@@ -1,0 +1,44 @@
+"""Public ABI plugin interfaces."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Dict, Iterable, Mapping, Optional, Protocol
+
+from abi._compat.skills.registry import ToolRegistry
+
+
+class ABIPlugin(Protocol):
+    plugin_id: str
+    display_name: str
+    description: str
+    report_title: str
+
+    def load_config(
+        self,
+        config_path: str | Path | None = None,
+        *,
+        profile: str | None = None,
+        overrides: Optional[Mapping[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        ...
+
+    def build_plan(self, config: Mapping[str, Any], *, check_files: bool = True) -> Any:
+        ...
+
+    def registry(self) -> ToolRegistry:
+        ...
+
+    def table_schemas(self) -> Mapping[str, Iterable[str]]:
+        ...
+
+    def parse_outputs(
+        self,
+        tool_id: str,
+        output_dir: str | Path,
+        sample_id: str,
+    ) -> Mapping[str, Iterable[Mapping[str, Any]]]:
+        ...
+
+    def write_report(self, plan: Any, result_dir: str | Path) -> Dict[str, Path]:
+        ...

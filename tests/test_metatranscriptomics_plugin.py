@@ -1,0 +1,40 @@
+"""Tests for the metatranscriptomics plugin."""
+
+from __future__ import annotations
+
+from abi.plugins import get_plugin, list_plugins
+
+
+def test_plugin_registered():
+    plugins = list_plugins()
+    ids = [p.plugin_id for p in plugins]
+    assert "metatranscriptomics" in ids
+
+
+def test_get_plugin():
+    plugin = get_plugin("metatranscriptomics")
+    assert plugin.plugin_id == "metatranscriptomics"
+    assert plugin.display_name == "Metatranscriptomics Demo"
+
+
+def test_table_schemas():
+    plugin = get_plugin("metatranscriptomics")
+    schemas = plugin.table_schemas()
+    assert "gene_expression" in schemas
+    assert "qc_summary" in schemas
+    assert "alignment_summary" in schemas
+
+
+def test_registry():
+    plugin = get_plugin("metatranscriptomics")
+    registry = plugin.registry()
+    assert registry.has("fastp")
+    assert registry.has("star")
+    assert registry.has("featurecounts")
+
+
+def test_load_config():
+    plugin = get_plugin("metatranscriptomics")
+    cfg = plugin.load_config()
+    assert cfg["project_name"] == "abi_metatranscriptomics_demo"
+    assert cfg["threads"] == 4

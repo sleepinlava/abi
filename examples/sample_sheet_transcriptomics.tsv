@@ -1,0 +1,2 @@
+sample_id	condition	read1	read2
+RNA1	control	examples/fixtures/tiny_R1.fastq	examples/fixtures/tiny_R2.fastq

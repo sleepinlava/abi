@@ -1,0 +1,22 @@
+tables:
+  gene_expression:
+    - sample_id
+    - gene_id
+    - count
+    - tpm
+    - tool
+    - source_file
+  qc_summary:
+    - sample_id
+    - tool
+    - metric
+    - value
+    - unit
+    - source_file
+  alignment_summary:
+    - sample_id
+    - tool
+    - metric
+    - value
+    - unit
+    - source_file

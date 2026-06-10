@@ -1,0 +1,21 @@
+project_name: abi_metatranscriptomics_demo
+analysis_type: metatranscriptomics
+mode: auto
+threads: 4
+outdir: results/abi_metatranscriptomics_demo
+log_dir: log
+dry_run: false
+mock_tools: false
+
+execution:
+  progress: true
+
+input:
+  sample_sheet: examples/sample_sheet_transcriptomics.tsv
+
+alignment:
+  tool: star
+
+resources:
+  genome_index: GENOME_INDEX_NOT_CONFIGURED
+  annotation_gtf: ANNOTATION_GTF_NOT_CONFIGURED
