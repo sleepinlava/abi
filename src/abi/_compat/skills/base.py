@@ -1,7 +1,4 @@
-"""Base classes for bioinformatics tool skill wrappers.
-
-Copied from autoplasm.skills.base with import path adjustments.
-"""
+"""Base classes for ABI command-line tool wrappers."""
 
 from __future__ import annotations
 
@@ -15,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
-from abi._compat.errors import ToolError
+from abi.errors import ToolError
 
 OPTIONAL_TEMPLATE_FIELDS = {"abundance_label", "metaphlan_long_reads_flag"}
 

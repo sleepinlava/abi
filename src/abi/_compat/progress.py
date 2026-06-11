@@ -1,8 +1,4 @@
-"""Progress event recording for pipeline execution.
-
-Copied from autoplasm.progress with import path adjustments.
-Uses Any for plan/step types to avoid circular dependencies.
-"""
+"""Progress event recording for pipeline execution."""
 
 from __future__ import annotations
 
@@ -12,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Mapping
 
-from abi._compat.filesystem import ensure_directory
+from abi.filesystem import ensure_directory
 
 
 class PipelineProgressRecorder:

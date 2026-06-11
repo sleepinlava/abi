@@ -207,7 +207,7 @@ def resolve_nextflow_bin(
     if env_value:
         candidates.append(Path(env_value))
     root = Path(mamba_root or PROJECT_ROOT / ".mamba")
-    candidates.append(root / "envs" / "autoplasm-nextflow" / "bin" / "nextflow")
+    candidates.append(root / "envs" / "abi-nextflow" / "bin" / "nextflow")
     path_value = shutil.which("nextflow")
     if path_value:
         candidates.append(Path(path_value))

@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional, Protocol
 
-from abi._compat.skills.registry import ToolRegistry
+from abi.schemas import ABIExecutionPlan
+from abi.tools import ToolRegistry
 
 
 class ABIPlugin(Protocol):
@@ -23,7 +24,12 @@ class ABIPlugin(Protocol):
     ) -> Dict[str, Any]:
         ...
 
-    def build_plan(self, config: Mapping[str, Any], *, check_files: bool = True) -> Any:
+    def build_plan(
+        self,
+        config: Mapping[str, Any],
+        *,
+        check_files: bool = True,
+    ) -> ABIExecutionPlan:
         ...
 
     def registry(self) -> ToolRegistry:

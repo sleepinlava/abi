@@ -7,13 +7,9 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional
 
 from abi.config import PROJECT_ROOT, write_yaml
+from abi.provenance import write_commands_tsv, write_resolved_inputs_tsv, write_tool_versions
 from abi.report import write_generic_report
 from abi.tables import StandardTableManager
-from abi._compat.logger import (
-    write_commands_tsv,
-    write_resolved_inputs_tsv,
-    write_tool_versions,
-)
 
 
 class ABIResultWriter:

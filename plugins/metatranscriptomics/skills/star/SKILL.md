@@ -17,7 +17,7 @@ Use for the metatranscriptomics demo `alignment` step when `alignment.tool: star
 - ABI provenance records in `provenance/commands.tsv` and `provenance/step_logs/`.
 
 ## Environment
-Runs from the repository-local `autoplasm-stats` environment as `STAR`.
+Runs from the repository-local `abi-stats` environment as `STAR`.
 
 ## Command Template
 ```bash

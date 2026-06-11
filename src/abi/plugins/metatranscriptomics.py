@@ -10,7 +10,7 @@ from abi.config import PLUGIN_ROOT, compact_overrides, deep_merge, load_yaml
 from abi.report import write_generic_report
 from abi.schemas import ABIExecutionPlan, ABIPlanStep, ABISample, ABISampleContext
 from abi.tables import StandardTableManager
-from abi._compat.skills.registry import ToolRegistry
+from abi.tools import ToolRegistry
 
 
 class MetatranscriptomicsPlugin:

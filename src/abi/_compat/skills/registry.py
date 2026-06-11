@@ -1,7 +1,4 @@
-"""Tool registry loader.
-
-Copied from autoplasm.skills.registry with import path adjustments.
-"""
+"""Tool registry loader."""
 
 from __future__ import annotations
 
@@ -11,8 +8,8 @@ from typing import Any, Dict, Iterable, List, Mapping
 
 import yaml
 
-from abi._compat.errors import ConfigError
 from abi._compat.skills.base import GenericCommandSkill
+from abi.errors import ConfigError
 
 RESOURCE_FIELDS = {
     "database",

@@ -1,22 +1,7 @@
-"""Error hierarchy for ABI runtime.
-
-Copied from autoplasm.schemas — only the error classes are kept here.
-"""
+"""Compatibility re-exports for legacy internal ABI imports."""
 
 from __future__ import annotations
 
+from abi.errors import ABIError, ConfigError, SampleSheetError, ToolError
 
-class AutoPlasmError(RuntimeError):
-    """Base class for clear user-facing errors."""
-
-
-class ConfigError(AutoPlasmError):
-    """Raised when configuration is invalid."""
-
-
-class SampleSheetError(AutoPlasmError):
-    """Raised when sample sheet validation fails."""
-
-
-class ToolError(AutoPlasmError):
-    """Raised when a tool wrapper cannot build or run a command."""
+__all__ = ["ABIError", "ConfigError", "SampleSheetError", "ToolError"]

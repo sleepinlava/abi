@@ -2,7 +2,7 @@ tools:
   - id: fastp
     name: fastp
     category: qc
-    env_name: autoplasm-qc
+    env_name: abi-qc
     executable: fastp
     default_enabled: true
     required: true
@@ -12,7 +12,7 @@ tools:
   - id: star
     name: STAR
     category: alignment
-    env_name: autoplasm-stats
+    env_name: abi-stats
     executable: STAR
     default_enabled: true
     required: true
@@ -22,7 +22,7 @@ tools:
   - id: hisat2
     name: HISAT2
     category: alignment
-    env_name: autoplasm-stats
+    env_name: abi-stats
     executable: hisat2
     default_enabled: false
     required: false
@@ -32,7 +32,7 @@ tools:
   - id: featurecounts
     name: featureCounts
     category: expression
-    env_name: autoplasm-stats
+    env_name: abi-stats
     executable: featureCounts
     default_enabled: true
     required: true

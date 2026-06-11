@@ -19,7 +19,7 @@ Use for the metatranscriptomics demo `qc` step when paired FASTQ inputs are pres
 - ABI provenance records in `provenance/commands.tsv` and `provenance/step_logs/`.
 
 ## Environment
-Runs from the repository-local `autoplasm-qc` environment as `fastp`.
+Runs from the repository-local `abi-qc` environment as `fastp`.
 
 ## Command Template
 ```bash
@@ -27,7 +27,7 @@ fastp -i {read1} -I {read2} -o {output_dir}/{sample_id}_R1.clean.fastq.gz -O {ou
 ```
 
 ## Failure Handling
-Check input FASTQ paths, the `autoplasm-qc` environment, and the per-step stderr log.
+Check input FASTQ paths, the `abi-qc` environment, and the per-step stderr log.
 
 ## Normalization
 Future real-run parsers can append read metrics to `qc_summary.tsv`.

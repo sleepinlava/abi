@@ -1,9 +1,4 @@
-"""Read-only validation for completed result directories.
-
-Copied from autoplasm.result_validation with import path adjustments.
-Removed dependency on autoplasm.standard_tables.TABLE_SCHEMAS —
-instead validates by checking if TSV files exist in the tables/ directory.
-"""
+"""Read-only validation for completed result directories."""
 
 from __future__ import annotations
 

@@ -11,11 +11,10 @@ from abi.config import compact_overrides
 from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
 from abi.plugins import get_plugin, list_plugins
+from abi.provenance import RunLogger
 from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
 from abi.schemas import ABIError
 from abi.tables import StandardTableManager
-from abi._compat.logger import RunLogger
-from abi._compat.result_validation import validate_result_dir
 
 
 class ABIAgentInterface:
@@ -32,7 +31,7 @@ class ABIAgentInterface:
     def plan(
         self,
         *,
-        analysis_type: str = "metagenomic_plasmid",
+        analysis_type: str,
         config_path: Optional[Union[str, Path]] = None,
         sample_sheet: Optional[Union[str, Path]] = None,
         profile: str = "dry_run",
@@ -60,7 +59,7 @@ class ABIAgentInterface:
     def dry_run(
         self,
         *,
-        analysis_type: str = "metagenomic_plasmid",
+        analysis_type: str,
         config_path: Optional[Union[str, Path]] = None,
         sample_sheet: Optional[Union[str, Path]] = None,
         profile: str = "dry_run",
@@ -108,7 +107,7 @@ class ABIAgentInterface:
     def run(
         self,
         *,
-        analysis_type: str = "metagenomic_plasmid",
+        analysis_type: str,
         engine: str = "local",
         config_path: Optional[Union[str, Path]] = None,
         sample_sheet: Optional[Union[str, Path]] = None,
@@ -158,7 +157,7 @@ class ABIAgentInterface:
     def export_nextflow(
         self,
         *,
-        analysis_type: str = "metagenomic_plasmid",
+        analysis_type: str,
         output: Union[str, Path],
         config_path: Optional[Union[str, Path]] = None,
         sample_sheet: Optional[Union[str, Path]] = None,
@@ -213,7 +212,17 @@ class ABIAgentInterface:
                     "available": sorted(aliases),
                 }
             )
-        return method(**args)
+        try:
+            return method(**args)
+        except TypeError as exc:
+            return _json_dump(
+                {
+                    "status": "error",
+                    "command": method_name,
+                    "error": str(exc),
+                    "error_type": exc.__class__.__name__,
+                }
+            )
 
     def _call(self, command: str, handler: Callable[..., Any], *args: Any, **kwargs: Any) -> str:
         try:
@@ -369,7 +378,9 @@ class ABIAgentInterface:
         if not plan_path.exists():
             raise ABIError(f"Missing execution plan: {plan_path}")
         plan_data = json.loads(plan_path.read_text(encoding="utf-8"))
-        plugin_id = analysis_type or str(plan_data.get("analysis_type") or "metagenomic_plasmid")
+        plugin_id = analysis_type or str(plan_data.get("analysis_type") or "")
+        if not plugin_id:
+            raise ABIError("Missing analysis_type in execution plan; pass analysis_type.")
         plugin = get_plugin(plugin_id)
         outputs = plugin.write_report(plan_data, root)
         return {"analysis_type": plugin_id, "outputs": dict(outputs)}

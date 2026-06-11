@@ -9,13 +9,17 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping
 
 from abi.config import write_yaml
+from abi.errors import ToolError
+from abi.filesystem import ensure_directory
+from abi.provenance import (
+    PipelineProgressRecorder,
+    RunLogger,
+    write_commands_tsv,
+    write_resolved_inputs_tsv,
+)
 from abi.report import write_generic_report
 from abi.tables import StandardTableManager
-from abi._compat.errors import ToolError
-from abi._compat.filesystem import ensure_directory
-from abi._compat.logger import RunLogger, write_commands_tsv, write_resolved_inputs_tsv
-from abi._compat.progress import PipelineProgressRecorder
-from abi._compat.skills.registry import ToolRegistry
+from abi.tools import ToolRegistry
 
 
 class GenericABIExecutor:

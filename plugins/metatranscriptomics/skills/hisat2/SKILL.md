@@ -18,7 +18,7 @@ Use when `alignment.tool: hisat2`.
 - ABI provenance records in `provenance/commands.tsv` and `provenance/step_logs/`.
 
 ## Environment
-Runs from the repository-local `autoplasm-stats` environment as `hisat2`.
+Runs from the repository-local `abi-stats` environment as `hisat2`.
 
 ## Command Template
 ```bash

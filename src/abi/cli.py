@@ -16,10 +16,10 @@ from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
 from abi.openai_contracts import export_openai_tools
 from abi.plugins import get_plugin, list_plugins
+from abi.provenance import RunLogger
 from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
 from abi.schemas import ABIError
 from abi.tables import StandardTableManager
-from abi._compat.logger import RunLogger
 
 app = typer.Typer(
     help=(
@@ -145,7 +145,7 @@ def init_command(
 
 @app.command("plan")
 def plan_command(
-    analysis_type: str = typer.Option("metagenomic_plasmid", "--type", help="ABI analysis type."),
+    analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
     config: Optional[Path] = typer.Option(None, "--config", help="Plugin config YAML."),
     sample_sheet: Optional[Path] = typer.Option(None, "--sample-sheet", help="Sample sheet TSV."),
     profile: str = typer.Option("dry_run", "--profile", help="Profile for adapter plugins."),
@@ -200,7 +200,7 @@ def plan_command(
 
 @app.command("dry-run")
 def dry_run_command(
-    analysis_type: str = typer.Option("metagenomic_plasmid", "--type", help="ABI analysis type."),
+    analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
     config: Optional[Path] = typer.Option(None, "--config", help="Plugin config YAML."),
     sample_sheet: Optional[Path] = typer.Option(None, "--sample-sheet", help="Sample sheet TSV."),
     profile: str = typer.Option("dry_run", "--profile", help="Profile for adapter plugins."),
@@ -324,7 +324,9 @@ def report_command(
         if not plan_path.exists():
             raise ABIError(f"Missing execution plan: {plan_path}")
         plan_data = json.loads(plan_path.read_text(encoding="utf-8"))
-        plugin_id = analysis_type or str(plan_data.get("analysis_type") or "metagenomic_plasmid")
+        plugin_id = analysis_type or str(plan_data.get("analysis_type") or "")
+        if not plugin_id:
+            raise ABIError("Missing analysis_type in execution plan; pass --type.")
         plugin = get_plugin(plugin_id)
         outputs = plugin.write_report(plan_data, result_dir)
         typer.echo(json.dumps({key: str(value) for key, value in outputs.items()}, indent=2))
@@ -334,7 +336,7 @@ def report_command(
 
 @app.command("export-nextflow")
 def export_nextflow_command(
-    analysis_type: str = typer.Option("metagenomic_plasmid", "--type", help="ABI analysis type."),
+    analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
     output: Path = typer.Option(..., "--output", help="Output Nextflow DSL2 script path."),
     config: Optional[Path] = typer.Option(None, "--config", help="Plugin config YAML."),
     sample_sheet: Optional[Path] = typer.Option(None, "--sample-sheet", help="Sample sheet TSV."),
@@ -407,7 +409,7 @@ def export_nextflow_command(
 
 @app.command("run")
 def run_command(
-    analysis_type: str = typer.Option("metagenomic_plasmid", "--type", help="ABI analysis type."),
+    analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
     engine: str = typer.Option("local", "--engine", help="Runtime engine: local or nextflow."),
     config: Optional[Path] = typer.Option(None, "--config", help="Plugin config YAML."),
     sample_sheet: Optional[Path] = typer.Option(None, "--sample-sheet", help="Sample sheet TSV."),
@@ -419,9 +421,21 @@ def run_command(
     workflow: Optional[Path] = typer.Option(None, "--workflow", help="Workflow path to write."),
     work_dir: Optional[Path] = typer.Option(None, "--work-dir", help="Nextflow work directory."),
     nxf_home: Optional[Path] = typer.Option(None, "--nxf-home", help="Nextflow home directory."),
-    nextflow_bin: Optional[Path] = typer.Option(None, "--nextflow-bin", help="Nextflow executable."),
-    nextflow_profile: Optional[str] = typer.Option(None, "--nextflow-profile", help="Nextflow config profile."),
-    executor: Optional[str] = typer.Option(None, "--executor", help="Nextflow process executor override."),
+    nextflow_bin: Optional[Path] = typer.Option(
+        None,
+        "--nextflow-bin",
+        help="Nextflow executable.",
+    ),
+    nextflow_profile: Optional[str] = typer.Option(
+        None,
+        "--nextflow-profile",
+        help="Nextflow config profile.",
+    ),
+    executor: Optional[str] = typer.Option(
+        None,
+        "--executor",
+        help="Nextflow process executor override.",
+    ),
     resume: bool = typer.Option(False, "--resume", help="Pass -resume to Nextflow."),
     mamba_root: Optional[Path] = typer.Option(None, "--mamba-root", help="Local mamba root."),
     smoke: bool = typer.Option(False, "--smoke/--real", help="Use mocked/smoke tools."),
@@ -489,7 +503,7 @@ def run_command(
 
 @app.command("export-openai-tools")
 def export_openai_tools_command(
-    analysis_type: str = typer.Option("metagenomic_plasmid", "--type", help="ABI analysis type."),
+    analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
     descriptor_format: str = typer.Option(
         "responses", "--format", help="Descriptor format: responses, apps-sdk, or json."
     ),

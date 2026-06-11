@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from abi.executor import GenericABIExecutor
+from abi.provenance import RunLogger
 from abi.runtimes.base import RuntimeOptions, RuntimeResult
 from abi.tables import StandardTableManager
-from abi._compat.logger import RunLogger
 
 
 class LocalRuntime:

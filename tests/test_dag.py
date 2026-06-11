@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
+import pytest
+
 from abi.dag import infer_dag, process_name
 from abi.schemas import ABIError
-
-import pytest
 
 
 @dataclass

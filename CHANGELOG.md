@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Public SDK entry points for plugin authors: `abi.tools`, `abi.errors`, and `abi.testing`.
+- Plugin contract testing helper for validating registry and standard table shape.
+
+### Changed
+- CLI and agent planning/execution commands now require an explicit ABI analysis type.
+- Metatranscriptomics demo registry now uses ABI-owned environment names.
+- Internal compatibility modules no longer define public-facing error classes.
+
 ## [0.1.0] - 2025-06-11
 
 ### Added

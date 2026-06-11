@@ -1,1 +1,1 @@
-"""Shared infrastructure copied from autoplasm for standalone ABI operation."""
+"""Internal compatibility modules for ABI."""

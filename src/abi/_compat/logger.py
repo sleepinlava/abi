@@ -1,7 +1,4 @@
-"""Structured logging and provenance helpers.
-
-Copied from autoplasm.logger with import path adjustments.
-"""
+"""Structured logging and provenance helpers."""
 
 from __future__ import annotations
 
@@ -11,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping
 
-from abi._compat.filesystem import ensure_directory
+from abi.filesystem import ensure_directory
 
 
 class RunLogger:

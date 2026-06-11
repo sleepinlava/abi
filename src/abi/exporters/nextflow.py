@@ -9,8 +9,8 @@ from typing import Any, Dict, Mapping
 
 from abi.config import PROJECT_ROOT
 from abi.dag import ABIDAG, StepBinding, infer_dag
-from abi._compat.errors import ToolError
-from abi._compat.skills.registry import ToolRegistry
+from abi.errors import ToolError
+from abi.tools import ToolRegistry
 
 
 class NextflowExporter:

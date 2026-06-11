@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abi.plugins import get_plugin, list_plugins
+from abi.testing import assert_plugin_contract
 
 
 def test_plugin_registered():
@@ -38,3 +39,14 @@ def test_load_config():
     cfg = plugin.load_config()
     assert cfg["project_name"] == "abi_metatranscriptomics_demo"
     assert cfg["threads"] == 4
+
+
+def test_plugin_contract():
+    plugin = get_plugin("metatranscriptomics")
+    assert_plugin_contract(plugin)
+
+
+def test_registry_uses_abi_environment_names():
+    plugin = get_plugin("metatranscriptomics")
+    env_names = {tool["env_name"] for tool in plugin.registry().list_tools()}
+    assert env_names == {"abi-qc", "abi-stats"}

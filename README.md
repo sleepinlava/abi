@@ -41,6 +41,10 @@ CLI (Typer)
 Implement the 6 core methods:
 
 ```python
+from abi.schemas import ABIExecutionPlan
+from abi.tools import ToolRegistry
+
+
 class MyPlugin:
     plugin_id = "my_analysis"
     display_name = "My Analysis"
@@ -61,12 +65,32 @@ Register via `pyproject.toml`:
 my_analysis = "my_package.plugins:MyPlugin"
 ```
 
+Validate a plugin with the SDK testing helper:
+
+```python
+from abi.plugins import get_plugin
+from abi.testing import assert_plugin_contract
+
+
+def test_my_plugin_contract():
+    assert_plugin_contract(get_plugin("my_analysis"))
+```
+
 ## Agent Integration
 
 All CLI commands support `--output-json` for structured output. Export OpenAI-compatible tool descriptors:
 
 ```bash
 abi export-openai-tools --type metatranscriptomics --format responses
+```
+
+## Development
+
+Use an editable install, or run tests through the repository configuration, so imports resolve to this checkout:
+
+```bash
+pip install -e ".[dev]"
+pytest -q
 ```
 
 ## License

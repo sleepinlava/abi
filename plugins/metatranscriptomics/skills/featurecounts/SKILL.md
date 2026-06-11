@@ -18,7 +18,7 @@ Use after the metatranscriptomics alignment step.
 - ABI provenance records in `provenance/commands.tsv` and `provenance/step_logs/`.
 
 ## Environment
-Runs from the repository-local `autoplasm-stats` environment as `featureCounts`.
+Runs from the repository-local `abi-stats` environment as `featureCounts`.
 
 ## Command Template
 ```bash
@@ -26,7 +26,7 @@ featureCounts -T {threads} -a {annotation_gtf} -o {counts} {bam}
 ```
 
 ## Failure Handling
-Check BAM path, annotation GTF path, the `autoplasm-stats` environment, and stderr.
+Check BAM path, annotation GTF path, the `abi-stats` environment, and stderr.
 
 ## Normalization
 Real featureCounts output is normalized to `tables/gene_expression.tsv`.

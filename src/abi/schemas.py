@@ -5,9 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
-
-class ABIError(RuntimeError):
-    """Base class for ABI user-facing errors."""
+from abi.errors import ABIError as ABIError
 
 
 @dataclass
