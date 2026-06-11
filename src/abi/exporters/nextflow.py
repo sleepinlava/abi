@@ -282,10 +282,23 @@ def _params_for_step(step: Any, *, project_root: Path) -> Dict[str, Any]:
     params.update(getattr(step, "params", {}))
     params.update(getattr(step, "outputs", {}))
     path_keys = {
-        "read1", "read2", "long_reads", "assembly", "database", "model",
-        "reference", "genome_index", "annotation_gtf", "gtf", "bam",
-        "alignment", "counts", "output_dir", "output_prefix",
-        "clean_read1", "clean_read2",
+        "read1",
+        "read2",
+        "long_reads",
+        "assembly",
+        "database",
+        "model",
+        "reference",
+        "genome_index",
+        "annotation_gtf",
+        "gtf",
+        "bam",
+        "alignment",
+        "counts",
+        "output_dir",
+        "output_prefix",
+        "clean_read1",
+        "clean_read2",
     }
     for key, value in list(params.items()):
         if value in (None, ""):

@@ -17,4 +17,3 @@ class SampleSheetError(ABIError):
 
 class ToolError(ABIError):
     """Raised when a registered tool cannot be planned or executed."""
-

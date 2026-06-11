@@ -5,11 +5,12 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Union, cast
 
 from abi.config import compact_overrides
 from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
+from abi.interfaces import ABIDryRunPlugin, ABIPlugin
 from abi.plugins import get_plugin, list_plugins
 from abi.provenance import RunLogger
 from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
@@ -213,7 +214,7 @@ class ABIAgentInterface:
                 }
             )
         try:
-            return method(**args)
+            return cast(str, method(**args))
         except TypeError as exc:
             return _json_dump(
                 {
@@ -323,7 +324,7 @@ class ABIAgentInterface:
         )
         plan = plugin.build_plan(cfg, check_files=check_files)
         if hasattr(plugin, "execute_dry_run"):
-            outputs = plugin.execute_dry_run(plan, cfg)
+            outputs = cast(ABIDryRunPlugin, plugin).execute_dry_run(plan, cfg)
         else:
             table_manager = StandardTableManager(plugin.table_schemas())
             executor = GenericABIExecutor(
@@ -515,7 +516,7 @@ class ABIAgentInterface:
         outdir: Optional[str],
         log_dir: Optional[str],
         check_files: bool,
-    ) -> Tuple[Any, Mapping[str, Any], Any]:
+    ) -> Tuple[ABIPlugin, Mapping[str, Any], Any]:
         plugin = get_plugin(analysis_type)
         cfg = plugin.load_config(
             _optional_path(config_path),
@@ -561,7 +562,7 @@ def _optional_path(value: Optional[Union[str, Path]]) -> Optional[Path]:
 
 
 def _plan_dict(plan: Any, analysis_type: str) -> Dict[str, Any]:
-    data = plan.to_dict()
+    data: Dict[str, Any] = dict(plan.to_dict())
     data.setdefault("analysis_type", analysis_type)
     return data
 

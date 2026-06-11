@@ -192,7 +192,7 @@ class PipelineProgressRecorder:
 
     def _step_state(self, step_id: str) -> Dict[str, Any] | None:
         for step in self._snapshot.get("steps", []):
-            if step.get("step_id") == step_id:
+            if isinstance(step, dict) and step.get("step_id") == step_id:
                 return step
         return None
 

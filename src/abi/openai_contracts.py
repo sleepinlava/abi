@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Mapping
+from typing import Any, Dict, Iterable, List, Mapping, TypedDict
 
 
 def _string(description: str) -> Dict[str, str]:
     return {"type": "string", "description": description}
 
 
-ABI_AGENT_TOOLS = {
+class ToolMetadata(TypedDict, total=False):
+    description: str
+    properties: Dict[str, Mapping[str, Any]]
+    required: List[str]
+    read_only: bool
+    permission: str
+    requires_confirmation: bool
+
+
+ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
     "abi_list_types": {
         "description": "List installed ABI analysis plugin types.",
         "properties": {},
@@ -102,7 +111,7 @@ ABI_AGENT_TOOLS = {
 }
 
 
-READ_ONLY_TOOLS = {
+READ_ONLY_TOOLS: Dict[str, ToolMetadata] = {
     name: metadata
     for name, metadata in ABI_AGENT_TOOLS.items()
     if metadata["permission"] == "read_only"

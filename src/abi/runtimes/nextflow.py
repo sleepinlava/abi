@@ -214,9 +214,7 @@ def resolve_nextflow_bin(
     for candidate in candidates:
         if candidate.exists() and os.access(candidate, os.X_OK):
             return candidate.resolve()
-    raise ABIError(
-        "Nextflow executable was not found. Pass --nextflow-bin or install nextflow."
-    )
+    raise ABIError("Nextflow executable was not found. Pass --nextflow-bin or install nextflow.")
 
 
 def parse_nextflow_trace(path: Path) -> list[dict[str, str]]:

@@ -6,7 +6,7 @@ import csv
 import json
 import shutil
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import typer
 
@@ -14,10 +14,11 @@ from abi.agent import ABIAgentInterface
 from abi.config import compact_overrides
 from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
+from abi.interfaces import ABIDryRunPlugin, ABIInitializablePlugin
 from abi.openai_contracts import export_openai_tools
 from abi.plugins import get_plugin, list_plugins
 from abi.provenance import RunLogger
-from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
+from abi.runtimes import ABIRuntime, LocalRuntime, NextflowRuntime, RuntimeOptions, RuntimeResult
 from abi.schemas import ABIError
 from abi.tables import StandardTableManager
 
@@ -118,7 +119,7 @@ def init_command(
         plugin = get_plugin(analysis_type)
         if not hasattr(plugin, "root"):
             raise ABIError(f"Plugin {analysis_type!r} does not provide init templates")
-        root = Path(plugin.root)
+        root = Path(cast(ABIInitializablePlugin, plugin).root)
         targets = [
             (root / "config_default.yaml", outdir / "config" / f"{analysis_type}.yaml"),
             (root / "sample_sheet_template.tsv", outdir / "samples.tsv"),
@@ -247,7 +248,7 @@ def dry_run_command(
         )
         plan = plugin.build_plan(cfg, check_files=check_files)
         if hasattr(plugin, "execute_dry_run"):
-            outputs = plugin.execute_dry_run(plan, cfg)
+            outputs = cast(ABIDryRunPlugin, plugin).execute_dry_run(plan, cfg)
         else:
             table_manager = StandardTableManager(plugin.table_schemas())
             executor = GenericABIExecutor(
@@ -525,7 +526,7 @@ def export_openai_tools_command(
 
 
 def _plan_dict(plan: Any, analysis_type: str) -> Dict[str, Any]:
-    data = plan.to_dict()
+    data: Dict[str, Any] = dict(plan.to_dict())
     data.setdefault("analysis_type", analysis_type)
     return data
 
@@ -558,7 +559,7 @@ def _run_with_runtime(
     mamba_root: Optional[Path],
     smoke: bool,
     check_files: bool,
-) -> Any:
+) -> RuntimeResult:
     runtime_engine = engine.lower().strip()
     if runtime_engine not in {"local", "nextflow"}:
         raise ABIError(f"Unsupported runtime engine: {engine}. Expected local or nextflow.")
@@ -589,7 +590,7 @@ def _run_with_runtime(
         resume=resume,
     )
     if runtime_engine == "local":
-        runtime = LocalRuntime(plugin, options=options)
+        runtime: ABIRuntime = LocalRuntime(plugin, options=options)
     else:
         runtime = NextflowRuntime(plugin, options=options)
     return runtime.run(plan, cfg)

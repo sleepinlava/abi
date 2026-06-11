@@ -17,4 +17,3 @@ __all__ = [
     "write_resolved_inputs_tsv",
     "write_tool_versions",
 ]
-

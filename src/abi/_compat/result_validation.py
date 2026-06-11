@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 
 def validate_result_dir(
@@ -80,10 +80,14 @@ def _read_json(path: Path, errors: List[str]) -> Dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         errors.append(f"Invalid JSON in {path}: {exc}")
         return {}
+    if not isinstance(data, dict):
+        errors.append(f"JSON in {path} must contain an object at top level")
+        return {}
+    return cast(Dict[str, Any], data)
 
 
 def _read_tsv(path: Path) -> List[Dict[str, str]]:
@@ -94,7 +98,7 @@ def _read_tsv(path: Path) -> List[Dict[str, str]]:
 
 
 def _table_status(tables_dir: Path) -> Dict[str, Dict[str, Any]]:
-    status = {}
+    status: Dict[str, Dict[str, Any]] = {}
     if not tables_dir.exists():
         return status
     for tsv_path in sorted(tables_dir.glob("*.tsv")):

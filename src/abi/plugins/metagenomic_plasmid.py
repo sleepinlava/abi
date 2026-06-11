@@ -7,7 +7,7 @@ Install with: pip install abi-agent[autoplasm]
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, cast
 
 from autoplasm.config import load_config as load_autoplasm_config
 from autoplasm.logger import RunLogger
@@ -34,7 +34,10 @@ class MetagenomicPlasmidPlugin:
         profile: str | None = None,
         overrides: Optional[Mapping[str, Any]] = None,
     ) -> Dict[str, Any]:
-        return load_autoplasm_config(config_path, profile=profile or "dry_run", overrides=overrides)
+        return cast(
+            Dict[str, Any],
+            load_autoplasm_config(config_path, profile=profile or "dry_run", overrides=overrides),
+        )
 
     def build_sample_context(self, config: Mapping[str, Any], *, check_files: bool = True) -> Any:
         del check_files
@@ -47,7 +50,7 @@ class MetagenomicPlasmidPlugin:
         return ToolRegistry.from_path()
 
     def table_schemas(self) -> Mapping[str, list[str]]:
-        return TABLE_SCHEMAS
+        return cast(Mapping[str, list[str]], TABLE_SCHEMAS)
 
     def parse_outputs(
         self,
@@ -55,12 +58,12 @@ class MetagenomicPlasmidPlugin:
         output_dir: str | Path,
         sample_id: str,
     ) -> Mapping[str, Any]:
-        return parse_standard_outputs(tool_id, output_dir, sample_id)
+        return cast(Mapping[str, Any], parse_standard_outputs(tool_id, output_dir, sample_id))
 
     def execute_dry_run(self, plan: Any, config: Mapping[str, Any]) -> Dict[str, Path]:
         logger = RunLogger(str(config["log_dir"]))
         executor = PipelineExecutor(self.registry(), logger, mock_tools=True)
-        return executor.dry_run(plan, config)
+        return cast(Dict[str, Path], executor.dry_run(plan, config))
 
     def write_report(self, plan: Any, result_dir: str | Path) -> Dict[str, Path]:
         if isinstance(plan, Mapping):

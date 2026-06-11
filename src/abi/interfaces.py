@@ -21,30 +21,32 @@ class ABIPlugin(Protocol):
         *,
         profile: str | None = None,
         overrides: Optional[Mapping[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        ...
+    ) -> Dict[str, Any]: ...
 
     def build_plan(
         self,
         config: Mapping[str, Any],
         *,
         check_files: bool = True,
-    ) -> ABIExecutionPlan:
-        ...
+    ) -> ABIExecutionPlan: ...
 
-    def registry(self) -> ToolRegistry:
-        ...
+    def registry(self) -> ToolRegistry: ...
 
-    def table_schemas(self) -> Mapping[str, Iterable[str]]:
-        ...
+    def table_schemas(self) -> Mapping[str, Iterable[str]]: ...
 
     def parse_outputs(
         self,
         tool_id: str,
         output_dir: str | Path,
         sample_id: str,
-    ) -> Mapping[str, Iterable[Mapping[str, Any]]]:
-        ...
+    ) -> Mapping[str, Iterable[Mapping[str, Any]]]: ...
 
-    def write_report(self, plan: Any, result_dir: str | Path) -> Dict[str, Path]:
-        ...
+    def write_report(self, plan: Any, result_dir: str | Path) -> Dict[str, Path]: ...
+
+
+class ABIDryRunPlugin(ABIPlugin, Protocol):
+    def execute_dry_run(self, plan: Any, config: Mapping[str, Any]) -> Dict[str, Path]: ...
+
+
+class ABIInitializablePlugin(ABIPlugin, Protocol):
+    root: Path
