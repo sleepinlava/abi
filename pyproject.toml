@@ -67,6 +67,23 @@ metatranscriptomics = "abi.plugins.metatranscriptomics:MetatranscriptomicsPlugin
 [tool.hatch.build.targets.wheel]
 packages = ["src/abi"]
 
+# Built-in plugin templates live outside src/ so editable installs and source-tree
+# usage can share the same files. Include them in wheels at the same relative
+# path expected by abi.config.PLUGIN_ROOT.
+[tool.hatch.build.targets.wheel.force-include]
+"plugins" = "plugins"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/abi",
+    "plugins",
+    "tests",
+    "examples",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
