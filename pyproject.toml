@@ -1,3 +1,7 @@
+# ── Build system ──────────────────────────────────────────────────────
+# hatchling >=1.21.0 fixes a bug where the "dependencies" field was
+# incorrectly validated as a URL under [project.urls] during editable
+# installs.  See: pip install -e ".[dev]"  on Python 3.10.
 [build-system]
 requires = ["hatchling>=1.21.0"]
 build-backend = "hatchling.build"
@@ -9,7 +13,7 @@ description = "Agent-Bioinformatics Interface: plugin-based abstraction for AI-d
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-authors = [{ name = "ABI Team", email = "abi-team@example.com" }]
+authors = [{ name = "BingkangGuo", email = "bingkangguo@gmail.com" }]
 keywords = ["bioinformatics", "agent", "ai", "pipeline", "plasmid", "metagenomics"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -32,6 +36,17 @@ dependencies = [
 Homepage = "https://github.com/sleepinlava/abi"
 Repository = "https://github.com/sleepinlava/abi"
 
+# ── Optional dependencies ────────────────────────────────────────────
+# Plugins may require packages outside the core dependency tree.
+# Each key defines an ``pip install abi-agent[<key>]`` extra.
+#
+# [autoplasm]  — enables the metagenomic_plasmid plugin
+# [dev]        — linting, formatting, type-checking, and testing tools
+#
+# The autoplasm imports in metagenomic_plasmid.py are lazy (imported
+# inside each method, not at module level) so that the module can be
+# imported without autoplasm installed.  The plugin registry in
+# abi/plugins/__init__.py also catches ImportError for extra safety.
 [project.optional-dependencies]
 autoplasm = ["autoplasm>=0.1.0"]
 dev = [

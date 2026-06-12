@@ -5,7 +5,12 @@ A plugin-based Python abstraction layer that lets AI agents drive bioinformatics
 ## Quick Start
 
 ```bash
+# Core install (metatranscriptomics plugin only)
 pip install -e .
+
+# Or include optional plugins:
+pip install -e ".[autoplasm]"       # metagenomic_plasmid plugin
+pip install -e ".[autoplasm,dev]"   # both plugins + dev tooling
 
 # List available analysis types
 abi list-types
@@ -21,6 +26,30 @@ abi dry-run --type metatranscriptomics --config config.yaml --sample-sheet sampl
 
 # Execute
 abi run --type metatranscriptomics --config config.yaml --sample-sheet samples.tsv
+```
+
+## Optional Dependencies
+
+Some plugins require packages outside the core dependency tree:
+
+| Extra        | Plugin                  | Package    | Install                              |
+|-------------|-------------------------|------------|--------------------------------------|
+| `autoplasm` | `metagenomic_plasmid`   | autoplasm  | `pip install abi-agent[autoplasm]`   |
+| `dev`       | (development tooling)   | pytest, ruff, mypy | `pip install abi-agent[dev]` |
+
+Plugins with optional dependencies use **lazy imports** — the external
+package is imported inside each method, not at the top of the module.
+This means:
+
+- The plugin module can be imported without its dependencies installed.
+- A clear `ImportError` is raised only when you actually try to **use**
+  the plugin, with an install hint.
+- CI and test suites don't need to install every optional dependency.
+
+### Installing all plugins + dev tooling
+
+```bash
+pip install -e ".[autoplasm,dev]"
 ```
 
 ## Architecture
@@ -86,11 +115,21 @@ abi export-openai-tools --type metatranscriptomics --format responses
 
 ## Development
 
-Use an editable install, or run tests through the repository configuration, so imports resolve to this checkout:
+Use an editable install so imports resolve to this checkout:
 
 ```bash
 pip install -e ".[dev]"
 pytest -q
+```
+
+The test suite does **not** require `autoplasm` — the metagenomic_plasmid
+plugin uses lazy imports so its module can be loaded without the optional
+dependency.  CI installs only `.[dev]` for speed.
+
+If you need to test the metagenomic_plasmid plugin locally:
+
+```bash
+pip install -e ".[autoplasm,dev]"
 ```
 
 ## License
