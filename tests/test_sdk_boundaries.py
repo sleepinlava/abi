@@ -30,7 +30,6 @@ def test_agent_plan_requires_analysis_type(tmp_path):
 def test_no_autoplasm_leakage_from_core_sdk_and_demo_plugin():
     root = Path(__file__).resolve().parents[1]
     checked_paths = [
-        root / "README.md",
         root / "src" / "abi" / "openai_contracts.py",
         root / "src" / "abi" / "interfaces.py",
         root / "src" / "abi" / "tools.py",

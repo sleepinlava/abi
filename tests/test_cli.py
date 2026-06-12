@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import json
+import re
 
 from typer.testing import CliRunner
 
 from abi.cli import app
 
 runner = CliRunner()
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
 
 
 def test_list_types():
@@ -26,13 +33,13 @@ def test_help():
 def test_plan_requires_explicit_type(tmp_path):
     result = runner.invoke(app, ["plan", "--outdir", str(tmp_path)])
     assert result.exit_code != 0
-    assert "--type" in result.output
+    assert "--type" in _strip_ansi(result.output)
 
 
 def test_export_openai_tools_requires_explicit_type():
     result = runner.invoke(app, ["export-openai-tools"])
     assert result.exit_code != 0
-    assert "--type" in result.output
+    assert "--type" in _strip_ansi(result.output)
 
 
 def test_export_openai_tools_uses_abi_tool_names():
