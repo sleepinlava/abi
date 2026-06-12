@@ -10,6 +10,8 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping
 
 from abi.config import write_yaml
 from abi.errors import ToolError
+
+__all__ = ["GenericABIExecutor"]
 from abi.filesystem import ensure_directory
 from abi.provenance import (
     PipelineProgressRecorder,

@@ -11,6 +11,8 @@ from abi.provenance import write_commands_tsv, write_resolved_inputs_tsv, write_
 from abi.report import write_generic_report
 from abi.tables import StandardTableManager
 
+__all__ = ["ABIResultWriter"]
+
 
 class ABIResultWriter:
     """Write common ABI provenance, standard tables, and reports."""

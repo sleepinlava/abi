@@ -8,6 +8,16 @@ from typing import Any, Dict, Mapping, Optional
 
 import yaml
 
+__all__ = [
+    "ABIConfigError",
+    "PLUGIN_ROOT",
+    "PROJECT_ROOT",
+    "compact_overrides",
+    "deep_merge",
+    "load_yaml",
+    "write_yaml",
+]
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_ROOT = PROJECT_ROOT / "plugins"
 

@@ -19,11 +19,23 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Lint and format check
+        run: |
+          pip install ruff
+          ruff check src/
+          ruff format --check src/ tests/
+
       - name: Install build tools
         run: pip install build
 
       - name: Build package
         run: python -m build
+
+      - name: Verify wheel contents
+        run: |
+          pip install dist/*.whl
+          python -c "import abi; print(f'abi-agent {abi.__version__} imported successfully')"
+          abi list-types
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

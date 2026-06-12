@@ -8,6 +8,12 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Protocol
 from abi.schemas import ABIExecutionPlan
 from abi.tools import ToolRegistry
 
+__all__ = [
+    "ABIDryRunPlugin",
+    "ABIInitializablePlugin",
+    "ABIPlugin",
+]
+
 
 class ABIPlugin(Protocol):
     plugin_id: str

@@ -6,6 +6,8 @@ from pathlib import Path
 
 from abi.errors import ABIError
 
+__all__ = ["ensure_directory"]
+
 
 def ensure_directory(path: str | Path, *, label: str = "Directory") -> Path:
     """Return an existing directory or create it when missing."""

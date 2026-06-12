@@ -9,7 +9,7 @@ description = "Agent-Bioinformatics Interface: plugin-based abstraction for AI-d
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-authors = [{ name = "ABI Team" }]
+authors = [{ name = "ABI Team", email = "abi-team@example.com" }]
 keywords = ["bioinformatics", "agent", "ai", "pipeline", "plasmid", "metagenomics"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -19,8 +19,13 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
+
+[project.urls]
+Homepage = "https://github.com/sleepinlava/abi"
+Repository = "https://github.com/sleepinlava/abi"
 dependencies = [
     "typer>=0.9",
     "rich>=13.0",
@@ -38,6 +43,7 @@ dev = [
 
 [project.scripts]
 abi = "abi.cli:main"
+abi-dev-setup = "abi.dev_setup:main"
 
 [project.entry-points."abi.plugins"]
 metagenomic_plasmid = "abi.plugins.metagenomic_plasmid:MetagenomicPlasmidPlugin"

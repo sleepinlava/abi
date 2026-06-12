@@ -7,6 +7,8 @@ from html import escape
 from pathlib import Path
 from typing import Any, Dict, Mapping
 
+__all__ = ["write_generic_report"]
+
 
 def write_generic_report(
     plan: Any,

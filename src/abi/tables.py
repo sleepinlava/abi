@@ -6,6 +6,8 @@ import csv
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping
 
+__all__ = ["StandardTableManager"]
+
 
 class StandardTableManager:
     def __init__(self, schemas: Mapping[str, Iterable[str]]) -> None:

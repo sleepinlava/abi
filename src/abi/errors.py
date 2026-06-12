@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+__all__ = [
+    "ABIError",
+    "ConfigError",
+    "SampleSheetError",
+    "ToolError",
+]
+
 
 class ABIError(RuntimeError):
     """Base class for ABI user-facing errors."""
