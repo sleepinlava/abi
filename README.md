@@ -4,9 +4,11 @@ A plugin-based Python abstraction layer that lets AI agents drive
 bioinformatics analyses through a unified
 **plan → dry-run → execute → inspect → report** workflow.
 
-[![Python](https://img.shields.io/pypi/pyversions/abi-agent.svg)](https://pypi.org/project/abi-agent/)
-[![PyPI](https://img.shields.io/pypi/v/abi-agent.svg)](https://pypi.org/project/abi-agent/)
-[![License](https://img.shields.io/pypi/l/abi-agent.svg)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=blue)](https://pypi.org/project/abi-agent/)
+[![Python](https://img.shields.io/pypi/pyversions/abi-agent?style=flat-square)](https://pypi.org/project/abi-agent/)
+[![Downloads](https://img.shields.io/pypi/dm/abi-agent?style=flat-square)](https://pypi.org/project/abi-agent/)
+[![License](https://img.shields.io/pypi/l/abi-agent?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
+[![GitHub](https://img.shields.io/badge/github-sleepinlava%2Fabi-lightgrey?style=flat-square&logo=github)](https://github.com/sleepinlava/abi)
 
 ## Installation
 
