@@ -185,10 +185,37 @@ mypy src/abi/ --ignore-missing-imports
 pytest tests/ -v
 
 # Build distribution
-pip install build && python -m build
+pip install build twine
+python -m build
+python -m twine check dist/*
 ```
 
 The test suite does **not** require `autoplasm` — CI installs only `.[dev]`.
+
+## Publishing to PyPI
+
+The package is configured for PyPI publication as `abi-agent`. Built-in plugin
+templates under `plugins/` are included in both source distributions and wheels
+so `abi init` works after installation from PyPI.
+
+Preferred release path:
+
+1. Ensure `pyproject.toml` has the intended version.
+2. Create and publish a GitHub Release for that version.
+3. The `Publish to PyPI` workflow builds the source distribution and wheel,
+   validates them with `twine check`, and publishes via PyPI Trusted Publishing.
+
+Manual release path, if you have a PyPI API token:
+
+```bash
+rm -rf dist/
+python -m build
+python -m twine check dist/*
+python -m twine upload dist/*
+```
+
+Set `TWINE_USERNAME=__token__` and `TWINE_PASSWORD=<pypi-api-token>` for manual
+uploads.
 
 ### Path Conflict with PlasimSkillsForAgent
 
