@@ -1,4 +1,39 @@
-"""Tool skill base classes and registry loader for ABI plugins."""
+"""Tool skill base classes and registry loader for ABI plugins.
+
+# Architecture / 架构
+This module defines the canonical tool abstraction for the ABI pipeline:
+
+    ToolSkill (ABC)          ← abstract lifecycle: check → plan → validate → run → parse
+        └── GenericCommandSkill  ← YAML-driven command-template wrapper
+
+    ToolRegistry             ← loads tool_registry.yaml, creates GenericCommandSkill instances
+
+    RunResult                ← immutable dataclass for tool execution outcomes
+
+    SafeFormatDict           ← lenient str.format_map() dict that returns "" for missing keys
+
+# Design decisions / 设计决策
+- **Template-driven**: Instead of writing a Python class per tool, 99% of tools
+  are defined entirely in YAML via GenericCommandSkill's command_template
+  field.  Only tools with complex post-processing need a custom ToolSkill
+  subclass. / 99% 的工具通过 YAML 中的 command_template 定义，无需 Python 子类
+
+- **Conda/Mamba environment isolation**: GenericCommandSkill resolves the
+  tool's conda env via `resolved_mamba_root() / envs / env_name`, then
+  prepends its `bin/` directory to PATH.  This avoids activating the
+  environment via shell scripts that would complicate subprocess invocation.
+  / 通过 PATH 前置而非激活 conda 环境来简化子进程调用
+
+- **SafeFormatDict**: Python's str.format_map() raises KeyError for missing
+  keys, which would crash the pipeline if a template references a parameter
+  the user hasn't set.  SafeFormatDict returns "" instead, so the command
+  renders with an empty placeholder rather than aborting. / 缺键返回空串而非异常
+
+- **Immutable RunResult**: Marked @dataclass (frozen=False for practical
+  reasons but convention is read-only after construction).  This ensures
+  that callers cannot accidentally mutate a result that other code holds a
+  reference to. / RunResult 构建后视为只读
+"""
 
 from __future__ import annotations
 
@@ -25,7 +60,13 @@ __all__ = [
     "ToolSkill",
 ]
 
+# Template fields that are allowed to be empty without causing validation errors.
+# These represent optional pipeline features (e.g. abundance estimation, long-read
+# Metaphlan) that may legitimately be unset for some analyses. / 允许为空的模板字段
 OPTIONAL_TEMPLATE_FIELDS = {"abundance_label", "metaphlan_long_reads_flag"}
+# Template fields that represent external resource files (databases, models, indexes).
+# These are checked by _resource_status() to verify they exist on disk before the
+# pipeline runs. / 表示外部资源文件的模板字段，运行前由 _resource_status() 检查
 RESOURCE_FIELDS = {
     "database",
     "model",
@@ -41,10 +82,31 @@ RESOURCE_FIELDS = {
 
 
 # ── RunResult ──────────────────────────────────────────────────────────
+# Immutable-by-convention result of a single tool invocation.
+# All fields are populated once in GenericCommandSkill.run() and then only read.
+# / 单次工具调用的结果，构建后只读。
 
 
 @dataclass
 class RunResult:
+    """Immutable record of a tool execution.
+
+    # Why a dataclass? / 为什么用 dataclass？
+    - `to_dict()` via `asdict()` gives a JSON-serializable dict for logging.
+    - `@dataclass` auto-generates __init__, __repr__, __eq__ — less boilerplate.
+    - Consumers can destructure: `result.tool_name`, `result.return_code`, etc.
+
+    # Fields / 字段
+    - tool_name: Registry id of the tool (e.g. "fastqc") / 工具注册 ID
+    - command: The full shell command token list that was executed / 执行的命令
+    - return_code: Exit code (0=success, -1=timeout) / 退出码
+    - stdout/stderr: Captured output (empty if redirected to files) / 捕获的输出
+    - start_time/end_time: ISO 8601 timestamps with second precision / 时间戳
+    - duration_seconds: Wall-clock duration / 耗时
+    - outputs: Dict of output file paths the tool produced / 输出文件路径
+    - log_file: Optional path to the step log (if configured) / 步骤日志路径
+    - status: "success", "failed", "timeout", or "dry_run" / 执行状态
+    """
     tool_name: str
     command: List[str]
     return_code: int
@@ -58,13 +120,43 @@ class RunResult:
     status: str = "success"
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert to a plain dict for JSON serialization in logs/reports.
+
+        Uses dataclasses.asdict() which recursively converts the dataclass
+        to nested dicts/lists. / 递归转换为嵌套 dict/list 用于 JSON 序列化。
+        """
         return asdict(self)
 
 
 # ── ToolSkill (abstract base) ──────────────────────────────────────────
+# Defines the standard lifecycle every tool follows in the ABI pipeline.
+# Subclasses must implement all methods (GenericCommandSkill provides defaults).
+# / 定义每个工具在 ABI 管道中的标准生命周期。子类必须实现所有方法。
 
 
 class ToolSkill:
+    """Abstract base for all tool skills.
+
+    # Lifecycle / 生命周期
+    The pipeline orchestrator calls these methods in order:
+
+    1. check_installation()  → Can the tool binary be found? / 工具是否可找到？
+    2. plan()                → What will this step do? (for dry-run preview) / 步骤做什么？
+    3. validate_inputs()     → Do the required input files exist? / 输入文件存在？
+    4. select_params()       → Merge user params with defaults. / 合并用户参数和默认值
+    5. build_command()       → Render the shell command token list. / 生成命令
+    6. run()                 → Execute the command via subprocess. / 执行命令
+    7. parse_outputs()       → Discover output files on disk. / 发现输出文件
+    8. normalize_outputs()   → Convert parsed data to standard schema. / 标准化输出
+
+    # Why separate parse_outputs and normalize_outputs? / 为什么分两步？
+    Parsing discovers what files exist (facts). Normalization transforms them
+    into the standard schema (policy). Separating them lets plugins override
+    `normalize_outputs` to remap fields without touching file discovery logic.
+    / 解析发现事实，标准化转换格式。分离后插件可覆盖 normalize_outputs 而不影响文件发现。
+    """
+
+    # Class-level defaults (overridden by subclasses or YAML metadata)
     name: str
     version: Optional[str]
     env_name: str
@@ -72,58 +164,158 @@ class ToolSkill:
     output_schema: Dict[str, Any]
 
     def check_installation(self) -> bool:
+        """Return True if the tool executable is available on PATH or in its conda env.
+
+        Called early in the pipeline to fail fast if a required tool is missing.
+        / 管道早期调用，如工具缺失则快速失败。
+        """
         raise NotImplementedError
 
     def plan(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Return a plan dict describing what this step will do.
+
+        Used for dry-run previews and provenance records. / 用于试运行预览和溯源记录。
+        """
         raise NotImplementedError
 
     def validate_inputs(self, params: Dict[str, Any]) -> None:
+        """Raise ToolError if any required input file does not exist.
+
+        Called BEFORE the command is built so callers get a clear error rather
+        than a confusing "file not found" from the tool itself. / 在构建命令前验证输入。
+        """
         raise NotImplementedError
 
     def select_params(self, params: Dict[str, Any], mode: str = "auto") -> Dict[str, Any]:
+        """Merge user-provided params with sensible defaults for this tool.
+
+        # Modes / 模式
+        - "auto": Automatic parameter selection (defaults + heuristics) / 自动选择
+        - "manual": Respect user params as-is (minimal defaults) / 尊重用户参数
+
+        Returns a complete params dict ready for build_command(). / 返回完整参数字典。
+        """
         raise NotImplementedError
 
     def build_command(self, params: Dict[str, Any]) -> List[str]:
+        """Render the selected params into a shell command token list.
+
+        Returns a list of strings suitable for subprocess.run(). The list form
+        avoids shell injection vulnerabilities that would exist with a string
+        command + shell=True. / 返回列表形式避免 shell 注入。
+        """
         raise NotImplementedError
 
     def run(self, params: Dict[str, Any], dry_run: bool = False) -> RunResult:
+        """Execute the tool and return a RunResult.
+
+        # dry_run mode / 试运行模式
+        When dry_run=True, validates inputs and builds the command but does NOT
+        execute the tool. Returns a RunResult with status="dry_run". / 仅验证和构建不执行。
+        """
         raise NotImplementedError
 
     def parse_outputs(self, output_dir: str) -> Dict[str, Any]:
+        """Scan the output directory and return discovered file paths.
+
+        Returns a dict with keys like "output_dir" and "files". / 扫描输出目录返回文件路径。
+        """
         raise NotImplementedError
 
     def normalize_outputs(self, parsed: Dict[str, Any]) -> Dict[str, Any]:
+        """Transform parsed output dict to match the tool's output_schema.
+
+        Plugins may override this to remap field names without changing the
+        file-discovery logic in parse_outputs(). / 插件可覆盖此方法重新映射字段。
+        """
         raise NotImplementedError
 
     def dry_run(self, params: Dict[str, Any]) -> RunResult:
+        """Convenience: run with dry_run=True. / 便捷方法：以试运行模式执行。"""
         return self.run(params, dry_run=True)
 
 
 # ── GenericCommandSkill ────────────────────────────────────────────────
+# This is the workhorse: it maps a YAML tool definition to a fully functional
+# ToolSkill.  Instead of writing Python, users author YAML with a command_template
+# string like `tool --input {input} --threads {threads}`.  GenericCommandSkill
+# renders the template, resolves the conda environment, and invokes the command.
+#
+# 这是主力类：将 YAML 工具定义映射为完整的 ToolSkill。用户在 YAML 中编写
+# command_template 字符串，由 GenericCommandSkill 渲染模板、解析 conda 环境并调用命令。
 
 
 class SafeFormatDict(dict):
+    """A dict subclass that returns "" for missing keys during str.format_map().
+
+    # Motivation / 动机
+    Python's str.format_map() raises KeyError when a template contains a key
+    that is not in the mapping.  Tool command templates may reference optional
+    parameters (e.g. `{metaphlan_long_reads_flag}`) that are legitimately absent.
+    SafeFormatDict returns "" for these so the template renders cleanly with an
+    empty string in place of the missing parameter. / 缺键返回 "" 而非 KeyError。
+
+    # Usage / 用法
+        template = "tool --flag {optional_flag} --input {input}"
+        params = SafeFormatDict({"input": "file.fasta"})
+        template.format_map(params)  # → "tool --flag  --input file.fasta"
+    """
     def __missing__(self, key: str) -> str:
+        """Return "" for any key not in the dict. / 字典中不存在的键返回 ""。"""
         return ""
 
 
 class GenericCommandSkill(ToolSkill):
-    """Generic command-template wrapper for registered command-line tools."""
+    """Generic command-template wrapper for registered command-line tools.
+
+    # How it works / 工作原理
+    1. Constructor receives YAML metadata dict from ToolRegistry. / 构造器接收 YAML 元数据
+    2. select_params() merges user params with defaults (threads, database paths, etc.).
+       / select_params() 合并用户参数与默认值
+    3. command_text() renders the template with SafeFormatDict to avoid KeyError.
+       / command_text() 使用 SafeFormatDict 渲染模板
+    4. build_command() tokenizes the rendered text via shlex.split(). / shlex.split() 分词
+    5. run() resolves the conda env, optionally redirects stdout/stderr to files,
+       and invokes subprocess.run() with a configurable timeout. / 解析环境并执行
+
+    # Stdout redirection / 标准输出重定向
+    If the command template contains `> output.txt`, _command_without_stdout_redirect()
+    strips the redirection from the command list and opens the target file as a
+    handle passed to subprocess.run().  This avoids shell=True while still
+    supporting large output files that would overwhelm PIPE buffers. / 支持大文件
+    输出而不使用 shell=True。
+    """
 
     def __init__(self, metadata: Mapping[str, Any]) -> None:
+        # Store the full metadata dict; YAML fields beyond the documented ones
+        # are preserved for tool-specific logic. / 存储完整元数据，未记录字段也保留
         self.metadata = dict(metadata)
         self.name = str(metadata["id"])
-        self.version = None
+        self.version = None  # Can be set by a tool-specific subclass / 可由工具子类设置
         self.env_name = str(metadata.get("env_name", "abi-base"))
+        # input_schema and output_schema are lightweight wrappers that plugins
+        # may override with richer typing / 输入输出 schema 是轻量包装器
         self.input_schema = {"inputs": metadata.get("inputs", [])}
         self.output_schema = {"outputs": metadata.get("outputs", [])}
 
     @property
     def executable(self) -> str:
+        """The binary name or path. Defaults to the tool id if not set in YAML.
+
+        # Why default to id? / 为什么默认用 id？
+        Many tools use the same name for their registry id and binary (e.g.
+        "fastqc" is both the id and the executable name), so defaulting to
+        the id reduces YAML boilerplate. / 减少 YAML 样板代码。
+        """
         return str(self.metadata.get("executable") or self.name)
 
     @property
     def command_template(self) -> str:
+        """The Python format-string template for the command.
+
+        If not specified in YAML, a sensible default is generated from the
+        executable name and common parameters. / 未指定时从可执行文件名生成默认模板。
+        """
         template = self.metadata.get("command_template")
         if template:
             return str(template)
@@ -131,17 +323,46 @@ class GenericCommandSkill(ToolSkill):
 
     @property
     def mamba_root(self) -> Path:
+        """Resolved path to the conda/mamba installation root.
+
+        Delegates to abi.config.resolved_mamba_root() which checks the
+        ABI_MAMBA_ROOT env var, config file, and default paths in order.
+        / 按优先级解析 conda/mamba 根目录。
+        """
         return resolved_mamba_root()
 
     @property
     def env_prefix(self) -> Path:
+        """Path to the conda environment directory: {mamba_root}/envs/{env_name}.
+
+        This is the conda convention: environments live under <prefix>/envs/<name>.
+        / conda 约定：环境位于 <prefix>/envs/<name>。
+        """
         return self.mamba_root / "envs" / self.env_name
 
     @property
     def env_bin(self) -> Path:
+        """Path to the bin/ directory inside the conda environment.
+
+        Prepending this to PATH is how we "activate" the environment without
+        running the conda shell activation script. / 前置到 PATH 以"激活"环境。
+        """
         return self.env_prefix / "bin"
 
     def runtime_env(self) -> Dict[str, str]:
+        """Build the OS environment dict for subprocess invocation.
+
+        # What we do / 做了什么
+        - Copy the current process environment (so PATH, HOME, etc. are inherited).
+          / 复制当前进程环境
+        - Prepend {env_bin} to PATH so the conda env's binaries are found first.
+          / 前置 conda env 的 bin 目录
+        - Set CONDA_PREFIX and MAMBA_ROOT_PREFIX so tools that introspect their
+          conda environment (e.g. Python scripts that check sys.prefix) work correctly.
+          / 设置 CONDA_PREFIX 等供工具内省
+        - Remove PYTHONPATH to prevent the host Python's site-packages from
+          leaking into the isolated conda environment. / 移除 PYTHONPATH 防泄漏
+        """
         env = os.environ.copy()
         if self.env_bin.exists():
             env["PATH"] = f"{self.env_bin}{os.pathsep}{env.get('PATH', '')}"
@@ -151,16 +372,31 @@ class GenericCommandSkill(ToolSkill):
         return env
 
     def check_installation(self) -> bool:
+        """Return True if the tool executable can be found.
+
+        # Resolution order / 解析顺序
+        1. If mock_tools is set, always return True (for testing). / mock 模式直接返回
+        2. If executable is an absolute path or contains a directory component,
+           check with .exists() directly. / 绝对路径直接检查
+        3. Otherwise, search in the conda env's bin directory via shutil.which().
+           / 在 conda env 的 bin 目录中搜索
+        """
         if self.metadata.get("mock_tools"):
             return True
         executable_path = Path(self.executable)
+        # Absolute path or path with directory: check directly / 绝对路径或含目录：直接检查
         if executable_path.is_absolute() or executable_path.parent != Path("."):
             return executable_path.exists()
+        # Simple name: search in conda env's bin / 简单名称：在 conda env 中搜索
         if not self.env_bin.exists():
             return False
         return shutil.which(self.executable, path=str(self.env_bin)) is not None
 
     def plan(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Return a lightweight plan dict describing this step.
+
+        Used by the pipeline orchestrator for dry-run previews. / 用于管道试运行预览。
+        """
         selected = self.select_params(params, mode=str(params.get("mode", "auto")))
         return {
             "tool_name": self.name,
@@ -170,6 +406,12 @@ class GenericCommandSkill(ToolSkill):
         }
 
     def validate_inputs(self, params: Dict[str, Any]) -> None:
+        """Check that all required input files exist on disk.
+
+        # Skip in dry_run / 试运行时跳过
+        In dry-run mode, input files may not exist yet (e.g. outputs of
+        upstream steps), so validation is skipped. / 试运行时上游输出可能还不存在。
+        """
         missing: List[str] = []
         for key in self.metadata.get("inputs", []):
             value = params.get(key)
@@ -179,7 +421,18 @@ class GenericCommandSkill(ToolSkill):
             raise ToolError(f"{self.name}: input files do not exist: {', '.join(missing)}")
 
     def select_params(self, params: Dict[str, Any], mode: str = "auto") -> Dict[str, Any]:
+        """Merge user params with tool-specific defaults.
+
+        # Default layering / 默认值层级
+        User params > Tool defaults > Pipeline-wide defaults
+
+        # Why setdefault and not {**defaults, **params}? / 为什么用 setdefault？
+        setdefault preserves user-provided values exactly as given, while dict
+        merging would overwrite user values with defaults if the defaults come
+        last.  This way the user always wins. / setdefault 确保用户值优先。
+        """
         selected = dict(params)
+        # ── Universal defaults / 通用默认值 ──
         selected.setdefault("threads", 1)
         selected.setdefault("database", "DATABASE_NOT_CONFIGURED")
         selected.setdefault("abricate_db", "card")
@@ -188,6 +441,10 @@ class GenericCommandSkill(ToolSkill):
         selected.setdefault("minimap2_preset", "map-ont")
         selected.setdefault("project_root", str(PROJECT_ROOT))
         selected.setdefault("abundance_label", "")
+        # ── Derived output paths / 推导输出路径 ──
+        # When both output_dir and sample_id are known, we can derive standard
+        # output file paths (alignment, BAM, abundance) so individual tools
+        # don't need to duplicate this logic. / 已知输出目录和样本 ID 时可推导标准输出路径
         if selected.get("output_dir") and selected.get("sample_id"):
             output_dir = Path(str(selected["output_dir"]))
             sample_id = str(selected["sample_id"])
@@ -202,10 +459,23 @@ class GenericCommandSkill(ToolSkill):
         return selected
 
     def command_text(self, params: Dict[str, Any]) -> str:
+        """Render the command template as a string.
+
+        # SafeFormatDict usage / SafeFormatDict 的用途
+        If the template references a key not in params (e.g. an optional flag),
+        SafeFormatDict returns "" instead of raising KeyError. This means the
+        rendered command will have an empty placeholder rather than crashing.
+        / 引用不存在参数时不崩溃，而是渲染为空格。
+        """
         selected = self.select_params(params, mode=str(params.get("mode", "auto")))
         return self.command_template.format_map(SafeFormatDict(_template_values(selected)))
 
     def build_command(self, params: Dict[str, Any]) -> List[str]:
+        """Render and tokenize the command into a list of strings.
+
+        Uses shlex.split() to parse the rendered template, respecting quoting
+        rules (e.g. `--out "{output_dir}/report.html"`). / shlex.split() 解析渲染后的模板。
+        """
         selected = self.select_params(params, mode=str(params.get("mode", "auto")))
         template = self.command_text(selected)
         try:
@@ -214,16 +484,35 @@ class GenericCommandSkill(ToolSkill):
             raise ToolError(f"{self.name}: could not parse command template: {exc}") from exc
 
     def _required_template_fields(self) -> List[str]:
+        """Parse the command template and return all unique field names.
+
+        Uses string.Formatter().parse() which extracts {field_name} references
+        from format strings. Strips attribute/index suffixes (e.g. {x.y} → "x",
+        {a[0]} → "a") so we check the root key. / 解析模板返回所有字段名。
+        """
         fields: List[str] = []
         formatter = string.Formatter()
         for _, field_name, _, _ in formatter.parse(self.command_template):
             if field_name:
+                # Strip .attr and [index] suffixes / 去除属性和索引后缀
                 root = field_name.split(".", 1)[0].split("[", 1)[0]
                 if root not in fields:
                     fields.append(root)
         return fields
 
     def _validate_template_params(self, params: Mapping[str, Any]) -> None:
+        """Ensure all required template parameters have non-empty values.
+
+        # When this runs / 执行时机
+        Called inside run() AFTER validate_inputs() but BEFORE the subprocess,
+        so missing template params are caught before the tool is invoked.
+        / 在验证输入后、执行子进程前调用，提前捕获缺失参数。
+
+        # Why not always validate? / 为什么不总是验证？
+        Optional fields (OPTIONAL_TEMPLATE_FIELDS) are skipped, and
+        "DATABASE_NOT_CONFIGURED" is treated as a valid sentinel for tools that
+        don't need a database. / 可选字段和哨兵值被跳过。
+        """
         missing = []
         for field_name in self._required_template_fields():
             if field_name in OPTIONAL_TEMPLATE_FIELDS:
@@ -240,20 +529,50 @@ class GenericCommandSkill(ToolSkill):
     def _command_without_stdout_redirect(
         self, command: List[str]
     ) -> tuple[List[str], Optional[Path]]:
+        """Separate stdout redirection from the command token list.
+
+        # Motivation / 动机
+        command_template strings often end with `> {output_file}`.  We cannot
+        pass ">" to subprocess.run() as part of the token list — it only works
+        with shell=True.  Instead, we strip the ">" and target from the command
+        and pass the target as a file handle to subprocess.run()'s stdout kwarg.
+        / 将 ">" 重定向从命令中分离，避免使用 shell=True。
+
+        Returns (cleaned_command, target_path_or_None). / 返回清理后的命令和重定向路径。
+        """
         if ">" not in command:
             return command, None
         index = command.index(">")
         if index + 1 >= len(command):
             raise ToolError(f"{self.name}: stdout redirection is missing a target path")
         target = Path(command[index + 1])
+        # Remove ">" AND the target path from the command / 从命令中移除 ">" 和目标路径
         cleaned = command[:index] + command[index + 2 :]
         if ">" in cleaned:
             raise ToolError(f"{self.name}: multiple stdout redirections are not supported")
         return cleaned, target
 
     def run(self, params: Dict[str, Any], dry_run: bool = False) -> RunResult:
+        """Execute the tool command and return the result.
+
+        # Execution flow / 执行流程
+        1. select_params() — merge defaults / 合并默认参数
+        2. validate_inputs() — check input files exist / 验证输入文件
+        3. _validate_template_params() — check template fields populated / 验证模板字段
+        4. check_installation() — verify binary exists / 验证二进制文件
+        5. build_command() — render and tokenize / 渲染并分词
+        6. _command_without_stdout_redirect() — handle > redirect / 处理重定向
+        7. subprocess.run() — execute with timeout / 带超时执行
+        8. Return RunResult — immutable result record / 返回不可变结果
+
+        # Timeout handling / 超时处理
+        Timeout is configured via `timeout_seconds` param or the
+        ABI_TOOL_TIMEOUT_SECONDS env var.  On timeout, RunResult.status is
+        "timeout" and return_code is -1. / 超时时 status="timeout", return_code=-1。
+        """
         selected = self.select_params(params, mode=str(params.get("mode", "auto")))
         self.validate_inputs({**selected, "dry_run": dry_run})
+        # Full validation only for real runs / 实际运行才做完整验证
         if not dry_run:
             self._validate_template_params(selected)
             if not self.check_installation():
@@ -263,6 +582,7 @@ class GenericCommandSkill(ToolSkill):
                 )
         command = self.build_command(selected)
         start = datetime.now()
+        # ── Dry-run: skip execution, return immediately / 试运行：跳过执行 ──
         if dry_run:
             end = datetime.now()
             return RunResult(
@@ -278,6 +598,8 @@ class GenericCommandSkill(ToolSkill):
                 status="dry_run",
             )
 
+        # ── Real execution / 实际执行 ──
+        # Strip stdout redirection from command and get target path / 去掉重定向获取目标路径
         executable_command, redirected_stdout = self._command_without_stdout_redirect(command)
         stdout_path = redirected_stdout or (
             Path(str(selected["stdout_path"])) if selected.get("stdout_path") else None
@@ -286,10 +608,12 @@ class GenericCommandSkill(ToolSkill):
         stdout_handle = None
         stderr_handle = None
         timeout_seconds = self._timeout_seconds(selected)
+        # Track timeout state outside try/finally so finally block can use it / finally 块需要访问
         timed_out = False
         timeout_message = ""
         timeout_stdout = ""
         try:
+            # Open output file handles if paths are configured / 打开输出文件句柄
             if stdout_path:
                 stdout_path.parent.mkdir(parents=True, exist_ok=True)
                 stdout_handle = stdout_path.open("w", encoding="utf-8")
@@ -298,7 +622,7 @@ class GenericCommandSkill(ToolSkill):
                 stderr_handle = stderr_path.open("w", encoding="utf-8")
             completed = subprocess.run(
                 executable_command,
-                check=False,
+                check=False,  # We handle return codes ourselves / 自己处理返回码
                 text=True,
                 stdout=stdout_handle if stdout_handle else subprocess.PIPE,
                 stderr=stderr_handle if stderr_handle else subprocess.PIPE,
@@ -310,11 +634,13 @@ class GenericCommandSkill(ToolSkill):
             timeout_message = _timeout_message(self.name, timeout_seconds, exc)
             timeout_stdout = _timeout_output(exc.stdout)
         finally:
+            # Always close file handles to flush buffers / 总是关闭文件句柄刷新缓冲
             if stdout_handle:
                 stdout_handle.close()
             if stderr_handle:
                 stderr_handle.close()
         end = datetime.now()
+        # ── Build result / 构建结果 ──
         if timed_out:
             status = "timeout"
             return_code = -1
@@ -323,6 +649,7 @@ class GenericCommandSkill(ToolSkill):
         else:
             status = "success" if completed.returncode == 0 else "failed"
             return_code = completed.returncode
+            # If output was redirected to a file, captions are empty / 输出重定向到文件则捕获为空
             stdout = "" if stdout_path else completed.stdout
             stderr = "" if stderr_path else completed.stderr
         return RunResult(
@@ -343,6 +670,17 @@ class GenericCommandSkill(ToolSkill):
         )
 
     def _timeout_seconds(self, selected: Mapping[str, Any]) -> float | None:
+        """Resolve the timeout for this tool invocation.
+
+        # Resolution order / 解析顺序
+        1. User-provided `timeout_seconds` in step params / 用户步骤参数
+        2. Tool-level `timeout_seconds` in YAML metadata / YAML 元数据
+        3. ABI_TOOL_TIMEOUT_SECONDS environment variable / 环境变量
+        4. DEFAULT_TOOL_TIMEOUT_SECONDS constant (hard-coded fallback) / 硬编码兜底
+
+        Returns None if no timeout should be applied (subprocess waits forever).
+        / 返回 None 表示不设超时。
+        """
         value = selected.get("timeout_seconds", self.metadata.get("timeout_seconds"))
         return timeout_from_env_or_value(
             "ABI_TOOL_TIMEOUT_SECONDS",
@@ -351,18 +689,58 @@ class GenericCommandSkill(ToolSkill):
         )
 
     def parse_outputs(self, output_dir: str) -> Dict[str, Any]:
+        """Discover output files by scanning the output directory.
+
+        The default implementation is a simple glob — subclasses for tools with
+        complex output structures (e.g. multiple subdirectories, specific file
+        patterns) should override this. / 默认 glob 扫描，复杂输出结构的工具应覆盖此方法。
+        """
         files = sorted(str(path) for path in Path(output_dir).glob("*"))
         return {"output_dir": output_dir, "files": files}
 
     def normalize_outputs(self, parsed: Dict[str, Any]) -> Dict[str, Any]:
+        """Return parsed outputs unchanged (identity transform).
+
+        Subclasses override this to remap field names, filter files, or add
+        computed values. / 子类可覆盖以重新映射字段名或添加计算值。
+        """
         return dict(parsed)
 
 
 # ── ToolRegistry ───────────────────────────────────────────────────────
+# Registry that loads tool definitions from a YAML file (tool_registry.yaml)
+# and provides lookup, creation, and health-check operations.
+#
+# YAML 工具注册表，从 tool_registry.yaml 加载工具定义，提供查找、创建和健康检查操作。
 
 
 class ToolRegistry:
+    """YAML-based tool registry with resource checking.
+
+    # Responsibilities / 职责
+    1. Load and validate tool_registry.yaml at startup. / 加载并验证 YAML
+    2. Provide O(1) lookups by tool_id. / O(1) 查找
+    3. Create GenericCommandSkill instances on demand (factory pattern). / 工厂模式创建实例
+    4. Check tool installation status and resource availability. / 检查安装和资源状态
+
+    # Why a registry and not just dict? / 为什么用注册表而非简单 dict？
+    - Validation at load time (duplicate IDs, missing required fields). / 加载时验证
+    - Factory method (create()) injects mock_tools flag uniformly. / 工厂方法统一注入
+    - check_tools() provides a health-check summary consumed by the CLI. / 健康检查供 CLI 使用
+
+    # Thread safety / 线程安全
+    The registry is read-only after construction (the _tools dict is never
+    mutated after __init__), so it is safe to share across threads without
+    locking. / 构造后只读，线程安全。
+    """
+
     def __init__(self, tools: Iterable[Mapping[str, Any]]) -> None:
+        """Build the registry from an iterable of tool definition dicts.
+
+        # Validation / 验证
+        - Every tool must have a non-empty string id. / 每个工具必须有非空 id
+        - Duplicate ids raise ConfigError immediately (fail-fast). / 重复 id 立即报错
+        """
         self._tools: Dict[str, Dict[str, Any]] = {}
         for tool in tools:
             tool_id = str(tool.get("id", "")).strip()
@@ -374,6 +752,14 @@ class ToolRegistry:
 
     @classmethod
     def from_path(cls, path: str | Path | None = None) -> "ToolRegistry":
+        """Load the registry from a YAML file on disk.
+
+        # Why require an explicit path? / 为什么需要显式路径？
+        The path argument is required (no default) because the registry file
+        location depends on the ABI installation and deployment context.
+        Callers must explicitly provide it to avoid loading the wrong file.
+        / 必须显式提供路径以避免加载错误的文件。
+        """
         if path is None:
             raise ConfigError("ToolRegistry.from_path requires an explicit path")
         registry_path = Path(path)
@@ -387,20 +773,48 @@ class ToolRegistry:
         return cls(tools)
 
     def ids(self) -> List[str]:
+        """Return sorted tool IDs for stable iteration order.
+
+        # Why sorted? / 为什么排序？
+        Deterministic ordering is important for CLI output, reports, and tests.
+        Without sorting, dict iteration order (which IS insertion-ordered in
+        Python 3.7+) could vary across registry files. / 确定性顺序对 CLI 和测试很重要。
+        """
         return sorted(self._tools)
 
     def list_tools(self) -> List[Dict[str, Any]]:
+        """Return all tool metadata dicts in sorted id order.
+
+        Returns a list (not a generator) so callers can iterate multiple times.
+        / 返回列表而非生成器，调用者可多次遍历。
+        """
         return [self._tools[tool_id] for tool_id in self.ids()]
 
     def get(self, tool_id: str) -> Dict[str, Any]:
+        """Look up a tool's metadata dict by id. Raises ConfigError if not found.
+
+        # Fail-fast / 快速失败
+        Raises ConfigError immediately rather than returning None, so callers
+        don't need to null-check and the error message includes the missing id.
+        / 立即报错而非返回 None，调用者无需空值检查。
+        """
         if tool_id not in self._tools:
             raise ConfigError(f"Tool {tool_id!r} is not registered")
         return self._tools[tool_id]
 
     def has(self, tool_id: str) -> bool:
+        """Check if a tool id is registered (safe for conditionals). / 安全检查工具是否注册。"""
         return tool_id in self._tools
 
     def create(self, tool_id: str, *, mock_tools: bool = False) -> GenericCommandSkill:
+        """Factory: create a GenericCommandSkill from the tool's metadata.
+
+        # Why a factory method? / 为什么用工厂方法？
+        - Centralizes the mock_tools injection (every skill created in test
+          mode gets this flag uniformly). / 统一注入 mock_tools 标志
+        - Copies the metadata dict to prevent mutations from leaking back
+          into the registry. / 复制元数据防止修改泄漏回注册表
+        """
         metadata = dict(self.get(tool_id))
         metadata["mock_tools"] = mock_tools
         return GenericCommandSkill(metadata)
@@ -408,6 +822,21 @@ class ToolRegistry:
     def check_tools(
         self, *, mock_tools: bool = False, config: Mapping[str, Any] | None = None
     ) -> List[Dict[str, Any]]:
+        """Health-check all registered tools and return a status summary.
+
+        # What this checks / 检查内容
+        1. Is the tool binary installed and findable? / 工具二进制是否可找到？
+        2. Are required resource files (databases, models, indexes) present?
+           / 资源文件是否存在？
+
+        Returns a list of dicts suitable for rendering as a table or JSON.
+        / 返回字典列表，适合渲染为表格或 JSON。
+
+        # Why does this exist separately from check_installation()? / 为什么独立存在？
+        check_installation() checks one tool. check_tools() iterates over all
+        tools and also checks resource availability, producing a machine-readable
+        summary consumed by `abi check` and dashboard views. / 批量检查并检查资源。
+        """
         rows: List[Dict[str, Any]] = []
         for metadata in self.list_tools():
             skill = self.create(str(metadata["id"]), mock_tools=mock_tools)
@@ -432,13 +861,31 @@ class ToolRegistry:
 
 
 # ── Internal helpers ───────────────────────────────────────────────────
+# Package-private utilities for template rendering, timeout handling, and
+# resource validation. Not exported in __all__.
+# 包内部工具函数，不被 __all__ 导出。
 
 
 def _template_values(values: Mapping[str, Any]) -> Dict[str, Any]:
+    """Recursively convert all values to template-safe strings.
+
+    Applies _template_value() to each value in the mapping. / 将每个值转为模板安全字符串。
+    """
     return {key: _template_value(value) for key, value in values.items()}
 
 
 def _template_value(value: Any) -> Any:
+    """Convert a single value for safe insertion into a command template.
+
+    # Why convert Path to POSIX? / 为什么要转 Path 为 POSIX 路径？
+    On Windows, Path.as_posix() uses forward slashes, which are understood by
+    most bioinformatics tools even on Windows (WSL, Git Bash, MSYS2). / 正斜杠
+    在 Windows 上的生物信息工具中也能工作。
+
+    # Why convert backslashes on Windows? / 为什么在 Windows 上转反斜杠？
+    Backslashes in command templates would be interpreted as escape characters
+    by shlex.split(), causing parse errors. / 反斜杠会被 shlex.split() 解释为转义字符。
+    """
     if isinstance(value, Path):
         return value.as_posix()
     if os.name == "nt" and isinstance(value, str):
@@ -447,6 +894,11 @@ def _template_value(value: Any) -> Any:
 
 
 def _timeout_output(exc_stdout: Any) -> str:
+    """Safely decode stderr/stdout captured from a TimeoutExpired exception.
+
+    subprocess.TimeoutExpired stores captured output as bytes or str depending
+    on whether text=True was used. This helper normalizes to str. / 统一解码为字符串。
+    """
     if exc_stdout is None:
         return ""
     if isinstance(exc_stdout, bytes):
@@ -459,9 +911,19 @@ def _timeout_message(
     timeout_seconds: float | None,
     exc: subprocess.TimeoutExpired,
 ) -> str:
+    """Build a human-readable timeout error message.
+
+    Includes the tool name, timeout value, and any stderr captured before the
+    timeout. / 包含工具名、超时值和超时前捕获的 stderr。
+
+    # Why ":g" format? / 为什么用 ":g" 格式？
+    The ":g" format specifier removes trailing zeros (e.g. 3600.0 → "3600s"
+    rather than "3600.0s"). / 去除尾随零使输出更整洁。
+    """
     stderr = _timeout_output(exc.stderr)
     timeout_text = "configured timeout" if timeout_seconds is None else f"{timeout_seconds:g}s"
     message = f"{tool_name}: command timed out after {timeout_text}"
+    # Include stderr only if non-empty for cleaner error messages / 仅 stderr 非空时才包含
     return "\n".join(text for text in [message, stderr.strip()] if text)
 
 
@@ -469,6 +931,28 @@ def _resource_status(
     metadata: Mapping[str, Any],
     config: Mapping[str, Any],
 ) -> tuple[str, Dict[str, str]]:
+    """Check whether resource files (databases, models, indexes) are configured and exist.
+
+    # Resource resolution logic / 资源解析逻辑
+    1. Parse the tool's command_template to find resource field references
+       (e.g. {database}, {model}, {refgraph}) via _resource_fields(). / 解析模板找资源引用
+    2. Look up values in the pipeline config at two levels: / 两级查找
+       - config.resources.<tool_id> — tool-specific resources / 工具级资源
+       - config.resources — shared resources (applicable to all tools) / 共享资源
+       - config.tool_params.<tool_id> — parameters that may include resource paths / 参数中
+    3. For each field, check if a value is configured and if the path exists on disk.
+       / 检查值是否配置且路径是否存在
+
+    # Return values / 返回值
+    - "ok": All resource fields are configured and paths exist. / 全部配置且存在
+    - "missing": At least one configured path does not exist on disk. / 有路径不存在
+    - "not_configured": At least one resource field has no value configured. / 有字段未配置
+    - "not_required": No resource fields found in the template. / 模板中无资源字段
+
+    Returns (status, details_dict) where details maps field_name → path or status.
+    / 返回 (状态, 详情字典)，详情映射字段名到路径或状态。
+    """
+    # Extract resource field names from the command template / 从命令模板提取资源字段名
     fields = _resource_fields(str(metadata.get("command_template", "")))
     if not fields:
         return "not_required", {}
@@ -477,13 +961,16 @@ def _resource_status(
     resources = config.get("resources", {})
     tool_params = config.get("tool_params", {})
     configured: Dict[str, Any] = {}
+    # Layer 1: tool-specific resource config / 第1层：工具级资源配置
     if isinstance(resources, Mapping):
         tool_resources = resources.get(tool_id, {})
         if isinstance(tool_resources, Mapping):
             configured.update(tool_resources)
+        # Layer 2: shared/global resources (e.g. a common database path) / 第2层：共享资源
         for field in fields:
             if field in resources:
                 configured[field] = resources[field]
+    # Layer 3: tool_params may also contain resource paths / 第3层：工具参数中的资源路径
     if isinstance(tool_params, Mapping):
         tool_parameter_values = tool_params.get(tool_id, {})
         if isinstance(tool_parameter_values, Mapping):
@@ -513,11 +1000,23 @@ def _resource_status(
 
 
 def _resource_fields(command_template: str) -> List[str]:
+    """Parse a command template string and return resource-type field names.
+
+    # What qualifies as a resource field? / 哪些字段算资源字段？
+    Only field names listed in RESOURCE_FIELDS (database, model, refgraph, etc.)
+    are returned.  Other template fields like {input}, {threads} are not resources
+    and should not be checked for on-disk existence. / 只有 RESOURCE_FIELDS 中
+    的字段被返回，其余字段不检查磁盘存在性。
+
+    Uses string.Formatter().parse() to extract {field_name} references. / 使用
+    Formatter.parse() 提取 {field_name} 引用。
+    """
     fields: List[str] = []
     formatter = string.Formatter()
     for _, field_name, _, _ in formatter.parse(command_template):
         if not field_name:
             continue
+        # Strip .attr and [index] suffixes to get the root key / 去后缀得根键
         root = field_name.split(".", 1)[0].split("[", 1)[0]
         if root in RESOURCE_FIELDS and root not in fields:
             fields.append(root)

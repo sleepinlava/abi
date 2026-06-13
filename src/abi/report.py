@@ -1,4 +1,26 @@
-"""Generic ABI report writer."""
+"""Generic ABI report writer.
+
+# Purpose / 目的
+Produces three output files in a report/ subdirectory:
+    report.md          — Markdown (human-readable, portable) / 人类可读的 Markdown
+    report.html        — HTML (browser-friendly, styled) / 浏览器友好的 HTML
+    report_summary.json — JSON (machine-readable, API-friendly) / 机器可读的 JSON
+
+# Plugin usage / 插件用法
+Plugins call write_generic_report() at the end of a pipeline run, passing the
+plan object (for metadata like project name, analysis type, tool list) and the
+table_summary from StandardTableManager.summarize() (for row counts per table).
+
+# Design decisions / 设计决策
+- **Three formats, one function**: Generating all three from a single call
+  ensures consistency — the Markdown, HTML, and JSON all reflect the same data.
+  / 一个调用生成三种格式确保一致性
+- **Minimal dependencies**: No template engine is used. The HTML is built with
+  string concatenation so there are zero dependencies beyond the stdlib.
+  / 无模板引擎，零额外依赖
+- **Escape early**: html.escape() is applied at generation time so plugins that
+  later embed the HTML don't need to remember to escape. / 生成时转义 HTML
+"""
 
 from __future__ import annotations
 
@@ -17,9 +39,29 @@ def write_generic_report(
     table_summary: Mapping[str, Mapping[str, Any]],
     title: str = "ABI Report",
 ) -> Dict[str, Path]:
+    """Write a human-readable + machine-readable pipeline report.
+
+    # What plugins need to provide / 插件需要提供
+    - plan: The pipeline plan object (duck-typed: needs .to_dict() or be dict) / 管道计划
+    - result_dir: Where to create the report/ subdirectory / 报告输出目录
+    - table_summary: Dict from StandardTableManager.summarize() / 表格汇总
+
+    # What is produced / 生成内容
+    - report/report.md: Markdown with project metadata and a table summary. / Markdown 格式
+    - report/report.html: HTML with the same content, escaped for safety. / HTML 格式
+    - report/report_summary.json: Machine-readable summary (same data as Markdown).
+      / 机器可读的 JSON
+
+    # Duck-typing the plan / plan 的鸭子类型
+    The `plan` parameter is typed as `Any` intentionally: it can be a dataclass
+    with .to_dict(), a plain dict, or any object with dict-like access. This
+    decouples the report writer from the plan schema so plugins can evolve their
+    plan structures independently. / 接受任何有 to_dict() 或 dict 访问的对象。
+    """
     root = Path(result_dir)
     report_dir = root / "report"
     report_dir.mkdir(parents=True, exist_ok=True)
+    # Normalize plan to a dict for uniform access / 将 plan 统一转为 dict
     plan_data = plan.to_dict() if hasattr(plan, "to_dict") else dict(plan)
     project_name = str(plan_data.get("project_name", root.name))
     analysis_type = str(plan_data.get("analysis_type", "unknown"))
@@ -27,6 +69,9 @@ def write_generic_report(
     markdown = report_dir / "report.md"
     html = report_dir / "report.html"
 
+    # ── Markdown report / Markdown 格式 ──
+    # Build line by line via join() for clarity (f-strings would be unwieldy
+    # with this many lines). / 逐行构建，比 f-string 更清晰。
     markdown.write_text(
         "\n".join(
             [
@@ -38,6 +83,7 @@ def write_generic_report(
                 "",
                 "## Standard Tables",
                 "",
+                # Right-aligned "Rows" column for numeric data / 行数列右对齐
                 "| Table | Rows | Path |",
                 "| --- | ---: | --- |",
                 *[
@@ -45,6 +91,7 @@ def write_generic_report(
                     for table, meta in sorted(table_summary.items())
                 ],
                 "",
+                # Disclaimer: dry-run = structural validation only / 免责声明
                 "Dry-run artifacts prove planning, command rendering, provenance, and table "
                 "contracts only; biological conclusions require real tool outputs.",
             ]
@@ -53,6 +100,9 @@ def write_generic_report(
         encoding="utf-8",
     )
 
+    # ── HTML report / HTML 格式 ──
+    # Build table rows first then interpolate into the HTML template. / 先构建行再插入模板。
+    # Every dynamic value is escaped via html.escape() to prevent XSS. / 所有动态值都转义防 XSS。
     html_rows = [
         (
             f"<tr><td>{escape(table)}.tsv</td>"
@@ -89,6 +139,10 @@ def write_generic_report(
         + "\n",
         encoding="utf-8",
     )
+
+    # ── JSON summary / JSON 格式 ──
+    # Machine-readable version: suitable for API responses, CI checks, and
+    # dashboard ingestion. / 适合 API 响应、CI 检查和仪表盘摄取。
     (report_dir / "report_summary.json").write_text(
         json.dumps(
             {
@@ -98,7 +152,7 @@ def write_generic_report(
                 "standard_tables": dict(table_summary),
             },
             indent=2,
-            ensure_ascii=False,
+            ensure_ascii=False,  # Allow Unicode in project names / 允许中文项目名
         )
         + "\n",
         encoding="utf-8",

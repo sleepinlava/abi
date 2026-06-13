@@ -1,4 +1,58 @@
-"""Transport-neutral ABI interface for agent platforms."""
+"""ABIAgentInterface — the stable, transport-neutral entry point for ABI agents.
+
+This module exposes `ABIAgentInterface`, the single, versioned boundary through which
+all agentic callers (CLI JSON, MCP servers, HTTP jobs, OpenAI function-calling) interact
+with the ABI bioinformatics platform.
+
+# Agent interaction model / Agent 交互模型
+
+Every public method returns a JSON string following a unified three-status envelope:
+
+    success               — operation completed; ``result`` holds the payload
+    confirmation_required — the operation is gated on user approval (used by ``run``)
+    error                 — operation failed; ``error`` + ``error_code`` +
+                            ``diagnostic_hints`` guide automated recovery
+
+Callers never need to parse free-text messages; they inspect ``status`` and branch.
+
+# Lifecycle methods (safe call order) / 生命周期方法（安全调用顺序）
+
+The recommended progression from discovery to execution is:
+
+    1. list_types()       — discover installed analysis plugins
+    2. plan()             — resolve config + inputs, persist execution_plan.json
+    3. dry_run()          — render commands & provenance without executing external tools
+    4. inspect()          — summarize run health from an existing result directory
+    5. report()           — regenerate reports from a completed run
+    6. run()              — execute (requires confirm_execution=true)
+
+Additional utility methods:
+
+    export_nextflow()     — export the plan as a Nextflow DSL2 workflow
+    export_agent_context()— compact machine-readable guidance for agent callers
+    doctor_agent()        — human-readable operating guide for an analysis type
+    dispatch()            — function-calling style tool router (used by MCP/OpenAI)
+
+# dispatch() routing / dispatch() 路由机制
+
+``dispatch(tool_name, arguments)`` is the bridge between function-calling schemas and
+the public methods. It maps hyphenated/aliased tool names (e.g. ``"dry-run"``,
+``"abi_dry_run"``) to the canonical method name, then calls the method with unpacked
+keyword arguments. Unknown tool names produce an immediate ``error`` envelope with
+``diagnostic_hints`` so callers can self-correct.
+
+# Design decisions / 设计决策
+
+- Every method returns a *string* (serialized JSON) so that the interface is
+  wire-format agnostic — a CLI subprocess, an MCP tool response, and an HTTP body
+  all look identical.
+- The ``_call`` helper enforces the envelope contract and centralizes error
+  classification via ``classify_exception`` from ``abi.diagnostics``.
+- ``MemoryError`` is re-raised intentionally — OOM conditions should not be
+  swallowed by the error envelope.
+- ``confirmation_required`` is treated as a first-class status (not an error) so
+  that orchestrators can present a clear approval flow without ambiguous parsing.
+"""
 
 from __future__ import annotations
 
@@ -33,10 +87,27 @@ class ABIAgentInterface:
 
     Every public method returns a JSON string with the same envelope:
     ``status``, ``command``, and either ``result`` or ``error``.
+
+    # 每个公共方法都返回统一 JSON 信封, 包含 status / command / result 或 error。
     """
 
+    # ------------------------------------------------------------------
+    # Public lifecycle methods / 公共生命周期方法
+    # ------------------------------------------------------------------
+
     def list_types(self) -> str:
-        """List installed ABI analysis plugin types."""
+        """Return installed ABI analysis plugin types as a JSON envelope.
+
+        Role in lifecycle: **Step 1 — Discovery.**
+        Call this first so the agent knows which analysis types are available
+        before constructing a plan.
+
+        Returns:
+            success envelope with ``analysis_types`` (list of {analysis_type,
+            name, description}) and ``count``.
+
+        # 返回已安装的 ABI 分析插件类型, 这是生命周期第一步: 发现可用分析类型。
+        """
         return self._call("list_types", self._list_types)
 
     def plan(
@@ -52,7 +123,28 @@ class ABIAgentInterface:
         log_dir: Optional[str] = None,
         check_files: bool = True,
     ) -> str:
-        """Build and persist an ABI execution plan without running external tools."""
+        """Build and persist an ABI execution plan without running external tools.
+
+        Role in lifecycle: **Step 2 — Plan.**
+        Resolves the plugin configuration, builds a full execution plan (ordered
+        steps with tool contracts), and persists it as ``execution_plan.json`` in
+        the output directory. No external tools are executed.
+
+        Key parameters:
+            analysis_type: plugin ID returned by ``list_types()``.
+            config_path:   optional YAML/JSON config override.
+            sample_sheet:  optional TSV mapping sample IDs to input paths.
+            profile:       config profile to load (default ``"dry_run"``).
+            mode:          optional workflow sub-mode (e.g. ``"plasmid"``).
+            check_files:   whether to verify input file existence during planning.
+
+        Returns:
+            success envelope with ``plan_path``, ``steps`` (count), and the
+            full ``plan`` dictionary.
+
+        # 构建并持久化 ABI 执行计划, 不会运行外部工具。
+        # 这是生命周期第二步: 解析配置 -> 构建步骤 -> 写入 execution_plan.json。
+        """
         return self._call(
             "plan",
             self._plan,
@@ -81,7 +173,24 @@ class ABIAgentInterface:
         progress: Optional[bool] = None,
         check_files: bool = True,
     ) -> str:
-        """Render commands and provenance artifacts without executing real tools."""
+        """Render commands and provenance artifacts without executing real tools.
+
+        Role in lifecycle: **Step 3 — Dry Run.**
+        Identical pipeline to ``plan()`` but additionally renders every command
+        line, captures resolved inputs, and writes provenance TSV files. Tools are
+        run in *mock mode* (command strings are logged, not executed). This is the
+        safest way to validate a complete workflow before real execution.
+
+        Key parameters (beyond ``plan()``):
+            progress:  if True, emit progress events (JSONL) during dry run.
+
+        Returns:
+            success envelope with ``outdir``, ``outputs`` (mapping of artifact
+            keys to paths), and ``written_files``.
+
+        # 渲染命令和溯源产物, 但不真正执行外部工具。
+        # 这是生命周期第三步: 以 mock 模式验证完整工作流, 是执行前最安全的检查点。
+        """
         return self._call(
             "dry_run",
             self._dry_run,
@@ -98,7 +207,23 @@ class ABIAgentInterface:
         )
 
     def inspect(self, *, result_dir: Union[str, Path]) -> str:
-        """Inspect an ABI result directory and summarize run health."""
+        """Inspect an ABI result directory and summarize run health.
+
+        Role in lifecycle: **Step 4 — Inspect.**
+        Reads provenance artifacts (``commands.tsv``, ``resolved_inputs.tsv``,
+        ``run_summary.json``) from a completed (or partially completed) result
+        directory and surfaces failures, skipped steps, and missing inputs.
+
+        Parameters:
+            result_dir: path to a directory containing a prior ABI run's output.
+
+        Returns:
+            success envelope with ``status``, ``step_count``, ``failed_steps``,
+            ``skipped_steps``, and ``missing_or_placeholder_inputs``.
+
+        # 检查结果目录并总结运行健康状况。
+        # 这是生命周期第四步: 读取溯源文件, 快速暴露失败 / 跳过 / 缺失输入。
+        """
         return self._call("inspect", self._inspect, result_dir=result_dir)
 
     def report(
@@ -107,7 +232,25 @@ class ABIAgentInterface:
         result_dir: Union[str, Path],
         analysis_type: Optional[str] = None,
     ) -> str:
-        """Regenerate ABI reports from an existing result directory."""
+        """Regenerate ABI reports from an existing result directory.
+
+        Role in lifecycle: **Step 5 — Report.**
+        Reads the ``execution_plan.json`` from a prior run and invokes the
+        plugin's ``write_report()`` hook to produce ``report/report.md``,
+        ``report/report.html``, and any analysis-specific summaries. This is
+        safe to call repeatedly on the same result directory.
+
+        Parameters:
+            result_dir:   path to a completed ABI run directory.
+            analysis_type: optional override; auto-detected from the plan if omitted.
+
+        Returns:
+            success envelope with ``outputs`` (artifact paths) and
+            ``written_files``.
+
+        # 从已有结果目录重新生成报告。
+        # 这是生命周期第五步: 读取 execution_plan.json -> 调用 write_report() -> 输出报告。
+        """
         return self._call(
             "report",
             self._report,
@@ -139,7 +282,40 @@ class ABIAgentInterface:
         check_files: bool = True,
         confirm_execution: bool = False,
     ) -> str:
-        """Run an ABI plan through a runtime backend after explicit confirmation."""
+        """Run an ABI plan through a runtime backend after explicit confirmation.
+
+        Role in lifecycle: **Step 6 — Execute.**
+        This is the *only* method that executes real external tools. It requires
+        ``confirm_execution=true`` as a deliberate safety gate: without it, a
+        ``confirmation_required`` envelope is returned so the orchestrator can
+        present an approval prompt to the user.
+
+        **Data flow:**
+            1. If ``confirm_execution`` is False -> return ``confirmation_required``
+               immediately (no side effects).
+            2. Resolve plugin config and build the execution plan.
+            3. Select runtime: ``engine=local`` uses ``LocalRuntime`` (subprocess);
+               ``engine=nextflow`` uses ``NextflowRuntime`` (DSL2 pipeline).
+            4. Execute plan steps, capture return code, and collect outputs.
+
+        Key parameters:
+            engine:             ``"local"`` or ``"nextflow"``.
+            confirm_execution:  must be ``True`` to proceed past the safety gate.
+            smoke:              if True with engine=local, tools run in mock mode
+                                (useful for integration tests).
+            resume:             resume a previous Nextflow run.
+            mamba_root:         path to the conda/mamba prefix for tool environments.
+
+        Returns:
+            - ``confirmation_required`` envelope when ``confirm_execution`` is
+              False (caller should re-invoke with ``confirm_execution=true``).
+            - ``success`` envelope with ``runtime_status``, ``return_code``,
+              ``outputs``, and ``written_files``.
+
+        # 通过运行时后端运行 ABI 计划, 必须先显式确认。
+        # 这是生命周期第六步(最后一步): 唯一真正执行外部工具的方法。
+        # confirm_execution=false 时返回 confirmation_required, 作为安全闸门。
+        """
         return self._call(
             "run",
             self._run,
@@ -181,7 +357,25 @@ class ABIAgentInterface:
         mamba_root: Optional[Union[str, Path]] = None,
         check_files: bool = True,
     ) -> str:
-        """Export an ABI execution plan to Nextflow DSL2 without running it."""
+        """Export an ABI execution plan to Nextflow DSL2 without running it.
+
+        Utility method (not in the strict ``run()`` path).
+        Builds the plan (same as ``plan()``) but serializes it as a Nextflow
+        ``main.nf`` workflow file instead of executing it. Useful for portability
+        and HPC environments where Nextflow is the preferred orchestrator.
+
+        Key parameters:
+            output:     path where the ``main.nf`` workflow file will be written.
+            smoke:      if True, inject smoke-test parameters into the workflow.
+            mamba_root: conda/mamba prefix path for containerized steps.
+
+        Returns:
+            success envelope with ``workflow`` (path), ``steps`` (count),
+            and ``written_files``.
+
+        # 将执行计划导出为 Nextflow DSL2 工作流文件, 不执行。
+        # 适用于 HPC 环境或需要 Nextflow 编排的场景。
+        """
         return self._call(
             "export_nextflow",
             self._export_nextflow,
@@ -200,7 +394,17 @@ class ABIAgentInterface:
         )
 
     def export_agent_context(self, *, analysis_type: str) -> str:
-        """Export compact machine-readable guidance for untrained agent callers."""
+        """Export compact machine-readable guidance for untrained agent callers.
+
+        Returns a dictionary with: analysis type metadata, the recommended safe
+        call sequence, tool permissions, standard table names, important artifact
+        paths, known error codes, and recovery rules. This is designed to be
+        injected into an agent's system prompt so that even an untrained LLM can
+        use ABI correctly on the first attempt.
+
+        # 导出紧凑的机器可读指南, 供未经训练的 LLM agent 使用。
+        # 包含安全调用顺序 / 工具权限 / 标准表 / 重要产物 / 错误码和恢复规则。
+        """
         return self._call(
             "export_agent_context",
             self._export_agent_context,
@@ -208,7 +412,14 @@ class ABIAgentInterface:
         )
 
     def doctor_agent(self, *, analysis_type: str) -> str:
-        """Return a short agent operating guide for an ABI analysis type."""
+        """Return a short human-readable operating guide for an ABI analysis type.
+
+        Renders the same information as ``export_agent_context()`` but as a
+        plain-text summary intended for display to a human operator or for
+        inclusion in a chat-based agent prompt.
+
+        # 返回人类可读的简短操作指南, 适合展示给用户或注入聊天式 agent prompt。
+        """
         return self._call("doctor_agent", self._doctor_agent, analysis_type=analysis_type)
 
     def abi_validate_result(
@@ -217,7 +428,18 @@ class ABIAgentInterface:
         result_dir: Union[str, Path],
         allow_empty_tables: bool = True,
     ) -> str:
-        """Validate an ABI result directory without modifying it."""
+        """Validate an ABI result directory without modifying it.
+
+        Checks that all expected artifacts (plan, provenance, tables, reports)
+        exist and conform to the plugin's output schema. Read-only; safe to call
+        at any time.
+
+        Parameters:
+            allow_empty_tables: if True, empty TSV tables do not trigger
+                                validation errors (useful for no-hit results).
+
+        # 验证 ABI 结果目录的结构完整性, 只读操作, 可随时安全调用。
+        """
         return self._call(
             "abi_validate_result",
             validate_abi_result_dir,
@@ -231,7 +453,13 @@ class ABIAgentInterface:
         result_dir: Union[str, Path],
         allow_empty_tables: bool = True,
     ) -> str:
-        """Backward-compatible alias for abi_validate_result."""
+        """Backward-compatible alias for ``abi_validate_result``.
+
+        Preserved so existing scripts referencing the old ``autoplasm`` namespace
+        continue to work after the rename to ``abi``.
+
+        # 向后兼容别名, 保留旧 autoplasm 命名空间的调用路径。
+        """
         return self._call(
             "autoplasm_validate_result",
             validate_autoplasm_result_dir,
@@ -240,7 +468,26 @@ class ABIAgentInterface:
         )
 
     def dispatch(self, tool_name: str, arguments: Optional[Mapping[str, Any]] = None) -> str:
-        """Dispatch a function-calling style tool invocation."""
+        """Dispatch a function-calling style tool invocation to the correct method.
+
+        This is the bridge between LLM function-calling schemas (where tool names
+        may be hyphenated like ``"dry-run"`` or prefixed like ``"abi_dry_run"``)
+        and the Python method names of this class. All variants map to the same
+        canonical method.
+
+        Data flow:
+            1. Look up ``tool_name`` in the aliases table.
+            2. If not found -> immediate ``error`` envelope with
+               ``diagnostic_hints`` and the list of available tool names.
+            3. If found -> call the Python method with unpacked ``**args``.
+            4. ``TypeError`` from mismatched arguments is caught and converted
+               to an error envelope (so callers see a structured error, not a
+               raw Python traceback).
+
+        # 将函数调用风格的工具调用路由到正确的方法。
+        # 这是 LLM function-calling schema 和 Python 方法之间的桥梁。
+        # 支持连字符别名 (如 "dry-run") 和前缀别名 (如 "abi_dry_run")。
+        """
         args = dict(arguments or {})
         aliases = {
             "list": "list_types",
@@ -310,6 +557,27 @@ class ABIAgentInterface:
             )
 
     def _call(self, command: str, handler: Callable[..., Any], *args: Any, **kwargs: Any) -> str:
+        """Central dispatch helper that enforces the JSON envelope contract.
+
+        Every public method delegates to ``_call`` so that: (1) all exceptions
+        are caught and classified via ``classify_exception``, (2) the three-status
+        envelope (success / confirmation_required / error) is enforced uniformly,
+        and (3) non-dict return values are automatically wrapped.
+
+        Design decisions:
+            - ``MemoryError`` is **re-raised** — OOM kills should not be swallowed
+              by the error envelope; the process must terminate.
+            - When the error message contains ``"Unknown ABI analysis type"``,
+              we inject the full list of available plugin IDs into the error
+              payload so callers can self-correct without an extra round-trip.
+            - If the handler result is a mapping with ``status ==
+              "confirmation_required"``, the envelope is promoted to a
+              first-class ``confirmation_required`` envelope (not an error).
+
+        # 中央调度辅助方法, 强制统一 JSON 信封契约。
+        # 所有公共方法都通过 _call 来统一异常分类 / 信封格式 / 返回值包装。
+        # MemoryError 被有意重新抛出, 不淹没 OOM 信号。
+        """
         try:
             result = handler(*args, **kwargs)
         except MemoryError:
@@ -317,6 +585,9 @@ class ABIAgentInterface:
         except Exception as exc:
             error_code, hints = classify_exception(exc, command=command)
             extra: Dict[str, Any] = {}
+            # Inject the list of available plugin IDs so callers can retry
+            # immediately with a valid analysis_type without calling list_types.
+            # 注入可用插件列表, 调用者无需额外调用 list_types 即可自行纠正。
             if "Unknown ABI analysis type" in str(exc):
                 extra["available"] = [plugin.plugin_id for plugin in list_plugins()]
             return json_dumps(
@@ -329,16 +600,32 @@ class ABIAgentInterface:
                     extra=extra,
                 )
             )
+        # Promote handler-returned confirmation_required to a first-class envelope.
+        # This is how _run() signals the safety gate without raising an error.
+        # 将 handler 返回的 confirmation_required 提升为一级信封。
+        # 这是 _run() 在不抛出错误的情况下实现安全闸门的方式。
         if isinstance(result, Mapping) and result.get("status") == "confirmation_required":
             raw_result = result.get("result")
             if not isinstance(raw_result, Mapping):
                 raw_result = {}
             return json_dumps(confirmation_required_envelope(command, raw_result))
+        # Auto-wrap non-dict results so every success payload has a "result" key.
+        # 自动包装非字典返回值, 确保每个成功载荷都有 "result" 键。
         if not isinstance(result, Mapping):
             result = {"value": result}
         return json_dumps(success_envelope(command, result))
 
+    # ------------------------------------------------------------------
+    # Private handler methods / 私有处理方法
+    #
+    # Each handler returns a Mapping (or a confirmation_required dict).
+    # _call() wraps the return value in the appropriate JSON envelope.
+    # 每个 handler 返回 Mapping (或 confirmation_required 字典)。
+    # _call() 将其包装为相应的 JSON 信封。
+    # ------------------------------------------------------------------
+
     def _list_types(self) -> Dict[str, Any]:
+        """Return all registered analysis plugin metadata."""
         plugins = [
             {
                 "analysis_type": plugin.plugin_id,
@@ -362,6 +649,13 @@ class ABIAgentInterface:
         log_dir: Optional[str],
         check_files: bool,
     ) -> Dict[str, Any]:
+        """Build config + plan, then persist ``execution_plan.json`` to disk.
+
+        The plugin reference is discarded after plan construction because the
+        serialized plan is the canonical artifact that downstream steps consume.
+        # 构建配置 + 计划, 然后将 execution_plan.json 写入磁盘。
+        # 构建完成后丢弃插件引用, 因为序列化计划是下游步骤消费的规范产物。
+        """
         plugin, cfg, plan = self._build_plan(
             analysis_type=analysis_type,
             config_path=config_path,
@@ -373,7 +667,7 @@ class ABIAgentInterface:
             log_dir=log_dir,
             check_files=check_files,
         )
-        del plugin
+        del plugin  # plugin reference is not needed after plan is serialized
         outdir_path = Path(str(cfg["outdir"]))
         outdir_path.mkdir(parents=True, exist_ok=True)
         plan_path = outdir_path / "execution_plan.json"
@@ -404,7 +698,16 @@ class ABIAgentInterface:
         progress: Optional[bool],
         check_files: bool,
     ) -> Dict[str, Any]:
+        """Execute a mock run: render commands + provenance, no external tools.
+
+        Prefers the plugin's ``execute_dry_run`` hook if available; otherwise
+        falls back to ``GenericABIExecutor`` with ``mock_tools=True``.
+        # 执行模拟运行: 渲染命令 + 溯源产物, 不执行外部工具。
+        # 优先使用插件的 execute_dry_run 钩子, 否则回退到 GenericABIExecutor mock 模式。
+        """
         plugin = get_plugin(analysis_type)
+        # Force mock_tools=True so external commands are only rendered, not executed.
+        # 强制 mock_tools=True, 确保外部命令仅渲染不执行。
         cfg = plugin.load_config(
             _optional_path(config_path),
             profile=profile,
@@ -442,6 +745,14 @@ class ABIAgentInterface:
         }
 
     def _inspect(self, *, result_dir: Union[str, Path]) -> Dict[str, Any]:
+        """Read provenance TSVs and summarize what happened in a prior run.
+
+        Parses ``commands.tsv`` for failed/skipped steps and
+        ``resolved_inputs.tsv`` for missing or placeholder (NOT_CONFIGURED) files.
+        # 读取溯源 TSV 文件, 总结先前运行的执行状况。
+        # 解析 commands.tsv 查找失败/跳过的步骤,
+        # 解析 resolved_inputs.tsv 查找缺失或占位符文件。
+        """
         root = Path(result_dir)
         provenance = root / "provenance"
         commands = _read_tsv(provenance / "commands.tsv")
@@ -471,6 +782,14 @@ class ABIAgentInterface:
         result_dir: Union[str, Path],
         analysis_type: Optional[str],
     ) -> Dict[str, Any]:
+        """Regenerate reports from a completed run directory.
+
+        Reads ``execution_plan.json`` for context and calls the plugin's
+        ``write_report()`` hook to produce markdown/HTML reports. The
+        ``analysis_type`` is auto-detected from the plan when not provided.
+        # 从已完成运行目录重新生成报告。
+        # 读取 execution_plan.json 获取上下文, 调用插件 write_report() 生成报告。
+        """
         root = Path(result_dir)
         plan_path = root / "execution_plan.json"
         if not plan_path.exists():
@@ -510,9 +829,20 @@ class ABIAgentInterface:
         check_files: bool,
         confirm_execution: bool,
     ) -> Dict[str, Any]:
+        """Execute the plan on a real runtime (local or Nextflow).
+
+        The ``confirm_execution`` safety gate is checked first: if False, a
+        ``status="confirmation_required"`` dict is returned immediately so
+        ``_call()`` can promote it to the proper envelope without side effects.
+        # 在真实运行时上执行计划 (local 或 Nextflow)。
+        # 首先检查 confirm_execution 安全闸门: 若为 False,
+        # 立即返回 confirmation_required 字典, 无任何副作用。
+        """
         runtime_engine = engine.lower().strip()
         if runtime_engine not in {"local", "nextflow"}:
             raise ABIError(f"Unsupported runtime engine: {engine}. Expected local or nextflow.")
+        # Safety gate: require explicit user confirmation before execution.
+        # 安全闸门: 执行前需要显式用户确认。
         if not confirm_execution:
             return {
                 "status": "confirmation_required",
@@ -530,6 +860,8 @@ class ABIAgentInterface:
             log_dir=log_dir,
             sample_sheet=sample_sheet,
         )
+        # Smoke mode with local engine: force mock_tools so no real tools run.
+        # Smoke 模式 + local 引擎: 强制 mock_tools, 不执行真实工具。
         if runtime_engine == "local" and smoke:
             overrides = overrides | {"mock_tools": True}
 
@@ -548,6 +880,9 @@ class ABIAgentInterface:
             executor=executor,
             resume=resume,
         )
+        # Select runtime backend: LocalRuntime for subprocess execution,
+        # NextflowRuntime for DSL2 pipeline orchestration.
+        # 选择运行时后端: LocalRuntime 用于子进程执行, NextflowRuntime 用于 DSL2 管道编排。
         runtime = (
             LocalRuntime(plugin, options=options)
             if runtime_engine == "local"
@@ -579,6 +914,13 @@ class ABIAgentInterface:
         mamba_root: Optional[Union[str, Path]],
         check_files: bool,
     ) -> Dict[str, Any]:
+        """Build plan and serialize it as a Nextflow DSL2 workflow file.
+
+        Uses ``NextflowExporter`` to translate the ABI execution plan into a
+        portable ``main.nf`` script with conda/mamba container directives.
+        # 构建计划并序列化为 Nextflow DSL2 工作流文件。
+        # 使用 NextflowExporter 将 ABI 执行计划转换为可移植的 main.nf 脚本。
+        """
         plugin, cfg, plan = self._build_plan(
             analysis_type=analysis_type,
             config_path=config_path,
@@ -607,10 +949,22 @@ class ABIAgentInterface:
         }
 
     def _export_agent_context(self, *, analysis_type: str) -> Dict[str, Any]:
+        """Delegate to ``abi.agent.context.build_agent_context`` for the plugin.
+
+        Returns the compact machine-readable dictionary that agents embed in
+        their system prompt to understand ABI capabilities without prior training.
+        # 委托给 build_agent_context, 返回紧凑的机器可读字典,
+        # 供 agent 嵌入 system prompt 以理解 ABI 能力。
+        """
         plugin = get_plugin(analysis_type)
         return build_agent_context(plugin)
 
     def _doctor_agent(self, *, analysis_type: str) -> Dict[str, Any]:
+        """Delegate to ``abi.agent.context.render_doctor_agent`` for the plugin.
+
+        Returns a human-readable text block summarizing the operating guide.
+        # 委托给 render_doctor_agent, 返回人类可读的操作指南文本。
+        """
         plugin = get_plugin(analysis_type)
         return {"analysis_type": analysis_type, "text": render_doctor_agent(plugin)}
 
@@ -627,6 +981,13 @@ class ABIAgentInterface:
         log_dir: Optional[str],
         check_files: bool,
     ) -> Tuple[Any, Mapping[str, Any], Any]:
+        """Shared plan construction: resolve plugin -> load config -> build plan.
+
+        Returns the (plugin, config, plan) tuple so callers can use the plugin
+        reference (e.g. for ``write_report`` or ``registry``) without reloading.
+        # 共享的计划构建逻辑: 解析插件 -> 加载配置 -> 构建计划。
+        # 返回 (plugin, config, plan) 三元组, 调用者可复用插件引用。
+        """
         plugin = get_plugin(analysis_type)
         cfg = plugin.load_config(
             _optional_path(config_path),
@@ -643,6 +1004,11 @@ class ABIAgentInterface:
         return plugin, cfg, plan
 
 
+# ------------------------------------------------------------------
+# Module-level helpers / 模块级辅助函数
+# ------------------------------------------------------------------
+
+
 def _common_overrides(
     *,
     mode: Optional[str] = None,
@@ -653,6 +1019,14 @@ def _common_overrides(
     dry_run: Optional[bool] = None,
     progress: Optional[bool] = None,
 ) -> Dict[str, Any]:
+    """Build a compact overrides dict from scattered CLI / agent parameters.
+
+    The dict is passed to ``plugin.load_config()`` where it is merged with the
+    plugin's default configuration. ``compact_overrides`` strips ``None`` values
+    so that only explicitly provided keys override the defaults.
+    # 将分散的 CLI/agent 参数组装为紧凑的覆盖字典。
+    # 传入 plugin.load_config() 与默认配置合并; compact_overrides 去除 None 值。
+    """
     overrides: Dict[str, Any] = {
         "mode": mode,
         "threads": threads,
@@ -668,16 +1042,38 @@ def _common_overrides(
 
 
 def _optional_path(value: Optional[Union[str, Path]]) -> Optional[Path]:
+    """Convert a string/Path to Path, preserving None for unset values.
+
+    Used so that downstream code receives ``Path | None`` rather than
+    ``str | None``, simplifying path-handling branches.
+    # 将字符串/Path 转为 Path, 保留 None 表示未设置。
+    # 下游代码接收 Path | None 而非 str | None, 简化路径处理分支。
+    """
     return Path(value) if value is not None else None
 
 
 def _plan_dict(plan: Any, analysis_type: str) -> Dict[str, Any]:
+    """Serialize a plan object to dict, injecting the analysis_type if absent.
+
+    The analysis_type is stored inside the plan so that downstream consumers
+    (report generation, inspection) can identify the plugin without external
+    context.
+    # 将计划对象序列化为字典, 若缺失则注入 analysis_type。
+    # 下游消费者 (报告生成 / inspect) 无需外部上下文即可识别插件。
+    """
     data = plan.to_dict()
     data.setdefault("analysis_type", analysis_type)
     return data
 
 
 def _read_tsv(path: Path) -> list[dict[str, str]]:
+    """Read a TSV file into a list of dicts; return [] if the file is missing.
+
+    Used for reading provenance files (commands.tsv, resolved_inputs.tsv) which
+    may not exist yet for fresh or incomplete runs.
+    # 将 TSV 文件读入字典列表; 若文件缺失则返回 []。
+    # 用于读取可能尚不存在的溯源文件 (commands.tsv, resolved_inputs.tsv)。
+    """
     if not path.exists():
         return []
     with path.open("r", encoding="utf-8", newline="") as handle:
@@ -685,4 +1081,11 @@ def _read_tsv(path: Path) -> list[dict[str, str]]:
 
 
 def _path_values(outputs: Mapping[str, Any]) -> list[Any]:
+    """Collect non-None values from an outputs mapping.
+
+    Used to build the ``written_files`` list that agents can consume directly
+    without filtering None placeholders.
+    # 从 outputs 映射中收集非 None 值。
+    # 用于构建 written_files 列表, agent 无需自行过滤 None 占位符。
+    """
     return [value for value in outputs.values() if value is not None]

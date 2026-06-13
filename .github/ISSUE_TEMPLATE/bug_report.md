@@ -31,7 +31,7 @@ Paste the full error output here
 
 - OS: [e.g., Ubuntu 22.04]
 - Python version: [e.g., 3.11]
-- ABI version: [e.g., 0.2.0]
+- ABI version: [e.g., 1.0.0]
 - Analysis type: [e.g., metatranscriptomics or metagenomic_plasmid]
 - Runtime backend: [e.g., local, nextflow, job-service]
 

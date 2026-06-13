@@ -39,7 +39,12 @@ plugins/my_analysis/
     tool_a.yaml
   skills/
     tool_a/SKILL.md
+  _engine/             ← optional: complex engine code (see metagenomic_plasmid)
 ```
+
+For complex plugins with substantial internal logic, use a self-contained
+package with a private `_engine/` subdirectory. See `plugins/metagenomic_plasmid/`
+for the canonical example.
 
 ## Tool Contracts
 
@@ -60,6 +65,17 @@ Use `assert_plugin_contract(plugin)` in plugin tests.
 Parsers must only write tables declared by the plugin. Empty tables should still
 exist with stable headers so agents can inspect results without parsing raw
 tool output.
+
+## Shared Infrastructure
+
+Plugins should import from the public SDK:
+
+| Module | Use |
+| --- | --- |
+| `abi.schemas` | `SampleInput`, `SampleContext`, `PlanStep`, `ExecutionPlan` |
+| `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
+| `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV writers |
+| `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
 
 ## Execution Safety
 

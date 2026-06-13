@@ -2,14 +2,46 @@
 
 This repository publishes one Python distribution: `abi-agent`.
 
-The source tree has two layers:
+## Source Tree
 
-- `src/abi`: public ABI SDK, CLI, plugin registry, transports, runtimes, and built-in plugins.
-- `src/abi/autoplasm`: bundled metagenomic plasmid pipeline used by the
-  `metagenomic_plasmid` plugin and the `autoplasm` compatibility CLI.
+```
+src/abi/
+  agent/          ABIAgentInterface, JSON envelopes, agent context
+  plugins/        Built-in analysis-type plugins
+    metagenomic_plasmid/   Self-contained plugin package (engine in _engine/)
+    metatranscriptomics.py Native ABI demo plugin
+  autoplasm/      Backward-compatible re-export shim → plugins/metagenomic_plasmid/_engine/
+  provenance.py   RunLogger, PipelineProgressRecorder, TSV provenance writers
+  tools.py        ToolRegistry, ToolSkill, GenericCommandSkill, RunResult
+  schemas.py      Canonical ExecutionPlan, PlanStep, SampleInput, SampleContext
+  executor.py     GenericABIExecutor
+  permissions.py  read_only / planning_write / execution
+  diagnostics.py  Error taxonomy and diagnostic hints
+  tables.py       StandardTableManager
+  report.py       Generic report writer
+  jobs/           HTTP Job Service (service, client)
+  runtimes/       local, Nextflow runtimes
+  exporters/      Nextflow DSL2 exporter
+  mcp/            Optional MCP stdio server
+  transports/     (future) transport-specific adapters
+  cli.py          Typer CLI (abi, autoplasm entry points)
+```
 
-Do not add a top-level Python package named `autoplasm`. Code should import the
-bundled pipeline as `abi.autoplasm`.
+The `abi.autoplasm` package is a backward-compatible re-export shim that proxies
+to `abi.plugins.metagenomic_plasmid._engine`. Internal code should import from
+`abi.plugins.metagenomic_plasmid._engine` for the plasmid engine or from the ABI
+core modules for shared infrastructure.
+
+## Public SDK
+
+| Module | Purpose |
+| --- | --- |
+| `abi.interfaces` | Plugin protocol classes |
+| `abi.schemas` | Canonical schema types (SampleInput, ExecutionPlan, etc.) |
+| `abi.tools` | ToolRegistry, ToolSkill, GenericCommandSkill |
+| `abi.provenance` | RunLogger, PipelineProgressRecorder, TSV writers |
+| `abi.errors` | ABIError, ConfigError, SampleSheetError, ToolError |
+| `abi.testing` | Plugin contract assertions |
 
 ## Local Setup
 
@@ -56,7 +88,7 @@ accepted for compatibility.
 ## Agent Interfaces
 
 `ABIAgentInterface` is the transport-neutral boundary. Keep CLI JSON, MCP,
-OpenAI descriptors, and Job Service behavior aligned with it.
+OpenAI descriptors, `abi dispatch`, and Job Service behavior aligned with it.
 
 Execution must remain gated: `abi run`, `abi_run`, and Job Service execution
 submissions should return `confirmation_required` unless explicit confirmation

@@ -1,4 +1,77 @@
-"""Command-line interface for the ABI prototype."""
+"""Command-line interface for the ABI (Agent-Bioinformatics Interface) prototype.
+
+ABI CLI — command-line interface for the ABI prototype.
+
+This module defines the Typer application with all subcommands. It serves as
+the primary human interface and also as a machine interface via the
+``--output-json`` flag, which routes through ``ABIAgentInterface`` to emit
+JSON envelopes consumable by LLM agents.
+
+Commands overview
+-----------------
+
+============================  ===================================================
+Command                       Purpose
+============================  ===================================================
+``list-types`` / ``list``     List installed ABI analysis plugins.
+``init``                      Scaffold a workspace from a plugin template.
+``plan``                      Build and write an ABI execution plan.
+``dry-run``                   Validate a plan and write provenance (no tool execution).
+``run``                       Execute a plan through local or Nextflow runtime.
+``run-nextflow``              Convenience alias for ``run --engine nextflow``.
+``inspect``                   Inspect ABI provenance and summarize run health.
+``report``                    Regenerate a plugin report from ABI results.
+``validate-result``           Validate an ABI result directory without modifying it.
+``export-nextflow``           Export an execution plan as a Nextflow DSL2 script.
+``export-openai-tools``       Export ABI tools as OpenAI-compatible function descriptors.
+``export-agent-context``      Export compact machine-readable context for agent callers.
+``check-resources``           Check database/index/model resources (read-only).
+``setup-resources``           Download/mock/plan resource setup.
+``doctor-agent``              Print a safe operating guide for ABI agent callers.
+``dispatch``                  Headless subprocess dispatch for Job Service workers.
+``job-service``               Start the HTTP Job Service for queued operations.
+``job submit``                Submit a job to the ABI Job Service.
+``job status``                Fetch a queued job's current status.
+``job artifacts``             Fetch artifact paths from a completed/running job.
+``job cancel``                Request cancellation of a queued/running job.
+============================  ===================================================
+
+Key design decisions
+--------------------
+
+**Confirmation gate for ``run``**: The ``run`` command requires
+``--confirm-execution`` before it will actually execute. Without this flag,
+the command returns a JSON confirmation-required envelope (exit code 2)
+so agent callers can present a confirmation prompt before incurring cost.
+
+**``--output-json`` flag**: Every command accepts this flag. When set, the
+command delegates to ``ABIAgentInterface`` which returns a structured JSON
+envelope with ``status`` (success/error/confirmation_required), ``message``,
+and ``data`` fields. This is the primary integration point for LLM agents.
+
+**``dispatch`` command**: A headless subprocess entry point used internally
+by the Job Service. Workers spawn ``abi dispatch --command <cmd> --arguments
+<json>`` subprocesses so that job cancellation can force-kill the subprocess
+via SIGTERM without affecting the service process itself.
+
+**Job Service (``job`` / ``job-service``)**: Provides an HTTP API for queuing
+long-running ABI operations (plans, runs, resource setup). The ``job-service``
+command starts the server; ``job submit/status/artifacts/cancel`` interact
+with a running service. Subprocess workers (``--subprocess-workers``) use
+``dispatch`` internally for clean cancellation.
+
+ABI CLI 命令行界面。
+
+本模块定义了 Typer 应用及其所有子命令。它既作为主要的人机界面，
+也通过 ``--output-json`` 标志作为机器界面，该标志通过 ``ABIAgentInterface``
+路由，发出 LLM agent 可消费的 JSON 信封。
+
+关键设计决策：
+- ``run`` 的确认门：需要 ``--confirm-execution`` 才实际执行，agent 可以先展示确认提示。
+- ``--output-json`` 标志：委托给 ``ABIAgentInterface``，返回结构化 JSON 信封。
+- ``dispatch`` 命令：Job Service 内部使用的无头子进程入口点。
+- Job Service：为排队长时间运行的 ABI 操作提供 HTTP API。
+"""
 
 from __future__ import annotations
 
@@ -25,6 +98,9 @@ from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
 from abi.schemas import ABIError
 from abi.tables import StandardTableManager
 
+# Main Typer app. ``no_args_is_help=True`` means running ``abi`` with no
+# arguments prints the help text instead of an error.
+# 主 Typer 应用。``no_args_is_help=True`` 表示不带参数运行 ``abi`` 时打印帮助文本而非错误。
 app = typer.Typer(
     help=(
         "Agent-Bioinformatics Interface prototype. It runs analysis-type plugins "
@@ -32,11 +108,21 @@ app = typer.Typer(
     ),
     no_args_is_help=True,
 )
+# Sub-Typer for Job Service operations, mounted at ``abi job``.
+# 用于 Job Service 操作的子 Typer，挂载在 ``abi job`` 下。
 job_app = typer.Typer(help="Submit and inspect queued ABI Job Service operations.")
 app.add_typer(job_app, name="job")
 
 
 def _fail(exc: Exception) -> None:
+    """Handle CLI errors: print to stderr in red and exit with code 1.
+
+    ``MemoryError`` is re-raised because it indicates a terminal resource
+    exhaustion that should not be caught as a normal error.
+
+    处理 CLI 错误：以红色输出到 stderr 并以代码 1 退出。
+    ``MemoryError`` 被重新抛出，因为它表示终端资源耗尽，不应作为普通错误捕获。
+    """
     if isinstance(exc, MemoryError):
         raise
     typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
@@ -44,6 +130,24 @@ def _fail(exc: Exception) -> None:
 
 
 def _emit_agent_json(payload: str) -> None:
+    """Emit an agent JSON envelope and interpret its status code.
+
+    When ``--output-json`` is active, the CLI outputs a JSON envelope with
+    a ``status`` field. This function:
+    - Echos the payload to stdout.
+    - Parses it to check the status.
+    - Exits with code 1 for ``"error"`` and code 2 for
+      ``"confirmation_required"`` (used by the ``run`` confirmation gate).
+
+    Exit code 2 is the signal that tells an agent caller "please confirm
+    before proceeding"; the caller should present the confirmation message
+    to the user and re-invoke with ``--confirm-execution``.
+
+    发出 agent JSON 信封并解释其状态码。
+
+    当 ``--output-json`` 激活时，CLI 输出带有 ``status`` 字段的 JSON 信封。
+    退出码 2 是告诉 agent 调用者"请在继续前确认"的信号。
+    """
     typer.echo(payload)
     try:
         data = loads_json(payload, label="agent response")
@@ -59,6 +163,10 @@ def _emit_agent_json(payload: str) -> None:
 
 
 def _emit_json_payload(payload: Any) -> None:
+    """Emit a JSON payload to stdout with consistent formatting.
+
+    以一致的格式将 JSON 负载输出到 stdout。
+    """
     typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
 
 
@@ -72,6 +180,16 @@ def _common_overrides(
     dry_run: Optional[bool] = None,
     progress: Optional[bool] = None,
 ) -> Dict[str, Any]:
+    """Build a compact overrides dict from common CLI flags.
+
+    Maps CLI flags into the nested override structure expected by plugin
+    config loading. The ``compact_overrides`` call removes None values so
+    only explicitly set flags affect the config.
+
+    从通用 CLI 标志构建紧凑的覆盖字典。
+    将 CLI 标志映射到插件配置加载所期望的嵌套覆盖结构。
+    ``compact_overrides`` 调用会删除 None 值，因此只有显式设置的标志会影响配置。
+    """
     overrides: Dict[str, Any] = {
         "mode": mode,
         "threads": threads,
@@ -93,6 +211,16 @@ def _load_plugin_config(
     profile: str,
     overrides: Mapping[str, Any],
 ) -> Dict[str, Any]:
+    """Load and resolve a plugin configuration.
+
+    Gets the plugin by analysis type, then calls its ``load_config`` with
+    the given profile and overrides. The result is a fully-resolved config
+    dict with all defaults, profile layers, and CLI overrides merged.
+
+    加载并解析插件配置。
+    根据分析类型获取插件，然后使用给定的 profile 和覆盖项调用其 ``load_config``。
+    结果是一个完全解析的配置字典，包含所有默认值、profile 层和 CLI 覆盖项。
+    """
     plugin = get_plugin(analysis_type)
     return plugin.load_config(config, profile=profile, overrides=overrides)
 
@@ -105,7 +233,16 @@ def list_types(
         help="Emit the agent JSON envelope.",
     ),
 ) -> None:
-    """List installed ABI analysis plugins."""
+    """List installed ABI analysis plugins.
+
+    When ``--output-json`` is set, routes through ``ABIAgentInterface`` for
+    a structured agent envelope. Otherwise prints a simple JSON array of
+    plugin descriptors (type, name, description).
+
+    列出已安装的 ABI 分析插件。
+    当 ``--output-json`` 设置时，通过 ``ABIAgentInterface`` 路由以获取结构化的 agent 信封。
+    否则打印插件描述符的简单 JSON 数组。
+    """
     if output_json:
         _emit_agent_json(ABIAgentInterface().list_types())
         return
@@ -128,7 +265,10 @@ def list_command(
         help="Emit the agent JSON envelope.",
     ),
 ) -> None:
-    """Alias for list-types."""
+    """Alias for list-types. Lists installed ABI analysis plugins.
+
+    list-types 的别名。列出已安装的 ABI 分析插件。
+    """
     list_types(output_json=output_json)
 
 
@@ -138,12 +278,23 @@ def init_command(
     outdir: Path = typer.Option(Path("."), "--outdir", help="Workspace directory."),
     force: bool = typer.Option(False, "--force", help="Allow overwriting ABI template files."),
 ) -> None:
-    """Initialize a minimal ABI workspace from a plugin template."""
+    """Initialize a minimal ABI workspace from a plugin template.
+
+    Copies the plugin's default config YAML and sample sheet template into
+    the target workspace. Refuses to overwrite existing files unless
+    ``--force`` is set.
+
+    从插件模板初始化最小的 ABI 工作空间。
+    将插件的默认配置 YAML 和样本表模板复制到目标工作空间。
+    除非设置 ``--force``，否则拒绝覆盖已有文件。
+    """
     try:
         plugin = get_plugin(analysis_type)
         if not hasattr(plugin, "root"):
             raise ABIError(f"Plugin {analysis_type!r} does not provide init templates")
         root = Path(plugin.root)
+        # Target files: config YAML and sample sheet TSV template.
+        # 目标文件：配置 YAML 和样本表 TSV 模板。
         targets = [
             (root / "config_default.yaml", outdir / "config" / f"{analysis_type}.yaml"),
             (root / "sample_sheet_template.tsv", outdir / "samples.tsv"),
@@ -185,7 +336,19 @@ def plan_command(
         help="Emit the agent JSON envelope.",
     ),
 ) -> None:
-    """Build and write an ABI execution plan."""
+    """Build and write an ABI execution plan to ``<outdir>/execution_plan.json``.
+
+    This command resolves the plugin configuration, builds a step plan via
+    ``plugin.build_plan()``, and persists it as JSON. The plan encodes every
+    step: tool_id, inputs, params, outputs, and the command to run.
+
+    ``check_files`` controls whether input file existence is validated during
+    plan construction. Disable with ``--no-check-files`` for offline planning.
+
+    构建 ABI 执行计划并写入 ``<outdir>/execution_plan.json``。
+    该命令解析插件配置，通过 ``plugin.build_plan()`` 构建步骤计划，并持久化为 JSON。
+    计划编码了每个步骤：tool_id、inputs、params、outputs 以及要运行的命令。
+    """
     if output_json:
         _emit_agent_json(
             ABIAgentInterface().plan(
@@ -245,7 +408,20 @@ def dry_run_command(
         help="Emit the agent JSON envelope.",
     ),
 ) -> None:
-    """Run a plugin dry-run and write ABI provenance artifacts."""
+    """Run a plugin dry-run and write ABI provenance artifacts.
+
+    A dry run validates the execution plan without invoking any real external
+    tools. It produces the same provenance artifacts as a real run (commands.tsv,
+    resolved_inputs.tsv, run_summary.json, report, etc.) but every step is
+    marked ``"dry_run"`` and no computation occurs.
+
+    If the plugin has a custom ``execute_dry_run`` method, it is used;
+    otherwise the generic ``GenericABIExecutor`` runs in dry_run mode.
+
+    运行插件预演并写出 ABI 溯源产物。
+    预演验证执行计划而不调用任何真实的外部工具。它产生与实际运行相同的溯源产物，
+    但每个步骤都标记为 ``"dry_run"``，且不发生实际计算。
+    """
     if output_json:
         _emit_agent_json(
             ABIAgentInterface().dry_run(
@@ -276,12 +452,16 @@ def dry_run_command(
                 dry_run=True,
                 progress=progress,
             )
-            | {"mock_tools": True},
+            | {"mock_tools": True},  # Force mock tools so no real execution occurs. / 强制 mock 工具以确保不执行真实计算。
         )
         plan = plugin.build_plan(cfg, check_files=check_files)
         if hasattr(plugin, "execute_dry_run"):
+            # Plugin provides its own dry-run logic (e.g., for custom output parsing).
+            # 插件提供自己的 dry-run 逻辑（例如自定义输出解析）。
             outputs = plugin.execute_dry_run(plan, cfg)
         else:
+            # Fall back to the generic executor in dry_run mode.
+            # 回退到 dry_run 模式下的通用执行器。
             table_manager = StandardTableManager(plugin.table_schemas())
             executor = GenericABIExecutor(
                 plugin.registry(),
@@ -306,7 +486,23 @@ def inspect_command(
         help="Emit the agent JSON envelope.",
     ),
 ) -> None:
-    """Inspect ABI provenance and summarize run health."""
+    """Inspect ABI provenance and summarize run health.
+
+    Reads commands.tsv and resolved_inputs.tsv from the provenance directory,
+    then reports:
+    - Overall run status (success/failed/unknown).
+    - Count of all steps and number of failed/skipped steps.
+    - Detailed failure rows with reason strings.
+    - Missing or placeholder input paths (files that don't exist on disk or
+      contain "NOT_CONFIGURED").
+
+    This is the primary post-mortem diagnostic command. Run it after a failed
+    pipeline to quickly identify which steps failed and why.
+
+    检查 ABI 溯源并总结运行健康状况。
+    从溯源目录中读取 commands.tsv 和 resolved_inputs.tsv，报告运行状态、
+    失败/跳过步骤及详细的失败原因。这是主要的事后诊断命令。
+    """
     if output_json:
         _emit_agent_json(ABIAgentInterface().inspect(result_dir=result_dir))
         return
@@ -316,6 +512,8 @@ def inspect_command(
         resolved_inputs = _read_tsv(provenance / "resolved_inputs.tsv")
         failed = [row for row in commands if row.get("status") == "failed"]
         skipped = [row for row in commands if row.get("status") == "skipped"]
+        # Identify inputs that are missing (doesn't exist) or are placeholders.
+        # 识别缺失的输入（不存在）或是占位符。
         missing_inputs = [
             row
             for row in resolved_inputs
@@ -352,7 +550,17 @@ def report_command(
         help="Emit the agent JSON envelope.",
     ),
 ) -> None:
-    """Regenerate a plugin report from ABI results."""
+    """Regenerate a plugin report from ABI results.
+
+    Reads the execution plan from the result directory, determines the analysis
+    type (from ``--type`` or the plan itself), and invokes the plugin's
+    ``write_report`` method. This is useful for regenerating reports after
+    manual edits to result files, or for re-rendering with an updated plugin.
+
+    从 ABI 结果重新生成插件报告。
+    从结果目录中读取执行计划，确定分析类型，并调用插件的 ``write_report`` 方法。
+    适用于在手动编辑结果文件后重新生成报告，或使用更新后的插件重新渲染。
+    """
     if output_json:
         _emit_agent_json(
             ABIAgentInterface().report(result_dir=result_dir, analysis_type=analysis_type)
@@ -385,7 +593,20 @@ def validate_result_command(
         help="Emit the agent JSON envelope.",
     ),
 ) -> None:
-    """Validate an ABI result directory without modifying it."""
+    """Validate an ABI result directory without modifying it.
+
+    Checks that the result directory has the expected structure: execution plan,
+    provenance artifacts, standard tables with correct schemas, and report files.
+    By default, empty tables (headers only) are allowed; use
+    ``--require-nonempty-tables`` to enforce at least one data row.
+
+    Returns ``{"valid": true/false, "issues": [...]}``. Exits with code 1 if
+    validation fails.
+
+    验证 ABI 结果目录而不修改它。
+    检查结果目录是否具有预期结构：执行计划、溯源产物、具有正确模式的标准表格和报告文件。
+    默认允许空表格；使用 ``--require-nonempty-tables`` 强制要求至少有一行数据。
+    """
     if output_json:
         _emit_agent_json(
             ABIAgentInterface().abi_validate_result(
@@ -423,7 +644,18 @@ def export_nextflow_command(
         help="Emit the agent JSON envelope.",
     ),
 ) -> None:
-    """Export an ABI execution plan as a Nextflow DSL2 script."""
+    """Export an ABI execution plan as a Nextflow DSL2 script.
+
+    Builds the execution plan, then uses ``NextflowExporter`` to generate a
+    Nextflow DSL2 workflow file. The resulting ``.nf`` file can be run
+    independently with ``nextflow run``, enabling HPC and cloud execution.
+
+    ``--smoke`` generates a workflow that uses mock tools for quick validation.
+
+    将 ABI 执行计划导出为 Nextflow DSL2 脚本。
+    构建执行计划，然后使用 ``NextflowExporter`` 生成 Nextflow DSL2 工作流文件。
+    生成的 ``.nf`` 文件可以用 ``nextflow run`` 独立运行，支持 HPC 和云执行。
+    """
     if output_json:
         _emit_agent_json(
             ABIAgentInterface().export_nextflow(
@@ -524,8 +756,32 @@ def run_command(
         help="Emit the agent JSON envelope.",
     ),
 ) -> None:
-    """Run an ABI execution plan through a selected runtime backend."""
+    """Run an ABI execution plan through a selected runtime backend.
+
+    **Confirmation gate**: This command requires ``--confirm-execution`` before
+    it will actually execute. Without it (and without ``--output-json``), the
+    command returns a ``confirmation_required`` envelope (via agent interface)
+    and exits with code 2. This prevents accidental execution and lets agent
+    callers present a confirmation prompt.
+
+    **Execution flow**: Loads the plugin config, builds the plan, selects a
+    runtime (``LocalRuntime`` or ``NextflowRuntime`` based on ``--engine``),
+    and executes. ``--smoke`` uses mock tool wrappers for smoke testing.
+
+    通过选定的运行时后端运行 ABI 执行计划。
+
+    确认门：需要 ``--confirm-execution`` 才实际执行。若无此标志且无 ``--output-json``，
+    命令返回 ``confirmation_required`` 信封并以代码 2 退出。这防止意外执行，
+    并允许 agent 调用者展示确认提示。
+
+    执行流程：加载插件配置，构建计划，选择运行时（基于 ``--engine`` 选择
+    ``LocalRuntime`` 或 ``NextflowRuntime``），然后执行。
+    """
     if not confirm_execution:
+        # No confirmation and not in output-json mode — route through agent
+        # interface to get the confirmation_required envelope (exit code 2).
+        # 未确认且不在 output-json 模式——通过 agent 接口路由以获取
+        # confirmation_required 信封（退出码 2）。
         _emit_agent_json(
             ABIAgentInterface().run(
                 analysis_type=analysis_type,
@@ -552,6 +808,9 @@ def run_command(
         )
         return
     if output_json:
+        # Confirmed execution with --output-json: agent interface returns the
+        # result envelope after the run completes.
+        # 已确认执行且带有 --output-json：agent 接口在运行完成后返回结果信封。
         _emit_agent_json(
             ABIAgentInterface().run(
                 analysis_type=analysis_type,
@@ -647,8 +906,19 @@ def run_nextflow_command(
         help="Emit the agent JSON envelope.",
     ),
 ) -> None:
-    """Compatibility alias for `run --engine nextflow`."""
+    """Compatibility alias for ``run --engine nextflow``.
+
+    Works identically to ``run`` but defaults ``--engine`` to ``"nextflow"``
+    and ``--smoke`` to ``True``. This is kept for backward compatibility with
+    scripts and agents that use the older ``run-nextflow`` command name.
+
+    ``run --engine nextflow`` 的兼容性别名。
+    行为与 ``run`` 相同，但默认 ``--engine`` 为 ``"nextflow"``，``--smoke`` 为 ``True``。
+    保留此命令是为了与使用旧 ``run-nextflow`` 命令名的脚本和 agent 保持向后兼容。
+    """
     if not confirm_execution:
+        # Same confirmation gate as run_command.
+        # 与 run_command 相同的确认门。
         _emit_agent_json(
             ABIAgentInterface().run(
                 analysis_type=analysis_type,
@@ -741,7 +1011,21 @@ def export_openai_tools_command(
         help="Include execution tools such as abi_run in the export.",
     ),
 ) -> None:
-    """Export OpenAI-compatible ABI agent tool descriptors."""
+    """Export OpenAI-compatible ABI agent tool descriptors.
+
+    Generates function definitions for each ABI tool (plan, dry-run, inspect,
+    report, etc.) in a format compatible with the OpenAI Chat Completions /
+    Responses API ``tools`` parameter. Supports ``responses``, ``apps-sdk``,
+    and ``json`` descriptor formats.
+
+    ``--include-execution`` adds execution tools like ``abi_run`` to the export
+    (off by default for safety).
+
+    导出与 OpenAI 兼容的 ABI agent 工具描述符。
+    以与 OpenAI Chat Completions / Responses API ``tools`` 参数兼容的格式
+    为每个 ABI 工具（plan、dry-run、inspect、report 等）生成函数定义。
+    支持 ``responses``、``apps-sdk`` 和 ``json`` 描述符格式。
+    """
     try:
         plugin = get_plugin(analysis_type)
         tools = export_openai_tools(
@@ -763,7 +1047,16 @@ def export_agent_context_command(
         help="Context format. Currently only json is supported.",
     ),
 ) -> None:
-    """Export compact machine-readable context for agent callers."""
+    """Export compact machine-readable context for agent callers.
+
+    Produces a JSON object describing the plugin's capabilities, tools,
+    configuration schema, and sample sheet format. Agent callers use this
+    to understand what a plugin can do without having to parse its source.
+
+    为 agent 调用者导出紧凑的机器可读上下文。
+    产生一个 JSON 对象，描述插件的能力、工具、配置模式和样本表格式。
+    Agent 调用者使用此信息来理解插件的功能，而无需解析其源代码。
+    """
     try:
         if context_format != "json":
             raise ABIError("Unsupported agent context format. Expected: json.")
@@ -792,7 +1085,16 @@ def check_resources_command(
     outdir: Optional[str] = typer.Option(None, "--outdir", help="Output directory."),
     log_dir: Optional[str] = typer.Option(None, "--log-dir", help="Log directory."),
 ) -> None:
-    """Check configured database, index, and model resources without downloading them."""
+    """Check configured database, index, and model resources without downloading them.
+
+    Read-only operation: inspects whether each resource (database, index, model)
+    is present at its configured path. Returns a JSON array with status per
+    resource. Use ``--resource`` to limit checks to specific resource IDs.
+
+    检查配置的数据库、索引和模型资源，而不下载它们。
+    只读操作：检查每个资源（数据库、索引、模型）是否存在于其配置的路径。
+    返回带有每个资源状态的 JSON 数组。使用 ``--resource`` 将检查限制到特定资源 ID。
+    """
     try:
         cfg = _load_plugin_config(
             analysis_type=analysis_type,
@@ -832,7 +1134,22 @@ def setup_resources_command(
     dry_run: bool = typer.Option(False, "--dry-run", help="Show resource setup plan only."),
     mock: bool = typer.Option(False, "--mock", help="Create mock resource directories."),
 ) -> None:
-    """Download, mock, or plan setup for ABI analysis resources."""
+    """Download, mock, or plan setup for ABI analysis resources.
+
+    Prepares resources (databases, indexes, models) required by the analysis
+    type. Three modes:
+    - Normal: downloads and installs resources to configured paths.
+    - ``--dry-run``: shows what would be done without making changes.
+    - ``--mock``: creates empty mock directories for smoke testing.
+
+    Resources are downloaded once and reused across runs.
+
+    下载、模拟或规划 ABI 分析资源的设置。
+    准备分析类型所需的资源（数据库、索引、模型）。三种模式：
+    - 正常：下载并安装资源到配置的路径。
+    - ``--dry-run``：显示将要执行的操作而不做更改。
+    - ``--mock``：创建空的 mock 目录用于 smoke 测试。
+    """
     try:
         cfg = _load_plugin_config(
             analysis_type=analysis_type,
@@ -861,7 +1178,18 @@ def setup_resources_command(
 def doctor_agent_command(
     analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
 ) -> None:
-    """Print the shortest safe operating guide for ABI agent callers."""
+    """Print the shortest safe operating guide for ABI agent callers.
+
+    Emits a condensed text guide explaining the correct command sequence for
+    running an ABI analysis (plan -> dry-run -> run with confirmation) along
+    with common pitfalls and suggested next steps. Designed to be pasted into
+    an LLM system prompt so the agent knows how to use the ABI tools correctly.
+
+    为 ABI agent 调用者打印最简洁的安全操作指南。
+    发出一份简明的文本指南，解释运行 ABI 分析的正确命令序列
+    （plan -> dry-run -> 确认后 run）以及常见的陷阱和建议的后续步骤。
+    设计用于粘贴到 LLM 系统提示中，使 agent 知道如何正确使用 ABI 工具。
+    """
     try:
         plugin = get_plugin(analysis_type)
         typer.echo(render_doctor_agent(plugin), nl=False)
@@ -941,7 +1269,20 @@ def job_submit_command(
     ),
     check_files: Optional[bool] = typer.Option(None, "--check-files/--no-check-files"),
 ) -> None:
-    """Submit a job to an ABI Job Service."""
+    """Submit a job to an ABI Job Service for asynchronous execution.
+
+    Builds a job payload from the provided arguments (or from ``--payload``
+    if a full JSON file is given), then POSTs it to the Job Service at
+    ``--service-url``. The Job Service queues the job and returns a job ID
+    that can be used with ``job status``, ``job artifacts``, and ``job cancel``.
+
+    ``--confirm-execution`` is required for commands that execute (e.g., run).
+
+    向 ABI Job Service 提交作业以进行异步执行。
+    从提供的参数（或通过 ``--payload`` 提供的完整 JSON 文件）构建作业负载，
+    然后 POST 到 ``--service-url`` 处的 Job Service。
+    Job Service 将作业排队并返回作业 ID，可用于 ``job status``、``job artifacts`` 和 ``job cancel``。
+    """
     from abi.jobs.client import JobClientError, submit_job
 
     try:
@@ -974,6 +1315,8 @@ def job_submit_command(
         _, response = submit_job(request_payload, base_url=service_url)
         _emit_json_payload(response)
     except JobClientError as exc:
+        # Surface the server's error payload directly.
+        # 直接展示服务器的错误负载。
         _emit_json_payload(exc.payload)
         if exc.payload.get("status") == "confirmation_required":
             raise typer.Exit(code=2) from None
@@ -990,7 +1333,13 @@ def job_list_command(
         help="ABI Job Service base URL.",
     ),
 ) -> None:
-    """List jobs currently known to the ABI Job Service."""
+    """List jobs currently known to the ABI Job Service.
+
+    Returns a JSON array of job records with IDs, statuses, and timestamps.
+
+    列出 ABI Job Service 当前已知的作业。
+    返回带有 ID、状态和时间戳的作业记录 JSON 数组。
+    """
     from abi.jobs.client import JobClientError, list_jobs
 
     try:
@@ -1012,7 +1361,14 @@ def job_status_command(
         help="ABI Job Service base URL.",
     ),
 ) -> None:
-    """Fetch one queued job status."""
+    """Fetch one queued job's current status.
+
+    Returns the job record including status (pending/running/completed/failed),
+    progress, and any error information.
+
+    获取一个排队作业的当前状态。
+    返回作业记录，包括状态（pending/running/completed/failed）、进度和任何错误信息。
+    """
     from abi.jobs.client import JobClientError, get_job
 
     try:
@@ -1034,7 +1390,15 @@ def job_artifacts_command(
         help="ABI Job Service base URL.",
     ),
 ) -> None:
-    """Fetch artifact paths reported by a completed or running job."""
+    """Fetch artifact paths reported by a completed or running job.
+
+    Artifacts include plan, config, commands, tables, report, and log file
+    paths. These can be inspected or downloaded directly from the filesystem
+    (when co-located) or via the Job Service API.
+
+    获取已完成或运行中作业报告的产物路径。
+    产物包括计划、配置、命令、表格、报告和日志文件路径。
+    """
     from abi.jobs.client import JobClientError, get_artifacts
 
     try:
@@ -1056,7 +1420,16 @@ def job_cancel_command(
         help="ABI Job Service base URL.",
     ),
 ) -> None:
-    """Request cancellation for a queued or running ABI job."""
+    """Request cancellation for a queued or running ABI job.
+
+    If the job is still pending, it is removed from the queue. If running
+    and ``--subprocess-workers`` is enabled on the service, the subprocess
+    is terminated via SIGTERM.
+
+    请求取消一个排队或运行中的 ABI 作业。
+    如果作业仍在等待中，则将其从队列中移除。如果正在运行且服务启用了
+    ``--subprocess-workers``，则通过 SIGTERM 终止子进程。
+    """
     from abi.jobs.client import JobClientError, cancel_job
 
     try:
@@ -1085,7 +1458,30 @@ def job_service_command(
         help="Run each job in an abi-dispatch subprocess so cancel can force-kill via SIGTERM.",
     ),
 ) -> None:
-    """Start the ABI HTTP Job Service for queued long-running operations."""
+    """Start the ABI HTTP Job Service for queued long-running operations.
+
+    The Job Service provides an HTTP API for queuing ABI commands (plan,
+    dry-run, run, setup-resources, etc.) as asynchronous jobs. Clients
+    submit jobs via ``abi job submit`` or direct HTTP POST, then poll
+    with ``abi job status``.
+
+    **Architecture**:
+    - A thread pool (``--workers``) processes jobs concurrently.
+    - ``--subprocess-workers`` spawns each job as a separate ``abi dispatch``
+      subprocess. This enables clean cancellation: the parent process can
+      SIGTERM the subprocess without affecting the service or other jobs.
+    - ``--store`` persists job records to a JSON file for crash recovery.
+
+    Press Ctrl+C to stop gracefully.
+
+    启动 ABI HTTP Job Service 用于排队长时间运行的操作。
+
+    架构：
+    - 线程池并发处理作业。
+    - ``--subprocess-workers`` 将每个作业作为独立的子进程运行，
+      支持通过 SIGTERM 干净地取消作业。
+    - ``--store`` 将作业记录持久化到 JSON 文件以进行崩溃恢复。
+    """
     try:
         from abi.jobs import serve
 
@@ -1130,17 +1526,37 @@ def _build_job_payload(
     confirm_execution: bool,
     check_files: Optional[bool],
 ) -> Dict[str, Any]:
+    """Build a Job Service request payload from CLI arguments.
+
+    Merges three sources of arguments:
+    1. A base payload from ``--payload`` (full JSON file).
+    2. ``--arguments-json`` (inline JSON merged into arguments).
+    3. Individual CLI flags (e.g., ``--analysis-type``, ``--outdir``).
+
+    The result is a ``{"command": ..., "arguments": {...}, "backend": ...}``
+    dict ready for POST to the Job Service API.
+
+    从 CLI 参数构建 Job Service 请求负载。
+    合并三个来源的参数：基础负载（``--payload``）、内联 JSON（``--arguments-json``）
+    和单独的 CLI 标志。结果是准备 POST 到 Job Service API 的字典。
+    """
+    # Start with a full payload if provided, otherwise empty dict.
+    # 如果提供了完整负载，则以其为基础；否则使用空字典。
     payload: Dict[str, Any] = _load_json_object(payload_path) if payload_path else {}
     payload.setdefault("command", command)
     raw_arguments = payload.get("arguments", {})
     if not isinstance(raw_arguments, dict):
         raise ABIError("Job payload field 'arguments' must be a JSON object.")
     arguments: Dict[str, Any] = dict(raw_arguments)
+    # Merge inline JSON arguments on top of the base arguments.
+    # 将内联 JSON 参数合并到基础参数之上。
     if arguments_json:
         extra_arguments = loads_json(arguments_json, label="--arguments-json")
         if not isinstance(extra_arguments, dict):
             raise ABIError("--arguments-json must be a JSON object.")
         arguments.update(extra_arguments)
+    # Apply individual CLI flags as argument overrides.
+    # 将单独的 CLI 标志作为参数覆盖应用。
     _set_if_not_none(arguments, "analysis_type", analysis_type)
     _set_if_not_none(arguments, "config_path", _path_string(config_path))
     _set_if_not_none(arguments, "sample_sheet", _path_string(sample_sheet))
@@ -1157,6 +1573,8 @@ def _build_job_payload(
     _set_if_not_none(arguments, "work_dir", _path_string(work_dir))
     _set_if_not_none(arguments, "nxf_home", _path_string(nxf_home))
     _set_if_not_none(arguments, "mamba_root", _path_string(mamba_root))
+    # Boolean flags are only set when True to avoid polluting arguments.
+    # 布尔标志仅在为 True 时设置，以避免污染参数。
     if resume:
         arguments["resume"] = True
     if smoke:
@@ -1172,25 +1590,54 @@ def _build_job_payload(
 
 
 def _load_json_object(path: Path) -> Dict[str, Any]:
+    """Load a JSON file into a dict, with error context in the exception message.
+
+    将 JSON 文件加载为字典，异常消息中包含错误上下文。
+    """
     return load_json_object(path)
 
 
 def _set_if_not_none(target: Dict[str, Any], key: str, value: Any) -> None:
+    """Set a key in target dict only if value is not None.
+
+    Prevents overwriting explicitly-set None values from one source with
+    a missing value from another source.
+
+    仅在 value 非 None 时在目标字典中设置键。
+    防止用来自一个源的缺失值覆盖另一个源中显式设置的 None 值。
+    """
     if value is not None:
         target[key] = value
 
 
 def _path_string(path: Optional[Path]) -> Optional[str]:
+    """Convert a Path to string, preserving None.
+
+    将 Path 转换为字符串，保留 None。
+    """
     return str(path) if path is not None else None
 
 
 def _plan_dict(plan: Any, analysis_type: str) -> Dict[str, Any]:
+    """Convert a plan to a dict and inject the analysis_type.
+
+    The analysis_type is embedded so the plan is self-describing when
+    read back later (e.g., by ``abi report`` or ``abi inspect``).
+
+    将计划转换为字典并注入 analysis_type。
+    analysis_type 被嵌入，以便以后读取时计划能自我描述
+    （例如通过 ``abi report`` 或 ``abi inspect``）。
+    """
     data = plan.to_dict()
     data.setdefault("analysis_type", analysis_type)
     return data
 
 
 def _read_tsv(path: Path) -> list[dict[str, str]]:
+    """Read a TSV file into a list of dicts. Returns [] if the file is missing.
+
+    将 TSV 文件读取为字典列表。如果文件缺失则返回 []。
+    """
     if not path.exists():
         return []
     with path.open("r", encoding="utf-8", newline="") as handle:
@@ -1219,6 +1666,16 @@ def _run_with_runtime(
     smoke: bool,
     check_files: bool,
 ) -> Any:
+    """Resolve config, build plan, select runtime, and execute.
+
+    Shared implementation between ``run`` and ``run-nextflow`` commands.
+    Validates the engine type, applies overrides (including mock_tools for
+    local smoke mode), builds the plan, instantiates the appropriate runtime
+    (LocalRuntime or NextflowRuntime), and calls ``runtime.run()``.
+
+    ``run`` 和 ``run-nextflow`` 命令之间的共享实现。
+    验证引擎类型，应用覆盖项，构建计划，实例化适当的运行时并执行。
+    """
     runtime_engine = engine.lower().strip()
     if runtime_engine not in {"local", "nextflow"}:
         raise ABIError(f"Unsupported runtime engine: {engine}. Expected local or nextflow.")
@@ -1230,6 +1687,8 @@ def _run_with_runtime(
         log_dir=log_dir,
         sample_sheet=sample_sheet,
     )
+    # For local smoke runs, force mock tools to avoid requiring real installations.
+    # 对于本地 smoke 运行，强制使用 mock 工具以避免需要真实安装。
     if runtime_engine == "local" and smoke:
         overrides = overrides | {"mock_tools": True}
 
@@ -1266,15 +1725,46 @@ def dispatch_command(
         None, "--arguments-file", help="Path to JSON file containing arguments."
     ),
 ) -> None:
-    """Dispatch a single ABI command and print the JSON envelope (used by Job Service workers)."""
+    """Dispatch a single ABI command and print the JSON envelope.
+
+    **This is a headless subprocess entry point used internally by the
+    Job Service.** When ``job-service --subprocess-workers`` is active,
+    each job is executed as ``abi dispatch --command <cmd> --arguments <json>``
+    in a separate subprocess. This architecture enables clean cancellation:
+    the parent service process can SIGTERM the subprocess without affecting
+    other jobs or the service itself.
+
+    Arguments are resolved in this priority order:
+    1. ``--arguments-file`` — explicit JSON file path.
+    2. ``--arguments`` — inline JSON string or a file path (auto-detected).
+    3. stdin — reads raw JSON from standard input.
+
+    The output is a JSON envelope with status, message, and data fields,
+    printed directly to stdout.
+
+    分发单个 ABI 命令并打印 JSON 信封。
+
+    这是 Job Service 内部使用的无头子进程入口点。
+    每个作业作为单独的 ``abi dispatch`` 子进程运行，使得父服务进程可以
+    通过 SIGTERM 干净地取消作业，而不会影响其他作业或服务本身。
+
+    参数解析优先级：``--arguments-file`` > ``--arguments`` > stdin。
+    输出是带有 status、message 和 data 字段的 JSON 信封。
+    """
+    # Resolve arguments from the highest-priority source.
+    # 从最高优先级来源解析参数。
     if arguments_file is not None:
         arguments = load_json_object(arguments_file, label=f"arguments file {arguments_file}")
     elif arguments_json is not None:
+        # Try parsing as inline JSON first; if that fails, treat it as a file path.
+        # 首先尝试作为内联 JSON 解析；如果失败，将其视为文件路径。
         try:
             arguments = json.loads(arguments_json)
         except json.JSONDecodeError:
             arguments = load_json_object(Path(arguments_json), label=f"arguments path {arguments_json}")
     else:
+        # Read arguments from stdin — the default for subprocess piped input.
+        # 从 stdin 读取参数——子进程管道输入的默认方式。
         import sys as _sys
 
         raw = _sys.stdin.read()
@@ -1289,6 +1779,10 @@ def dispatch_command(
 
 
 def main() -> None:
+    """Entry point for the ``abi`` console script.
+
+    ``abi`` 控制台脚本的入口点。
+    """
     app()
 
 
