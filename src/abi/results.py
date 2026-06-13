@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional
 
-from abi._compat.logger import (
+from abi.provenance import (
     write_commands_tsv,
     write_resolved_inputs_tsv,
     write_tool_versions,

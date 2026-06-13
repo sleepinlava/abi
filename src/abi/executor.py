@@ -7,14 +7,12 @@ import shlex
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping
 
-from abi._compat.logger import (
+from abi.provenance import (
+    PipelineProgressRecorder,
     RunLogger,
     write_commands_tsv,
-    write_resolved_inputs_tsv,
-)
-from abi._compat.progress import (
-    PipelineProgressRecorder,
     write_minimal_progress_artifacts,
+    write_resolved_inputs_tsv,
 )
 from abi.config import resolved_mamba_root, write_yaml
 from abi.errors import ToolError

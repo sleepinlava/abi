@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from abi._compat.logger import RunLogger
+from abi.provenance import RunLogger
 from abi.executor import GenericABIExecutor
 from abi.runtimes.base import RuntimeOptions, RuntimeResult
 from abi.tables import StandardTableManager

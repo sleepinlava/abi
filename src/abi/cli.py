@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import typer
 
-from abi._compat.logger import RunLogger
+from abi.provenance import RunLogger
 from abi.agent import ABIAgentInterface
 from abi.agent.context import build_agent_context, render_doctor_agent
 from abi.config import compact_overrides

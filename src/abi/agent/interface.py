@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Union
 
-from abi._compat.logger import RunLogger
+from abi.provenance import RunLogger
 from abi.agent.context import build_agent_context, render_doctor_agent
 from abi.agent.envelopes import (
     confirmation_required_envelope,
