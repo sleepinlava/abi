@@ -1,15 +1,21 @@
 """Queue-backed HTTP job service for ABI agent calls.
 
 The service intentionally uses only the Python standard library so it can run in
-the Python 3.9 ABI environment. It is a thin transport around
+the Python 3.10 ABI environment. It is a thin transport around
 ``ABIAgentInterface``: queued jobs dispatch through the same tool boundary used
 by CLI JSON, MCP, and function-calling integrations.
+
+When ``subprocess_workers=True`` each job runs in an ``abi dispatch``
+subprocess so that cancel can send SIGTERM for true force-kill.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import queue
+import signal
+import subprocess
 import threading
 import time
 import uuid
@@ -65,6 +71,8 @@ class JobRecord:
     cancel_requested: bool = False
     job_provenance_path: Optional[str] = None
     job_provenance_error: Optional[str] = None
+    worker_pid: Optional[int] = None
+    remote_scheduler_job_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -83,11 +91,17 @@ class JobRecord:
             "cancel_requested": self.cancel_requested,
             "job_provenance_path": self.job_provenance_path,
             "job_provenance_error": self.job_provenance_error,
+            "worker_pid": self.worker_pid,
+            "remote_scheduler_job_id": self.remote_scheduler_job_id,
         }
 
 
 class ABIJobService:
-    """ABI job queue with optional JSON persistence."""
+    """ABI job queue with optional JSON persistence and optional force-kill.
+
+    Set ``subprocess_workers=True`` to run each job in a separate ``abi dispatch``
+    subprocess so that :meth:`cancel` can send SIGTERM for true force-kill.
+    """
 
     def __init__(
         self,
@@ -95,6 +109,7 @@ class ABIJobService:
         agent: Optional[ABIAgentInterface] = None,
         max_workers: int = 1,
         store_path: Optional[str | Path] = None,
+        subprocess_workers: bool = False,
     ) -> None:
         if max_workers < 1:
             raise ValueError("max_workers must be at least 1")
@@ -104,6 +119,8 @@ class ABIJobService:
         self._queue: "queue.Queue[str]" = queue.Queue()
         self._stop = threading.Event()
         self._store_path = Path(store_path) if store_path else None
+        self._subprocess_workers = bool(subprocess_workers)
+        self._processes: Dict[str, "subprocess.Popen[str]"] = {}
         queued_jobs = self._load_store()
         self._workers = [
             threading.Thread(target=self._worker_loop, name=f"abi-job-worker-{index}", daemon=True)
@@ -180,6 +197,10 @@ class ABIJobService:
             elif record.status not in TERMINAL_STATUSES:
                 record.status = "cancel_requested"
                 record.cancel_requested = True
+                # Force-kill subprocess worker when available.
+                proc = self._processes.get(job_id)
+                if proc is not None and proc.poll() is None:
+                    _kill_process(proc, record.worker_pid)
             record.updated_at = time.time()
             self._write_job_provenance_locked(record)
             self._persist_locked()
@@ -219,13 +240,20 @@ class ABIJobService:
             record.updated_at = record.started_at
             self._persist_locked()
         try:
-            envelope = loads_json(
-                self.agent.dispatch(record.command, record.arguments),
-                label=f"agent response for {record.command}",
-            )
+            if self._subprocess_workers:
+                envelope = self._dispatch_subprocess(job_id, record)
+            else:
+                envelope = loads_json(
+                    self.agent.dispatch(record.command, record.arguments),
+                    label=f"agent response for {record.command}",
+                )
             with self._lock:
                 record.result = envelope
-                if envelope.get("status") == "success":
+                # Extract remote scheduler job ID from the result envelope.
+                self._capture_remote_scheduler_id(record, envelope)
+                if self._cancel_requested_or_cancelled(record):
+                    record.status = "cancelled"
+                elif envelope.get("status") == "success":
                     record.status = "succeeded"
                 else:
                     record.status = "failed"
@@ -251,7 +279,57 @@ class ABIJobService:
                 record.finished_at = time.time()
                 record.updated_at = record.finished_at
                 self._write_job_provenance_locked(record)
+                self._processes.pop(job_id, None)
                 self._persist_locked()
+
+    # ── helpers ────────────────────────────────────────────────────────
+
+    def _dispatch_subprocess(self, job_id: str, record: JobRecord) -> Dict[str, Any]:
+        args_json = json.dumps(record.arguments, ensure_ascii=False)
+        proc = subprocess.Popen(
+            ["abi", "dispatch", "--command", record.command, "--arguments", args_json],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        with self._lock:
+            self._processes[job_id] = proc
+            record.worker_pid = proc.pid
+        stdout, stderr = proc.communicate()
+        if self._cancel_requested_or_cancelled(record):
+            return {
+                "status": "cancelled",
+                "command": record.command,
+                "result": {},
+                "error": "Job was cancelled.",
+            }
+        if proc.returncode != 0:
+            raise JobServiceError(
+                f"abi dispatch failed with code {proc.returncode}: {stderr.strip()}"
+            )
+        return loads_json(stdout, label=f"subprocess dispatch stdout for {job_id}")
+
+    @staticmethod
+    def _capture_remote_scheduler_id(record: JobRecord, envelope: Mapping[str, Any]) -> None:
+        result = envelope.get("result")
+        if not isinstance(result, Mapping):
+            return
+        for key in ("remote_scheduler_job_id", "nextflow_job_id", "job_id"):
+            value = result.get(key)
+            if value:
+                record.remote_scheduler_job_id = str(value)
+                return
+        outputs = result.get("outputs")
+        if isinstance(outputs, Mapping):
+            for key in ("remote_scheduler_job_id", "nextflow_job_id"):
+                value = outputs.get(key)
+                if value:
+                    record.remote_scheduler_job_id = str(value)
+                    return
+
+    @staticmethod
+    def _cancel_requested_or_cancelled(record: JobRecord) -> bool:
+        return record.cancel_requested or record.status in {"cancelled", "cancel_requested"}
 
     def _load_store(self) -> list[str]:
         if self._store_path is None or not self._store_path.exists():
@@ -402,10 +480,15 @@ def serve(
     port: int = 18791,
     max_workers: int = 1,
     store_path: Optional[str | Path] = None,
+    subprocess_workers: bool = False,
 ) -> None:
     """Run the ABI Job Service until interrupted."""
 
-    service = ABIJobService(max_workers=max_workers, store_path=store_path)
+    service = ABIJobService(
+        max_workers=max_workers,
+        store_path=store_path,
+        subprocess_workers=subprocess_workers,
+    )
     server = create_http_server(service, host=host, port=port)
     try:
         server.serve_forever()
@@ -570,6 +653,14 @@ def _record_from_mapping(data: Mapping[str, Any]) -> JobRecord:
             if data.get("job_provenance_error") is not None
             else None
         ),
+        worker_pid=(
+            int(data["worker_pid"]) if isinstance(data.get("worker_pid"), (int, float)) else None
+        ),
+        remote_scheduler_job_id=(
+            str(data["remote_scheduler_job_id"])
+            if data.get("remote_scheduler_job_id") is not None
+            else None
+        ),
     )
 
 
@@ -653,6 +744,29 @@ def _infer_result_root_from_artifact(path: Path) -> Path:
 def _path_parts(path: str) -> list[str]:
     parsed = urlparse(path)
     return [part for part in parsed.path.split("/") if part]
+
+
+def _kill_process(proc: "subprocess.Popen[str]", pid: Optional[int]) -> None:
+    """Send SIGTERM (then SIGKILL after grace period) to a subprocess."""
+    target_pid = pid or proc.pid
+    if target_pid is None:
+        return
+    try:
+        os.kill(target_pid, signal.SIGTERM)
+    except OSError:
+        pass
+    try:
+        proc.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        try:
+            os.kill(target_pid, signal.SIGKILL)
+        except OSError:
+            pass
+    # Ensure stdout/stderr pipes are closed.
+    try:
+        proc.communicate(timeout=1)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
 
 
 def _error_payload(exc: JobServiceError) -> Dict[str, Any]:

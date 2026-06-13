@@ -128,7 +128,7 @@ def test_job_service_records_running_cancel_request_after_dispatch_finishes():
                 break
             time.sleep(0.05)
 
-        assert job["status"] == "succeeded"
+        assert job["status"] == "cancelled"
         assert job["cancel_requested"] is True
         assert job["finished_at"] is not None
     finally:
@@ -630,3 +630,125 @@ def test_abi_job_cli_unconfirmed_run_returns_confirmation_required():
         server.server_close()
         service.shutdown()
         thread.join(timeout=2)
+
+
+def test_job_service_remote_scheduler_job_id_extracted_from_result():
+    finished = threading.Event()
+
+    class HpcAgent:
+        def dispatch(self, command, arguments):
+            del command, arguments
+            finished.set()
+            return json.dumps(
+                {
+                    "status": "success",
+                    "command": "abi_run",
+                    "result": {
+                        "analysis_type": "metatranscriptomics",
+                        "outdir": "results/hpc-job",
+                        "remote_scheduler_job_id": "slurm-12345",
+                    },
+                }
+            )
+
+    service = ABIJobService(agent=HpcAgent(), max_workers=1)
+    try:
+        submitted = service.submit(
+            {
+                "command": "run",
+                "arguments": {
+                    "analysis_type": "metatranscriptomics",
+                    "outdir": "results/hpc-job",
+                    "confirm_execution": True,
+                },
+            }
+        )
+        assert finished.wait(timeout=2)
+        deadline = time.time() + 2
+        while time.time() < deadline:
+            job = service.get_job(submitted["job_id"])
+            if job["status"] == "succeeded":
+                break
+            time.sleep(0.05)
+        assert job["remote_scheduler_job_id"] == "slurm-12345"
+    finally:
+        service.shutdown()
+
+
+def test_job_service_subprocess_workers_flag():
+    finished = threading.Event()
+
+    class FastAgent:
+        def dispatch(self, command, arguments):
+            del command, arguments
+            finished.set()
+            return json.dumps({"status": "success", "command": "abi_plan", "result": {}})
+
+    service = ABIJobService(agent=FastAgent(), max_workers=1, subprocess_workers=False)
+    try:
+        assert service._subprocess_workers is False
+        submitted = service.submit(
+            {"command": "plan", "arguments": {"analysis_type": "metatranscriptomics"}}
+        )
+        assert finished.wait(timeout=2)
+        deadline = time.time() + 2
+        while time.time() < deadline:
+            job = service.get_job(submitted["job_id"])
+            if job["status"] == "succeeded":
+                break
+            time.sleep(0.05)
+        assert job["status"] == "succeeded"
+    finally:
+        service.shutdown()
+
+
+def test_job_service_persists_remote_scheduler_job_id(tmp_path):
+    store_path = tmp_path / "jobs.json"
+    finished = threading.Event()
+
+    class FullAgent:
+        def dispatch(self, command, arguments):
+            del command, arguments
+            finished.set()
+            return json.dumps(
+                {
+                    "status": "success",
+                    "command": "abi_run",
+                    "result": {
+                        "outdir": str(tmp_path),
+                        "remote_scheduler_job_id": "nxflow-abc",
+                    },
+                }
+            )
+
+    service = ABIJobService(agent=FullAgent(), max_workers=1, store_path=store_path)
+    try:
+        submitted = service.submit(
+            {
+                "command": "run",
+                "backend": "nextflow",
+                "arguments": {
+                    "analysis_type": "metatranscriptomics",
+                    "outdir": str(tmp_path),
+                    "confirm_execution": True,
+                },
+            }
+        )
+        assert finished.wait(timeout=2)
+        deadline = time.time() + 2
+        while time.time() < deadline:
+            job = service.get_job(submitted["job_id"])
+            if job["status"] == "succeeded":
+                break
+            time.sleep(0.05)
+        assert job["remote_scheduler_job_id"] == "nxflow-abc"
+    finally:
+        service.shutdown()
+
+    reloaded = ABIJobService(max_workers=1, store_path=store_path)
+    try:
+        job = reloaded.get_job(submitted["job_id"])
+        assert job["status"] == "succeeded"
+        assert job["remote_scheduler_job_id"] == "nxflow-abc"
+    finally:
+        reloaded.shutdown()

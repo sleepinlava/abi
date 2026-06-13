@@ -1079,13 +1079,24 @@ def job_service_command(
         "--store",
         help="Optional JSON file used to persist job records.",
     ),
+    subprocess_workers: bool = typer.Option(
+        False,
+        "--subprocess-workers",
+        help="Run each job in an abi-dispatch subprocess so cancel can force-kill via SIGTERM.",
+    ),
 ) -> None:
     """Start the ABI HTTP Job Service for queued long-running operations."""
     try:
         from abi.jobs import serve
 
         typer.echo(f"ABI Job Service listening on http://{host}:{port}")
-        serve(host=host, port=port, max_workers=workers, store_path=store)
+        serve(
+            host=host,
+            port=port,
+            max_workers=workers,
+            store_path=store,
+            subprocess_workers=subprocess_workers,
+        )
     except KeyboardInterrupt:
         typer.echo("ABI Job Service stopped.")
     except Exception as exc:
@@ -1243,6 +1254,38 @@ def _run_with_runtime(
     else:
         runtime = NextflowRuntime(plugin, options=options)
     return runtime.run(plan, cfg)
+
+
+@app.command("dispatch")
+def dispatch_command(
+    command: str = typer.Option(..., "--command", "-c", help="ABI command to dispatch."),
+    arguments_json: Optional[str] = typer.Option(
+        None, "--arguments", "-a", help="JSON arguments (inline or file path). Reads stdin if omitted."
+    ),
+    arguments_file: Optional[Path] = typer.Option(
+        None, "--arguments-file", help="Path to JSON file containing arguments."
+    ),
+) -> None:
+    """Dispatch a single ABI command and print the JSON envelope (used by Job Service workers)."""
+    if arguments_file is not None:
+        arguments = load_json_object(arguments_file, label=f"arguments file {arguments_file}")
+    elif arguments_json is not None:
+        try:
+            arguments = json.loads(arguments_json)
+        except json.JSONDecodeError:
+            arguments = load_json_object(Path(arguments_json), label=f"arguments path {arguments_json}")
+    else:
+        import sys as _sys
+
+        raw = _sys.stdin.read()
+        if raw.strip():
+            arguments = json.loads(raw)
+        else:
+            arguments = {}
+    if not isinstance(arguments, dict):
+        raise typer.BadParameter("Arguments must be a JSON object.")
+    interface = ABIAgentInterface()
+    typer.echo(interface.dispatch(command, arguments), nl=False)
 
 
 def main() -> None:
