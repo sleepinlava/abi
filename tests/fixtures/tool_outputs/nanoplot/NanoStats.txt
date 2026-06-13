@@ -1,0 +1,4 @@
+Metric	Value	Unit
+number_of_reads	12	count
+mean_read_length	8500	bp
+median_read_quality	12.5	qscore

@@ -1,0 +1,38 @@
+abi_version: '0.1'
+tool_id: plasmidhostfinder
+name: PlasmidHostFinder
+category: host_prediction
+purpose: Run PlasmidHostFinder as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- host_prediction
+inputs:
+  plasmid_contigs:
+    type: path
+    required: true
+  level:
+    type: path
+    required: true
+  threshold:
+    type: path
+    required: true
+  database:
+    type: path
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-annotation
+  executable: plasmidhostfinder.py
+  command_template: plasmidhostfinder.py -i {plasmid_contigs} -o {output_dir} -l {level}
+    -t {threshold} -p {database}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install plasmidhostfinder.py in the autoplasm-annotation environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

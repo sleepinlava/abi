@@ -1,0 +1,2 @@
+sample_id	group	platform	read1	read2	long_reads	assembly	technology	host_reference	notes
+ONT1	case	ont			examples/fixtures/tiny_long.fastq		ONT		Phase 3 ONT dry-run smoke sample

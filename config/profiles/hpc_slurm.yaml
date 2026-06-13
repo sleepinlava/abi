@@ -1,0 +1,8 @@
+profile: hpc_slurm
+threads: 32
+mock_tools: false
+scheduler:
+  type: slurm
+  submit: false
+  partition: null
+  account: null

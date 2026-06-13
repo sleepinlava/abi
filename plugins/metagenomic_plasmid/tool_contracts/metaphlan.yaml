@@ -1,0 +1,29 @@
+abi_version: "0.1"
+tool_id: metaphlan
+name: MetaPhlAn
+category: host_prediction
+purpose: Estimate source community taxonomy from read inputs.
+when_to_use:
+  - host_context_required
+inputs:
+  metaphlan_input: {type: string, required: true}
+  database: {type: directory, required: true}
+  sample_id: {type: string, required: true}
+  threads: {type: integer, minimum: 1}
+outputs:
+  output_dir: {type: directory}
+  profile: {type: file, format: tsv}
+execution:
+  env_name: autoplasm-stats
+  executable: metaphlan
+  command_template: "metaphlan {metaphlan_input} --input_type fastq {metaphlan_long_reads_flag} --nproc {threads} --db_dir {database} -o {output_dir}/{sample_id}.metaphlan.tsv"
+  network: false
+  writes_output: true
+normalization:
+  parser: "abi.autoplasm.parsers:parse_metaphlan"
+  tables: [host_predictions]
+failure_handling:
+  missing_database:
+    hint: "Configure the MetaPhlAn database directory."
+  tool_not_found:
+    hint: "Install metaphlan in the autoplasm-stats environment."

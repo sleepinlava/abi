@@ -1,0 +1,4 @@
+find_program(MAMBA_EXE NAMES mamba micromamba)
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(Mamba DEFAULT_MSG MAMBA_EXE)

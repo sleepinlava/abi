@@ -1,0 +1,2 @@
+sample_id	group	platform	read1	read2	long_reads	assembly	technology	host_reference	notes
+HIFI1	case	pacbio_hifi			examples/fixtures/tiny_long.fastq		PacBio HiFi		Phase 4 PacBio HiFi dry-run smoke sample

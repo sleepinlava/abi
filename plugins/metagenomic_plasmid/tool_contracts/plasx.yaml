@@ -1,0 +1,38 @@
+abi_version: '0.1'
+tool_id: plasx
+name: PlasX
+category: plasmid_detection
+purpose: Run PlasX as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- plasmid_detection
+inputs:
+  annotations:
+    type: path
+    required: true
+  gene_calls:
+    type: path
+    required: true
+  model:
+    type: path
+    required: true
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-plasmid-detect
+  executable: plasx
+  command_template: plasx predict -a {annotations} -g {gene_calls} -m {model} -o {output_dir}/{sample_id}.plasx.tsv
+    --overwrite
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install plasx in the autoplasm-plasmid-detect environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

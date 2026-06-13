@@ -1,0 +1,15 @@
+abi_version: "0.1"
+plugin_id: metatranscriptomics
+display_name: Metatranscriptomics Demo
+description: "Minimal RNA-seq style ABI portability demo: fastp, STAR/HISAT2, featureCounts."
+report_title: Metatranscriptomics ABI Report
+plugin_type: standalone
+entry_point: abi.plugins.metatranscriptomics:MetatranscriptomicsPlugin
+tool_registry: tool_registry.yaml
+standard_tables: standard_tables.yaml
+tool_contracts: tool_contracts
+core_contracts:
+  - fastp
+  - star
+  - hisat2
+  - featurecounts

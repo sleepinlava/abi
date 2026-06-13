@@ -1,0 +1,30 @@
+abi_version: '0.1'
+tool_id: clinker
+name: clinker
+category: comparative_genomics
+purpose: Run clinker as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- comparative_genomics
+inputs:
+  sample_id:
+    type: string
+    required: true
+outputs:
+  genbank_files:
+    type: path
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-visualization
+  executable: clinker
+  command_template: clinker {genbank_files} -p {output_dir}/{sample_id}.clinker.html
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install clinker in the autoplasm-visualization environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

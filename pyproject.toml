@@ -7,8 +7,8 @@ requires = ["hatchling>=1.21.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "abi-agent"
-version = "0.1.0"
+name = "autoplasm-abi"
+version = "0.2.0"
 description = "Agent-Bioinformatics Interface: plugin-based abstraction for AI-driven bioinformatics analysis"
 readme = "README.md"
 license = "MIT"
@@ -36,29 +36,29 @@ dependencies = [
 Homepage = "https://github.com/sleepinlava/abi"
 Repository = "https://github.com/sleepinlava/abi"
 
-# ── Optional dependencies ────────────────────────────────────────────
-# Plugins may require packages outside the core dependency tree.
-# Each key defines an ``pip install abi-agent[<key>]`` extra.
-#
-# [autoplasm]  — enables the metagenomic_plasmid plugin
-# [dev]        — linting, formatting, type-checking, and testing tools
-#
-# The autoplasm imports in metagenomic_plasmid.py are lazy (imported
-# inside each method, not at module level) so that the module can be
-# imported without autoplasm installed.  The plugin registry in
-# abi/plugins/__init__.py also catches ImportError for extra safety.
 [project.optional-dependencies]
-autoplasm = ["autoplasm>=0.1.0"]
+mcp = [
+    "mcp; python_version >= '3.10'",
+]
+report = [
+    "jinja2",
+    "matplotlib",
+    "plotly",
+]
 dev = [
     "pytest>=7.0",
+    "pytest-cov>=4.0",
     "ruff>=0.4",
+    "black>=24.0",
     "mypy>=1.0",
     "types-PyYAML>=6.0",
+    "build>=1.0",
+    "twine>=5.0",
 ]
 
 [project.scripts]
 abi = "abi.cli:main"
-abi-dev-setup = "abi.dev_setup:main"
+autoplasm = "abi.autoplasm.cli:main"
 
 [project.entry-points."abi.plugins"]
 metagenomic_plasmid = "abi.plugins.metagenomic_plasmid:MetagenomicPlasmidPlugin"
@@ -71,17 +71,40 @@ packages = ["src/abi"]
 # usage can share the same files. Include them in wheels at the same relative
 # path expected by abi.config.PLUGIN_ROOT.
 [tool.hatch.build.targets.wheel.force-include]
+"config" = "config"
+"data/examples" = "data/examples"
+"envs" = "envs"
+"examples" = "examples"
+"golden_traces" = "golden_traces"
 "plugins" = "plugins"
+"scripts/download_databases.sh" = "scripts/download_databases.sh"
+"scripts/hifiasm_gfa_to_fasta.sh" = "scripts/hifiasm_gfa_to_fasta.sh"
+"scripts/normalize_hifiadapterfilt_output.sh" = "scripts/normalize_hifiadapterfilt_output.sh"
+"scripts/normalize_opera_ms_output.sh" = "scripts/normalize_opera_ms_output.sh"
+"skills" = "skills"
 
 [tool.hatch.build.targets.sdist]
 include = [
+    "CMakeLists.txt",
+    "cmake",
+    "config",
+    "data/examples",
+    "docs",
+    "envs",
+    "golden_traces",
     "src/abi",
     "plugins",
+    "scripts",
+    "skills",
     "tests",
     "examples",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
+    "demo_artifacts",
+    "baseline_comparison",
+    "figures",
+    "metrics.tsv",
 ]
 
 [tool.pytest.ini_options]
@@ -92,6 +115,10 @@ pythonpath = ["src"]
 target-version = "py310"
 line-length = 100
 
+[tool.black]
+target-version = ["py310"]
+line-length = 100
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
 
@@ -100,3 +127,4 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
+disable_error_code = ["import-untyped", "no-any-return"]

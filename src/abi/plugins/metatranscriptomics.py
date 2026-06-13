@@ -6,10 +6,11 @@ import csv
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from abi.config import PLUGIN_ROOT, compact_overrides, deep_merge, load_yaml
+from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
 from abi.report import write_generic_report
 from abi.schemas import ABIExecutionPlan, ABIPlanStep, ABISample, ABISampleContext
 from abi.tables import StandardTableManager
+from abi.timeouts import mapping_block
 from abi.tools import ToolRegistry
 
 
@@ -35,6 +36,7 @@ class MetatranscriptomicsPlugin:
         if config_path:
             config = deep_merge(config, load_yaml(config_path))
         config = deep_merge(config, compact_overrides(overrides))
+        _resolve_config_paths(config)
         self._validate_config(config)
         return config
 
@@ -61,7 +63,7 @@ class MetatranscriptomicsPlugin:
         context = self.build_sample_context(config, check_files=check_files)
         outdir = Path(str(config["outdir"]))
         threads = int(config["threads"])
-        aligner = str(config.get("alignment", {}).get("tool", "star"))
+        aligner = str(mapping_block(config, "alignment").get("tool", "star"))
         resources = config.get("resources", {})
         if not isinstance(resources, Mapping):
             resources = {}
@@ -188,7 +190,7 @@ class MetatranscriptomicsPlugin:
 
 
 def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleContext:
-    sample_sheet = Path(path)
+    sample_sheet = _resolve_path(path, base_dirs=[PROJECT_ROOT])
     if not sample_sheet.exists():
         raise ValueError(f"Sample sheet does not exist: {sample_sheet}")
     with sample_sheet.open("r", encoding="utf-8", newline="") as handle:
@@ -207,6 +209,8 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
             read2 = _clean(row.get("read2"))
             if not sample_id or not read1 or not read2:
                 raise ValueError(f"Row {index}: sample_id, read1, and read2 are required")
+            read1 = str(_resolve_path(read1, base_dirs=[sample_sheet.parent, PROJECT_ROOT]))
+            read2 = str(_resolve_path(read2, base_dirs=[sample_sheet.parent, PROJECT_ROOT]))
             samples.append(
                 ABISample(
                     sample_id=sample_id,
@@ -236,6 +240,26 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
         enable_sample_analysis=len(samples) > 1,
         enable_differential_abundance=len(groups) >= 2,
     )
+
+
+def _resolve_config_paths(config: Dict[str, Any]) -> None:
+    input_config = config.get("input", {})
+    if not isinstance(input_config, dict):
+        return
+    sample_sheet = input_config.get("sample_sheet")
+    if sample_sheet:
+        input_config["sample_sheet"] = str(_resolve_path(sample_sheet, base_dirs=[PROJECT_ROOT]))
+
+
+def _resolve_path(value: str | Path, *, base_dirs: Iterable[Path]) -> Path:
+    path = Path(value)
+    if path.is_absolute() or path.exists():
+        return path
+    for base_dir in base_dirs:
+        candidate = base_dir / path
+        if candidate.exists():
+            return candidate
+    return path
 
 
 def _parse_featurecounts(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:

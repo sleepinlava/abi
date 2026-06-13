@@ -1,0 +1,28 @@
+abi_version: "0.1"
+plugin_id: metagenomic_plasmid
+display_name: Metagenomic Plasmid Analysis
+description: AutoPlasm adapter using the existing plasmid-analysis planner and executor.
+report_title: AutoPlasm ABI Report
+plugin_type: adapter
+entry_point: abi.plugins.metagenomic_plasmid:MetagenomicPlasmidPlugin
+tool_registry: tool_registry.yaml
+standard_tables: standard_tables.yaml
+tool_contracts: tool_contracts
+core_contracts:
+  - fastp
+  - fastqc
+  - multiqc
+  - megahit
+  - quast
+  - genomad
+  - metaphlan
+  - bakta
+  - amrfinderplus
+  - abricate
+  - isescan
+  - integronfinder
+  - bowtie2
+  - samtools
+  - coverm
+  - fastspar
+  - report_markdown

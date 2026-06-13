@@ -1,0 +1,13 @@
+project_name: autoplasm_project
+mode: auto
+threads: 2
+outdir: results/autoplasm_project
+log_dir: log
+dry_run: true
+mock_tools: true
+input:
+  sample_sheet: examples/sample_sheet.tsv
+plasmid_detection:
+  tools:
+    - genomad
+  strategy: single_tool

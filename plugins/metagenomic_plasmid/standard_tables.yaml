@@ -1,0 +1,158 @@
+tables:
+  plasmid_predictions:
+    - sample_id
+    - contig_id
+    - tool
+    - evidence_level
+    - score
+    - confidence
+    - contig_length
+    - circularity
+    - evidence
+    - warnings
+    - source_file
+  plasmid_consensus:
+    - sample_id
+    - contig_id
+    - final_plasmid_call
+    - decision_strategy
+    - support_tools
+    - support_count
+    - total_tools
+    - confidence_score
+    - contig_length
+    - evidence
+    - warnings
+  annotations:
+    - sample_id
+    - contig_id
+    - start
+    - end
+    - strand
+    - gene
+    - product
+    - category
+    - tool
+    - evidence
+    - identity
+    - coverage
+    - source_file
+  host_predictions:
+    - sample_id
+    - contig_id
+    - host_taxon
+    - method
+    - confidence
+    - evidence
+    - tool
+    - source_file
+  abundance:
+    - sample_id
+    - feature_id
+    - contig_id
+    - coverage
+    - tpm
+    - rpkm
+    - mapped_reads
+    - length_bp
+    - tool
+    - source_file
+  qc_summary:
+    - sample_id
+    - tool
+    - metric
+    - value
+    - unit
+    - source_file
+  assembly_summary:
+    - sample_id
+    - tool
+    - metric
+    - value
+    - unit
+    - source_file
+  plasmid_typing:
+    - sample_id
+    - contig_id
+    - typing_scheme
+    - type_id
+    - mobility
+    - confidence
+    - tool
+    - evidence
+    - source_file
+  plasmid_bins:
+    - sample_id
+    - bin_id
+    - method
+    - contig_count
+    - total_length_bp
+    - confidence
+    - evidence
+    - source_file
+  bin_to_contig:
+    - sample_id
+    - bin_id
+    - contig_id
+    - membership_score
+    - tool
+    - source_file
+  comparative_hits:
+    - sample_id
+    - query_id
+    - subject_id
+    - identity
+    - coverage
+    - e_value
+    - bit_score
+    - alignment_length
+    - tool
+    - evidence
+    - source_file
+  visualization_outputs:
+    - sample_id
+    - output_type
+    - path
+    - tool
+    - description
+  sample_diversity:
+    - sample_id
+    - comparison_sample_id
+    - metric
+    - value
+    - method
+    - group
+    - source_file
+    - warnings
+  differential_abundance:
+    - feature_id
+    - contig_id
+    - group_a
+    - group_b
+    - mean_a
+    - mean_b
+    - log2_fold_change
+    - statistic
+    - p_value
+    - q_value
+    - method
+    - warnings
+  network_edges:
+    - source
+    - target
+    - correlation
+    - covariance
+    - p_value
+    - q_value
+    - method
+    - evidence
+    - warnings
+    - source_file
+  network_nodes:
+    - node_id
+    - node_type
+    - sample_count
+    - mean_abundance
+    - degree
+    - evidence
+    - source_file

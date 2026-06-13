@@ -1,0 +1,34 @@
+abi_version: '0.1'
+tool_id: hifiadapterfilt
+name: HiFiAdapterFilt
+category: qc
+purpose: Run HiFiAdapterFilt as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- qc
+inputs:
+  long_reads:
+    type: path
+    required: true
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-qc
+  executable: hifiadapterfilt.sh
+  command_template: sh -c 'mkdir -p "$1" && input=$(cd "$(dirname "$2")" && pwd -P)/$(basename
+    "$2") && cd "$1" && hifiadapterfilt.sh -p "$3" "$input" && sh "$4/scripts/normalize_hifiadapterfilt_output.sh"
+    "$3" "$3.hifiadapterfilt.fastq.gz"' autoplasm "{output_dir}" "{long_reads}" "{sample_id}"
+    "{project_root}"
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install hifiadapterfilt.sh in the autoplasm-qc environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

@@ -1,0 +1,2 @@
+PASS	Basic Statistics	S1_R1.fastq
+WARN	Per base sequence quality	S1_R1.fastq

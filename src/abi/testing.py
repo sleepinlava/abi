@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from abi.contracts import ContractValidationError, validate_plugin_contract_files
 from abi.tools import ToolRegistry
 
 
@@ -37,6 +38,10 @@ def assert_plugin_contract(plugin: Any) -> None:
         assert isinstance(fields, Iterable), f"{table_name} fields must be iterable"
         field_list = list(fields)
         assert field_list, f"{table_name} must define at least one field"
-        assert all(isinstance(field, str) and field.strip() for field in field_list), (
-            f"{table_name} fields must be non-empty strings"
-        )
+        valid_fields = all(isinstance(field, str) and field.strip() for field in field_list)
+        assert valid_fields, f"{table_name} fields must be non-empty strings"
+
+    try:
+        validate_plugin_contract_files(plugin)
+    except ContractValidationError as exc:
+        raise AssertionError(str(exc)) from exc

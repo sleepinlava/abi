@@ -1,0 +1,41 @@
+abi_version: '0.1'
+tool_id: kraken2
+name: Kraken2
+category: host_prediction
+purpose: Run Kraken2 as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- host_prediction
+inputs:
+  threads:
+    type: integer
+    required: true
+  database:
+    type: path
+    required: true
+  sample_id:
+    type: string
+    required: true
+  read1:
+    type: path
+    required: true
+  read2:
+    type: path
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-stats
+  executable: kraken2
+  command_template: kraken2 --threads {threads} --db {database} --report {output_dir}/{sample_id}.kraken2.report
+    {read1} {read2}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install kraken2 in the autoplasm-stats environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

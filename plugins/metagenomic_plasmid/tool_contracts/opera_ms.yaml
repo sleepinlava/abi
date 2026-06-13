@@ -1,0 +1,40 @@
+abi_version: '0.1'
+tool_id: opera_ms
+name: OPERA-MS
+category: assembly
+purpose: Run OPERA-MS as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- assembly
+inputs:
+  read1:
+    type: path
+    required: true
+  read2:
+    type: path
+    required: true
+  long_reads:
+    type: path
+    required: true
+  threads:
+    type: integer
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-assembly
+  executable: OPERA-MS.pl
+  command_template: sh -c 'mkdir -p "$1" && OPERA-MS.pl --short-read1 "$2" --short-read2
+    "$3" --long-read "$4" --out-dir "$1" --num-processors "$5" && sh "$6/scripts/normalize_opera_ms_output.sh"
+    "$1" "$1/contigs.fasta"' autoplasm "{output_dir}" "{read1}" "{read2}" "{long_reads}"
+    "{threads}" "{project_root}"
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install OPERA-MS.pl in the autoplasm-assembly environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

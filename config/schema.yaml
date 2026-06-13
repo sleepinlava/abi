@@ -1,0 +1,64 @@
+type: object
+required:
+  - project_name
+  - mode
+  - threads
+  - outdir
+  - log_dir
+  - input
+  - qc
+  - assembly
+  - plasmid_detection
+properties:
+  mode:
+    enum: [auto, interactive]
+  threads:
+    type: integer
+    minimum: 1
+  plasmid_detection:
+    required: [enable, tools, strategy]
+    properties:
+      strategy:
+        enum: [single_tool, union, intersection, majority_vote, weighted_vote]
+  resources:
+    type: object
+  execution:
+    type: object
+    properties:
+      parallel:
+        type: boolean
+      workers:
+        type: integer
+        minimum: 1
+      progress:
+        type: boolean
+      tool_timeout_seconds:
+        type: number
+        minimum: 0
+      resource_timeout_seconds:
+        type: number
+        minimum: 0
+      nextflow_timeout_seconds:
+        type: number
+        minimum: 0
+      dashboard:
+        type: object
+        properties:
+          enable:
+            type: boolean
+          host:
+            type: string
+          port:
+            type: integer
+            minimum: 1
+            maximum: 65535
+          open_browser:
+            type: boolean
+  workflow:
+    type: object
+  tool_params:
+    type: object
+  input:
+    properties:
+      platform:
+        enum: [illumina, ont, pacbio_hifi, hybrid, assembly, null]

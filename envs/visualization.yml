@@ -1,0 +1,16 @@
+name: autoplasm-visualization
+channels: [conda-forge, bioconda, defaults]
+channel_priority: strict
+dependencies:
+  - python=3.9
+  - matplotlib
+  - plotly
+  - networkx
+  - pyvis
+  - jinja2
+  - pip
+  - pip:
+      - clinker
+      - dna-features-viewer
+      - pycirclize
+      - pygenomeviz

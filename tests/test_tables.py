@@ -27,6 +27,17 @@ def test_append_rows(tmp_path):
     assert "100" in content
 
 
+def test_append_rows_rejects_unknown_tables(tmp_path):
+    import pytest
+
+    mgr = StandardTableManager({"genes": ["gene_id", "count"]})
+
+    with pytest.raises(ValueError, match="Unknown ABI standard table: unknown"):
+        mgr.append_rows(tmp_path, {"unknown": [{"gene_id": "g1"}]})
+
+    assert not (tmp_path / "unknown.tsv").exists()
+
+
 def test_summarize(tmp_path):
     schemas = {"genes": ["gene_id", "count"]}
     mgr = StandardTableManager(schemas)

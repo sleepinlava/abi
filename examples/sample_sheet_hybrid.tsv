@@ -1,0 +1,2 @@
+sample_id	group	platform	read1	read2	long_reads	assembly	technology	host_reference	notes
+HYB1	case	hybrid	examples/fixtures/tiny_R1.fastq	examples/fixtures/tiny_R2.fastq	examples/fixtures/tiny_long.fastq		Illumina+ONT		Phase 5 hybrid dry-run smoke sample

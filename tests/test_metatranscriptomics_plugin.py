@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from abi.plugins import get_plugin, list_plugins
 from abi.testing import assert_plugin_contract
 
@@ -39,6 +41,18 @@ def test_load_config():
     cfg = plugin.load_config()
     assert cfg["project_name"] == "abi_metatranscriptomics_demo"
     assert cfg["threads"] == 4
+    assert Path(cfg["input"]["sample_sheet"]).exists()
+
+
+def test_default_sample_sheet_resolves_outside_project_cwd(tmp_path, monkeypatch):
+    plugin = get_plugin("metatranscriptomics")
+    monkeypatch.chdir(tmp_path)
+
+    cfg = plugin.load_config(overrides={"outdir": str(tmp_path / "results")})
+    plan = plugin.build_plan(cfg)
+
+    assert Path(plan.samples[0].read1).exists()
+    assert Path(plan.samples[0].read2).exists()
 
 
 def test_plugin_contract():

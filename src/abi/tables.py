@@ -54,6 +54,8 @@ class StandardTableManager:
         *,
         append: bool = False,
     ) -> Path:
+        if table_name not in self.schemas:
+            raise ValueError(f"Unknown ABI standard table: {table_name}")
         fields = self.schemas[table_name]
         path = self.table_path(tables_dir, table_name)
         path.parent.mkdir(parents=True, exist_ok=True)

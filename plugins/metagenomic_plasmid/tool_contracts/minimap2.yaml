@@ -1,0 +1,38 @@
+abi_version: '0.1'
+tool_id: minimap2
+name: minimap2
+category: abundance
+purpose: Run minimap2 as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- abundance
+inputs:
+  plasmid_contigs:
+    type: path
+    required: true
+  long_reads:
+    type: path
+    required: true
+  threads:
+    type: integer
+    required: true
+  minimap2_preset:
+    type: path
+    required: true
+outputs:
+  alignment:
+    type: path
+execution:
+  env_name: autoplasm-abundance
+  executable: minimap2
+  command_template: minimap2 -t {threads} -ax {minimap2_preset} {plasmid_contigs}
+    {long_reads} > {alignment}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install minimap2 in the autoplasm-abundance environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

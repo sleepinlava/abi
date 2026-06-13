@@ -1,0 +1,4 @@
+profile: dry_run
+dry_run: true
+mock_tools: true
+threads: 4

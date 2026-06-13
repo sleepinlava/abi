@@ -1,0 +1,28 @@
+abi_version: "0.1"
+tool_id: fastspar
+name: FastSpar
+category: network
+purpose: Infer sparse correlation networks from plasmid abundance tables.
+when_to_use:
+  - multi_sample_abundance_available
+inputs:
+  abundance_table: {type: file, format: tsv, required: true}
+  threads: {type: integer, minimum: 1}
+outputs:
+  output_dir: {type: directory}
+  correlation: {type: file, format: tsv}
+  covariance: {type: file, format: tsv}
+execution:
+  env_name: autoplasm-stats
+  executable: fastspar
+  command_template: "fastspar --otu_table {abundance_table} --correlation {output_dir}/correlation.tsv --covariance {output_dir}/covariance.tsv --threads {threads}"
+  network: false
+  writes_output: true
+normalization:
+  parser: "abi.autoplasm.parsers:parse_fastspar"
+  tables: [network_edges, network_nodes]
+failure_handling:
+  missing_input:
+    hint: "Check the plasmid abundance table path."
+  tool_not_found:
+    hint: "Install fastspar in the autoplasm-stats environment."

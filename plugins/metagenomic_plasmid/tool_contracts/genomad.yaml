@@ -1,0 +1,31 @@
+abi_version: "0.1"
+tool_id: genomad
+name: geNomad
+category: plasmid_detection
+purpose: Detect plasmid-like sequences from assembled contigs.
+when_to_use:
+  - assembly_available
+  - plasmid_detection_required
+inputs:
+  assembly: {type: file, format: fasta, required: true}
+  database: {type: directory, required: true}
+  threads: {type: integer, minimum: 1}
+outputs:
+  output_dir: {type: directory}
+  plasmid_summary: {type: file, format: tsv}
+execution:
+  env_name: autoplasm-plasmid-detect
+  executable: genomad
+  command_template: "genomad end-to-end --cleanup --restart --threads {threads} {assembly} {output_dir} {database}"
+  network: false
+  writes_output: true
+normalization:
+  parser: "abi.autoplasm.parsers:parse_genomad"
+  tables: [plasmid_predictions]
+failure_handling:
+  missing_database:
+    hint: "Configure the geNomad database resource path."
+  missing_input:
+    hint: "Check assembly FASTA path."
+  parse_failed:
+    hint: "Check geNomad plasmid summary TSV output."

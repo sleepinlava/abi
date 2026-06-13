@@ -1,0 +1,90 @@
+project_name: autoplasm_assembly_full_run
+mode: auto
+threads: 4
+outdir: results/assembly_full_run
+log_dir: results/assembly_full_run/log
+dry_run: false
+mock_tools: false
+
+workflow:
+  plasmid_contigs_source: assembly
+
+resources:
+  root: resources/autoplasm
+  auto_download: true
+  genomad:
+    database: resources/autoplasm/genomad
+    version: latest
+  bakta:
+    database: resources/autoplasm/bakta
+    type: light
+    version: light
+  mob_suite:
+    database: resources/autoplasm/mob_suite
+    version: latest
+  plasmidfinder:
+    database: resources/autoplasm/plasmidfinder_db
+    version: latest
+
+input:
+  sample_sheet: data/examples/plasmid_refseq_smoke/sample_sheet.tsv
+
+qc:
+  enable: false
+  run_fastqc: false
+  run_multiqc: false
+
+assembly:
+  enable: false
+  assembly_qc: true
+
+plasmid_detection:
+  enable: true
+  tools:
+    - genomad
+  consensus_tools:
+    - genomad
+    - mob_suite
+    - plasmidfinder
+  strategy: majority_vote
+  min_contig_length: 1000
+  output_uncertain: true
+
+plasmid_binning:
+  enable: false
+  tools: []
+
+typing:
+  enable: true
+  tools:
+    - mob_typer
+    - plasmidfinder
+
+host_prediction:
+  enable: false
+  tools: []
+
+annotation:
+  enable: true
+  general_annotator: bakta
+  arg_tools: []
+  vf_tools: []
+  mobile_element_tools:
+    - mob_suite
+
+comparative_genomics:
+  enable: false
+  tools: []
+
+abundance:
+  enable: false
+
+sample_analysis:
+  enable: false
+  differential_abundance: false
+  network: false
+
+visualization:
+  enable: true
+  html_report: true
+  markdown_report: true

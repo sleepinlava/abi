@@ -1,0 +1,32 @@
+abi_version: '0.1'
+tool_id: nanoplot
+name: NanoPlot
+category: qc
+purpose: Run NanoPlot as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- qc
+inputs:
+  long_reads:
+    type: path
+    required: true
+  threads:
+    type: integer
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-qc
+  executable: NanoPlot
+  command_template: NanoPlot --fastq {long_reads} --outdir {output_dir} --threads
+    {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install NanoPlot in the autoplasm-qc environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

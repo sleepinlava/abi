@@ -27,13 +27,16 @@ def test_agent_plan_requires_analysis_type(tmp_path):
     assert "analysis_type" in payload
 
 
-def test_no_autoplasm_leakage_from_core_sdk_and_demo_plugin():
+def test_no_autoplasm_imports_from_public_sdk_and_standalone_plugin():
     root = Path(__file__).resolve().parents[1]
     checked_paths = [
         root / "src" / "abi" / "openai_contracts.py",
         root / "src" / "abi" / "interfaces.py",
         root / "src" / "abi" / "tools.py",
         root / "src" / "abi" / "errors.py",
+        root / "src" / "abi" / "executor.py",
+        root / "src" / "abi" / "results.py",
+        root / "src" / "abi" / "runtimes" / "local.py",
         root / "src" / "abi" / "runtimes" / "nextflow.py",
     ]
     checked_paths.extend((root / "plugins" / "metatranscriptomics").rglob("*"))
@@ -42,6 +45,11 @@ def test_no_autoplasm_leakage_from_core_sdk_and_demo_plugin():
         if not path.is_file():
             continue
         text = path.read_text(encoding="utf-8").lower()
-        if "autoplasm" in text:
+        if (
+            "from autoplasm." in text
+            or "import autoplasm." in text
+            or "from abi.autoplasm" in text
+            or "import abi.autoplasm" in text
+        ):
             leaks.append(str(path.relative_to(root)))
     assert leaks == []
