@@ -1,0 +1,2 @@
+Protein identifier	Contig id	Start	Stop	Strand	Gene symbol	Element type	Sequence name	% Identity to reference sequence	% Coverage of reference sequence
+-	contig_1	100	900	+	tetA	AMR	tetracycline efflux protein	98.5	96.0

@@ -1,0 +1,5 @@
+Sample	FastQC_mqc-generalstats-fastqc-total_sequences	FastQC_mqc-generalstats-fastqc-percent_gc	fastp_filtered_reads
+S1	20	51	18
+ONT1	12	48	10
+HIFI1	10	52	9
+HYB1	18	50	16

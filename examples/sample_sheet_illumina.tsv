@@ -1,0 +1,2 @@
+sample_id	group	platform	read1	read2	long_reads	assembly	technology	host_reference	notes
+S1	case	illumina	examples/fixtures/tiny_R1.fastq	examples/fixtures/tiny_R2.fastq			NovaSeq		Phase 2 Illumina dry-run smoke sample

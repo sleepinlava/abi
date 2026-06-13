@@ -1,12 +1,16 @@
 # Metagenomic Plasmid Plugin
 
-This plugin is an adapter over the existing AutoPlasm implementation.
+`metagenomic_plasmid` adapts the bundled `abi.autoplasm` pipeline to the ABI
+plugin contract.
 
-It requires the `autoplasm` package to be installed:
+It is included in `abi-agent`; no external `autoplasm` package is required.
+The plugin delegates configuration, planning, dry-run execution, parsing, and
+report generation to `abi.autoplasm`.
+
+Useful commands:
 
 ```bash
-pip install abi-agent[autoplasm]
+abi plan --type metagenomic_plasmid --config examples/config_minimal.yaml --profile dry_run
+abi dry-run --type metagenomic_plasmid --config examples/config_minimal.yaml --profile dry_run
+autoplasm dry-run --config examples/config_minimal.yaml --profile dry_run
 ```
-
-When installed, it delegates planning, execution, parsing, and reporting to AutoPlasm's
-planner, pipeline executor, parsers, and report generators.

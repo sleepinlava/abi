@@ -1,0 +1,26 @@
+{
+  "dataset": "plasmid_refseq_smoke",
+  "generated_at": "2026-04-27T20:42:21",
+  "mock": false,
+  "files": [
+    {
+      "accession": "NC_002127.1",
+      "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NC_002127.1&rettype=fasta&retmode=text",
+      "path": "data/examples/plasmid_refseq_smoke/NC_002127.1.fasta",
+      "sha256": "873eb114bbd8bf922b6b4b620876128a7885eb2517ea763711e114b415087ea9"
+    },
+    {
+      "accession": "NC_011977.1",
+      "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NC_011977.1&rettype=fasta&retmode=text",
+      "path": "data/examples/plasmid_refseq_smoke/NC_011977.1.fasta",
+      "sha256": "b7b4d4b7d7ae2bd8ba7630836def626eaaa504f2fd1c127bb1409eb51cb6ac94"
+    },
+    {
+      "accession": "NC_002483.1",
+      "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NC_002483.1&rettype=fasta&retmode=text",
+      "path": "data/examples/plasmid_refseq_smoke/NC_002483.1.fasta",
+      "sha256": "f537653ef117c53dde082309951af8e68ea3923433415aa4a4b970b027098152"
+    }
+  ],
+  "sample_sheet": "data/examples/plasmid_refseq_smoke/sample_sheet.tsv"
+}

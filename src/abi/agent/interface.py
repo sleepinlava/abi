@@ -5,14 +5,24 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Union, cast
+from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Union
 
+from abi._compat.logger import RunLogger
+from abi.agent.context import build_agent_context, render_doctor_agent
+from abi.agent.envelopes import (
+    confirmation_required_envelope,
+    error_envelope,
+    json_dumps,
+    success_envelope,
+)
+from abi.autoplasm.result_validation import validate_result_dir as validate_autoplasm_result_dir
 from abi.config import compact_overrides
+from abi.diagnostics import classify_exception
 from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
-from abi.interfaces import ABIDryRunPlugin, ABIPlugin
+from abi.json_utils import load_json_object
 from abi.plugins import get_plugin, list_plugins
-from abi.provenance import RunLogger
+from abi.results import validate_abi_result_dir
 from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
 from abi.schemas import ABIError
 from abi.tables import StandardTableManager
@@ -189,58 +199,144 @@ class ABIAgentInterface:
             check_files=check_files,
         )
 
+    def export_agent_context(self, *, analysis_type: str) -> str:
+        """Export compact machine-readable guidance for untrained agent callers."""
+        return self._call(
+            "export_agent_context",
+            self._export_agent_context,
+            analysis_type=analysis_type,
+        )
+
+    def doctor_agent(self, *, analysis_type: str) -> str:
+        """Return a short agent operating guide for an ABI analysis type."""
+        return self._call("doctor_agent", self._doctor_agent, analysis_type=analysis_type)
+
+    def abi_validate_result(
+        self,
+        *,
+        result_dir: Union[str, Path],
+        allow_empty_tables: bool = True,
+    ) -> str:
+        """Validate an ABI result directory without modifying it."""
+        return self._call(
+            "abi_validate_result",
+            validate_abi_result_dir,
+            result_dir,
+            allow_empty_tables=allow_empty_tables,
+        )
+
+    def autoplasm_validate_result(
+        self,
+        *,
+        result_dir: Union[str, Path],
+        allow_empty_tables: bool = True,
+    ) -> str:
+        """Backward-compatible alias for abi_validate_result."""
+        return self._call(
+            "autoplasm_validate_result",
+            validate_autoplasm_result_dir,
+            result_dir,
+            allow_empty_tables=allow_empty_tables,
+        )
+
     def dispatch(self, tool_name: str, arguments: Optional[Mapping[str, Any]] = None) -> str:
         """Dispatch a function-calling style tool invocation."""
         args = dict(arguments or {})
         aliases = {
+            "list": "list_types",
+            "list-types": "list_types",
+            "list_types": "list_types",
             "abi_list": "list_types",
             "abi_list_types": "list_types",
+            "plan": "plan",
             "abi_plan": "plan",
+            "dry_run": "dry_run",
+            "dry-run": "dry_run",
             "abi_dry_run": "dry_run",
+            "inspect": "inspect",
             "abi_inspect": "inspect",
+            "report": "report",
             "abi_report": "report",
+            "run": "run",
             "abi_run": "run",
+            "export_nextflow": "export_nextflow",
+            "export-nextflow": "export_nextflow",
             "abi_export_nextflow": "export_nextflow",
+            "export_agent_context": "export_agent_context",
+            "export-agent-context": "export_agent_context",
+            "abi_export_agent_context": "export_agent_context",
+            "doctor_agent": "doctor_agent",
+            "doctor-agent": "doctor_agent",
+            "abi_doctor_agent": "doctor_agent",
+            "validate_result": "abi_validate_result",
+            "validate-result": "abi_validate_result",
+            "abi_validate_result": "abi_validate_result",
+            "autoplasm_validate_result": "autoplasm_validate_result",
         }
         method_name = aliases.get(tool_name, tool_name)
         method = getattr(self, method_name, None)
         if method is None:
-            return _json_dump(
-                {
-                    "status": "error",
-                    "command": tool_name,
-                    "error": f"Unknown ABI agent tool: {tool_name}",
-                    "available": sorted(aliases),
-                }
+            return json_dumps(
+                error_envelope(
+                    tool_name,
+                    error=f"Unknown ABI agent tool: {tool_name}",
+                    error_type="ValueError",
+                    error_code="internal_error",
+                    diagnostic_hints=[
+                        {
+                            "severity": "error",
+                            "code": "internal_error",
+                            "message": "The requested ABI tool name is not registered.",
+                            "suggested_next_action": (
+                                "Use one of the advertised ABI tool descriptors."
+                            ),
+                        }
+                    ],
+                    extra={"available": sorted(aliases)},
+                )
             )
         try:
-            return cast(str, method(**args))
+            return method(**args)
         except TypeError as exc:
-            return _json_dump(
-                {
-                    "status": "error",
-                    "command": method_name,
-                    "error": str(exc),
-                    "error_type": exc.__class__.__name__,
-                }
+            error_code, hints = classify_exception(exc, command=method_name)
+            return json_dumps(
+                error_envelope(
+                    method_name,
+                    error=str(exc),
+                    error_type=exc.__class__.__name__,
+                    error_code=error_code,
+                    diagnostic_hints=hints,
+                )
             )
 
     def _call(self, command: str, handler: Callable[..., Any], *args: Any, **kwargs: Any) -> str:
         try:
             result = handler(*args, **kwargs)
+        except MemoryError:
+            raise
         except Exception as exc:
-            payload: Dict[str, Any] = {
-                "status": "error",
-                "command": command,
-                "error": str(exc),
-                "error_type": exc.__class__.__name__,
-            }
+            error_code, hints = classify_exception(exc, command=command)
+            extra: Dict[str, Any] = {}
             if "Unknown ABI analysis type" in str(exc):
-                payload["available"] = [plugin.plugin_id for plugin in list_plugins()]
-            return _json_dump(payload)
+                extra["available"] = [plugin.plugin_id for plugin in list_plugins()]
+            return json_dumps(
+                error_envelope(
+                    command,
+                    error=str(exc),
+                    error_type=exc.__class__.__name__,
+                    error_code=error_code,
+                    diagnostic_hints=hints,
+                    extra=extra,
+                )
+            )
         if isinstance(result, Mapping) and result.get("status") == "confirmation_required":
-            return _json_dump({"command": command, **dict(result)})
-        return _json_dump({"status": "success", "command": command, "result": result})
+            raw_result = result.get("result")
+            if not isinstance(raw_result, Mapping):
+                raw_result = {}
+            return json_dumps(confirmation_required_envelope(command, raw_result))
+        if not isinstance(result, Mapping):
+            result = {"value": result}
+        return json_dumps(success_envelope(command, result))
 
     def _list_types(self) -> Dict[str, Any]:
         plugins = [
@@ -290,6 +386,7 @@ class ABIAgentInterface:
             "analysis_type": analysis_type,
             "plan_path": plan_path,
             "steps": len(getattr(plan, "steps", [])),
+            "written_files": [plan_path],
             "plan": plan_data,
         }
 
@@ -324,7 +421,7 @@ class ABIAgentInterface:
         )
         plan = plugin.build_plan(cfg, check_files=check_files)
         if hasattr(plugin, "execute_dry_run"):
-            outputs = cast(ABIDryRunPlugin, plugin).execute_dry_run(plan, cfg)
+            outputs = plugin.execute_dry_run(plan, cfg)
         else:
             table_manager = StandardTableManager(plugin.table_schemas())
             executor = GenericABIExecutor(
@@ -336,10 +433,12 @@ class ABIAgentInterface:
                 mock_tools=True,
             )
             outputs = executor.dry_run(plan, cfg)
+        output_files = dict(outputs)
         return {
             "analysis_type": analysis_type,
             "outdir": cfg.get("outdir"),
-            "outputs": dict(outputs),
+            "outputs": output_files,
+            "written_files": _path_values(output_files),
         }
 
     def _inspect(self, *, result_dir: Union[str, Path]) -> Dict[str, Any]:
@@ -356,9 +455,7 @@ class ABIAgentInterface:
             or "NOT_CONFIGURED" in row.get("path", "")
         ]
         summary_path = provenance / "run_summary.json"
-        summary = (
-            json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {}
-        )
+        summary = load_json_object(summary_path) if summary_path.exists() else {}
         return {
             "result_dir": root,
             "status": summary.get("status", "unknown"),
@@ -378,13 +475,16 @@ class ABIAgentInterface:
         plan_path = root / "execution_plan.json"
         if not plan_path.exists():
             raise ABIError(f"Missing execution plan: {plan_path}")
-        plan_data = json.loads(plan_path.read_text(encoding="utf-8"))
-        plugin_id = analysis_type or str(plan_data.get("analysis_type") or "")
-        if not plugin_id:
-            raise ABIError("Missing analysis_type in execution plan; pass analysis_type.")
+        plan_data = load_json_object(plan_path)
+        plugin_id = analysis_type or str(plan_data.get("analysis_type") or "metagenomic_plasmid")
         plugin = get_plugin(plugin_id)
         outputs = plugin.write_report(plan_data, root)
-        return {"analysis_type": plugin_id, "outputs": dict(outputs)}
+        output_files = dict(outputs)
+        return {
+            "analysis_type": plugin_id,
+            "outputs": output_files,
+            "written_files": _path_values(output_files),
+        }
 
     def _run(
         self,
@@ -460,6 +560,7 @@ class ABIAgentInterface:
             "runtime_status": result.status,
             "return_code": result.return_code,
             "outputs": result.outputs,
+            "written_files": _path_values(result.outputs),
         }
 
     def _export_nextflow(
@@ -502,7 +603,16 @@ class ABIAgentInterface:
             "workflow": workflow_path,
             "steps": len(getattr(plan, "steps", [])),
             "smoke": smoke,
+            "written_files": [workflow_path],
         }
+
+    def _export_agent_context(self, *, analysis_type: str) -> Dict[str, Any]:
+        plugin = get_plugin(analysis_type)
+        return build_agent_context(plugin)
+
+    def _doctor_agent(self, *, analysis_type: str) -> Dict[str, Any]:
+        plugin = get_plugin(analysis_type)
+        return {"analysis_type": analysis_type, "text": render_doctor_agent(plugin)}
 
     def _build_plan(
         self,
@@ -516,7 +626,7 @@ class ABIAgentInterface:
         outdir: Optional[str],
         log_dir: Optional[str],
         check_files: bool,
-    ) -> Tuple[ABIPlugin, Mapping[str, Any], Any]:
+    ) -> Tuple[Any, Mapping[str, Any], Any]:
         plugin = get_plugin(analysis_type)
         cfg = plugin.load_config(
             _optional_path(config_path),
@@ -562,7 +672,7 @@ def _optional_path(value: Optional[Union[str, Path]]) -> Optional[Path]:
 
 
 def _plan_dict(plan: Any, analysis_type: str) -> Dict[str, Any]:
-    data: Dict[str, Any] = dict(plan.to_dict())
+    data = plan.to_dict()
     data.setdefault("analysis_type", analysis_type)
     return data
 
@@ -574,15 +684,5 @@ def _read_tsv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle, delimiter="\t"))
 
 
-def _json_dump(payload: Mapping[str, Any]) -> str:
-    return json.dumps(_jsonable(payload), indent=2, ensure_ascii=False)
-
-
-def _jsonable(value: Any) -> Any:
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, Mapping):
-        return {str(key): _jsonable(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_jsonable(item) for item in value]
-    return value
+def _path_values(outputs: Mapping[str, Any]) -> list[Any]:
+    return [value for value in outputs.values() if value is not None]

@@ -1,0 +1,3 @@
+profile: local
+threads: 8
+mock_tools: false

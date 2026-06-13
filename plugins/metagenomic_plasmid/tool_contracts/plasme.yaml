@@ -1,0 +1,38 @@
+abi_version: '0.1'
+tool_id: plasme
+name: PLASMe
+category: plasmid_detection
+purpose: Run PLASMe as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- plasmid_detection
+inputs:
+  assembly:
+    type: path
+    required: true
+  sample_id:
+    type: string
+    required: true
+  database:
+    type: path
+    required: true
+  threads:
+    type: integer
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-plasmid-detect
+  executable: PLASMe.py
+  command_template: PLASMe.py {assembly} {output_dir}/{sample_id}.plasme -d {database}
+    -t {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install PLASMe.py in the autoplasm-plasmid-detect environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

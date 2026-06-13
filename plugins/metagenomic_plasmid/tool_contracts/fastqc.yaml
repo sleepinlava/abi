@@ -1,0 +1,29 @@
+abi_version: "0.1"
+tool_id: fastqc
+name: FastQC
+category: qc
+purpose: Generate read-level QC summaries for paired short reads.
+when_to_use:
+  - illumina_reads
+  - read_quality_report_required
+inputs:
+  read1: {type: file, required: true}
+  read2: {type: file, required: true}
+  threads: {type: integer, minimum: 1}
+outputs:
+  output_dir: {type: directory}
+execution:
+  env_name: autoplasm-qc
+  executable: fastqc
+  command_template: "fastqc --threads {threads} --outdir {output_dir} {read1} {read2}"
+  network: false
+  writes_output: true
+normalization:
+  tables: [qc_summary]
+failure_handling:
+  missing_input:
+    hint: "Check paired FASTQ paths before running FastQC."
+  tool_not_found:
+    hint: "Install fastqc in the autoplasm-qc environment."
+  parse_failed:
+    hint: "Check the FastQC output directory layout."

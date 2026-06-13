@@ -1,0 +1,30 @@
+abi_version: "0.1"
+tool_id: bowtie2
+name: bowtie2
+category: abundance
+purpose: Build a plasmid contig index and align paired reads for abundance estimation.
+when_to_use:
+  - plasmid_contigs_available
+  - paired_reads_available
+  - abundance_estimation_required
+inputs:
+  plasmid_contigs: {type: file, format: fasta, required: true}
+  read1: {type: file, required: true}
+  read2: {type: file, required: true}
+  sample_id: {type: string, required: true}
+  threads: {type: integer, minimum: 1}
+outputs:
+  output_dir: {type: directory}
+  alignment: {type: file, format: sam}
+execution:
+  env_name: autoplasm-abundance
+  executable: bowtie2
+  command_template: >-
+    sh -c 'bowtie2-build "$1" "$2/$3$4.plasmid_index" >/dev/null && bowtie2 -x "$2/$3$4.plasmid_index" -1 "$5" -2 "$6" -p "$7" -S "$8"' autoplasm "{plasmid_contigs}" "{output_dir}" "{sample_id}" "{abundance_label}" "{read1}" "{read2}" "{threads}" "{alignment}"
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: "Check plasmid_contigs and paired read paths."
+  tool_not_found:
+    hint: "Install bowtie2 in the autoplasm-abundance environment."

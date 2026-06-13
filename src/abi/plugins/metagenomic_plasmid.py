@@ -1,17 +1,21 @@
-"""AutoPlasm adapter plugin for the ABI prototype.
-
-This plugin requires the 'autoplasm' package to be installed.
-Install with: pip install abi-agent[autoplasm]
-
-All autoplasm imports are lazy (inside methods) so the module can be
-imported without autoplasm installed.  The registry layer in
-``abi.plugins.__init__`` also catches ``ImportError`` for extra safety.
-"""
+"""AutoPlasm adapter plugin for the ABI prototype."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional, cast
+from typing import Any, Dict, Mapping, Optional
+
+from abi.autoplasm.config import load_config as load_autoplasm_config
+from abi.autoplasm.logger import RunLogger
+from abi.autoplasm.parsers import parse_standard_outputs
+from abi.autoplasm.pipeline import PipelineExecutor
+from abi.autoplasm.planner import build_plan
+from abi.autoplasm.report.html import write_html_report
+from abi.autoplasm.report.markdown import write_markdown_report
+from abi.autoplasm.schemas import ExecutionPlan, PlanStep, SampleContext, SampleInput
+from abi.autoplasm.standard_tables import TABLE_SCHEMAS, summarize_standard_tables
+from abi.config import PLUGIN_ROOT
+from abi.tools import ToolRegistry
 
 
 class MetagenomicPlasmidPlugin:
@@ -20,6 +24,10 @@ class MetagenomicPlasmidPlugin:
     description = "AutoPlasm adapter using the existing plasmid-analysis planner and executor."
     report_title = "AutoPlasm ABI Report"
 
+    @property
+    def root(self) -> Path:
+        return PLUGIN_ROOT / self.plugin_id
+
     def load_config(
         self,
         config_path: str | Path | None = None,
@@ -27,31 +35,20 @@ class MetagenomicPlasmidPlugin:
         profile: str | None = None,
         overrides: Optional[Mapping[str, Any]] = None,
     ) -> Dict[str, Any]:
-        from autoplasm.config import load_config as load_autoplasm_config
-
-        return cast(
-            Dict[str, Any],
-            load_autoplasm_config(config_path, profile=profile or "dry_run", overrides=overrides),
-        )
+        return load_autoplasm_config(config_path, profile=profile or "dry_run", overrides=overrides)
 
     def build_sample_context(self, config: Mapping[str, Any], *, check_files: bool = True) -> Any:
         del check_files
         return None
 
     def build_plan(self, config: Mapping[str, Any], *, check_files: bool = True) -> Any:
-        from autoplasm.planner import build_plan
-
         return build_plan(config, check_files=check_files)
 
-    def registry(self):
-        from autoplasm.skills.registry import ToolRegistry
-
-        return ToolRegistry.from_path()
+    def registry(self) -> ToolRegistry:
+        return ToolRegistry.from_path(self.root / "tool_registry.yaml")
 
     def table_schemas(self) -> Mapping[str, list[str]]:
-        from autoplasm.standard_tables import TABLE_SCHEMAS
-
-        return cast(Mapping[str, list[str]], TABLE_SCHEMAS)
+        return TABLE_SCHEMAS
 
     def parse_outputs(
         self,
@@ -59,23 +56,14 @@ class MetagenomicPlasmidPlugin:
         output_dir: str | Path,
         sample_id: str,
     ) -> Mapping[str, Any]:
-        from autoplasm.parsers import parse_standard_outputs
-
-        return cast(Mapping[str, Any], parse_standard_outputs(tool_id, output_dir, sample_id))
+        return parse_standard_outputs(tool_id, output_dir, sample_id)
 
     def execute_dry_run(self, plan: Any, config: Mapping[str, Any]) -> Dict[str, Path]:
-        from autoplasm.logger import RunLogger
-        from autoplasm.pipeline import PipelineExecutor
-
         logger = RunLogger(str(config["log_dir"]))
         executor = PipelineExecutor(self.registry(), logger, mock_tools=True)
-        return cast(Dict[str, Path], executor.dry_run(plan, config))
+        return executor.dry_run(plan, config)
 
     def write_report(self, plan: Any, result_dir: str | Path) -> Dict[str, Path]:
-        from autoplasm.report.html import write_html_report
-        from autoplasm.report.markdown import write_markdown_report
-        from autoplasm.standard_tables import summarize_standard_tables
-
         if isinstance(plan, Mapping):
             plan = _plan_from_dict(plan)
         root = Path(result_dir)
@@ -99,9 +87,7 @@ class MetagenomicPlasmidPlugin:
         return {"report": report_path, "report_html": report_html_path}
 
 
-def _plan_from_dict(data: Mapping[str, Any]) -> Any:
-    from autoplasm.schemas import ExecutionPlan, PlanStep, SampleContext, SampleInput
-
+def _plan_from_dict(data: Mapping[str, Any]) -> ExecutionPlan:
     samples = [SampleInput(**sample) for sample in data.get("samples", [])]
     context_data = data.get("sample_context", {})
     if not isinstance(context_data, Mapping):

@@ -1,24 +1,24 @@
-"""ABI configuration loading and validation."""
+"""Configuration helpers for the ABI prototype."""
 
 from __future__ import annotations
 
+import os
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
 import yaml
 
-__all__ = [
-    "ABIConfigError",
-    "PLUGIN_ROOT",
-    "PROJECT_ROOT",
-    "compact_overrides",
-    "deep_merge",
-    "load_yaml",
-    "write_yaml",
-]
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+def _resolve_project_root() -> Path:
+    current = Path(__file__).resolve()
+    for candidate in (current.parents[2], current.parents[1], Path.cwd()):
+        if (candidate / "plugins").exists():
+            return candidate
+    return current.parents[2]
+
+
+PROJECT_ROOT = _resolve_project_root()
 PLUGIN_ROOT = PROJECT_ROOT / "plugins"
 
 
@@ -41,16 +41,25 @@ def write_yaml(data: Mapping[str, Any], path: str | Path) -> Path:
     yaml_path = Path(path)
     yaml_path.parent.mkdir(parents=True, exist_ok=True)
     with yaml_path.open("w", encoding="utf-8") as handle:
-        yaml.dump(dict(data), handle, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        yaml.safe_dump(dict(data), handle, sort_keys=False, allow_unicode=True)
     return yaml_path
 
 
-def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> Dict[str, Any]:
-    result = dict(base)
+def resolved_mamba_root() -> Path:
+    """Return the local mamba root used by ABI-managed tool environments."""
+    return Path(
+        os.environ.get("ABI_MAMBA_ROOT")
+        or os.environ.get("AUTOPLASM_MAMBA_ROOT")
+        or PROJECT_ROOT / ".mamba"
+    )
+
+
+def deep_merge(base: Dict[str, Any], override: Mapping[str, Any]) -> Dict[str, Any]:
+    result = deepcopy(base)
     for key, value in override.items():
         if value is None:
             continue
-        if key in result and isinstance(result[key], Mapping) and isinstance(value, Mapping):
+        if isinstance(value, Mapping) and isinstance(result.get(key), dict):
             result[key] = deep_merge(result[key], value)
         else:
             result[key] = deepcopy(value)
@@ -60,14 +69,14 @@ def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> Dict[str
 def compact_overrides(overrides: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     if not overrides:
         return {}
-    result: Dict[str, Any] = {}
+    compacted: Dict[str, Any] = {}
     for key, value in overrides.items():
         if value is None:
             continue
         if isinstance(value, Mapping):
-            compacted = compact_overrides(value)
-            if compacted:
-                result[key] = compacted
+            nested = compact_overrides(value)
+            if nested:
+                compacted[key] = nested
         else:
-            result[key] = value
-    return result
+            compacted[key] = value
+    return compacted

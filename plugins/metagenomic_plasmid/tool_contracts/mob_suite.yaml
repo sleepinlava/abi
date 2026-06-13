@@ -1,0 +1,35 @@
+abi_version: '0.1'
+tool_id: mob_suite
+name: MOB-suite
+category: annotation
+purpose: Run MOB-suite as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- annotation
+inputs:
+  plasmid_contigs:
+    type: path
+    required: true
+  threads:
+    type: integer
+    required: true
+  database:
+    type: path
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-annotation
+  executable: mob_recon
+  command_template: mob_recon --infile {plasmid_contigs} --outdir {output_dir} --num_threads
+    {threads} --database_directory {database}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install mob_recon in the autoplasm-annotation environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

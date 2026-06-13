@@ -1,0 +1,132 @@
+project_name: autoplasm_project
+mode: auto
+threads: 16
+outdir: results/autoplasm_project
+log_dir: log
+profile: local
+resume: false
+force: false
+dry_run: false
+mock_tools: false
+
+execution:
+  parallel: false
+  workers: 1
+  progress: true
+  tool_timeout_seconds: 604800
+  resource_timeout_seconds: 86400
+  nextflow_timeout_seconds: 604800
+  dashboard:
+    enable: false
+    host: 127.0.0.1
+    port: 18790
+    open_browser: true
+
+workflow:
+  plasmid_contigs_source: auto
+  data_profile: null
+
+resources:
+  root: resources/autoplasm
+  auto_download: false
+tool_params: {}
+
+input:
+  sample_sheet: null
+  single_input: null
+  read2: null
+  long_reads: null
+  assembly: null
+  platform: null
+  sample_id: single_sample
+  group: null
+
+qc:
+  enable: true
+  short_read_tool: fastp
+  long_read_tool: filtlong
+  run_fastqc: true
+  run_multiqc: true
+  avoid_duplicate_qc: true
+
+assembly:
+  enable: true
+  short_read_assembler: megahit
+  high_quality_short_read_assembler: metaspades
+  long_read_assembler: metaflye
+  pacbio_hifi_assembler: hifiasm_meta
+  hybrid_assembler: opera_ms
+  assembly_qc: true
+
+plasmid_detection:
+  enable: true
+  tools:
+    - genomad
+  default_tool: genomad
+  strategy: single_tool
+  min_contig_length: 1000
+  output_uncertain: true
+
+plasmid_binning:
+  enable: auto
+  tools: auto
+  strategy: auto
+
+typing:
+  enable: auto
+  tools: auto
+
+host_prediction:
+  enable: auto
+  tools: auto
+  use_abundance_correlation: true
+  use_crispr_spacer: false
+  use_methylation: false
+  interpretation: evidence_integration
+
+annotation:
+  enable: true
+  general_annotator: bakta
+  arg_tools:
+    - amrfinderplus
+    - abricate
+  vf_tools:
+    - abricate
+  mobile_element_tools:
+    - isescan
+    - integronfinder
+
+comparative_genomics:
+  enable: auto
+  tools: auto
+
+abundance:
+  enable: auto
+  mapper_short: bowtie2
+  mapper_long: minimap2
+  calculator: coverm
+  abundance_policy:
+    min_contig_length: 1000
+    min_mean_coverage: null
+    min_coverage_breadth: null
+    multimapping_strategy: report_separately
+    length_normalization: tpm
+    shared_region_masking: optional
+    report_copy_number_bias: true
+  normalization:
+    - raw_counts
+    - coverage
+    - rpkm
+    - tpm
+
+sample_analysis:
+  enable: auto
+  alpha_diversity: true
+  beta_diversity: true
+  differential_abundance: true
+  network: true
+
+visualization:
+  enable: true
+  html_report: true
+  markdown_report: true

@@ -1,0 +1,20 @@
+project_name: autoplasm_full
+mode: auto
+threads: 4
+outdir: results/autoplasm_full
+log_dir: log
+dry_run: true
+mock_tools: true
+input:
+  sample_sheet: examples/sample_sheet.tsv
+plasmid_detection:
+  tools:
+    - genomad
+    - plasme
+    - plasx
+    - plasmidfinder
+  strategy: majority_vote
+host_prediction:
+  use_abundance_correlation: true
+  use_crispr_spacer: false
+  use_methylation: false

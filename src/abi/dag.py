@@ -10,13 +10,6 @@ from typing import Any, Dict, Iterable, List, Mapping
 from abi.config import PROJECT_ROOT
 from abi.schemas import ABIError
 
-__all__ = [
-    "ABIDAG",
-    "StepBinding",
-    "infer_dag",
-    "process_name",
-]
-
 
 @dataclass(frozen=True)
 class StepBinding:
@@ -49,6 +42,7 @@ def infer_dag(
     steps: Iterable[Any],
     *,
     project_root: str | Path | None = None,
+    sequential_fallback: bool = False,
 ) -> ABIDAG:
     """Infer a DAG by matching normalized input paths to prior output paths."""
     root = Path(project_root or PROJECT_ROOT).resolve()
@@ -67,6 +61,9 @@ def infer_dag(
             normalized = _normalize_path(value, root)
             if not normalized:
                 continue
+            produced[str(key)] = normalized
+            if _is_shared_output_path(str(key), normalized):
+                continue
             if normalized in output_map:
                 previous_step, previous_key = output_map[normalized]
                 raise ABIError(
@@ -74,11 +71,11 @@ def infer_dag(
                     f"{normalized} from {previous_step}.{previous_key} and {step_id}.{key}"
                 )
             output_map[normalized] = (step_id, str(key))
-            produced[str(key)] = normalized
         produced_by_step[step_id] = produced
 
     edges: Dict[str, List[str]] = {str(step.step_id): [] for step in step_list}
     bindings: List[StepBinding] = []
+    previous_step_id = ""
     for step in step_list:
         step_id = str(step.step_id)
         dependencies: List[str] = []
@@ -91,6 +88,8 @@ def infer_dag(
             producer = output_map.get(normalized)
             if producer and producer[0] != step_id and producer[0] not in dependencies:
                 dependencies.append(producer[0])
+        if sequential_fallback and not dependencies and previous_step_id:
+            dependencies.append(previous_step_id)
         edges[step_id] = dependencies
         bindings.append(
             StepBinding(
@@ -101,6 +100,7 @@ def infer_dag(
                 consumed_paths=consumed,
             )
         )
+        previous_step_id = step_id
 
     order = _topological_order([str(step.step_id) for step in step_list], edges)
     roots = [step_id for step_id in order if not edges.get(step_id)]
@@ -120,6 +120,8 @@ def process_name(step_id: str) -> str:
 def _normalize_path(value: Any, project_root: Path) -> str:
     if value in (None, ""):
         return ""
+    if not isinstance(value, (str, Path)):
+        return ""
     text = str(value)
     if "NOT_CONFIGURED" in text:
         return ""
@@ -127,6 +129,12 @@ def _normalize_path(value: Any, project_root: Path) -> str:
     if not path.is_absolute():
         path = project_root / path
     return str(path)
+
+
+def _is_shared_output_path(key: str, normalized_path: str) -> bool:
+    if key in {"output_dir", "outdir", "work_dir", "report_dir", "tables_dir"}:
+        return True
+    return not Path(normalized_path).suffix
 
 
 def _topological_order(step_ids: List[str], edges: Mapping[str, List[str]]) -> List[str]:

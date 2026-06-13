@@ -1,0 +1,32 @@
+abi_version: '0.1'
+tool_id: gplas2
+name: gplas2
+category: plasmid_binning
+purpose: Run gplas2 as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- plasmid_binning
+inputs:
+  assembly_graph:
+    type: path
+    required: true
+  sample_id:
+    type: string
+    required: true
+outputs:
+  plasmid_predictions:
+    type: path
+execution:
+  env_name: autoplasm-plasmid-binning
+  executable: gplas2
+  command_template: gplas2 --input {assembly_graph} --classifier predict --prediction
+    {plasmid_predictions} --name {sample_id}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install gplas2 in the autoplasm-plasmid-binning environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

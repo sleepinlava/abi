@@ -3,22 +3,22 @@
 from __future__ import annotations
 
 import json
-import os
 import shlex
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping
 
-from abi.config import write_yaml
-from abi.errors import ToolError
-
-__all__ = ["GenericABIExecutor"]
-from abi.filesystem import ensure_directory
-from abi.provenance import (
-    PipelineProgressRecorder,
+from abi._compat.logger import (
     RunLogger,
     write_commands_tsv,
     write_resolved_inputs_tsv,
 )
+from abi._compat.progress import (
+    PipelineProgressRecorder,
+    write_minimal_progress_artifacts,
+)
+from abi.config import resolved_mamba_root, write_yaml
+from abi.errors import ToolError
+from abi.filesystem import ensure_directory
 from abi.report import write_generic_report
 from abi.tables import StandardTableManager
 from abi.tools import ToolRegistry
@@ -109,6 +109,20 @@ class GenericABIExecutor:
             table_summary=table_summary,
             title=self.report_title,
         )
+        run_status = "failed" if failed_error else "success"
+        if progress_recorder:
+            progress_recorder.finish_run(status=run_status)
+            progress_paths = progress_recorder.paths
+        else:
+            progress_paths = write_minimal_progress_artifacts(
+                provenance,
+                plan,
+                dry_run=dry_run,
+                parallel=False,
+                workers=1,
+                status=run_status,
+                command_rows=command_rows,
+            )
         summary_path = provenance / "run_summary.json"
         summary_path.write_text(
             json.dumps(
@@ -119,17 +133,13 @@ class GenericABIExecutor:
                     "sample_count": len(plan.samples),
                     "step_count": len(plan.steps),
                     "completed_step_count": len(command_rows),
-                    "status": "failed" if failed_error else "success",
+                    "status": run_status,
                     "parallel": False,
                     "workers": 1,
                     "selected_tools": plan.selected_tools,
                     "standard_tables": table_summary,
-                    "progress_file": str(progress_recorder.snapshot_path)
-                    if progress_recorder
-                    else "",
-                    "progress_events": str(progress_recorder.events_path)
-                    if progress_recorder
-                    else "",
+                    "progress_file": str(progress_paths["snapshot"]),
+                    "progress_events": str(progress_paths["events"]),
                     "log_file": str(self.logger.log_file),
                 },
                 indent=2,
@@ -152,11 +162,9 @@ class GenericABIExecutor:
             "report": report_paths["report"],
             "report_html": report_paths["report_html"],
             "log": self.logger.log_file,
+            "progress": progress_paths["snapshot"],
+            "progress_events": progress_paths["events"],
         }
-        if progress_recorder:
-            progress_recorder.finish_run(status="failed" if failed_error else "success")
-            outputs["progress"] = progress_recorder.snapshot_path
-            outputs["progress_events"] = progress_recorder.events_path
         if failed_error:
             raise failed_error
         return outputs
@@ -247,7 +255,11 @@ class GenericABIExecutor:
                 stderr_path=str(result.outputs.get("stderr_path", params["stderr_path"])),
                 stdout_path=str(result.outputs.get("stdout_path", params["stdout_path"])),
             )
-            return {"status": "failed", "return_code": result.return_code, "reason": reason}
+            return {
+                "status": "failed",
+                "return_code": result.return_code,
+                "reason": reason,
+            }
 
         rows_by_table = self.parse_outputs(
             step.tool_id,
@@ -312,9 +324,11 @@ class GenericABIExecutor:
                         "input_name": name,
                         "path": str(path),
                         "exists": path.exists(),
-                        "source": "sample"
-                        if name in step.inputs and str(step.inputs.get(name)) == str(value)
-                        else "config_or_plan",
+                        "source": (
+                            "sample"
+                            if name in step.inputs and str(step.inputs.get(name)) == str(value)
+                            else "config_or_plan"
+                        ),
                     }
                 )
         return rows
@@ -351,7 +365,7 @@ class GenericABIExecutor:
 
     def _write_environment(self, path: Path) -> Path:
         environment = {
-            "mamba_root": os.environ.get("ABI_MAMBA_ROOT", ".mamba"),
+            "mamba_root": str(resolved_mamba_root()),
             "tools": [
                 {
                     "tool_id": tool.get("id", ""),

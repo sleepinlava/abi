@@ -2,16 +2,33 @@
 
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional
 
-from abi.config import PROJECT_ROOT, write_yaml
-from abi.provenance import write_commands_tsv, write_resolved_inputs_tsv, write_tool_versions
+from abi._compat.logger import (
+    write_commands_tsv,
+    write_resolved_inputs_tsv,
+    write_tool_versions,
+)
+from abi.config import resolved_mamba_root, write_yaml
 from abi.report import write_generic_report
 from abi.tables import StandardTableManager
 
-__all__ = ["ABIResultWriter"]
+__all__ = ["ABIResultWriter", "validate_abi_result_dir"]
+
+REQUIRED_RESULT_ARTIFACTS = [
+    "execution_plan.json",
+    "provenance/run_summary.json",
+    "provenance/commands.tsv",
+    "provenance/resolved_inputs.tsv",
+    "provenance/tool_versions.tsv",
+    "provenance/resources.json",
+    "provenance/progress.jsonl",
+    "report/report.md",
+    "report/report.html",
+]
 
 
 class ABIResultWriter:
@@ -126,6 +143,97 @@ class ABIResultWriter:
         return outputs
 
 
+def validate_abi_result_dir(
+    result_dir: str | Path,
+    *,
+    allow_empty_tables: bool = True,
+) -> Dict[str, Any]:
+    """Validate a result directory against its ABI plugin standard table schema."""
+    root = Path(result_dir)
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    if not root.exists():
+        return {
+            "result_dir": str(root),
+            "analysis_type": "",
+            "valid": False,
+            "errors": [f"Result directory does not exist: {root}"],
+            "warnings": [],
+            "status": "missing",
+            "failed_steps": [],
+            "tables": {},
+            "artifacts": {},
+        }
+
+    artifacts = _artifact_status(root, REQUIRED_RESULT_ARTIFACTS)
+    for relpath, artifact in artifacts.items():
+        if not artifact["exists"]:
+            errors.append(f"Missing artifact: {relpath}")
+        elif artifact["empty"]:
+            errors.append(f"Empty artifact: {relpath}")
+
+    plan_path = root / "execution_plan.json"
+    summary_path = root / "provenance" / "run_summary.json"
+    commands_path = root / "provenance" / "commands.tsv"
+    plan = _read_json(plan_path, errors)
+    summary = _read_json(summary_path, errors)
+    commands = _read_tsv(commands_path)
+
+    status = str(summary.get("status", "unknown")) if summary else "unknown"
+    if status != "success":
+        errors.append(f"run_summary status is {status!r}, not 'success'")
+
+    failed_steps = [row for row in commands if row.get("status") == "failed"]
+    if failed_steps:
+        errors.append(f"commands.tsv contains {len(failed_steps)} failed step(s)")
+
+    analysis_type = _analysis_type(plan, summary)
+    schemas: Mapping[str, Iterable[str]] = {}
+    if not analysis_type:
+        errors.append("Cannot determine analysis_type from execution_plan.json or run_summary.json")
+    else:
+        try:
+            from abi.plugins import get_plugin
+
+            schemas = get_plugin(analysis_type).table_schemas()
+        except Exception as exc:
+            errors.append(f"Cannot load table schema for analysis_type {analysis_type!r}: {exc}")
+
+    tables = _table_status(root / "tables", schemas)
+    missing_tables = [name for name, table in tables.items() if not table["exists"]]
+    if missing_tables:
+        errors.append("Missing standard table(s): " + ", ".join(sorted(missing_tables)))
+
+    missing_fields = {
+        name: table["missing_fields"]
+        for name, table in tables.items()
+        if table["exists"] and table["missing_fields"]
+    }
+    if missing_fields:
+        for table_name, fields in sorted(missing_fields.items()):
+            errors.append(f"{table_name}.tsv missing field(s): {', '.join(fields)}")
+
+    if not allow_empty_tables:
+        empty_tables = [
+            name for name, table in tables.items() if table["exists"] and table["rows"] == 0
+        ]
+        if empty_tables:
+            errors.append("Empty standard table(s): " + ", ".join(sorted(empty_tables)))
+
+    return {
+        "result_dir": str(root),
+        "analysis_type": analysis_type,
+        "valid": not errors,
+        "errors": errors,
+        "warnings": warnings,
+        "status": status,
+        "failed_steps": failed_steps,
+        "tables": tables,
+        "artifacts": artifacts,
+    }
+
+
 def _resolved_input_rows(plan: Any, *, smoke: bool) -> list[dict[str, Any]]:
     rows = []
     path_fields = {
@@ -202,7 +310,7 @@ def _environment_snapshot(
     environment: Dict[str, Any] = {
         "engine": engine,
         "smoke": smoke,
-        "mamba_root": str(PROJECT_ROOT / ".mamba"),
+        "mamba_root": str(resolved_mamba_root()),
         "tools": [
             {
                 "tool_id": tool.get("id", ""),
@@ -228,3 +336,67 @@ def _write_trace_tsv(rows: Iterable[Mapping[str, Any]], path: Path) -> Path | No
         for row in rows:
             handle.write("\t".join(str(row.get(field, "")) for field in fields) + "\n")
     return path
+
+
+def _artifact_status(root: Path, relpaths: Iterable[str]) -> Dict[str, Dict[str, Any]]:
+    status: Dict[str, Dict[str, Any]] = {}
+    for relpath in relpaths:
+        path = root / relpath
+        exists = path.exists()
+        status[relpath] = {
+            "exists": exists,
+            "empty": bool(exists and path.is_file() and path.stat().st_size == 0),
+            "path": str(path),
+        }
+    return status
+
+
+def _read_json(path: Path, errors: list[str]) -> Dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        errors.append(f"Invalid JSON in {path}: {exc}")
+        return {}
+
+
+def _read_tsv(path: Path) -> list[dict[str, str]]:
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle, delimiter="\t"))
+
+
+def _analysis_type(plan: Mapping[str, Any], summary: Mapping[str, Any]) -> str:
+    value = plan.get("analysis_type") or summary.get("analysis_type") or ""
+    return str(value) if value else ""
+
+
+def _table_status(
+    tables_dir: Path,
+    schemas: Mapping[str, Iterable[str]],
+) -> Dict[str, Dict[str, Any]]:
+    status: Dict[str, Dict[str, Any]] = {}
+    for table_name, fields in schemas.items():
+        expected_fields = [str(field) for field in fields]
+        path = tables_dir / f"{table_name}.tsv"
+        if not path.exists():
+            status[table_name] = {
+                "exists": False,
+                "rows": 0,
+                "path": str(path),
+                "missing_fields": expected_fields,
+            }
+            continue
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle, delimiter="\t")
+            rows = list(reader)
+            actual_fields = reader.fieldnames or []
+        status[table_name] = {
+            "exists": True,
+            "rows": len(rows),
+            "path": str(path),
+            "missing_fields": [field for field in expected_fields if field not in actual_fields],
+        }
+    return status

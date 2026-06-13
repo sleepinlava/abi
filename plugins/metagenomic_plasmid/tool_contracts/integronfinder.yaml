@@ -1,0 +1,25 @@
+abi_version: "0.1"
+tool_id: integronfinder
+name: IntegronFinder
+category: annotation
+purpose: Detect integrons and related mobile elements in plasmid contigs.
+when_to_use:
+  - plasmid_contigs_available
+  - integron_annotation_required
+inputs:
+  plasmid_contigs: {type: file, format: fasta, required: true}
+outputs:
+  output_dir: {type: directory}
+execution:
+  env_name: autoplasm-integronfinder
+  executable: integron_finder
+  command_template: "integron_finder --outdir {output_dir} {plasmid_contigs}"
+  network: false
+  writes_output: true
+normalization:
+  tables: [annotations]
+failure_handling:
+  missing_input:
+    hint: "Check plasmid_contigs FASTA path."
+  tool_not_found:
+    hint: "Install integron_finder in the autoplasm-integronfinder environment."

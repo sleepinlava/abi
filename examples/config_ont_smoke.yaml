@@ -1,0 +1,72 @@
+project_name: autoplasm_ont_smoke
+mode: auto
+threads: 2
+outdir: results/ont_smoke
+log_dir: results/ont_smoke/log
+dry_run: true
+mock_tools: true
+
+workflow:
+  data_profile: ont_long
+  plasmid_contigs_source: auto
+
+input:
+  sample_sheet: examples/sample_sheet_ont.tsv
+
+qc:
+  enable: true
+  long_read_tool: filtlong
+  run_multiqc: true
+
+assembly:
+  enable: true
+  long_read_assembler: metaflye
+  assembly_qc: true
+
+plasmid_detection:
+  enable: true
+  tools:
+    - genomad
+  strategy: single_tool
+  min_contig_length: 1000
+  output_uncertain: true
+
+plasmid_binning:
+  enable: false
+  tools: []
+
+typing:
+  enable: false
+  tools: []
+
+host_prediction:
+  enable: auto
+  tools: auto
+
+annotation:
+  enable: true
+  general_annotator: bakta
+  arg_tools:
+    - amrfinderplus
+    - abricate
+  vf_tools: []
+  mobile_element_tools: []
+
+comparative_genomics:
+  enable: false
+  tools: []
+
+abundance:
+  enable: true
+  mapper_long: minimap2
+  calculator: coverm
+
+sample_analysis:
+  enable: false
+  differential_abundance: false
+  network: false
+
+visualization:
+  enable: true
+  html_report: true
+  markdown_report: true

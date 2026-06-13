@@ -1,0 +1,32 @@
+abi_version: "0.1"
+tool_id: abricate
+name: ABRicate
+category: annotation
+purpose: Screen plasmid contigs against curated gene databases.
+when_to_use:
+  - plasmid_contigs_available
+  - database_screening_required
+inputs:
+  plasmid_contigs: {type: file, format: fasta, required: true}
+  abricate_db: {type: string, required: true}
+  sample_id: {type: string, required: true}
+  threads: {type: integer, minimum: 1}
+outputs:
+  output_dir: {type: directory}
+  annotations_tsv: {type: file, format: tsv}
+execution:
+  env_name: autoplasm-annotation
+  executable: abricate
+  command_template: "abricate --threads {threads} --db {abricate_db} {plasmid_contigs} > {output_dir}/{sample_id}.{abricate_db}.tsv"
+  network: false
+  writes_output: true
+normalization:
+  parser: "abi.autoplasm.parsers:parse_abricate"
+  tables: [annotations]
+failure_handling:
+  missing_input:
+    hint: "Check plasmid_contigs FASTA path."
+  tool_not_found:
+    hint: "Install abricate in the autoplasm-annotation environment."
+  parse_failed:
+    hint: "Check ABRicate TSV output."

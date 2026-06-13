@@ -1,0 +1,24 @@
+abi_version: "0.1"
+tool_id: multiqc
+name: MultiQC
+category: qc
+purpose: Aggregate QC outputs into a single report directory.
+when_to_use:
+  - multiple_qc_outputs
+inputs:
+  output_dir: {type: directory, required: true}
+outputs:
+  multiqc_report: {type: file, format: html}
+execution:
+  env_name: autoplasm-qc
+  executable: multiqc
+  command_template: "multiqc {output_dir} --outdir {output_dir}"
+  network: false
+  writes_output: true
+normalization:
+  tables: [qc_summary]
+failure_handling:
+  missing_input:
+    hint: "Run read QC before MultiQC aggregation."
+  tool_not_found:
+    hint: "Install multiqc in the autoplasm-qc environment."

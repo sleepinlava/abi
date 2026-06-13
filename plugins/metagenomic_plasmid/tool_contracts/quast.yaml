@@ -1,0 +1,25 @@
+abi_version: "0.1"
+tool_id: quast
+name: metaQUAST
+category: assembly_qc
+purpose: Summarize metagenomic assembly quality metrics.
+when_to_use:
+  - assembly_available
+inputs:
+  assembly: {type: file, format: fasta, required: true}
+  threads: {type: integer, minimum: 1}
+outputs:
+  output_dir: {type: directory}
+execution:
+  env_name: autoplasm-assembly
+  executable: metaquast.py
+  command_template: "metaquast.py {assembly} -o {output_dir} -t {threads}"
+  network: false
+  writes_output: true
+normalization:
+  tables: [assembly_summary]
+failure_handling:
+  missing_input:
+    hint: "Check that the assembly step wrote the expected FASTA."
+  tool_not_found:
+    hint: "Install metaquast.py in the autoplasm-assembly environment."

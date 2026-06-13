@@ -6,19 +6,22 @@ import csv
 import json
 import shutil
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, List, Mapping, Optional
 
 import typer
 
+from abi._compat.logger import RunLogger
 from abi.agent import ABIAgentInterface
+from abi.agent.context import build_agent_context, render_doctor_agent
 from abi.config import compact_overrides
 from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
-from abi.interfaces import ABIDryRunPlugin, ABIInitializablePlugin
+from abi.json_utils import load_json_object, loads_json
 from abi.openai_contracts import export_openai_tools
 from abi.plugins import get_plugin, list_plugins
-from abi.provenance import RunLogger
-from abi.runtimes import ABIRuntime, LocalRuntime, NextflowRuntime, RuntimeOptions, RuntimeResult
+from abi.resources import check_resources, setup_resources
+from abi.results import validate_abi_result_dir
+from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
 from abi.schemas import ABIError
 from abi.tables import StandardTableManager
 
@@ -29,9 +32,13 @@ app = typer.Typer(
     ),
     no_args_is_help=True,
 )
+job_app = typer.Typer(help="Submit and inspect queued ABI Job Service operations.")
+app.add_typer(job_app, name="job")
 
 
 def _fail(exc: Exception) -> None:
+    if isinstance(exc, MemoryError):
+        raise
     typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
     raise typer.Exit(code=1)
 
@@ -39,14 +46,20 @@ def _fail(exc: Exception) -> None:
 def _emit_agent_json(payload: str) -> None:
     typer.echo(payload)
     try:
-        data = json.loads(payload)
-    except json.JSONDecodeError:
+        data = loads_json(payload, label="agent response")
+    except ABIError:
+        return
+    if not isinstance(data, dict):
         return
     status = data.get("status")
     if status == "error":
         raise typer.Exit(code=1)
     if status == "confirmation_required":
         raise typer.Exit(code=2)
+
+
+def _emit_json_payload(payload: Any) -> None:
+    typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
 
 
 def _common_overrides(
@@ -71,6 +84,17 @@ def _common_overrides(
     if progress is not None:
         overrides["execution"] = {"progress": progress}
     return compact_overrides(overrides)
+
+
+def _load_plugin_config(
+    *,
+    analysis_type: str,
+    config: Optional[Path],
+    profile: str,
+    overrides: Mapping[str, Any],
+) -> Dict[str, Any]:
+    plugin = get_plugin(analysis_type)
+    return plugin.load_config(config, profile=profile, overrides=overrides)
 
 
 @app.command("list-types")
@@ -119,7 +143,7 @@ def init_command(
         plugin = get_plugin(analysis_type)
         if not hasattr(plugin, "root"):
             raise ABIError(f"Plugin {analysis_type!r} does not provide init templates")
-        root = Path(cast(ABIInitializablePlugin, plugin).root)
+        root = Path(plugin.root)
         targets = [
             (root / "config_default.yaml", outdir / "config" / f"{analysis_type}.yaml"),
             (root / "sample_sheet_template.tsv", outdir / "samples.tsv"),
@@ -155,7 +179,11 @@ def plan_command(
     outdir: Optional[str] = typer.Option(None, "--outdir", help="Output directory."),
     log_dir: Optional[str] = typer.Option(None, "--log-dir", help="Log directory."),
     check_files: bool = typer.Option(True, "--check-files/--no-check-files"),
-    output_json: bool = typer.Option(False, "--output-json", help="Emit the agent JSON envelope."),
+    output_json: bool = typer.Option(
+        False,
+        "--output-json",
+        help="Emit the agent JSON envelope.",
+    ),
 ) -> None:
     """Build and write an ABI execution plan."""
     if output_json:
@@ -211,7 +239,11 @@ def dry_run_command(
     log_dir: Optional[str] = typer.Option(None, "--log-dir", help="Log directory."),
     progress: Optional[bool] = typer.Option(None, "--progress/--no-progress"),
     check_files: bool = typer.Option(True, "--check-files/--no-check-files"),
-    output_json: bool = typer.Option(False, "--output-json", help="Emit the agent JSON envelope."),
+    output_json: bool = typer.Option(
+        False,
+        "--output-json",
+        help="Emit the agent JSON envelope.",
+    ),
 ) -> None:
     """Run a plugin dry-run and write ABI provenance artifacts."""
     if output_json:
@@ -248,7 +280,7 @@ def dry_run_command(
         )
         plan = plugin.build_plan(cfg, check_files=check_files)
         if hasattr(plugin, "execute_dry_run"):
-            outputs = cast(ABIDryRunPlugin, plugin).execute_dry_run(plan, cfg)
+            outputs = plugin.execute_dry_run(plan, cfg)
         else:
             table_manager = StandardTableManager(plugin.table_schemas())
             executor = GenericABIExecutor(
@@ -268,7 +300,11 @@ def dry_run_command(
 @app.command("inspect")
 def inspect_command(
     result_dir: Path = typer.Option(..., "--result-dir", help="ABI result directory."),
-    output_json: bool = typer.Option(False, "--output-json", help="Emit the agent JSON envelope."),
+    output_json: bool = typer.Option(
+        False,
+        "--output-json",
+        help="Emit the agent JSON envelope.",
+    ),
 ) -> None:
     """Inspect ABI provenance and summarize run health."""
     if output_json:
@@ -287,9 +323,7 @@ def inspect_command(
             or "NOT_CONFIGURED" in row.get("path", "")
         ]
         summary_path = provenance / "run_summary.json"
-        summary = (
-            json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {}
-        )
+        summary = load_json_object(summary_path) if summary_path.exists() else {}
         typer.echo(
             json.dumps(
                 {
@@ -312,7 +346,11 @@ def inspect_command(
 def report_command(
     result_dir: Path = typer.Option(..., "--result-dir", help="ABI result directory."),
     analysis_type: Optional[str] = typer.Option(None, "--type", help="ABI analysis type."),
-    output_json: bool = typer.Option(False, "--output-json", help="Emit the agent JSON envelope."),
+    output_json: bool = typer.Option(
+        False,
+        "--output-json",
+        help="Emit the agent JSON envelope.",
+    ),
 ) -> None:
     """Regenerate a plugin report from ABI results."""
     if output_json:
@@ -324,13 +362,43 @@ def report_command(
         plan_path = result_dir / "execution_plan.json"
         if not plan_path.exists():
             raise ABIError(f"Missing execution plan: {plan_path}")
-        plan_data = json.loads(plan_path.read_text(encoding="utf-8"))
-        plugin_id = analysis_type or str(plan_data.get("analysis_type") or "")
-        if not plugin_id:
-            raise ABIError("Missing analysis_type in execution plan; pass --type.")
+        plan_data = load_json_object(plan_path)
+        plugin_id = analysis_type or str(plan_data.get("analysis_type") or "metagenomic_plasmid")
         plugin = get_plugin(plugin_id)
         outputs = plugin.write_report(plan_data, result_dir)
         typer.echo(json.dumps({key: str(value) for key, value in outputs.items()}, indent=2))
+    except Exception as exc:
+        _fail(exc)
+
+
+@app.command("validate-result")
+def validate_result_command(
+    result_dir: Path = typer.Option(..., "--result-dir", help="ABI result directory."),
+    allow_empty_tables: bool = typer.Option(
+        True,
+        "--allow-empty-tables/--require-nonempty-tables",
+        help="Allow standard tables with headers and zero data rows.",
+    ),
+    output_json: bool = typer.Option(
+        False,
+        "--output-json",
+        help="Emit the agent JSON envelope.",
+    ),
+) -> None:
+    """Validate an ABI result directory without modifying it."""
+    if output_json:
+        _emit_agent_json(
+            ABIAgentInterface().abi_validate_result(
+                result_dir=result_dir,
+                allow_empty_tables=allow_empty_tables,
+            )
+        )
+        return
+    try:
+        result = validate_abi_result_dir(result_dir, allow_empty_tables=allow_empty_tables)
+        typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
+        if not result["valid"]:
+            raise typer.Exit(code=1)
     except Exception as exc:
         _fail(exc)
 
@@ -349,7 +417,11 @@ def export_nextflow_command(
     smoke: bool = typer.Option(False, "--smoke", help="Export a runnable smoke workflow."),
     mamba_root: Optional[Path] = typer.Option(None, "--mamba-root", help="Local mamba root."),
     check_files: bool = typer.Option(True, "--check-files/--no-check-files"),
-    output_json: bool = typer.Option(False, "--output-json", help="Emit the agent JSON envelope."),
+    output_json: bool = typer.Option(
+        False,
+        "--output-json",
+        help="Emit the agent JSON envelope.",
+    ),
 ) -> None:
     """Export an ABI execution plan as a Nextflow DSL2 script."""
     if output_json:
@@ -430,7 +502,7 @@ def run_command(
     nextflow_profile: Optional[str] = typer.Option(
         None,
         "--nextflow-profile",
-        help="Nextflow config profile.",
+        help="Nextflow config profile to pass to `nextflow run`.",
     ),
     executor: Optional[str] = typer.Option(
         None,
@@ -444,11 +516,41 @@ def run_command(
     confirm_execution: bool = typer.Option(
         False,
         "--confirm-execution",
-        help="Required with --output-json before executing run.",
+        help="Required before executing run.",
     ),
-    output_json: bool = typer.Option(False, "--output-json", help="Emit the agent JSON envelope."),
+    output_json: bool = typer.Option(
+        False,
+        "--output-json",
+        help="Emit the agent JSON envelope.",
+    ),
 ) -> None:
     """Run an ABI execution plan through a selected runtime backend."""
+    if not confirm_execution:
+        _emit_agent_json(
+            ABIAgentInterface().run(
+                analysis_type=analysis_type,
+                engine=engine,
+                config_path=config,
+                sample_sheet=sample_sheet,
+                profile=profile,
+                mode=mode,
+                threads=threads,
+                outdir=outdir,
+                log_dir=log_dir,
+                workflow=workflow,
+                work_dir=work_dir,
+                nxf_home=nxf_home,
+                nextflow_bin=nextflow_bin,
+                nextflow_profile=nextflow_profile,
+                executor=executor,
+                resume=resume,
+                mamba_root=mamba_root,
+                smoke=smoke,
+                check_files=check_files,
+                confirm_execution=False,
+            )
+        )
+        return
     if output_json:
         _emit_agent_json(
             ABIAgentInterface().run(
@@ -502,14 +604,141 @@ def run_command(
         _fail(exc)
 
 
+@app.command("run-nextflow")
+def run_nextflow_command(
+    analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
+    config: Optional[Path] = typer.Option(None, "--config", help="Plugin config YAML."),
+    sample_sheet: Optional[Path] = typer.Option(None, "--sample-sheet", help="Sample sheet TSV."),
+    profile: str = typer.Option("dry_run", "--profile", help="Profile for adapter plugins."),
+    mode: Optional[str] = typer.Option(None, "--mode", help="Execution mode."),
+    threads: Optional[int] = typer.Option(None, "--threads", help="Thread count."),
+    outdir: Optional[str] = typer.Option(None, "--outdir", help="Output directory."),
+    log_dir: Optional[str] = typer.Option(None, "--log-dir", help="Log directory."),
+    workflow: Optional[Path] = typer.Option(None, "--workflow", help="Workflow path to write."),
+    work_dir: Optional[Path] = typer.Option(None, "--work-dir", help="Nextflow work directory."),
+    nextflow_bin: Optional[Path] = typer.Option(
+        None,
+        "--nextflow-bin",
+        help="Nextflow executable.",
+    ),
+    mamba_root: Optional[Path] = typer.Option(None, "--mamba-root", help="Local mamba root."),
+    nxf_home: Optional[Path] = typer.Option(None, "--nxf-home", help="Nextflow home directory."),
+    nextflow_profile: Optional[str] = typer.Option(
+        None,
+        "--nextflow-profile",
+        help="Nextflow config profile to pass to `nextflow run`.",
+    ),
+    executor: Optional[str] = typer.Option(
+        None,
+        "--executor",
+        help="Nextflow process executor override.",
+    ),
+    resume: bool = typer.Option(False, "--resume", help="Pass -resume to Nextflow."),
+    smoke: bool = typer.Option(True, "--smoke/--real", help="Run smoke or real tool workflow."),
+    check_files: bool = typer.Option(True, "--check-files/--no-check-files"),
+    confirm_execution: bool = typer.Option(
+        False,
+        "--confirm-execution",
+        help="Required before executing run.",
+    ),
+    output_json: bool = typer.Option(
+        False,
+        "--output-json",
+        help="Emit the agent JSON envelope.",
+    ),
+) -> None:
+    """Compatibility alias for `run --engine nextflow`."""
+    if not confirm_execution:
+        _emit_agent_json(
+            ABIAgentInterface().run(
+                analysis_type=analysis_type,
+                engine="nextflow",
+                config_path=config,
+                sample_sheet=sample_sheet,
+                profile=profile,
+                mode=mode,
+                threads=threads,
+                outdir=outdir,
+                log_dir=log_dir,
+                workflow=workflow,
+                work_dir=work_dir,
+                nxf_home=nxf_home,
+                nextflow_bin=nextflow_bin,
+                nextflow_profile=nextflow_profile,
+                executor=executor,
+                resume=resume,
+                mamba_root=mamba_root,
+                smoke=smoke,
+                check_files=check_files,
+                confirm_execution=False,
+            )
+        )
+        return
+    if output_json:
+        _emit_agent_json(
+            ABIAgentInterface().run(
+                analysis_type=analysis_type,
+                engine="nextflow",
+                config_path=config,
+                sample_sheet=sample_sheet,
+                profile=profile,
+                mode=mode,
+                threads=threads,
+                outdir=outdir,
+                log_dir=log_dir,
+                workflow=workflow,
+                work_dir=work_dir,
+                nxf_home=nxf_home,
+                nextflow_bin=nextflow_bin,
+                nextflow_profile=nextflow_profile,
+                executor=executor,
+                resume=resume,
+                mamba_root=mamba_root,
+                smoke=smoke,
+                check_files=check_files,
+                confirm_execution=confirm_execution,
+            )
+        )
+        return
+    try:
+        result = _run_with_runtime(
+            analysis_type=analysis_type,
+            engine="nextflow",
+            config=config,
+            sample_sheet=sample_sheet,
+            profile=profile,
+            mode=mode,
+            threads=threads,
+            outdir=outdir,
+            log_dir=log_dir,
+            workflow=workflow,
+            work_dir=work_dir,
+            nxf_home=nxf_home,
+            nextflow_bin=nextflow_bin,
+            nextflow_profile=nextflow_profile,
+            executor=executor,
+            resume=resume,
+            mamba_root=mamba_root,
+            smoke=smoke,
+            check_files=check_files,
+        )
+        typer.echo(json.dumps({key: str(value) for key, value in result.outputs.items()}, indent=2))
+    except Exception as exc:
+        _fail(exc)
+
+
 @app.command("export-openai-tools")
 def export_openai_tools_command(
     analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
     descriptor_format: str = typer.Option(
-        "responses", "--format", help="Descriptor format: responses, apps-sdk, or json."
+        "responses",
+        "--format",
+        help="Descriptor format: responses, apps-sdk, or json.",
     ),
     include_execution: bool = typer.Option(
-        False, "--include-execution", help="Include execution tools such as abi_run in the export."
+        False,
+        "--include-execution",
+        help="Include execution tools such as abi_run in the export.",
     ),
 ) -> None:
     """Export OpenAI-compatible ABI agent tool descriptors."""
@@ -525,8 +754,427 @@ def export_openai_tools_command(
         _fail(exc)
 
 
+@app.command("export-agent-context")
+def export_agent_context_command(
+    analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
+    context_format: str = typer.Option(
+        "json",
+        "--format",
+        help="Context format. Currently only json is supported.",
+    ),
+) -> None:
+    """Export compact machine-readable context for agent callers."""
+    try:
+        if context_format != "json":
+            raise ABIError("Unsupported agent context format. Expected: json.")
+        plugin = get_plugin(analysis_type)
+        _emit_json_payload(build_agent_context(plugin))
+    except Exception as exc:
+        _fail(exc)
+
+
+@app.command("check-resources")
+def check_resources_command(
+    analysis_type: str = typer.Option(
+        "metagenomic_plasmid",
+        "--type",
+        help="ABI analysis type.",
+    ),
+    config: Optional[Path] = typer.Option(None, "--config", help="Plugin config YAML."),
+    resource: Optional[List[str]] = typer.Option(
+        None,
+        "--resource",
+        help="Resource id to check. Repeatable.",
+    ),
+    profile: str = typer.Option("local", "--profile", help="Profile for adapter plugins."),
+    mode: Optional[str] = typer.Option(None, "--mode", help="Execution mode."),
+    threads: Optional[int] = typer.Option(None, "--threads", help="Thread count."),
+    outdir: Optional[str] = typer.Option(None, "--outdir", help="Output directory."),
+    log_dir: Optional[str] = typer.Option(None, "--log-dir", help="Log directory."),
+) -> None:
+    """Check configured database, index, and model resources without downloading them."""
+    try:
+        cfg = _load_plugin_config(
+            analysis_type=analysis_type,
+            config=config,
+            profile=profile,
+            overrides=_common_overrides(
+                mode=mode,
+                threads=threads,
+                outdir=outdir,
+                log_dir=log_dir,
+            ),
+        )
+        rows = check_resources(analysis_type=analysis_type, config=cfg, resource_ids=resource)
+        _emit_json_payload(rows)
+    except Exception as exc:
+        _fail(exc)
+
+
+@app.command("setup-resources")
+def setup_resources_command(
+    analysis_type: str = typer.Option(
+        "metagenomic_plasmid",
+        "--type",
+        help="ABI analysis type.",
+    ),
+    config: Optional[Path] = typer.Option(None, "--config", help="Plugin config YAML."),
+    resource: Optional[List[str]] = typer.Option(
+        None,
+        "--resource",
+        help="Resource id to prepare. Repeatable.",
+    ),
+    profile: str = typer.Option("local", "--profile", help="Profile for adapter plugins."),
+    mode: Optional[str] = typer.Option(None, "--mode", help="Execution mode."),
+    threads: Optional[int] = typer.Option(None, "--threads", help="Thread count."),
+    outdir: Optional[str] = typer.Option(None, "--outdir", help="Output directory."),
+    log_dir: Optional[str] = typer.Option(None, "--log-dir", help="Log directory."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show resource setup plan only."),
+    mock: bool = typer.Option(False, "--mock", help="Create mock resource directories."),
+) -> None:
+    """Download, mock, or plan setup for ABI analysis resources."""
+    try:
+        cfg = _load_plugin_config(
+            analysis_type=analysis_type,
+            config=config,
+            profile=profile,
+            overrides=_common_overrides(
+                mode=mode,
+                threads=threads,
+                outdir=outdir,
+                log_dir=log_dir,
+            ),
+        )
+        rows = setup_resources(
+            analysis_type=analysis_type,
+            config=cfg,
+            resource_ids=resource,
+            dry_run=dry_run,
+            mock=mock,
+        )
+        _emit_json_payload(rows)
+    except Exception as exc:
+        _fail(exc)
+
+
+@app.command("doctor-agent")
+def doctor_agent_command(
+    analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
+) -> None:
+    """Print the shortest safe operating guide for ABI agent callers."""
+    try:
+        plugin = get_plugin(analysis_type)
+        typer.echo(render_doctor_agent(plugin), nl=False)
+    except Exception as exc:
+        _fail(exc)
+
+
+@job_app.command("submit")
+def job_submit_command(
+    service_url: str = typer.Option(
+        "http://127.0.0.1:18791",
+        "--service-url",
+        help="ABI Job Service base URL.",
+    ),
+    command: str = typer.Option("run", "--command", help="ABI command to queue."),
+    payload: Optional[Path] = typer.Option(
+        None,
+        "--payload",
+        help="JSON file containing a full Job API payload.",
+    ),
+    arguments_json: Optional[str] = typer.Option(
+        None,
+        "--arguments-json",
+        help="JSON object merged into the Job API arguments.",
+    ),
+    backend: Optional[str] = typer.Option(
+        None,
+        "--backend",
+        help="Execution backend: local, nextflow, hpc, or cloud.",
+    ),
+    analysis_type: Optional[str] = typer.Option(
+        None,
+        "--analysis-type",
+        help="ABI analysis type.",
+    ),
+    config_path: Optional[Path] = typer.Option(
+        None,
+        "--config-path",
+        help="Optional plugin config YAML path.",
+    ),
+    sample_sheet: Optional[Path] = typer.Option(
+        None,
+        "--sample-sheet",
+        help="Optional sample sheet TSV path.",
+    ),
+    profile: Optional[str] = typer.Option(None, "--profile", help="Plugin config profile."),
+    mode: Optional[str] = typer.Option(None, "--mode", help="Execution mode."),
+    threads: Optional[int] = typer.Option(None, "--threads", help="Thread count."),
+    outdir: Optional[str] = typer.Option(None, "--outdir", help="Output directory."),
+    log_dir: Optional[str] = typer.Option(None, "--log-dir", help="Log directory."),
+    engine: Optional[str] = typer.Option(None, "--engine", help="Runtime engine."),
+    workflow: Optional[Path] = typer.Option(None, "--workflow", help="Workflow path to write."),
+    nextflow_bin: Optional[Path] = typer.Option(
+        None,
+        "--nextflow-bin",
+        help="Nextflow executable.",
+    ),
+    nextflow_profile: Optional[str] = typer.Option(
+        None,
+        "--nextflow-profile",
+        help="Nextflow config profile.",
+    ),
+    executor: Optional[str] = typer.Option(
+        None,
+        "--executor",
+        help="Nextflow process executor override.",
+    ),
+    work_dir: Optional[Path] = typer.Option(None, "--work-dir", help="Nextflow work directory."),
+    nxf_home: Optional[Path] = typer.Option(None, "--nxf-home", help="Nextflow home directory."),
+    mamba_root: Optional[Path] = typer.Option(None, "--mamba-root", help="Local mamba root."),
+    resume: bool = typer.Option(False, "--resume", help="Pass -resume to Nextflow."),
+    smoke: bool = typer.Option(False, "--smoke", help="Use mocked/smoke tools."),
+    confirm_execution: bool = typer.Option(
+        False,
+        "--confirm-execution",
+        help="Required before queueing execution jobs.",
+    ),
+    check_files: Optional[bool] = typer.Option(None, "--check-files/--no-check-files"),
+) -> None:
+    """Submit a job to an ABI Job Service."""
+    from abi.jobs.client import JobClientError, submit_job
+
+    try:
+        request_payload = _build_job_payload(
+            command=command,
+            payload_path=payload,
+            arguments_json=arguments_json,
+            backend=backend,
+            analysis_type=analysis_type,
+            config_path=config_path,
+            sample_sheet=sample_sheet,
+            profile=profile,
+            mode=mode,
+            threads=threads,
+            outdir=outdir,
+            log_dir=log_dir,
+            engine=engine,
+            workflow=workflow,
+            nextflow_bin=nextflow_bin,
+            nextflow_profile=nextflow_profile,
+            executor=executor,
+            work_dir=work_dir,
+            nxf_home=nxf_home,
+            mamba_root=mamba_root,
+            resume=resume,
+            smoke=smoke,
+            confirm_execution=confirm_execution,
+            check_files=check_files,
+        )
+        _, response = submit_job(request_payload, base_url=service_url)
+        _emit_json_payload(response)
+    except JobClientError as exc:
+        _emit_json_payload(exc.payload)
+        if exc.payload.get("status") == "confirmation_required":
+            raise typer.Exit(code=2) from None
+        raise typer.Exit(code=1) from None
+    except Exception as exc:
+        _fail(exc)
+
+
+@job_app.command("list")
+def job_list_command(
+    service_url: str = typer.Option(
+        "http://127.0.0.1:18791",
+        "--service-url",
+        help="ABI Job Service base URL.",
+    ),
+) -> None:
+    """List jobs currently known to the ABI Job Service."""
+    from abi.jobs.client import JobClientError, list_jobs
+
+    try:
+        _, response = list_jobs(base_url=service_url)
+        _emit_json_payload(response)
+    except JobClientError as exc:
+        _emit_json_payload(exc.payload)
+        raise typer.Exit(code=1) from None
+    except Exception as exc:
+        _fail(exc)
+
+
+@job_app.command("status")
+def job_status_command(
+    job_id: str = typer.Argument(..., help="ABI Job Service job id."),
+    service_url: str = typer.Option(
+        "http://127.0.0.1:18791",
+        "--service-url",
+        help="ABI Job Service base URL.",
+    ),
+) -> None:
+    """Fetch one queued job status."""
+    from abi.jobs.client import JobClientError, get_job
+
+    try:
+        _, response = get_job(job_id, base_url=service_url)
+        _emit_json_payload(response)
+    except JobClientError as exc:
+        _emit_json_payload(exc.payload)
+        raise typer.Exit(code=1) from None
+    except Exception as exc:
+        _fail(exc)
+
+
+@job_app.command("artifacts")
+def job_artifacts_command(
+    job_id: str = typer.Argument(..., help="ABI Job Service job id."),
+    service_url: str = typer.Option(
+        "http://127.0.0.1:18791",
+        "--service-url",
+        help="ABI Job Service base URL.",
+    ),
+) -> None:
+    """Fetch artifact paths reported by a completed or running job."""
+    from abi.jobs.client import JobClientError, get_artifacts
+
+    try:
+        _, response = get_artifacts(job_id, base_url=service_url)
+        _emit_json_payload(response)
+    except JobClientError as exc:
+        _emit_json_payload(exc.payload)
+        raise typer.Exit(code=1) from None
+    except Exception as exc:
+        _fail(exc)
+
+
+@job_app.command("cancel")
+def job_cancel_command(
+    job_id: str = typer.Argument(..., help="ABI Job Service job id."),
+    service_url: str = typer.Option(
+        "http://127.0.0.1:18791",
+        "--service-url",
+        help="ABI Job Service base URL.",
+    ),
+) -> None:
+    """Request cancellation for a queued or running ABI job."""
+    from abi.jobs.client import JobClientError, cancel_job
+
+    try:
+        _, response = cancel_job(job_id, base_url=service_url)
+        _emit_json_payload(response)
+    except JobClientError as exc:
+        _emit_json_payload(exc.payload)
+        raise typer.Exit(code=1) from None
+    except Exception as exc:
+        _fail(exc)
+
+
+@app.command("job-service")
+def job_service_command(
+    host: str = typer.Option("127.0.0.1", "--host", help="Host interface to bind."),
+    port: int = typer.Option(18791, "--port", help="HTTP port to bind."),
+    workers: int = typer.Option(1, "--workers", help="Background ABI job worker count."),
+    store: Optional[Path] = typer.Option(
+        None,
+        "--store",
+        help="Optional JSON file used to persist job records.",
+    ),
+) -> None:
+    """Start the ABI HTTP Job Service for queued long-running operations."""
+    try:
+        from abi.jobs import serve
+
+        typer.echo(f"ABI Job Service listening on http://{host}:{port}")
+        serve(host=host, port=port, max_workers=workers, store_path=store)
+    except KeyboardInterrupt:
+        typer.echo("ABI Job Service stopped.")
+    except Exception as exc:
+        _fail(exc)
+
+
+def _build_job_payload(
+    *,
+    command: str,
+    payload_path: Optional[Path],
+    arguments_json: Optional[str],
+    backend: Optional[str],
+    analysis_type: Optional[str],
+    config_path: Optional[Path],
+    sample_sheet: Optional[Path],
+    profile: Optional[str],
+    mode: Optional[str],
+    threads: Optional[int],
+    outdir: Optional[str],
+    log_dir: Optional[str],
+    engine: Optional[str],
+    workflow: Optional[Path],
+    nextflow_bin: Optional[Path],
+    nextflow_profile: Optional[str],
+    executor: Optional[str],
+    work_dir: Optional[Path],
+    nxf_home: Optional[Path],
+    mamba_root: Optional[Path],
+    resume: bool,
+    smoke: bool,
+    confirm_execution: bool,
+    check_files: Optional[bool],
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = _load_json_object(payload_path) if payload_path else {}
+    payload.setdefault("command", command)
+    raw_arguments = payload.get("arguments", {})
+    if not isinstance(raw_arguments, dict):
+        raise ABIError("Job payload field 'arguments' must be a JSON object.")
+    arguments: Dict[str, Any] = dict(raw_arguments)
+    if arguments_json:
+        extra_arguments = loads_json(arguments_json, label="--arguments-json")
+        if not isinstance(extra_arguments, dict):
+            raise ABIError("--arguments-json must be a JSON object.")
+        arguments.update(extra_arguments)
+    _set_if_not_none(arguments, "analysis_type", analysis_type)
+    _set_if_not_none(arguments, "config_path", _path_string(config_path))
+    _set_if_not_none(arguments, "sample_sheet", _path_string(sample_sheet))
+    _set_if_not_none(arguments, "profile", profile)
+    _set_if_not_none(arguments, "mode", mode)
+    _set_if_not_none(arguments, "threads", threads)
+    _set_if_not_none(arguments, "outdir", outdir)
+    _set_if_not_none(arguments, "log_dir", log_dir)
+    _set_if_not_none(arguments, "engine", engine)
+    _set_if_not_none(arguments, "workflow", _path_string(workflow))
+    _set_if_not_none(arguments, "nextflow_bin", _path_string(nextflow_bin))
+    _set_if_not_none(arguments, "nextflow_profile", nextflow_profile)
+    _set_if_not_none(arguments, "executor", executor)
+    _set_if_not_none(arguments, "work_dir", _path_string(work_dir))
+    _set_if_not_none(arguments, "nxf_home", _path_string(nxf_home))
+    _set_if_not_none(arguments, "mamba_root", _path_string(mamba_root))
+    if resume:
+        arguments["resume"] = True
+    if smoke:
+        arguments["smoke"] = True
+    if confirm_execution:
+        arguments["confirm_execution"] = True
+    if check_files is not None:
+        arguments["check_files"] = check_files
+    payload["arguments"] = arguments
+    if backend:
+        payload["backend"] = backend
+    return payload
+
+
+def _load_json_object(path: Path) -> Dict[str, Any]:
+    return load_json_object(path)
+
+
+def _set_if_not_none(target: Dict[str, Any], key: str, value: Any) -> None:
+    if value is not None:
+        target[key] = value
+
+
+def _path_string(path: Optional[Path]) -> Optional[str]:
+    return str(path) if path is not None else None
+
+
 def _plan_dict(plan: Any, analysis_type: str) -> Dict[str, Any]:
-    data: Dict[str, Any] = dict(plan.to_dict())
+    data = plan.to_dict()
     data.setdefault("analysis_type", analysis_type)
     return data
 
@@ -559,7 +1207,7 @@ def _run_with_runtime(
     mamba_root: Optional[Path],
     smoke: bool,
     check_files: bool,
-) -> RuntimeResult:
+) -> Any:
     runtime_engine = engine.lower().strip()
     if runtime_engine not in {"local", "nextflow"}:
         raise ABIError(f"Unsupported runtime engine: {engine}. Expected local or nextflow.")
@@ -589,8 +1237,9 @@ def _run_with_runtime(
         executor=executor,
         resume=resume,
     )
+    runtime: Any
     if runtime_engine == "local":
-        runtime: ABIRuntime = LocalRuntime(plugin, options=options)
+        runtime = LocalRuntime(plugin, options=options)
     else:
         runtime = NextflowRuntime(plugin, options=options)
     return runtime.run(plan, cfg)

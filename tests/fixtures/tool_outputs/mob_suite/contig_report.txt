@@ -1,0 +1,2 @@
+contig_id	molecule_type	primary_cluster_id	host_range	replicon_type	relaxase_type	mpf_type	predicted_mobility	size
+contig_1	plasmid	AA001	Enterobacteriaceae	IncF	MOBF	MPFT	conjugative	5000

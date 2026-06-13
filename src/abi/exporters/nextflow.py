@@ -30,7 +30,11 @@ class NextflowExporter:
         """Generate a complete Nextflow DSL2 script."""
         root = Path(project_root or PROJECT_ROOT).resolve()
         mamba = Path(mamba_root or root / ".mamba").resolve()
-        abi_dag = dag or infer_dag(getattr(plan, "steps", []), project_root=root)
+        abi_dag = dag or infer_dag(
+            getattr(plan, "steps", []),
+            project_root=root,
+            sequential_fallback=True,
+        )
         sections = [
             self._header(plan, smoke=smoke),
             self._params_block(plan, config, project_root=root, mamba_root=mamba),

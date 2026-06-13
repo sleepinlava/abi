@@ -8,7 +8,7 @@ tools:
     required: true
     skill_path: plugins/metatranscriptomics/skills/fastp/SKILL.md
     command_template: "fastp -i {read1} -I {read2} -o {output_dir}/{sample_id}_R1.clean.fastq.gz -O {output_dir}/{sample_id}_R2.clean.fastq.gz --thread {threads} --html {output_dir}/{sample_id}.fastp.html --json {output_dir}/{sample_id}.fastp.json"
-    inputs: [read1, read2, genome_index]
+    inputs: [read1, read2]
   - id: star
     name: STAR
     category: alignment
@@ -28,7 +28,7 @@ tools:
     required: false
     skill_path: plugins/metatranscriptomics/skills/hisat2/SKILL.md
     command_template: "hisat2 -p {threads} -x {genome_index} -1 {read1} -2 {read2} -S {output_dir}/{sample_id}.sam"
-    inputs: [read1, read2]
+    inputs: [read1, read2, genome_index]
   - id: featurecounts
     name: featureCounts
     category: expression

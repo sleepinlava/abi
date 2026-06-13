@@ -1,0 +1,35 @@
+abi_version: '0.1'
+tool_id: mummer
+name: MUMmer/nucmer
+category: comparative_genomics
+purpose: Run MUMmer/nucmer as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- comparative_genomics
+inputs:
+  sample_id:
+    type: string
+    required: true
+  reference_plasmids:
+    type: path
+    required: true
+  plasmid_contigs:
+    type: path
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-annotation
+  executable: nucmer
+  command_template: nucmer --prefix {output_dir}/{sample_id} {reference_plasmids}
+    {plasmid_contigs}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install nucmer in the autoplasm-annotation environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

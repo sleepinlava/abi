@@ -1,0 +1,260 @@
+from pathlib import Path
+
+from abi.autoplasm.resources import (
+    check_resources,
+    fetch_example_dataset,
+    required_resource_issues,
+    setup_resources,
+    sha256_path,
+)
+
+
+def test_setup_resources_mock_writes_manifest(tmp_path):
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+
+    rows = setup_resources(config, resource_ids=["genomad", "bakta"], mock=True)
+
+    assert {row["resource_id"] for row in rows} == {"genomad", "bakta"}
+    assert all(row["status"] == "ok" for row in rows)
+    assert (tmp_path / "resources" / "resources.json").exists()
+    genomad = check_resources(config, resource_ids=["genomad"])[0]
+    assert genomad["status"] == "ok"
+    assert genomad["ready_check"] == "ready sentinel found"
+    assert genomad["directory_file_count"] >= 1
+    assert "directory_size_bytes" in genomad
+
+
+def test_setup_resources_reports_progress(tmp_path):
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    events = []
+
+    setup_resources(
+        config,
+        resource_ids=["genomad"],
+        mock=True,
+        progress_callback=lambda event, resource_id, message: events.append(
+            (event, resource_id, message)
+        ),
+    )
+
+    assert events[0] == ("start", "genomad", "preparing")
+    assert events[-1] == ("finish", "genomad", "ok")
+
+
+def test_setup_resources_uses_env_path_for_resource_dependencies(tmp_path, monkeypatch):
+    mamba_root = tmp_path / ".mamba"
+    env_bin = mamba_root / "envs" / "autoplasm-annotation" / "bin"
+    env_bin.mkdir(parents=True)
+    monkeypatch.setenv("AUTOPLASM_MAMBA_ROOT", str(mamba_root))
+
+    bakta_db = env_bin / "bakta_db"
+    bakta_db.write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env sh",
+                "set -eu",
+                "command -v amrfinder >/dev/null",
+                "out=''",
+                'while [ "$#" -gt 0 ]; do',
+                '  case "$1" in',
+                '    --output) shift; out="$1" ;;',
+                "  esac",
+                "  shift || true",
+                "done",
+                'mkdir -p "$out"',
+                "printf 'ok\\n' > \"$out/bakta.db\"",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    bakta_db.chmod(0o755)
+    amrfinder = env_bin / "amrfinder"
+    amrfinder.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
+    amrfinder.chmod(0o755)
+
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    rows = setup_resources(config, resource_ids=["bakta"])
+
+    assert rows[0]["status"] == "ok"
+    assert (tmp_path / "resources" / "bakta" / "bakta.db").exists()
+
+
+def test_setup_resources_reports_command_timeout(tmp_path, monkeypatch):
+    mamba_root = tmp_path / ".mamba"
+    env_bin = mamba_root / "envs" / "autoplasm-plasmid-detect" / "bin"
+    env_bin.mkdir(parents=True)
+    monkeypatch.setenv("AUTOPLASM_MAMBA_ROOT", str(mamba_root))
+
+    executable = env_bin / "genomad"
+    executable.write_text("#!/usr/bin/env sh\nsleep 2\n", encoding="utf-8")
+    executable.chmod(0o755)
+
+    config = {
+        "resources": {"root": str(tmp_path / "resources")},
+        "execution": {"resource_timeout_seconds": 0.01},
+    }
+    rows = setup_resources(config, resource_ids=["genomad"])
+
+    assert rows[0]["status"] == "failed"
+    assert "timed out" in rows[0]["message"]
+
+
+def test_setup_resources_skips_existing_ready_database(tmp_path, monkeypatch):
+    mamba_root = tmp_path / ".mamba"
+    env_bin = mamba_root / "envs" / "autoplasm-plasmid-detect" / "bin"
+    env_bin.mkdir(parents=True)
+    monkeypatch.setenv("AUTOPLASM_MAMBA_ROOT", str(mamba_root))
+
+    executable = env_bin / "genomad"
+    executable.write_text("#!/usr/bin/env sh\nexit 9\n", encoding="utf-8")
+    executable.chmod(0o755)
+
+    resource_root = tmp_path / "resources"
+    (resource_root / "genomad" / "genomad_db").mkdir(parents=True)
+    config = {"resources": {"root": str(resource_root)}}
+
+    rows = setup_resources(config, resource_ids=["genomad"])
+
+    assert rows[0]["status"] == "ok"
+    assert rows[0]["message"] == "Existing database found; download skipped."
+    assert rows[0]["ready_check"] == "genomad_db directory found"
+
+
+def test_setup_resources_downloads_when_target_is_empty_directory(tmp_path, monkeypatch):
+    mamba_root = tmp_path / ".mamba"
+    env_bin = mamba_root / "envs" / "autoplasm-plasmid-detect" / "bin"
+    env_bin.mkdir(parents=True)
+    monkeypatch.setenv("AUTOPLASM_MAMBA_ROOT", str(mamba_root))
+
+    executable = env_bin / "genomad"
+    executable.write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env sh",
+                "set -eu",
+                'mkdir -p "$2/genomad_db"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+
+    resource_root = tmp_path / "resources"
+    (resource_root / "genomad").mkdir(parents=True)
+    config = {"resources": {"root": str(resource_root)}}
+
+    rows = setup_resources(config, resource_ids=["genomad"])
+
+    assert rows[0]["status"] == "ok"
+    assert (resource_root / "genomad" / "genomad_db").exists()
+
+
+def test_setup_resources_does_not_overwrite_incomplete_database(tmp_path, monkeypatch):
+    mamba_root = tmp_path / ".mamba"
+    env_bin = mamba_root / "envs" / "autoplasm-plasmid-detect" / "bin"
+    env_bin.mkdir(parents=True)
+    monkeypatch.setenv("AUTOPLASM_MAMBA_ROOT", str(mamba_root))
+
+    executable = env_bin / "genomad"
+    executable.write_text("#!/usr/bin/env sh\nexit 9\n", encoding="utf-8")
+    executable.chmod(0o755)
+
+    resource_root = tmp_path / "resources"
+    incomplete = resource_root / "genomad"
+    incomplete.mkdir(parents=True)
+    (incomplete / "partial.tmp").write_text("partial\n", encoding="utf-8")
+    config = {"resources": {"root": str(resource_root)}}
+
+    rows = setup_resources(config, resource_ids=["genomad"])
+
+    assert rows[0]["status"] == "incomplete"
+    assert "download skipped" in rows[0]["message"]
+    assert (incomplete / "partial.tmp").exists()
+
+
+def test_plasmidfinder_install_uses_absolute_install_path(tmp_path, monkeypatch):
+    mamba_root = tmp_path / ".mamba"
+    env_bin = mamba_root / "envs" / "autoplasm-annotation" / "bin"
+    env_bin.mkdir(parents=True)
+    monkeypatch.setenv("AUTOPLASM_MAMBA_ROOT", str(mamba_root))
+
+    python = env_bin / "python"
+    marker = tmp_path / "python_args.txt"
+    python.write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env sh",
+                "set -eu",
+                'printf "%s\\n" "$1" > "' + str(marker) + '"',
+                'test -f "$1"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    python.chmod(0o755)
+    kma_index = env_bin / "kma_index"
+    kma_index.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
+    kma_index.chmod(0o755)
+
+    db_path = Path("relative_plasmidfinder_db")
+    absolute_db_path = tmp_path / db_path
+    absolute_db_path.mkdir(parents=True)
+    (absolute_db_path / "INSTALL.py").write_text("print('install')\n", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    config = {}
+
+    from abi.autoplasm.resources import _run_plasmidfinder_install
+
+    _run_plasmidfinder_install(config, db_path)
+
+    install_arg = marker.read_text(encoding="utf-8").strip()
+    assert install_arg == str((absolute_db_path / "INSTALL.py").resolve())
+
+
+def test_plasmidfinder_uses_current_database_url(tmp_path):
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+
+    rows = setup_resources(config, resource_ids=["plasmidfinder"], dry_run=True)
+
+    assert "https://bitbucket.org/genomicepidemiology/plasmidfinder_db.git" in rows[0]["command"]
+    assert rows[0]["source_url"].endswith("plasmidfinder_db.git")
+
+
+def test_required_resource_issues_for_selected_tools(tmp_path):
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+
+    issues = required_resource_issues(config, ["genomad", "bakta"])
+
+    assert len(issues) == 2
+    assert "genomad.database" in issues[0]
+
+
+def test_metaphlan_resource_is_required_when_selected(tmp_path):
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+
+    issues = required_resource_issues(config, ["metaphlan"])
+
+    assert len(issues) == 1
+    assert "metaphlan.database" in issues[0]
+
+
+def test_metaphlan_resource_setup_requires_explicit_selection(tmp_path):
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+
+    rows = setup_resources(config, dry_run=True)
+
+    assert "metaphlan" not in {row["resource_id"] for row in rows}
+
+
+def test_fetch_example_dataset_mock(tmp_path):
+    outputs = fetch_example_dataset("plasmid_refseq_smoke", tmp_path, mock=True)
+
+    sample_sheet = Path(outputs["sample_sheet"])
+    assert sample_sheet.exists()
+    assert "NC_002127_1" in sample_sheet.read_text(encoding="utf-8")
+    fasta = tmp_path / "NC_002127.1.fasta"
+    assert sha256_path(fasta)

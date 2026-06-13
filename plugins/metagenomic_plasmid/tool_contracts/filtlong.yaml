@@ -1,0 +1,31 @@
+abi_version: '0.1'
+tool_id: filtlong
+name: Filtlong
+category: qc
+purpose: Run Filtlong as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- qc
+inputs:
+  long_reads:
+    type: path
+    required: true
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-qc
+  executable: filtlong
+  command_template: filtlong {long_reads} > {output_dir}/{sample_id}.filtlong.fastq
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install filtlong in the autoplasm-qc environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

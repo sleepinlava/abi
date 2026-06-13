@@ -16,6 +16,30 @@ def _string(description: str) -> Dict[str, str]:
     return {"type": "string", "description": description}
 
 
+def _integer(description: str, *, minimum: int | None = None) -> Dict[str, Any]:
+    schema: Dict[str, Any] = {"type": "integer", "description": description}
+    if minimum is not None:
+        schema["minimum"] = minimum
+    return schema
+
+
+def _boolean(description: str) -> Dict[str, str]:
+    return {"type": "boolean", "description": description}
+
+
+COMMON_PLAN_PROPERTIES: Dict[str, Mapping[str, Any]] = {
+    "analysis_type": _string("ABI analysis type."),
+    "config_path": _string("Optional plugin config YAML path."),
+    "sample_sheet": _string("Optional sample sheet TSV path."),
+    "profile": _string("Optional plugin configuration profile."),
+    "mode": _string("Optional execution or planning mode override."),
+    "threads": _integer("Optional thread count override.", minimum=1),
+    "outdir": _string("Output directory for generated ABI artifacts."),
+    "log_dir": _string("Optional log directory override."),
+    "check_files": _boolean("Check input paths when planning."),
+}
+
+
 class ToolMetadata(TypedDict, total=False):
     description: str
     properties: Dict[str, Mapping[str, Any]]
@@ -35,13 +59,7 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
     },
     "abi_plan": {
         "description": "Build and persist an ABI execution plan without running external tools.",
-        "properties": {
-            "analysis_type": _string("ABI analysis type."),
-            "config_path": _string("Optional plugin config YAML path."),
-            "sample_sheet": _string("Optional sample sheet TSV path."),
-            "outdir": _string("Output directory for the generated plan."),
-            "check_files": {"type": "boolean", "description": "Check input paths when planning."},
-        },
+        "properties": dict(COMMON_PLAN_PROPERTIES),
         "required": ["analysis_type", "outdir"],
         "read_only": False,
         "permission": "planning_write",
@@ -49,10 +67,8 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
     "abi_dry_run": {
         "description": "Render commands and provenance without executing external tools.",
         "properties": {
-            "analysis_type": _string("ABI analysis type."),
-            "config_path": _string("Optional plugin config YAML path."),
-            "sample_sheet": _string("Optional sample sheet TSV path."),
-            "outdir": _string("Output directory for dry-run artifacts."),
+            **COMMON_PLAN_PROPERTIES,
+            "progress": _boolean("Write live progress artifacts when supported."),
         },
         "required": ["analysis_type", "outdir"],
         "read_only": False,
@@ -84,13 +100,32 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
             "config_path": _string("Optional plugin config YAML path."),
             "sample_sheet": _string("Optional sample sheet TSV path."),
             "outdir": _string("Output directory used while building the plan."),
+            "profile": _string("Optional plugin configuration profile."),
+            "mode": _string("Optional planning mode override."),
+            "threads": _integer("Optional thread count override.", minimum=1),
+            "log_dir": _string("Optional log directory override."),
             "output": _string("Output .nf workflow path."),
-            "smoke": {"type": "boolean", "description": "Export a runnable smoke workflow."},
-            "check_files": {"type": "boolean", "description": "Check input paths when planning."},
+            "smoke": _boolean("Export a runnable smoke workflow."),
+            "mamba_root": _string("Optional local mamba root for generated workflows."),
+            "check_files": _boolean("Check input paths when planning."),
         },
         "required": ["analysis_type", "output"],
         "read_only": False,
         "permission": "planning_write",
+    },
+    "abi_export_agent_context": {
+        "description": "Export compact machine-readable guidance for ABI agent callers.",
+        "properties": {"analysis_type": _string("ABI analysis type.")},
+        "required": ["analysis_type"],
+        "read_only": True,
+        "permission": "read_only",
+    },
+    "abi_doctor_agent": {
+        "description": "Return the shortest safe operating guide for ABI agent callers.",
+        "properties": {"analysis_type": _string("ABI analysis type.")},
+        "required": ["analysis_type"],
+        "read_only": True,
+        "permission": "read_only",
     },
     "abi_run": {
         "description": "Execute an ABI analysis through a runtime backend after explicit approval.",
@@ -99,12 +134,25 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
             "config_path": _string("Optional plugin config YAML path."),
             "sample_sheet": _string("Optional sample sheet TSV path."),
             "outdir": _string("Output directory for run artifacts."),
+            "profile": _string("Optional plugin configuration profile."),
+            "mode": _string("Optional execution mode override."),
+            "threads": _integer("Optional thread count override.", minimum=1),
+            "log_dir": _string("Optional log directory override."),
             "engine": {
                 "type": "string",
                 "enum": ["local", "nextflow"],
                 "description": "Runtime backend.",
             },
-            "smoke": {"type": "boolean", "description": "Use mocked/smoke tools."},
+            "workflow": _string("Optional workflow path to write or run."),
+            "work_dir": _string("Optional Nextflow work directory."),
+            "nxf_home": _string("Optional Nextflow home directory."),
+            "nextflow_bin": _string("Optional Nextflow executable path."),
+            "nextflow_profile": _string("Optional Nextflow profile."),
+            "executor": _string("Optional Nextflow process executor override."),
+            "resume": _boolean("Resume a previous Nextflow run when supported."),
+            "mamba_root": _string("Optional local mamba root for generated workflows."),
+            "smoke": _boolean("Use mocked/smoke tools."),
+            "check_files": _boolean("Check input paths before execution."),
             "confirm_execution": {
                 "type": "boolean",
                 "description": "Must be true after user approval before execution.",
@@ -114,6 +162,19 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
         "read_only": False,
         "permission": "execution",
         "requires_confirmation": True,
+    },
+    "abi_validate_result": {
+        "description": "Validate an ABI result directory without modifying it.",
+        "properties": {
+            "result_dir": _string("ABI result directory."),
+            "allow_empty_tables": {
+                "type": "boolean",
+                "description": "Allow standard tables with headers and zero data rows.",
+            },
+        },
+        "required": ["result_dir"],
+        "read_only": True,
+        "permission": "read_only",
     },
 }
 
@@ -150,6 +211,7 @@ def export_openai_tools(
         elif descriptor_format == "apps-sdk":
             tools.append(
                 {
+                    "name": name,
                     "title": name,
                     "description": description,
                     "inputSchema": schema,

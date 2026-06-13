@@ -1,238 +1,140 @@
 # ABI — Agent-Bioinformatics Interface
 
-A plugin-based Python abstraction layer that lets AI agents drive
-bioinformatics analyses through a unified
-**plan → dry-run → execute → inspect → report** workflow.
+ABI is a Python interface layer for agent-driven bioinformatics workflows. It
+standardizes analysis plugins behind a common
+`plan -> dry-run -> run -> inspect -> report` lifecycle, with provenance,
+standard TSV tables, OpenAI-compatible tool descriptors, optional MCP transport,
+Nextflow export/runtime support, and a queue-backed HTTP Job Service.
 
-[![PyPI](https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=blue)](https://pypi.org/project/abi-agent/)
-[![Python](https://img.shields.io/pypi/pyversions/abi-agent?style=flat-square)](https://pypi.org/project/abi-agent/)
-[![License](https://img.shields.io/pypi/l/abi-agent?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
-[![GitHub](https://img.shields.io/badge/github-sleepinlava%2Fabi-lightgrey?style=flat-square&logo=github)](https://github.com/sleepinlava/abi)
+[![PyPI](https://img.shields.io/pypi/v/autoplasm-abi?style=flat-square&color=blue)](https://pypi.org/project/autoplasm-abi/)
+[![Python](https://img.shields.io/pypi/pyversions/autoplasm-abi?style=flat-square)](https://pypi.org/project/autoplasm-abi/)
+[![License](https://img.shields.io/pypi/l/autoplasm-abi?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
 
 ## Installation
 
 ```bash
-# From PyPI (core install — metatranscriptomics plugin)
-pip install abi-agent
+pip install autoplasm-abi
 
-# Include the optional metagenomic_plasmid adapter
-pip install "abi-agent[autoplasm]"
+# Development install
+pip install -e ".[dev]"
 
-# Development install (core + all dev tooling)
-pip install "abi-agent[autoplasm,dev]"
+# Optional MCP server dependencies
+pip install -e ".[dev,mcp]"
 ```
 
-**Python**: 3.10 – 3.13
+Python 3.10-3.13 is supported.
 
 ## Quick Start
 
 ```bash
-# List installed analysis types
+# List installed analysis plugins
 abi list-types
 
-# Initialize a workspace from a plugin template
+# Initialize a plugin workspace
 abi init --type metatranscriptomics --outdir ./workspace
 
-# Build an execution plan
+# Build a plan without executing tools
 abi plan --type metatranscriptomics --config config.yaml --sample-sheet samples.tsv
 
-# Dry-run — full provenance artifacts, no real tool execution
+# Write dry-run provenance and table skeletons
 abi dry-run --type metatranscriptomics --config config.yaml --sample-sheet samples.tsv
 
-# Execute through a runtime backend
-abi run --type metatranscriptomics --config config.yaml --sample-sheet samples.tsv
+# Execute only after explicit confirmation
+abi run --type metatranscriptomics --config config.yaml --sample-sheet samples.tsv \
+  --confirm-execution
 
-# Inspect results
+# Inspect and rebuild reports
 abi inspect --result-dir results/
-
-# Regenerate reports
 abi report --result-dir results/ --type metatranscriptomics
 
-# Export to Nextflow DSL2
+# Export agent/runtime interfaces
 abi export-nextflow --type metatranscriptomics --output workflow.nf
-
-# Export OpenAI-compatible tool descriptors
 abi export-openai-tools --type metatranscriptomics --format responses
+abi export-agent-context --type metatranscriptomics --format json
+abi doctor-agent --type metatranscriptomics
 ```
 
-All commands support `--output-json` for structured agent consumption.
+All agent-facing commands support `--output-json`.
 
-## Optional Dependencies
+## Built-In Analysis Types
 
-| Extra        | Plugin                | Package    | Install                                |
-|-------------|-----------------------|------------|----------------------------------------|
-| `autoplasm` | `metagenomic_plasmid` | autoplasm  | `pip install abi-agent[autoplasm]`     |
-| `dev`       | (development tooling) | pytest, ruff, mypy, types-PyYAML | `pip install abi-agent[dev]` |
+| Type | Implementation | Notes |
+| --- | --- | --- |
+| `metatranscriptomics` | Native ABI demo plugin | fastp -> STAR/HISAT2 -> featureCounts portability demo. |
+| `metagenomic_plasmid` | Internal `abi.autoplasm` pipeline | Migrated from the former AutoPlasm development tree and bundled inside `autoplasm-abi`. |
 
-The `metagenomic_plasmid` plugin uses **lazy imports** — the external package is
-imported inside each method, not at the module top level. The plugin module
-loads without its dependency; a clear `ImportError` is raised only when you
-actually try to use it.
+The package also exposes an `autoplasm` command for the bundled plasmid
+pipeline:
 
-## Architecture
-
-```
-CLI (Typer)  ────  ABIAgentInterface  ────  OpenAI Tool Export
- │                    │
- └── Plugin Registry (entry_points + builtins)
-       │
-       └── Plugin Protocol ───────────────────────────────────────┐
-            ├── ABIPlugin           (6 core methods)              │
-            ├── ABIDryRunPlugin     (+ execute_dry_run)           │
-            └── ABIInitializablePlugin  (+ root path for init)    │
-                     │                                            │
-                     └── Runtime Backend (Local / Nextflow)       │
-                              │                                   │
-                              └── GenericABIExecutor              │
-                                   ├── Standard Tables (TSV)      │
-                                   ├── Provenance (JSON / JSONL)  │
-                                   └── Reports (Markdown / HTML)  │
-                                                                    │
-Public SDK for plugin authors:  abi.tools  abi.errors  abi.testing ◄┘
+```bash
+autoplasm dry-run --config examples/config_minimal.yaml --profile dry_run
 ```
 
-## Plugin Development
+There is no top-level Python package named `autoplasm`; import the internal
+implementation as `abi.autoplasm`.
 
-A plugin is any object that satisfies the `ABIPlugin` protocol. It must expose
-four string attributes and six methods:
+## Agent Transports
 
-```python
-from abi.interfaces import ABIPlugin
-from abi.schemas import ABIExecutionPlan
-from abi.tools import ToolRegistry
+`ABIAgentInterface` is the stable transport-neutral boundary used by:
 
+- CLI JSON through `--output-json`
+- OpenAI-compatible descriptors from `abi export-openai-tools`
+- Optional MCP stdio server via `python -m abi.mcp.server`
+- HTTP Job Service via `abi job-service` and `abi job submit/list/status/artifacts/cancel`
 
-class MyPlugin:
-    # ── attributes ──────────────────────────────────────────────
-    plugin_id: str
-    display_name: str
-    description: str
-    report_title: str
+Execution tools require explicit confirmation. `abi run`, `abi_run`, and Job
+Service execution submissions return `confirmation_required` unless
+`confirm_execution=true` or `--confirm-execution` is provided.
 
-    # ── 6 core methods ──────────────────────────────────────────
-    def load_config(self, config_path, *, profile, overrides) -> dict: ...
-    def build_plan(self, config, *, check_files) -> ABIExecutionPlan: ...
-    def registry(self) -> ToolRegistry: ...
-    def table_schemas(self) -> dict[str, list[str]]: ...
-    def parse_outputs(self, tool_id, output_dir, sample_id) -> dict: ...
-    def write_report(self, plan, result_dir) -> dict: ...
+## Development
+
+```bash
+pip install -e ".[dev]"
+
+ruff check src/ tests/
+ruff format --check src/ tests/
+mypy src/abi/ --ignore-missing-imports
+pytest tests/ -v --tb=short
+
+python -m build
+python -m twine check dist/*
 ```
 
-### Extended Protocols
+Repository-local bioinformatics environments are described under `envs/` and
+resolved from `.mamba/envs/<env_name>/bin`. Set `ABI_MAMBA_ROOT` to override the
+default `.mamba` root; `AUTOPLASM_MAMBA_ROOT` remains accepted for compatibility.
 
-**`ABIDryRunPlugin`** — add `execute_dry_run` to use a plugin-specific
-dry-run pipeline instead of the generic executor:
+More details:
 
-```python
-from abi.interfaces import ABIDryRunPlugin
+- [ABI Spec v0.1](docs/abi_spec_v0.1.md)
+- [Agent Usage Guide](docs/agent_usage.md)
+- [Development Guide](docs/development.md)
+- [Plugin Development Guide](docs/plugin_development_guide.md)
+- [OpenAI Interface Standard](docs/openai_interface_standard.md)
+- [Job Service Guide](docs/job_service.md)
+- [Experiment Plan](docs/experiments.md)
+- [Metagenomic Plasmid Plugin](docs/metagenomic_plasmid.md)
+- [Release Guide](docs/release.md)
 
-class MyPlugin(ABIDryRunPlugin):
-    def execute_dry_run(self, plan, config) -> dict[str, Path]: ...
-```
+## Public SDK
 
-**`ABIInitializablePlugin`** — expose a `root` path so `abi init` can copy
-template files (config, sample sheet) into a workspace:
+Plugin authors should depend on these public modules:
 
-```python
-from abi.interfaces import ABIInitializablePlugin
+| Module | Contents |
+| --- | --- |
+| `abi.interfaces` | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin` |
+| `abi.schemas` | `ABISample`, `ABISampleContext`, `ABIPlanStep`, `ABIExecutionPlan` |
+| `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
+| `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
+| `abi.testing` | `assert_plugin_contract` |
 
-class MyPlugin(ABIInitializablePlugin):
-    root: Path  # directory containing config_default.yaml and sample_sheet_template.tsv
-```
-
-### Registration
-
-Register via `pyproject.toml` entry points:
+Register third-party plugins with:
 
 ```toml
 [project.entry-points."abi.plugins"]
 my_analysis = "my_package.plugins:MyPlugin"
 ```
 
-### Testing
-
-Validate a plugin's contract with the SDK testing helper:
-
-```python
-from abi.plugins import get_plugin
-from abi.testing import assert_plugin_contract
-
-
-def test_my_plugin_contract():
-    assert_plugin_contract(get_plugin("my_analysis"))
-```
-
-## SDK Reference
-
-Public modules available to plugin authors:
-
-| Module             | Contents                                              |
-|-------------------|-------------------------------------------------------|
-| `abi.tools`       | `ToolRegistry`, `ToolSkill`, `RunResult`             |
-| `abi.errors`      | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
-| `abi.testing`     | `assert_plugin_contract`                              |
-| `abi.schemas`     | `ABISample`, `ABISampleContext`, `ABIPlanStep`, `ABIExecutionPlan` |
-| `abi.interfaces`  | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin` |
-
-## Development
-
-```bash
-# Editable install with dev tooling
-pip install -e ".[dev]"
-
-# Lint, type-check, and test
-ruff check src/ && ruff format --check src/ tests/
-mypy src/abi/ --ignore-missing-imports
-pytest tests/ -v
-
-# Build distribution
-pip install build twine
-python -m build
-python -m twine check dist/*
-```
-
-The test suite does **not** require `autoplasm` — CI installs only `.[dev]`.
-
-## Publishing to PyPI
-
-The package is configured for PyPI publication as `abi-agent`. Built-in plugin
-templates under `plugins/` are included in both source distributions and wheels
-so `abi init` works after installation from PyPI.
-
-Preferred release path:
-
-1. Ensure `pyproject.toml` has the intended version.
-2. Create and publish a GitHub Release for that version.
-3. The `Publish to PyPI` workflow builds the source distribution and wheel,
-   validates them with `twine check`, and publishes via PyPI Trusted Publishing.
-
-Manual release path, if you have a PyPI API token:
-
-```bash
-rm -rf dist/
-python -m build
-python -m twine check dist/*
-python -m twine upload dist/*
-```
-
-Set `TWINE_USERNAME=__token__` and `TWINE_PASSWORD=<pypi-api-token>` for manual
-uploads.
-
-### Path Conflict with PlasimSkillsForAgent
-
-If you also have the `autoplasm` package installed from the
-PlasimSkillsForAgent monorepo, its `abi` package can shadow the standalone
-`abi-agent` package on `sys.path`.  Run the dev-setup tool once to fix this:
-
-```bash
-abi-dev-setup                          # install priority .pth file
-abi-dev-setup --check                  # verify the fix is active
-abi-dev-setup --undo                   # remove the fix
-```
-
-When the wrong package is loaded at runtime, a warning is emitted with
-instructions.  The CI pipeline is unaffected (clean environment).
-
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).

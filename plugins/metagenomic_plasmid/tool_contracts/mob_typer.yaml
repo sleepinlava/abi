@@ -1,0 +1,31 @@
+abi_version: '0.1'
+tool_id: mob_typer
+name: MOB-typer
+category: typing
+purpose: Run MOB-typer as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- typing
+inputs:
+  plasmid_contigs:
+    type: path
+    required: true
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-annotation
+  executable: mob_typer
+  command_template: mob_typer --infile {plasmid_contigs} --out_file {output_dir}/{sample_id}.mob_typer.tsv
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install mob_typer in the autoplasm-annotation environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

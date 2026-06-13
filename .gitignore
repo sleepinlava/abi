@@ -2,7 +2,13 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 *.egg-info/
+.eggs/
 dist/
 build/
 *.egg
@@ -23,11 +29,51 @@ venv/
 Thumbs.db
 
 # Project-specific
-results/
-log/
+resources/*
+!resources/.gitkeep
+results/*
+!results/.gitkeep
+log/*
+!log/.gitkeep
 *.log
 progress.json
 progress.jsonl
+.abi/
+abi_workspace/
+workspace/
+work/
+.nextflow/
+.nextflow.log*
+nextflow_work/
+nf_work/
+job_store.json
+jobs.json
+
+# Ignore user data by default, but keep curated small examples.
+data/*
+!data/examples/
+!data/examples/**
+
+# Large sequencing or archive inputs should not be committed by default.
+*.bam
+*.bai
+*.sam
+*.cram
+*.fastq
+*.fq
+*.fastq.gz
+*.fq.gz
+*.fasta.gz
+*.fa.gz
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+
+# Keep intentionally tiny test fixtures.
+!examples/fixtures/**
+!tests/fixtures/**
 
 # CMake (if used)
 CMakeCache.txt
@@ -35,3 +81,4 @@ CMakeFiles/
 cmake_install.cmake
 Makefile
 CTestTestfile.cmake
+Testing/

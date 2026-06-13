@@ -1,0 +1,8 @@
+>>Basic Statistics	pass
+#Measure	Value
+Filename	S1_R1.fastq
+Total Sequences	20
+Sequences flagged as poor quality	0
+Sequence length	100
+%GC	51
+>>END_MODULE

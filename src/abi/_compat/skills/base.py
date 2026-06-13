@@ -12,7 +12,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
+from abi.config import PROJECT_ROOT, resolved_mamba_root
 from abi.errors import ToolError
+from abi.timeouts import DEFAULT_TOOL_TIMEOUT_SECONDS, timeout_from_env_or_value
 
 OPTIONAL_TEMPLATE_FIELDS = {"abundance_label", "metaphlan_long_reads_flag"}
 
@@ -75,11 +77,6 @@ class ToolSkill:
         return self.run(params, dry_run=True)
 
 
-def _resolve_project_root() -> Path:
-    """Resolve project root relative to this file (2 levels up from _compat/skills/)."""
-    return Path(__file__).resolve().parents[3]
-
-
 class GenericCommandSkill(ToolSkill):
     """Generic command-template wrapper for registered command-line tools."""
 
@@ -104,7 +101,7 @@ class GenericCommandSkill(ToolSkill):
 
     @property
     def mamba_root(self) -> Path:
-        return Path(os.environ.get("ABI_MAMBA_ROOT", str(_resolve_project_root() / ".mamba")))
+        return resolved_mamba_root()
 
     @property
     def env_prefix(self) -> Path:
@@ -159,7 +156,7 @@ class GenericCommandSkill(ToolSkill):
         selected.setdefault("env_name", self.env_name)
         selected.setdefault("mode", mode)
         selected.setdefault("minimap2_preset", "map-ont")
-        selected.setdefault("project_root", str(_resolve_project_root()))
+        selected.setdefault("project_root", str(PROJECT_ROOT))
         selected.setdefault("abundance_label", "")
         if selected.get("output_dir") and selected.get("sample_id"):
             output_dir = Path(str(selected["output_dir"]))
@@ -176,7 +173,7 @@ class GenericCommandSkill(ToolSkill):
 
     def command_text(self, params: Dict[str, Any]) -> str:
         selected = self.select_params(params, mode=str(params.get("mode", "auto")))
-        return self.command_template.format_map(SafeFormatDict(selected))
+        return self.command_template.format_map(SafeFormatDict(_template_values(selected)))
 
     def build_command(self, params: Dict[str, Any]) -> List[str]:
         selected = self.select_params(params, mode=str(params.get("mode", "auto")))
@@ -258,6 +255,10 @@ class GenericCommandSkill(ToolSkill):
         stderr_path = Path(str(selected["stderr_path"])) if selected.get("stderr_path") else None
         stdout_handle = None
         stderr_handle = None
+        timeout_seconds = self._timeout_seconds(selected)
+        timed_out = False
+        timeout_message = ""
+        timeout_stdout = ""
         try:
             if stdout_path:
                 stdout_path.parent.mkdir(parents=True, exist_ok=True)
@@ -272,20 +273,32 @@ class GenericCommandSkill(ToolSkill):
                 stdout=stdout_handle if stdout_handle else subprocess.PIPE,
                 stderr=stderr_handle if stderr_handle else subprocess.PIPE,
                 env=self.runtime_env(),
+                timeout=timeout_seconds,
             )
+        except subprocess.TimeoutExpired as exc:
+            timed_out = True
+            timeout_message = _timeout_message(self.name, timeout_seconds, exc)
+            timeout_stdout = _timeout_output(exc.stdout)
         finally:
             if stdout_handle:
                 stdout_handle.close()
             if stderr_handle:
                 stderr_handle.close()
         end = datetime.now()
-        status = "success" if completed.returncode == 0 else "failed"
-        stdout = "" if stdout_path else completed.stdout
-        stderr = "" if stderr_path else completed.stderr
+        if timed_out:
+            status = "timeout"
+            return_code = -1
+            stdout = "" if stdout_path else timeout_stdout
+            stderr = "" if stderr_path else timeout_message
+        else:
+            status = "success" if completed.returncode == 0 else "failed"
+            return_code = completed.returncode
+            stdout = "" if stdout_path else completed.stdout
+            stderr = "" if stderr_path else completed.stderr
         return RunResult(
             tool_name=self.name,
             command=command,
-            return_code=completed.returncode,
+            return_code=return_code,
             stdout=stdout,
             stderr=stderr,
             start_time=start.isoformat(timespec="seconds"),
@@ -299,9 +312,48 @@ class GenericCommandSkill(ToolSkill):
             status=status,
         )
 
+    def _timeout_seconds(self, selected: Mapping[str, Any]) -> float | None:
+        value = selected.get("timeout_seconds", self.metadata.get("timeout_seconds"))
+        return timeout_from_env_or_value(
+            "ABI_TOOL_TIMEOUT_SECONDS",
+            value,
+            default=DEFAULT_TOOL_TIMEOUT_SECONDS,
+        )
+
     def parse_outputs(self, output_dir: str) -> Dict[str, Any]:
         files = sorted(str(path) for path in Path(output_dir).glob("*"))
         return {"output_dir": output_dir, "files": files}
 
     def normalize_outputs(self, parsed: Dict[str, Any]) -> Dict[str, Any]:
         return dict(parsed)
+
+
+def _template_values(values: Mapping[str, Any]) -> Dict[str, Any]:
+    return {key: _template_value(value) for key, value in values.items()}
+
+
+def _template_value(value: Any) -> Any:
+    if isinstance(value, Path):
+        return value.as_posix()
+    if os.name == "nt" and isinstance(value, str):
+        return value.replace("\\", "/")
+    return value
+
+
+def _timeout_output(exc_stdout: Any) -> str:
+    if exc_stdout is None:
+        return ""
+    if isinstance(exc_stdout, bytes):
+        return exc_stdout.decode("utf-8", errors="replace")
+    return str(exc_stdout)
+
+
+def _timeout_message(
+    tool_name: str,
+    timeout_seconds: float | None,
+    exc: subprocess.TimeoutExpired,
+) -> str:
+    stderr = _timeout_output(exc.stderr)
+    timeout_text = "configured timeout" if timeout_seconds is None else f"{timeout_seconds:g}s"
+    message = f"{tool_name}: command timed out after {timeout_text}"
+    return "\n".join(text for text in [message, stderr.strip()] if text)

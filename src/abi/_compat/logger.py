@@ -62,6 +62,7 @@ def write_commands_tsv(rows: Iterable[Mapping[str, Any]], path: str | Path) -> P
         "command",
         "status",
         "return_code",
+        "remote_scheduler_job_id",
         "reason",
         "parsed_status",
         "standard_tables",

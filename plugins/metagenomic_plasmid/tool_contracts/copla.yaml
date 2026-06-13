@@ -1,0 +1,35 @@
+abi_version: '0.1'
+tool_id: copla
+name: COPLA
+category: typing
+purpose: Run COPLA as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- typing
+inputs:
+  plasmid_contigs:
+    type: path
+    required: true
+  refgraph:
+    type: path
+    required: true
+  reflist:
+    type: path
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-annotation
+  executable: copla
+  command_template: copla --input {plasmid_contigs} --refgraph {refgraph} --reflist
+    {reflist} --output-dir {output_dir}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install copla in the autoplasm-annotation environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

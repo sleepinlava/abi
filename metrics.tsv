@@ -1,0 +1,3 @@
+group	task_id	completed	correct_analysis_type	ran_plan	ran_dry_run	skipped_confirmation_gate	parameter_errors	diagnostic_recovery	human_interventions	time_to_success_seconds	notes
+abi_control_layer	rnaseq_dry_run	1	1	1	1	0	0	1	0		see docs/experiments/metrics.tsv
+abi_control_layer	plasmid_dry_run	1	1	1	1	0	0	1	0		see docs/experiments/metrics.tsv

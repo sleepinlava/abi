@@ -10,12 +10,17 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping
 
-from abi.config import PROJECT_ROOT
+from abi.config import resolved_mamba_root
 from abi.dag import ABIDAG, infer_dag, process_name
 from abi.exporters import NextflowExporter
 from abi.results import ABIResultWriter
 from abi.runtimes.base import RuntimeOptions, RuntimeResult
 from abi.schemas import ABIError
+from abi.timeouts import (
+    DEFAULT_TOOL_TIMEOUT_SECONDS,
+    mapping_block,
+    timeout_from_env_or_value,
+)
 
 
 class NextflowRuntime:
@@ -33,7 +38,7 @@ class NextflowRuntime:
         result_dir = Path(str(config["outdir"]))
         nextflow_dir = result_dir / "nextflow"
         workflow_path = self.options.workflow or nextflow_dir / "workflow.nf"
-        dag = infer_dag(getattr(plan, "steps", []))
+        dag = infer_dag(getattr(plan, "steps", []), sequential_fallback=True)
         self.exporter.write(
             plan,
             config,
@@ -86,7 +91,7 @@ class NextflowRuntime:
         trace_path = nextflow_dir / "trace.txt"
         timeline_path = nextflow_dir / "timeline.html"
         nextflow_bin = resolve_nextflow_bin(self.options.nextflow_bin, self.options.mamba_root)
-        dag = infer_dag(getattr(plan, "steps", []))
+        dag = infer_dag(getattr(plan, "steps", []), sequential_fallback=True)
 
         workflow_path = self.exporter.write(
             plan,
@@ -125,17 +130,26 @@ class NextflowRuntime:
             stdout_path.open("w", encoding="utf-8") as stdout_handle,
             stderr_path.open("w", encoding="utf-8") as stderr_handle,
         ):
-            result = subprocess.run(
-                command,
-                cwd=nextflow_dir,
-                env=env,
-                stdout=stdout_handle,
-                stderr=stderr_handle,
-                text=True,
-                check=False,
-            )
+            timeout_seconds = _nextflow_timeout_seconds(config, self.options)
+            try:
+                result = subprocess.run(
+                    command,
+                    cwd=nextflow_dir,
+                    env=env,
+                    stdout=stdout_handle,
+                    stderr=stderr_handle,
+                    text=True,
+                    check=False,
+                    timeout=timeout_seconds,
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise ABIError(
+                    "Nextflow run timed out after "
+                    f"{timeout_seconds:g}s; stdout: {stdout_path}; stderr: {stderr_path}"
+                ) from exc
 
         trace_rows = parse_nextflow_trace(trace_path)
+        remote_scheduler_jobs = _remote_scheduler_jobs(trace_rows)
         status = "success" if result.returncode == 0 else "failed"
         writer = ABIResultWriter(self.plugin, registry)
         outputs = writer.write(
@@ -168,6 +182,7 @@ class NextflowRuntime:
                 "executor_profile": self.options.profile or "",
                 "executor": self.options.executor or "",
                 "resume": self.options.resume,
+                "remote_scheduler_jobs": remote_scheduler_jobs,
                 "dag": _dag_summary(dag),
             },
             extra_environment=_nextflow_environment(
@@ -196,6 +211,23 @@ class NextflowRuntime:
         return RuntimeResult(status=status, return_code=result.returncode, outputs=outputs)
 
 
+def _nextflow_timeout_seconds(
+    config: Mapping[str, Any],
+    options: RuntimeOptions,
+) -> float | None:
+    execution = mapping_block(config, "execution")
+    value = options.timeout_seconds
+    if value is None:
+        value = execution.get("nextflow_timeout_seconds")
+    if value is None:
+        value = execution.get("tool_timeout_seconds")
+    return timeout_from_env_or_value(
+        "ABI_NEXTFLOW_TIMEOUT_SECONDS",
+        value,
+        default=DEFAULT_TOOL_TIMEOUT_SECONDS,
+    )
+
+
 def resolve_nextflow_bin(
     nextflow_bin: Path | None,
     mamba_root: Path | None,
@@ -206,15 +238,20 @@ def resolve_nextflow_bin(
     env_value = os.environ.get("ABI_NEXTFLOW_BIN")
     if env_value:
         candidates.append(Path(env_value))
-    root = Path(mamba_root or PROJECT_ROOT / ".mamba")
-    candidates.append(root / "envs" / "abi-nextflow" / "bin" / "nextflow")
+    root = Path(mamba_root or resolved_mamba_root())
+    candidates.append(root / "envs" / "autoplasm-nextflow" / "bin" / "nextflow")
     path_value = shutil.which("nextflow")
     if path_value:
         candidates.append(Path(path_value))
     for candidate in candidates:
         if candidate.exists() and os.access(candidate, os.X_OK):
             return candidate.resolve()
-    raise ABIError("Nextflow executable was not found. Pass --nextflow-bin or install nextflow.")
+    raise ABIError(
+        "Nextflow executable was not found. Create the repository-local environment with "
+        "`cmake --build build --target create_envs` or "
+        "`.mamba/bin/micromamba create -y -p .mamba/envs/autoplasm-nextflow "
+        "-f envs/nextflow.yml`, or pass --nextflow-bin."
+    )
 
 
 def parse_nextflow_trace(path: Path) -> list[dict[str, str]]:
@@ -253,6 +290,7 @@ def _command_rows(
                 "command": exporter.command_for_step(step, registry, smoke=smoke),
                 "status": status,
                 "return_code": step_return_code,
+                "remote_scheduler_job_id": _remote_scheduler_job_id(trace),
                 "reason": "" if status in {"success", "dry_run"} else "Nextflow process failed",
                 "parsed_status": "smoke" if smoke and status == "success" else "",
                 "standard_tables": "",
@@ -286,6 +324,44 @@ def _status_from_trace(row: Mapping[str, str], *, fallback: str) -> str:
     return fallback
 
 
+def _remote_scheduler_jobs(rows: Iterable[Mapping[str, str]]) -> list[Dict[str, str]]:
+    jobs: list[Dict[str, str]] = []
+    for row in rows:
+        scheduler_job_id = _remote_scheduler_job_id(row)
+        if not scheduler_job_id:
+            continue
+        jobs.append(
+            {
+                "scheduler_job_id": scheduler_job_id,
+                "process": str(row.get("process") or row.get("name") or ""),
+                "task_id": str(row.get("task_id", "")),
+                "status": str(row.get("status", "")),
+                "executor": str(row.get("executor", "")),
+            }
+        )
+    return jobs
+
+
+def _remote_scheduler_job_id(row: Mapping[str, str]) -> str:
+    normalized = {_normalize_trace_key(key): value for key, value in row.items()}
+    for key in (
+        "nativeid",
+        "jobid",
+        "schedulerjobid",
+        "clusterjobid",
+        "remotejobid",
+        "externalid",
+    ):
+        value = str(normalized.get(key, "")).strip()
+        if value:
+            return value
+    return ""
+
+
+def _normalize_trace_key(key: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(key).lower())
+
+
 def _nextflow_environment(
     *,
     workflow_path: Path,
@@ -301,7 +377,7 @@ def _nextflow_environment(
         "nxf_home": str(nxf_home),
         "trace": str(trace_path),
         "timeline": str(timeline_path),
-        "mamba_root": str(options.mamba_root or PROJECT_ROOT / ".mamba"),
+        "mamba_root": str(options.mamba_root or resolved_mamba_root()),
         "executor_profile": options.profile or "",
         "executor": options.executor or "",
         "resume": options.resume,

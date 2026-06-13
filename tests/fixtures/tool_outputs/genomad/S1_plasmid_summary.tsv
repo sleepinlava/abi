@@ -1,0 +1,3 @@
+seq_name	length	topology	plasmid_score
+contig_1	5000	circular	0.98
+contig_2	3200	linear	0.63

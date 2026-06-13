@@ -1,0 +1,32 @@
+abi_version: '0.1'
+tool_id: metaflye
+name: metaFlye
+category: assembly
+purpose: Run metaFlye as registered by the metagenomic_plasmid plugin.
+when_to_use:
+- assembly
+inputs:
+  long_reads:
+    type: path
+    required: true
+  threads:
+    type: integer
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  env_name: autoplasm-assembly
+  executable: flye
+  command_template: flye --meta --nano-raw {long_reads} --out-dir {output_dir} --threads
+    {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check planned input paths and prerequisite upstream steps.
+  tool_not_found:
+    hint: Install flye in the autoplasm-assembly environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
+      environment.

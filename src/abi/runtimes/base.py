@@ -19,6 +19,7 @@ class RuntimeOptions:
     profile: str | None = None
     executor: str | None = None
     resume: bool = False
+    timeout_seconds: float | None = None
 
 
 @dataclass
