@@ -1,11 +1,17 @@
-"""Generic runtime schemas for ABI plugins."""
+"""Canonical runtime schemas for ABI plugins.
+
+These types are shared across all ABI plugins and the ABI Core.
+The ABI-prefixed names (ABIExecutionPlan, ABIPlanStep, ABISample,
+ABISampleContext) are stable public aliases for the canonical types.
+"""
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from abi.errors import ABIError as ABIError
+from abi.errors import ABIError, ConfigError, SampleSheetError, ToolError
 
 __all__ = [
     "ABIError",
@@ -13,11 +19,33 @@ __all__ = [
     "ABIPlanStep",
     "ABISample",
     "ABISampleContext",
+    "ConfigError",
+    "ExecutionPlan",
+    "PlanStep",
+    "SampleContext",
+    "SampleInput",
+    "SampleSheetError",
+    "ToolError",
+    "VALID_MODES",
+    "VALID_PLATFORMS",
+    "VALID_PLASMID_STRATEGIES",
 ]
+
+VALID_PLATFORMS = {"illumina", "ont", "pacbio_hifi", "hybrid", "assembly"}
+VALID_MODES = {"auto", "interactive"}
+VALID_PLASMID_STRATEGIES = {
+    "single_tool",
+    "union",
+    "intersection",
+    "majority_vote",
+    "weighted_vote",
+}
 
 
 @dataclass
-class ABISample:
+class SampleInput:
+    """Canonical sample descriptor (unified superset of autoplasm and ABI fields)."""
+
     sample_id: str
     platform: str = "generic"
     group: Optional[str] = None
@@ -25,16 +53,31 @@ class ABISample:
     read2: Optional[str] = None
     long_reads: Optional[str] = None
     assembly: Optional[str] = None
+    technology: Optional[str] = None
+    host_reference: Optional[str] = None
     condition: Optional[str] = None
+    notes: Optional[str] = None
     attributes: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
+    @property
+    def has_short_reads(self) -> bool:
+        return bool(self.read1 or self.read2)
+
+    @property
+    def has_long_reads(self) -> bool:
+        return bool(self.long_reads)
+
+    @property
+    def has_assembly(self) -> bool:
+        return bool(self.assembly)
+
 
 @dataclass
-class ABISampleContext:
-    samples: List[ABISample]
+class SampleContext:
+    samples: List[SampleInput]
     multi_sample: bool
     has_groups: bool
     enable_sample_analysis: bool = False
@@ -51,7 +94,7 @@ class ABISampleContext:
 
 
 @dataclass
-class ABIPlanStep:
+class PlanStep:
     step_id: str
     sample_id: Optional[str]
     step_name: str
@@ -68,18 +111,18 @@ class ABIPlanStep:
 
 
 @dataclass
-class ABIExecutionPlan:
+class ExecutionPlan:
     project_name: str
-    analysis_type: str
     mode: str
     threads: int
     outdir: str
     log_dir: str
-    samples: List[ABISample]
-    steps: List[ABIPlanStep]
-    sample_context: ABISampleContext
+    samples: List[SampleInput]
+    steps: List[PlanStep]
+    sample_context: SampleContext
     selected_tools: List[str]
-    skipped_steps: List[ABIPlanStep] = field(default_factory=list)
+    analysis_type: str = "metagenomic_plasmid"
+    skipped_steps: List[PlanStep] = field(default_factory=list)
     provenance_dir: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -97,3 +140,20 @@ class ABIExecutionPlan:
             "skipped_steps": [step.to_dict() for step in self.skipped_steps],
             "provenance_dir": self.provenance_dir,
         }
+
+
+# ── Stable ABI-prefixed aliases ────────────────────────────────────────
+
+ABISample = SampleInput
+ABISampleContext = SampleContext
+ABIPlanStep = PlanStep
+ABIExecutionPlan = ExecutionPlan
+
+
+# ── Utility ─────────────────────────────────────────────────────────────
+
+
+def ensure_parent(path: str | Path) -> Path:
+    resolved = Path(path)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    return resolved

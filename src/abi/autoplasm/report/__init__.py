@@ -1,1 +1,1 @@
-"""Report generation helpers."""
+"""Backward-compatibility shim."""

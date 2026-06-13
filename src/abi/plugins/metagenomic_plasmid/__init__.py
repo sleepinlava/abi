@@ -1,21 +1,22 @@
-"""AutoPlasm adapter plugin for the ABI prototype."""
+"""Metagenomic Plasmid Analysis plugin — AutoPlasm adapter."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
-from abi.autoplasm.config import load_config as load_autoplasm_config
-from abi.autoplasm.logger import RunLogger
-from abi.autoplasm.parsers import parse_standard_outputs
-from abi.autoplasm.pipeline import PipelineExecutor
-from abi.autoplasm.planner import build_plan
-from abi.autoplasm.report.html import write_html_report
-from abi.autoplasm.report.markdown import write_markdown_report
-from abi.autoplasm.schemas import ExecutionPlan, PlanStep, SampleContext, SampleInput
-from abi.autoplasm.standard_tables import TABLE_SCHEMAS, summarize_standard_tables
 from abi.config import PLUGIN_ROOT
+from abi.provenance import RunLogger
+from abi.schemas import ExecutionPlan, PlanStep, SampleContext, SampleInput
 from abi.tools import ToolRegistry
+
+from ._engine.config import load_config as load_autoplasm_config
+from ._engine.parsers import parse_standard_outputs
+from ._engine.pipeline import PipelineExecutor
+from ._engine.planner import build_plan
+from ._engine.report.html import write_html_report
+from ._engine.report.markdown import write_markdown_report
+from ._engine.standard_tables import TABLE_SCHEMAS, summarize_standard_tables
 
 
 class MetagenomicPlasmidPlugin:

@@ -1,30 +1,16 @@
-"""Parameter selection helpers."""
+"""Backward-compatibility shim — proxies to abi.plugins.metagenomic_plasmid._engine.selectors."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping
+import sys as _sys
+from abi.plugins.metagenomic_plasmid._engine.selectors import *  # noqa: F401,F403
 
-from abi.autoplasm.schemas import ConfigError
+_mod = _sys.modules[__name__]
+_target = _sys.modules["abi.plugins.metagenomic_plasmid._engine.selectors"]
+for _name in dir(_target):
+    if _name.startswith("_") and not _name.startswith("__"):
+        setattr(_mod, _name, getattr(_target, _name))
 
-
-def select_value(
-    *,
-    name: str,
-    configured: Any,
-    default: Any,
-    mode: str,
-    choices: list[Any] | None = None,
-) -> Any:
-    if mode not in {"auto", "interactive"}:
-        raise ConfigError(f"Invalid mode {mode!r} for selecting {name}")
-
-    value = configured if configured is not None else default
-    if choices is not None and value not in choices:
-        raise ConfigError(f"{name} must be one of {choices}, got {value!r}")
-    return value
-
-
-def record_auto_selection(params: Mapping[str, Any], reason: str) -> Dict[str, Any]:
-    selected = dict(params)
-    selected.setdefault("auto_selection_reason", reason)
-    return selected
+# Ensure __all__ stays aligned
+if hasattr(_target, "__all__"):
+    __all__ = list(_target.__all__)

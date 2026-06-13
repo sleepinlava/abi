@@ -1,1 +1,1 @@
-"""AutoPlasm tool skill wrappers."""
+"""Backward-compatibility shim."""

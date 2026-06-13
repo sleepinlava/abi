@@ -1,108 +1,16 @@
-"""Structured logging and provenance helpers."""
+"""Backward-compatibility shim — proxies to abi.plugins.metagenomic_plasmid._engine.logger."""
 
 from __future__ import annotations
 
-import json
-import shlex
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping
+import sys as _sys
+from abi.plugins.metagenomic_plasmid._engine.logger import *  # noqa: F401,F403
 
-from abi.autoplasm.filesystem import ensure_directory
-from abi.autoplasm.schemas import PlanStep
+_mod = _sys.modules[__name__]
+_target = _sys.modules["abi.plugins.metagenomic_plasmid._engine.logger"]
+for _name in dir(_target):
+    if _name.startswith("_") and not _name.startswith("__"):
+        setattr(_mod, _name, getattr(_target, _name))
 
-
-class RunLogger:
-    def __init__(self, log_dir: str | Path) -> None:
-        self.log_dir = ensure_directory(log_dir, label="Log directory")
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.log_file = self.log_dir / f"log_autoanlyplam_{timestamp}.log"
-
-    def log_event(self, event: str, payload: Mapping[str, Any]) -> None:
-        record = {
-            "timestamp": datetime.now().isoformat(timespec="seconds"),
-            "event": event,
-            "payload": dict(payload),
-        }
-        with self.log_file.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
-
-    def log_step(
-        self,
-        step: PlanStep,
-        *,
-        command: Iterable[str] | str,
-        status: str,
-        error_message: str | None = None,
-    ) -> None:
-        command_text = command if isinstance(command, str) else _display_command(command)
-        payload: Dict[str, Any] = {
-            "sample_id": step.sample_id,
-            "step_name": step.step_name,
-            "tool_name": step.tool_id,
-            "command": command_text,
-            "input_files": step.inputs,
-            "output_files": step.outputs,
-            "parameters": step.params,
-            "environment": step.params.get("env_name"),
-            "status": status,
-            "duration": 0,
-            "error_message": error_message,
-        }
-        self.log_event("pipeline_step", payload)
-
-
-def write_commands_tsv(rows: Iterable[Mapping[str, Any]], path: str | Path) -> Path:
-    commands_path = Path(path)
-    commands_path.parent.mkdir(parents=True, exist_ok=True)
-    fields = [
-        "step_id",
-        "sample_id",
-        "step_name",
-        "tool_id",
-        "category",
-        "command",
-        "status",
-        "return_code",
-        "remote_scheduler_job_id",
-        "reason",
-        "parsed_status",
-        "standard_tables",
-    ]
-    with commands_path.open("w", encoding="utf-8") as handle:
-        handle.write("\t".join(fields) + "\n")
-        for row in rows:
-            handle.write("\t".join(_tsv_value(row.get(field, "")) for field in fields) + "\n")
-    return commands_path
-
-
-def write_tool_versions(rows: Iterable[Mapping[str, Any]], path: str | Path) -> Path:
-    versions_path = Path(path)
-    versions_path.parent.mkdir(parents=True, exist_ok=True)
-    fields = ["tool_id", "executable", "env_name", "version", "status"]
-    with versions_path.open("w", encoding="utf-8") as handle:
-        handle.write("\t".join(fields) + "\n")
-        for row in rows:
-            handle.write("\t".join(_tsv_value(row.get(field, "")) for field in fields) + "\n")
-    return versions_path
-
-
-def write_resolved_inputs_tsv(rows: Iterable[Mapping[str, Any]], path: str | Path) -> Path:
-    inputs_path = Path(path)
-    inputs_path.parent.mkdir(parents=True, exist_ok=True)
-    fields = ["step_id", "tool_id", "sample_id", "input_name", "path", "exists", "source"]
-    with inputs_path.open("w", encoding="utf-8") as handle:
-        handle.write("\t".join(fields) + "\n")
-        for row in rows:
-            handle.write("\t".join(_tsv_value(row.get(field, "")) for field in fields) + "\n")
-    return inputs_path
-
-
-def _tsv_value(value: Any) -> str:
-    if value is None:
-        return ""
-    return str(value)
-
-
-def _display_command(command: Iterable[str]) -> str:
-    return " ".join(">" if token == ">" else shlex.quote(token) for token in command)
+# Ensure __all__ stays aligned
+if hasattr(_target, "__all__"):
+    __all__ = list(_target.__all__)

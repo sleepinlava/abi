@@ -1,43 +1,16 @@
-"""Timeout parsing helpers for external process boundaries."""
+"""Backward-compatibility shim — proxies to abi.plugins.metagenomic_plasmid._engine.timeouts."""
 
 from __future__ import annotations
 
-import os
-from typing import Any, Mapping
+import sys as _sys
+from abi.plugins.metagenomic_plasmid._engine.timeouts import *  # noqa: F401,F403
 
-DEFAULT_TOOL_TIMEOUT_SECONDS = 7 * 24 * 60 * 60
-DEFAULT_RESOURCE_TIMEOUT_SECONDS = 24 * 60 * 60
+_mod = _sys.modules[__name__]
+_target = _sys.modules["abi.plugins.metagenomic_plasmid._engine.timeouts"]
+for _name in dir(_target):
+    if _name.startswith("_") and not _name.startswith("__"):
+        setattr(_mod, _name, getattr(_target, _name))
 
-_DISABLED_VALUES = {"0", "false", "no", "none", "off", "disabled"}
-
-
-def parse_timeout_seconds(value: Any, *, default: float | None) -> float | None:
-    """Return a positive timeout in seconds, or None when explicitly disabled."""
-    if value is None or value == "":
-        return default
-    if isinstance(value, str) and value.strip().lower() in _DISABLED_VALUES:
-        return None
-    try:
-        seconds = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"timeout_seconds must be a positive number, got {value!r}") from exc
-    if seconds <= 0:
-        return None
-    return seconds
-
-
-def timeout_from_env_or_value(
-    env_var: str,
-    value: Any,
-    *,
-    default: float | None,
-) -> float | None:
-    """Resolve timeout with an environment variable taking precedence."""
-    env_value = os.environ.get(env_var)
-    return parse_timeout_seconds(env_value if env_value is not None else value, default=default)
-
-
-def mapping_block(config: Mapping[str, Any], key: str) -> Mapping[str, Any]:
-    """Return a config section only when it is a mapping."""
-    block = config.get(key, {})
-    return block if isinstance(block, Mapping) else {}
+# Ensure __all__ stays aligned
+if hasattr(_target, "__all__"):
+    __all__ = list(_target.__all__)

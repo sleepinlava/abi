@@ -1,18 +1,16 @@
-"""Filesystem helpers for AutoPlasm runtime paths."""
+"""Backward-compatibility shim — proxies to abi.plugins.metagenomic_plasmid._engine.filesystem."""
 
 from __future__ import annotations
 
-from pathlib import Path
+import sys as _sys
+from abi.plugins.metagenomic_plasmid._engine.filesystem import *  # noqa: F401,F403
 
-from abi.autoplasm.schemas import AutoPlasmError
+_mod = _sys.modules[__name__]
+_target = _sys.modules["abi.plugins.metagenomic_plasmid._engine.filesystem"]
+for _name in dir(_target):
+    if _name.startswith("_") and not _name.startswith("__"):
+        setattr(_mod, _name, getattr(_target, _name))
 
-
-def ensure_directory(path: str | Path, *, label: str = "Directory") -> Path:
-    """Return an existing directory or create it when missing."""
-    directory = Path(path)
-    if directory.exists():
-        if not directory.is_dir():
-            raise AutoPlasmError(f"{label} exists but is not a directory: {directory}")
-        return directory
-    directory.mkdir(parents=True, exist_ok=True)
-    return directory
+# Ensure __all__ stays aligned
+if hasattr(_target, "__all__"):
+    __all__ = list(_target.__all__)

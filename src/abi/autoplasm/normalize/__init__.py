@@ -1,1 +1,1 @@
-"""Output normalization modules."""
+"""Backward-compatibility shim."""
