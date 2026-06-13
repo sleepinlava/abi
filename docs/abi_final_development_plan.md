@@ -12,7 +12,7 @@ ABI is delivered as:
 - Agent-facing tool layer
 - Plugin SDK
 - HTTP Job Service
-- PyPI package: `autoplasm-abi`
+- PyPI package: `abi-agent`
 
 The Python import package remains `abi`, and the primary command remains `abi`.
 

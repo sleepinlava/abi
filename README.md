@@ -6,14 +6,14 @@ standardizes analysis plugins behind a common
 standard TSV tables, OpenAI-compatible tool descriptors, optional MCP transport,
 Nextflow export/runtime support, and a queue-backed HTTP Job Service.
 
-[![PyPI](https://img.shields.io/pypi/v/autoplasm-abi?style=flat-square&color=blue)](https://pypi.org/project/autoplasm-abi/)
-[![Python](https://img.shields.io/pypi/pyversions/autoplasm-abi?style=flat-square)](https://pypi.org/project/autoplasm-abi/)
-[![License](https://img.shields.io/pypi/l/autoplasm-abi?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=blue)](https://pypi.org/project/abi-agent/)
+[![Python](https://img.shields.io/pypi/pyversions/abi-agent?style=flat-square)](https://pypi.org/project/abi-agent/)
+[![License](https://img.shields.io/pypi/l/abi-agent?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
 
 ## Installation
 
 ```bash
-pip install autoplasm-abi
+pip install abi-agent
 
 # Development install
 pip install -e ".[dev]"
@@ -61,7 +61,7 @@ All agent-facing commands support `--output-json`.
 | Type | Implementation | Notes |
 | --- | --- | --- |
 | `metatranscriptomics` | Native ABI demo plugin | fastp -> STAR/HISAT2 -> featureCounts portability demo. |
-| `metagenomic_plasmid` | Internal `abi.autoplasm` pipeline | Migrated from the former AutoPlasm development tree and bundled inside `autoplasm-abi`. |
+| `metagenomic_plasmid` | Internal `abi.autoplasm` pipeline | Migrated from the former AutoPlasm development tree and bundled inside `abi-agent`. |
 
 The package also exposes an `autoplasm` command for the bundled plasmid
 pipeline:

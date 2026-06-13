@@ -6,7 +6,7 @@ This replaces the earlier split development model where an external
 
 ## Public Shape
 
-- PyPI package: `autoplasm-abi`
+- PyPI package: `abi-agent`
 - ABI plugin id: `metagenomic_plasmid`
 - Internal Python namespace: `abi.autoplasm`
 - Compatibility command: `autoplasm`

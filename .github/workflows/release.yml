@@ -37,7 +37,7 @@ jobs:
       - name: Verify wheel contents
         run: |
           pip install dist/*.whl
-          python -c "import abi; print(f'autoplasm-abi {abi.__version__} imported successfully')"
+          python -c "import abi; print(f'abi-agent {abi.__version__} imported successfully')"
           abi list-types
           autoplasm --help
           abi dry-run \

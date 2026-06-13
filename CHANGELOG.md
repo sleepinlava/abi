@@ -4,7 +4,7 @@
 
 ### Added
 - Bundled the metagenomic plasmid pipeline under `abi.autoplasm`.
-- Added the `autoplasm` compatibility CLI while keeping `autoplasm-abi` as the only Python distribution.
+- Added the `autoplasm` compatibility CLI while keeping `abi-agent` as the only Python distribution.
 - Added ABI HTTP Job Service and `abi job submit/list/status/artifacts/cancel`.
 - Added optional MCP stdio server module.
 - Added `abi_validate_result` as a read-only agent/OpenAI tool.
@@ -14,7 +14,7 @@
 - `metagenomic_plasmid` no longer depends on an external `autoplasm` package.
 - OpenAI tool exports keep public tool names under the `abi_` prefix.
 - `ABI_MAMBA_ROOT` is now the preferred mamba root override; `AUTOPLASM_MAMBA_ROOT` remains compatible.
-- Release and packaging metadata now build one `autoplasm-abi` wheel containing both ABI core and `abi.autoplasm`.
+- Release and packaging metadata now build one `abi-agent` wheel containing both ABI core and `abi.autoplasm`.
 
 ### Removed
 - Removed the old path-priority `abi-dev-setup` workaround for split-repository shadowing.

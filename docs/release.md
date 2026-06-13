@@ -1,6 +1,6 @@
 # Release Guide
 
-`autoplasm-abi` is the only PyPI distribution produced from this repository.
+`abi-agent` is the only PyPI distribution produced from this repository.
 
 ## Pre-Release Checks
 

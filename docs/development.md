@@ -1,6 +1,6 @@
 # Development Guide
 
-This repository publishes one Python distribution: `autoplasm-abi`.
+This repository publishes one Python distribution: `abi-agent`.
 
 The source tree has two layers:
 
