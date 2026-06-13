@@ -20,7 +20,6 @@ from rich.progress import (
 from abi.plugins.metagenomic_plasmid._engine.config import load_config
 from abi.plugins.metagenomic_plasmid._engine.dashboard import DashboardServer
 from abi.plugins.metagenomic_plasmid._engine.json_utils import load_json_object
-from abi.plugins.metagenomic_plasmid._engine.logger import RunLogger
 from abi.plugins.metagenomic_plasmid._engine.pipeline import PipelineExecutor
 from abi.plugins.metagenomic_plasmid._engine.planner import build_plan
 from abi.plugins.metagenomic_plasmid._engine.resources import (
@@ -44,6 +43,7 @@ from abi.plugins.metagenomic_plasmid._engine.standard_tables import (
     read_standard_table,
     summarize_standard_tables,
 )
+from abi.provenance import RunLogger
 
 APP_HELP = (
     "AutoPlasm 宏基因组质粒分析 CLI。支持样本表校验、工具检查、执行计划生成、"
