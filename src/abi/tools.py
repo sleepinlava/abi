@@ -29,6 +29,13 @@ This module defines the canonical tool abstraction for the ABI pipeline:
   the user hasn't set.  SafeFormatDict returns "" instead, so the command
   renders with an empty placeholder rather than aborting. / 缺键返回空串而非异常
 
+- **Dotted-field validation**: ``{key.attr}`` references in templates are
+  rejected at validation time via ``_check_dotted_fields()`` because
+  SafeFormatDict can only resolve simple ``{key}`` lookups — Python's
+  ``format_map`` would attempt ``getattr(value, "attr")`` on the resolved
+  string, causing an ``AttributeError`` at render time. / 模板中的 {key.attr}
+  引用在验证时被拒绝。
+
 - **Immutable RunResult**: Marked @dataclass (frozen=False for practical
   reasons but convention is read-only after construction).  This ensures
   that callers cannot accidentally mutate a result that other code holds a
@@ -72,12 +79,15 @@ RESOURCE_FIELDS = {
     "model",
     "refgraph",
     "ref_list",
+    "reflist",
     "plasmid_index",
     "annotations",
     "gene_calls",
     "reference",
+    "reference_plasmids",
     "genome_index",
     "annotation_gtf",
+    "abricate_db",
 }
 
 
@@ -528,6 +538,28 @@ class GenericCommandSkill(ToolSkill):
                 + ", ".join(sorted(missing))
             )
 
+    def _check_dotted_fields(self) -> None:
+        """Raise ToolError if the command template uses unsupported dotted field refs.
+
+        SafeFormatDict resolves ``{key}`` references but Python's ``str.format_map``
+        interprets ``{key.attr}`` as attribute access on the resolved value, which
+        would fail with ``AttributeError`` because ABI params are plain strings.
+        This check catches such templates at validation time with a clear message.
+        / SafeFormatDict 能解析 {key} 但不能解析 {key.attr}，此检查提前捕获。
+        """
+        dotted: List[str] = []
+        formatter = string.Formatter()
+        for _, field_name, _, _ in formatter.parse(self.command_template):
+            if field_name and ("." in field_name or "[" in field_name):
+                dotted.append(field_name)
+        if dotted:
+            raise ToolError(
+                f"{self.name}: command template contains unsupported dotted/indexed field "
+                f"references: {', '.join(sorted(dotted))}. "
+                f"Use simple {{field_name}} references instead of {{field.attr}} or "
+                f"{{field[index]}}."
+            )
+
     def _command_without_stdout_redirect(
         self, command: List[str]
     ) -> tuple[List[str], Optional[Path]]:
@@ -576,6 +608,7 @@ class GenericCommandSkill(ToolSkill):
         self.validate_inputs({**selected, "dry_run": dry_run})
         # Full validation only for real runs / 实际运行才做完整验证
         if not dry_run:
+            self._check_dotted_fields()
             self._validate_template_params(selected)
             if not self.check_installation():
                 raise ToolError(

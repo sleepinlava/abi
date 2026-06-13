@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional
 
+from abi._shared import _read_tsv
 from abi.config import resolved_mamba_root, write_yaml
 from abi.provenance import (
     write_commands_tsv,
@@ -359,13 +360,6 @@ def _read_json(path: Path, errors: list[str]) -> Dict[str, Any]:
     except json.JSONDecodeError as exc:
         errors.append(f"Invalid JSON in {path}: {exc}")
         return {}
-
-
-def _read_tsv(path: Path) -> list[dict[str, str]]:
-    if not path.exists():
-        return []
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle, delimiter="\t"))
 
 
 def _analysis_type(plan: Mapping[str, Any], summary: Mapping[str, Any]) -> str:

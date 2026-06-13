@@ -37,12 +37,12 @@ events concurrently without corruption.
 from __future__ import annotations
 
 import json
-import shlex
 import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping
 
+from abi._shared import _display_command
 from abi.filesystem import ensure_directory
 
 __all__ = [
@@ -731,17 +731,6 @@ def _tsv_value(value: Any) -> str:
     if value is None:
         return ""
     return str(value)
-
-
-def _display_command(command: Iterable[str]) -> str:
-    """Format a shell token list as a human-readable command string.
-
-    Uses shlex.quote() to safely re-quote tokens that contain spaces or special
-    characters. The ">" redirection token is preserved as-is (not quoted) so the
-    result reads naturally: `tool --input file.fasta > output.txt`. / 使用
-    shlex.quote() 安全地重新引用包含空格或特殊字符的标记，保留 ">" 不引用。
-    """
-    return " ".join(">" if token == ">" else shlex.quote(str(token)) for token in command)
 
 
 def _timestamp() -> str:

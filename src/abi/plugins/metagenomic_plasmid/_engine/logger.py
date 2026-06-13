@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-import shlex
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping
 
+from abi._shared import _display_command
 from abi.plugins.metagenomic_plasmid._engine.filesystem import ensure_directory
 from abi.plugins.metagenomic_plasmid._engine.schemas import PlanStep
 
@@ -102,7 +102,3 @@ def _tsv_value(value: Any) -> str:
     if value is None:
         return ""
     return str(value)
-
-
-def _display_command(command: Iterable[str]) -> str:
-    return " ".join(">" if token == ">" else shlex.quote(token) for token in command)

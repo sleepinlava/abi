@@ -12,14 +12,13 @@ def rpkm(raw_count: float, feature_length_bp: float, mapped_reads_millions: floa
 
 
 def tpm(raw_counts: Mapping[str, float], lengths_bp: Mapping[str, float]) -> Dict[str, float]:
-    rates = {
-        feature: (
-            (count / (lengths_bp.get(feature, 0.0) / 1000.0))
-            if lengths_bp.get(feature, 0.0) > 0
-            else 0.0
-        )
-        for feature, count in raw_counts.items()
-    }
+    rates: Dict[str, float] = {}
+    for feature, count in raw_counts.items():
+        length = lengths_bp.get(feature, 0.0)
+        if length > 0:
+            rates[feature] = count / (length / 1000.0)
+        else:
+            rates[feature] = 0.0
     total = sum(rates.values())
     if total <= 0:
         return {feature: 0.0 for feature in raw_counts}

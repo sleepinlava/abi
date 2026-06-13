@@ -377,7 +377,8 @@ class MetatranscriptomicsPlugin:
         missing = [key for key in required if key not in config]
         if missing:
             raise ValueError(f"Missing metatranscriptomics config keys: {', '.join(missing)}")
-        if not isinstance(config.get("threads"), int) or int(config.get("threads", 0)) < 1:
+        threads = config.get("threads")
+        if not isinstance(threads, int) or threads < 1:
             raise ValueError("threads must be a positive integer")
 
 

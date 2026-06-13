@@ -75,7 +75,6 @@ ABI CLI 命令行界面。
 
 from __future__ import annotations
 
-import csv
 import json
 import shutil
 from pathlib import Path
@@ -83,9 +82,9 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import typer
 
+from abi._shared import _common_overrides, _plan_dict, _read_tsv
 from abi.agent import ABIAgentInterface
 from abi.agent.context import build_agent_context, render_doctor_agent
-from abi.config import compact_overrides
 from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
 from abi.json_utils import load_json_object, loads_json
@@ -168,40 +167,6 @@ def _emit_json_payload(payload: Any) -> None:
     以一致的格式将 JSON 负载输出到 stdout。
     """
     typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
-
-
-def _common_overrides(
-    *,
-    mode: Optional[str] = None,
-    threads: Optional[int] = None,
-    outdir: Optional[str] = None,
-    log_dir: Optional[str] = None,
-    sample_sheet: Optional[Path] = None,
-    dry_run: Optional[bool] = None,
-    progress: Optional[bool] = None,
-) -> Dict[str, Any]:
-    """Build a compact overrides dict from common CLI flags.
-
-    Maps CLI flags into the nested override structure expected by plugin
-    config loading. The ``compact_overrides`` call removes None values so
-    only explicitly set flags affect the config.
-
-    从通用 CLI 标志构建紧凑的覆盖字典。
-    将 CLI 标志映射到插件配置加载所期望的嵌套覆盖结构。
-    ``compact_overrides`` 调用会删除 None 值，因此只有显式设置的标志会影响配置。
-    """
-    overrides: Dict[str, Any] = {
-        "mode": mode,
-        "threads": threads,
-        "outdir": outdir,
-        "log_dir": log_dir,
-        "dry_run": dry_run,
-    }
-    if sample_sheet:
-        overrides["input"] = {"sample_sheet": str(sample_sheet)}
-    if progress is not None:
-        overrides["execution"] = {"progress": progress}
-    return compact_overrides(overrides)
 
 
 def _load_plugin_config(
@@ -1617,32 +1582,6 @@ def _path_string(path: Optional[Path]) -> Optional[str]:
     将 Path 转换为字符串，保留 None。
     """
     return str(path) if path is not None else None
-
-
-def _plan_dict(plan: Any, analysis_type: str) -> Dict[str, Any]:
-    """Convert a plan to a dict and inject the analysis_type.
-
-    The analysis_type is embedded so the plan is self-describing when
-    read back later (e.g., by ``abi report`` or ``abi inspect``).
-
-    将计划转换为字典并注入 analysis_type。
-    analysis_type 被嵌入，以便以后读取时计划能自我描述
-    （例如通过 ``abi report`` 或 ``abi inspect``）。
-    """
-    data = plan.to_dict()
-    data.setdefault("analysis_type", analysis_type)
-    return data
-
-
-def _read_tsv(path: Path) -> list[dict[str, str]]:
-    """Read a TSV file into a list of dicts. Returns [] if the file is missing.
-
-    将 TSV 文件读取为字典列表。如果文件缺失则返回 []。
-    """
-    if not path.exists():
-        return []
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle, delimiter="\t"))
 
 
 def _run_with_runtime(

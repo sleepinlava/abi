@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+from abi._shared import _read_tsv
 from abi.plugins.metagenomic_plasmid._engine.standard_tables import TABLE_SCHEMAS
 
 CORE_TABLES = {
@@ -108,13 +109,6 @@ def _read_json(path: Path, errors: List[str]) -> Dict[str, Any]:
     except json.JSONDecodeError as exc:
         errors.append(f"Invalid JSON in {path}: {exc}")
         return {}
-
-
-def _read_tsv(path: Path) -> List[Dict[str, str]]:
-    if not path.exists():
-        return []
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle, delimiter="\t"))
 
 
 def _table_status(tables_dir: Path) -> Dict[str, Dict[str, Any]]:

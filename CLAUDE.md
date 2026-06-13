@@ -65,13 +65,16 @@ src/abi/
     metagenomic_plasmid/   Self-contained package (engine in _engine/)
     metatranscriptomics.py Native demo plugin (inline, no sub-package)
   autoplasm/          Backward-compatible re-export shim → metagenomic_plasmid/_engine/
-  provenance.py       RunLogger, PipelineProgressRecorder, TSV writers (482 lines)
-  tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, RunResult (524 lines)
+  _shared.py          Shared utilities: _read_tsv, _display_command, _plan_dict, _common_overrides (93 lines)
+  provenance.py       RunLogger, PipelineProgressRecorder, TSV writers (743 lines)
+  tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1051 lines)
   schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
   executor.py         GenericABIExecutor — step iteration, tool invocation, provenance generation
   permissions.py      read_only / planning_write / execution levels
-  diagnostics.py      Error taxonomy + DiagnosticHint for agent self-recovery
+  diagnostics.py      Error taxonomy + DiagnosticHint + classify_exception (384 lines)
   jobs/service.py     HTTP Job Service with subprocess force-kill (SIGTERM → SIGKILL)
+  json_utils.py       JSON file/payload loading with ABIJSONError wrapping
+  timeouts.py         Timeout parsing: parse_timeout_seconds, timeout_from_env_or_value
   cli.py              Typer CLI: abi + autoplasm entry points
 ```
 
@@ -113,6 +116,21 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 ### Tool contract pipeline
 
 The lifecycle for any tool is: `check_installation → plan → validate_inputs → select_params → build_command → run → parse_outputs → normalize_outputs`. GenericCommandSkill handles this from YAML tool_contracts; only tools with complex post-processing need Python subclasses.
+
+`_validate_template_params` ensures required template fields have non-empty values before execution. `_check_dotted_fields` rejects `{key.attr}` references in templates (SafeFormatDict cannot resolve attribute access on plain string values). `RESOURCE_FIELDS` controls which template fields are checked for on-disk existence by `_resource_status()` — add new resource-type field names here when they appear in tool contracts.
+
+### Shared utilities (`_shared.py`)
+
+`src/abi/_shared.py` is the single source of truth for helper functions that were previously duplicated across 2–5 modules each:
+
+| Function | Purpose | Former locations |
+|---|---|---|
+| `_read_tsv` | Read TSV → list[dict] (returns [] if missing) | cli, agent, results, engine.result_validation, engine.dashboard |
+| `_display_command` | Format token list → human-readable shell command | provenance, executor, engine.logger, engine.pipeline |
+| `_plan_dict` | Serialize plan + inject analysis_type | cli, agent |
+| `_common_overrides` | Build compact overrides dict from CLI flags | cli, agent (engine.cli has an extended version with parallel/dashboard) |
+
+All ABI core modules and `_engine/` subpackages import these from `abi._shared`. When adding a new caller, import from here rather than copying the function.
 
 ### Provenance artifacts
 

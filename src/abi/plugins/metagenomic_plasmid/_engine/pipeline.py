@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-import shlex
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping
 
+from abi._shared import _display_command
 from abi.errors import ToolError as ABIToolError
 from abi.plugins.metagenomic_plasmid._engine.config import write_resolved_config
 from abi.plugins.metagenomic_plasmid._engine.filesystem import ensure_directory
@@ -831,10 +831,6 @@ def _execution_options(config: Mapping[str, Any]) -> Dict[str, Any]:
         "dashboard_enabled": dashboard_enabled,
         "record_progress": progress or dashboard_enabled,
     }
-
-
-def _display_command(command: Iterable[str]) -> str:
-    return " ".join(">" if token == ">" else shlex.quote(token) for token in command)
 
 
 def _truthy(value: str) -> bool:

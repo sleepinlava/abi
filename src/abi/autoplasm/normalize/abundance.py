@@ -13,4 +13,5 @@ for _name in dir(_target):
         setattr(_mod, _name, getattr(_target, _name))
 
 if hasattr(_target, "__all__"):
-    __all__ = list(_target.__all__)
+    _source_all = _target.__all__
+    __all__ = list(_source_all) if isinstance(_source_all, tuple) else _source_all

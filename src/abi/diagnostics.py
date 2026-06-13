@@ -47,6 +47,10 @@ failure surface of ABI:
     2. Exception class name and message are passed to ``classify_exception``.
     3. ``classify_exception`` matches keyword patterns in the message against
        the error taxonomy (ordered from most specific to least specific).
+       The ``artifact_missing`` branch uses precise phrase matching via
+       ``_match_artifact_missing()`` rather than a bare ``"artifact"`` keyword
+       to avoid misclassifying unrelated tool errors. / artifact_missing 分支
+       使用精确短语匹配以避免误判。
     4. A single ``DiagnosticHint`` is returned with the best-matching code.
     5. The caller wraps the hint in an ``error_envelope`` and returns JSON.
 
@@ -200,7 +204,7 @@ def classify_exception(exc: Exception, *, command: str) -> tuple[str, List[Dict[
             "Check the referenced JSON file, regenerate the artifact if needed, then retry.",
             artifact=_extract_path(message),
         )
-    if "missing execution plan" in lowered or "artifact" in lowered:
+    if "missing execution plan" in lowered or _match_artifact_missing(lowered):
         # A required result file (usually execution_plan.json) is absent.
         # 必需的结果文件 (通常是 execution_plan.json) 不存在。
         return _diagnosis(
@@ -317,6 +321,29 @@ def _diagnosis(
         suggested_next_action=suggested_next_action,
     )
     return code, [hint.to_dict()]
+
+
+def _match_artifact_missing(message: str) -> bool:
+    """Precise match for missing-artifact error phrases.
+
+    Only matches explicit "missing / not found / absent" language attached to
+    ABI artifacts.  The bare word ``"artifact"`` is intentionally excluded
+    because it appears in many unrelated error messages (e.g. ``"artifact
+    processing failed"``, ``"artifact generation error"``) that are better
+    classified as ``internal_error`` or ``nonzero_exit``.
+    # 精确匹配缺失产物的错误短语，避免宽泛的 "artifact" 关键词误判。
+    """
+    return any(
+        phrase in message
+        for phrase in (
+            "missing artifact",
+            "artifact is missing",
+            "artifact not found",
+            "no such artifact",
+            "required artifact",
+            "result artifact is absent",
+        )
+    )
 
 
 def _looks_like_missing_input(message: str) -> bool:

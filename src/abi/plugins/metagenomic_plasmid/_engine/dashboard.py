@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import csv
 import json
 import mimetypes
 import os
@@ -12,9 +11,10 @@ import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, List, Mapping
+from typing import Any, Dict, Mapping
 from urllib.parse import parse_qs, urlparse
 
+from abi._shared import _read_tsv
 from abi.plugins.metagenomic_plasmid._engine.json_utils import load_json_object
 from abi.plugins.metagenomic_plasmid._engine.schemas import AutoPlasmError
 
@@ -252,13 +252,6 @@ def _max_file_bytes() -> int:
     except ValueError:
         return DEFAULT_MAX_FILE_BYTES
     return value if value > 0 else DEFAULT_MAX_FILE_BYTES
-
-
-def _read_tsv(path: Path) -> List[Dict[str, str]]:
-    if not path.exists():
-        return []
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle, delimiter="\t"))
 
 
 _DASHBOARD_HTML = """<!doctype html>

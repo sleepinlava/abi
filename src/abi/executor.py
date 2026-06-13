@@ -88,10 +88,10 @@ Generic executer — the orchestration engine for ABI pipelines.
 from __future__ import annotations
 
 import json
-import shlex
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping
 
+from abi._shared import _display_command
 from abi.config import resolved_mamba_root, write_yaml
 from abi.errors import ToolError
 from abi.filesystem import ensure_directory
@@ -795,6 +795,8 @@ class GenericABIExecutor:
         """
         for step in steps:
             for output_path in step.outputs.values():
+                if output_path is None:
+                    continue
                 path = Path(str(output_path))
                 if path.suffix:
                     # Path has a file extension (e.g., /out/results.csv) — create the parent.
@@ -831,21 +833,6 @@ def _execution_options(config: Mapping[str, Any]) -> Dict[str, Any]:
     dashboard = execution.get("dashboard", {})
     dashboard_enabled = isinstance(dashboard, Mapping) and bool(dashboard.get("enable", False))
     return {"record_progress": progress or dashboard_enabled}
-
-
-def _display_command(command: Iterable[str]) -> str:
-    """Format a shell command token list into a display string.
-
-    Shell-quotes each token for safe display. The ``">"`` token (used for
-    internal redirects) is rendered as a literal ``>`` without quoting so
-    the displayed command reads naturally.
-
-    将 shell 命令令牌列表格式化为显示字符串。
-
-    对每个令牌进行 shell 引用以安全显示。``">"`` 令牌（用于内部重定向）
-    显示为原字符 ``>`` 而不加引用，使显示的命令读起来自然。
-    """
-    return " ".join(">" if token == ">" else shlex.quote(str(token)) for token in command)
 
 
 def _tool_failure_reason(

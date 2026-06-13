@@ -56,11 +56,11 @@ keyword arguments. Unknown tool names produce an immediate ``error`` envelope wi
 
 from __future__ import annotations
 
-import csv
 import json
 from pathlib import Path
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Union
 
+from abi._shared import _common_overrides, _plan_dict, _read_tsv
 from abi.agent.context import build_agent_context, render_doctor_agent
 from abi.agent.envelopes import (
     confirmation_required_envelope,
@@ -69,7 +69,6 @@ from abi.agent.envelopes import (
     success_envelope,
 )
 from abi.autoplasm.result_validation import validate_result_dir as validate_autoplasm_result_dir
-from abi.config import compact_overrides
 from abi.diagnostics import classify_exception
 from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
@@ -1009,38 +1008,6 @@ class ABIAgentInterface:
 # ------------------------------------------------------------------
 
 
-def _common_overrides(
-    *,
-    mode: Optional[str] = None,
-    threads: Optional[int] = None,
-    outdir: Optional[str] = None,
-    log_dir: Optional[str] = None,
-    sample_sheet: Optional[Union[str, Path]] = None,
-    dry_run: Optional[bool] = None,
-    progress: Optional[bool] = None,
-) -> Dict[str, Any]:
-    """Build a compact overrides dict from scattered CLI / agent parameters.
-
-    The dict is passed to ``plugin.load_config()`` where it is merged with the
-    plugin's default configuration. ``compact_overrides`` strips ``None`` values
-    so that only explicitly provided keys override the defaults.
-    # 将分散的 CLI/agent 参数组装为紧凑的覆盖字典。
-    # 传入 plugin.load_config() 与默认配置合并; compact_overrides 去除 None 值。
-    """
-    overrides: Dict[str, Any] = {
-        "mode": mode,
-        "threads": threads,
-        "outdir": outdir,
-        "log_dir": log_dir,
-        "dry_run": dry_run,
-    }
-    if sample_sheet:
-        overrides["input"] = {"sample_sheet": str(sample_sheet)}
-    if progress is not None:
-        overrides["execution"] = {"progress": progress}
-    return compact_overrides(overrides)
-
-
 def _optional_path(value: Optional[Union[str, Path]]) -> Optional[Path]:
     """Convert a string/Path to Path, preserving None for unset values.
 
@@ -1050,34 +1017,6 @@ def _optional_path(value: Optional[Union[str, Path]]) -> Optional[Path]:
     # 下游代码接收 Path | None 而非 str | None, 简化路径处理分支。
     """
     return Path(value) if value is not None else None
-
-
-def _plan_dict(plan: Any, analysis_type: str) -> Dict[str, Any]:
-    """Serialize a plan object to dict, injecting the analysis_type if absent.
-
-    The analysis_type is stored inside the plan so that downstream consumers
-    (report generation, inspection) can identify the plugin without external
-    context.
-    # 将计划对象序列化为字典, 若缺失则注入 analysis_type。
-    # 下游消费者 (报告生成 / inspect) 无需外部上下文即可识别插件。
-    """
-    data = plan.to_dict()
-    data.setdefault("analysis_type", analysis_type)
-    return data
-
-
-def _read_tsv(path: Path) -> list[dict[str, str]]:
-    """Read a TSV file into a list of dicts; return [] if the file is missing.
-
-    Used for reading provenance files (commands.tsv, resolved_inputs.tsv) which
-    may not exist yet for fresh or incomplete runs.
-    # 将 TSV 文件读入字典列表; 若文件缺失则返回 []。
-    # 用于读取可能尚不存在的溯源文件 (commands.tsv, resolved_inputs.tsv)。
-    """
-    if not path.exists():
-        return []
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle, delimiter="\t"))
 
 
 def _path_values(outputs: Mapping[str, Any]) -> list[Any]:
