@@ -39,6 +39,7 @@ helper reconstructs a fully-typed ``ExecutionPlan`` including its nested
 ``SampleInput``, ``SampleContext``, and ``PlanStep`` objects so the report
 writers can traverse it with attribute access.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -69,7 +70,8 @@ class MetagenomicPlasmidPlugin:
     发现工具、构建执行计划、解析工具输出并生成报告，无需了解内部管道细节。
     """
 
-    # Static metadata consumed by the ABI agent for plugin discovery / ABI agent 插件发现用的静态元数据
+    # Static metadata consumed by the ABI agent for plugin discovery
+    # ABI agent 插件发现用的静态元数据
     plugin_id = "metagenomic_plasmid"
     display_name = "Metagenomic Plasmid Analysis"
     description = "AutoPlasm adapter using the existing plasmid-analysis planner and executor."
@@ -239,6 +241,7 @@ class MetagenomicPlasmidPlugin:
 
 
 # ── Helper: JSON-dict → typed ExecutionPlan / JSON 字典 → 类型化 ExecutionPlan ──
+
 
 def _plan_from_dict(data: Mapping[str, Any]) -> ExecutionPlan:
     """Reconstruct a fully-typed ``ExecutionPlan`` from a serialized JSON dict.

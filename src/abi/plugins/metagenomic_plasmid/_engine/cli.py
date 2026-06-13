@@ -34,10 +34,16 @@ from abi.plugins.metagenomic_plasmid._engine.resources import (
     setup_resources as setup_resource_files,
 )
 from abi.plugins.metagenomic_plasmid._engine.result_validation import validate_result_dir
-from abi.plugins.metagenomic_plasmid._engine.sample_sheet import parse_sample_sheet, single_sample_context
+from abi.plugins.metagenomic_plasmid._engine.sample_sheet import (
+    parse_sample_sheet,
+    single_sample_context,
+)
 from abi.plugins.metagenomic_plasmid._engine.schemas import AutoPlasmError
 from abi.plugins.metagenomic_plasmid._engine.skills.registry import ToolRegistry
-from abi.plugins.metagenomic_plasmid._engine.standard_tables import read_standard_table, summarize_standard_tables
+from abi.plugins.metagenomic_plasmid._engine.standard_tables import (
+    read_standard_table,
+    summarize_standard_tables,
+)
 
 APP_HELP = (
     "AutoPlasm 宏基因组质粒分析 CLI。支持样本表校验、工具检查、执行计划生成、"

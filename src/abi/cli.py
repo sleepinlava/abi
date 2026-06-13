@@ -83,7 +83,6 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import typer
 
-from abi.provenance import RunLogger
 from abi.agent import ABIAgentInterface
 from abi.agent.context import build_agent_context, render_doctor_agent
 from abi.config import compact_overrides
@@ -92,6 +91,7 @@ from abi.exporters import NextflowExporter
 from abi.json_utils import load_json_object, loads_json
 from abi.openai_contracts import export_openai_tools
 from abi.plugins import get_plugin, list_plugins
+from abi.provenance import RunLogger
 from abi.resources import check_resources, setup_resources
 from abi.results import validate_abi_result_dir
 from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
@@ -452,7 +452,7 @@ def dry_run_command(
                 dry_run=True,
                 progress=progress,
             )
-            | {"mock_tools": True},  # Force mock tools so no real execution occurs. / 强制 mock 工具以确保不执行真实计算。
+            | {"mock_tools": True},  # Force mock tools / 强制 mock 工具以确保不执行真实计算
         )
         plan = plugin.build_plan(cfg, check_files=check_files)
         if hasattr(plugin, "execute_dry_run"):
@@ -1281,7 +1281,8 @@ def job_submit_command(
     向 ABI Job Service 提交作业以进行异步执行。
     从提供的参数（或通过 ``--payload`` 提供的完整 JSON 文件）构建作业负载，
     然后 POST 到 ``--service-url`` 处的 Job Service。
-    Job Service 将作业排队并返回作业 ID，可用于 ``job status``、``job artifacts`` 和 ``job cancel``。
+    Job Service 将作业排队并返回作业 ID，
+    可用于 ``job status``、``job artifacts`` 和 ``job cancel``。
     """
     from abi.jobs.client import JobClientError, submit_job
 
@@ -1719,7 +1720,10 @@ def _run_with_runtime(
 def dispatch_command(
     command: str = typer.Option(..., "--command", "-c", help="ABI command to dispatch."),
     arguments_json: Optional[str] = typer.Option(
-        None, "--arguments", "-a", help="JSON arguments (inline or file path). Reads stdin if omitted."
+        None,
+        "--arguments",
+        "-a",
+        help="JSON arguments (inline or file path). Reads stdin if omitted.",
     ),
     arguments_file: Optional[Path] = typer.Option(
         None, "--arguments-file", help="Path to JSON file containing arguments."
@@ -1761,7 +1765,9 @@ def dispatch_command(
         try:
             arguments = json.loads(arguments_json)
         except json.JSONDecodeError:
-            arguments = load_json_object(Path(arguments_json), label=f"arguments path {arguments_json}")
+            arguments = load_json_object(
+                Path(arguments_json), label=f"arguments path {arguments_json}"
+            )
     else:
         # Read arguments from stdin — the default for subprocess piped input.
         # 从 stdin 读取参数——子进程管道输入的默认方式。

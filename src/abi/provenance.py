@@ -41,7 +41,7 @@ import shlex
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping
+from typing import Any, Dict, Iterable, Mapping
 
 from abi.filesystem import ensure_directory
 
@@ -68,7 +68,8 @@ class RunLogger:
 
     # Why JSON-line? / 为什么用 JSON-line？
     - Append-only means no file corruption on crash. / 追加模式，崩溃不损坏文件
-    - Each line is self-contained for grep/tail/jq inspection. / 每行自包含，方便用 grep/tail/jq 查看
+    - Each line is self-contained for grep/tail/jq.
+      / 每行自包含，方便用 grep/tail/jq 查看
     - `sort_keys=True` ensures deterministic field ordering across runs. / 排序键确保跨运行的可比性
     """
 

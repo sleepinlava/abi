@@ -9,7 +9,11 @@ from typing import Any, Dict, Mapping, Optional
 
 import yaml
 
-from abi.plugins.metagenomic_plasmid._engine.schemas import VALID_MODES, VALID_PLASMID_STRATEGIES, ConfigError
+from abi.plugins.metagenomic_plasmid._engine.schemas import (
+    VALID_MODES,
+    VALID_PLASMID_STRATEGIES,
+    ConfigError,
+)
 from abi.plugins.metagenomic_plasmid._engine.timeouts import parse_timeout_seconds
 
 

@@ -1,8 +1,9 @@
-"""Backward-compatibility shim — proxies to abi.plugins.metagenomic_plasmid._engine.skills.plasmid_detection."""
+"""Backward-compatibility shim."""
 
 from __future__ import annotations
 
 import sys as _sys
+
 from abi.plugins.metagenomic_plasmid._engine.skills.plasmid_detection import *  # noqa: F401,F403
 
 _mod = _sys.modules[__name__]

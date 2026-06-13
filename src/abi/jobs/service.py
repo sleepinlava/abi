@@ -200,9 +200,11 @@ class JobRecord:
     job_provenance_path: Optional[str] = None
     # ── Error message if provenance write failed / 溯源写入失败时的错误消息 ──
     job_provenance_error: Optional[str] = None
-    # ── OS PID of the worker subprocess (subprocess mode only) / worker 子进程的 OS PID（仅子进程模式） ──
+    # ── OS PID of the worker subprocess (subprocess mode only)
+    #    worker 子进程的 OS PID（仅子进程模式） ──
     worker_pid: Optional[int] = None
-    # ── Job ID from a remote scheduler (Nextflow/SLURM, etc.) / 远程调度器（Nextflow/SLURM 等）的作业 ID ──
+    # ── Job ID from a remote scheduler (Nextflow/SLURM, etc.)
+    #    远程调度器（Nextflow/SLURM 等）的作业 ID ──
     remote_scheduler_job_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -285,9 +287,11 @@ class ABIJobService:
         self._store_path = Path(store_path) if store_path else None
         # Whether to run jobs in subprocesses / 是否在子进程中运行作业
         self._subprocess_workers = bool(subprocess_workers)
-        # Maps job_id → Popen for active subprocess workers / job_id → Popen 的映射（活跃的子进程 worker）
+        # Maps job_id → Popen for active subprocess workers
+        # job_id → Popen 的映射（活跃的子进程 worker）
         self._processes: Dict[str, "subprocess.Popen[str]"] = {}
-        # Recover persisted jobs; returns job_ids that were "queued" / 恢复持久化作业；返回处于 "queued" 状态的 job_id
+        # Recover persisted jobs; returns job_ids that were "queued"
+        # 恢复持久化作业；返回处于 "queued" 状态的 job_id
         queued_jobs = self._load_store()
         # Spawn daemon worker threads / 启动守护 worker 线程
         self._workers = [
@@ -296,7 +300,8 @@ class ABIJobService:
         ]
         for worker in self._workers:
             worker.start()
-        # Re-enqueue jobs that were waiting when the service last stopped / 重新排队上次服务停止时等待的作业
+        # Re-enqueue jobs that were waiting when the service last stopped
+        # 重新排队上次服务停止时等待的作业
         for job_id in queued_jobs:
             self._queue.put(job_id)
 
@@ -316,7 +321,8 @@ class ABIJobService:
         """
         command, arguments = _request_to_command(payload)
         backend = _backend_for(command, arguments)
-        # Safety gate: execution commands must be explicitly confirmed / 安全关卡：执行命令必须明确确认
+        # Safety gate: execution commands must be explicitly confirmed
+        # 安全关卡：执行命令必须明确确认
         if _is_execution_command(command) and not bool(arguments.get("confirm_execution")):
             raise ConfirmationRequiredError(
                 "Execution jobs require confirm_execution=true after user approval.",
@@ -502,9 +508,11 @@ class ABIJobService:
                 )
             with self._lock:
                 record.result = envelope
-                # Extract remote scheduler job ID from the result envelope / 从结果信使中提取远程调度器作业 ID
+                # Extract remote scheduler job ID from the result envelope
+                # 从结果信使中提取远程调度器作业 ID
                 self._capture_remote_scheduler_id(record, envelope)
-                # Determine terminal status from envelope + cancel state / 从信使和取消状态确定终止状态
+                # Determine terminal status from envelope + cancel state
+                # 从信使和取消状态确定终止状态
                 if self._cancel_requested_or_cancelled(record):
                     record.status = "cancelled"
                 elif envelope.get("status") == "success":
@@ -533,7 +541,8 @@ class ABIJobService:
             with self._lock:
                 record.finished_at = time.time()
                 record.updated_at = record.finished_at
-                # Write provenance record to disk (best-effort) / 将溯源记录写入磁盘（尽力而为）
+                # Write provenance record to disk (best-effort)
+                # 将溯源记录写入磁盘（尽力而为）
                 self._write_job_provenance_locked(record)
                 # Clean up subprocess reference / 清理子进程引用
                 self._processes.pop(job_id, None)
@@ -561,11 +570,13 @@ class ABIJobService:
         )
         with self._lock:
             self._processes[job_id] = proc
-            # Record the OS PID for force-kill and diagnostics / 记录 OS PID 用于强制终止和诊断
+            # Record the OS PID for force-kill and diagnostics
+            # 记录 OS PID 用于强制终止和诊断
             record.worker_pid = proc.pid
         # Block until the subprocess exits / 阻塞直到子进程退出
         stdout, stderr = proc.communicate()
-        # If cancel was requested while the subprocess ran, override the result / 如果子进程运行期间请求取消，覆盖结果
+        # If cancel was requested while the subprocess ran, override the result
+        # 如果子进程运行期间请求取消，覆盖结果
         if self._cancel_requested_or_cancelled(record):
             return {
                 "status": "cancelled",
@@ -656,7 +667,8 @@ class ABIJobService:
                 # Never started -- safe to re-enqueue / 从未开始——可安全重新排队
                 queued_jobs.append(record.job_id)
             elif record.status in {"running", "cancel_requested"}:
-                # Was in-flight when the service died -- mark as failed / 服务挂掉时正在执行——标记为失败
+                # Was in-flight when the service died -- mark as failed
+                # 服务挂掉时正在执行——标记为失败
                 record.status = "failed"
                 record.error = "Job did not complete before the Job Service restarted."
                 record.error_type = "service_restart"
@@ -690,7 +702,8 @@ class ABIJobService:
             "updated_at": time.time(),
             "jobs": [record.to_dict() for record in self._jobs.values()],
         }
-        # Write to .tmp first, then atomically replace to avoid corruption / 先写入 .tmp，然后原子替换以避免损坏
+        # Write to .tmp first, then atomically replace to avoid corruption
+        # 先写入 .tmp，然后原子替换以避免损坏
         tmp_path = self._store_path.with_name(f"{self._store_path.name}.tmp")
         tmp_path.write_text(json.dumps(_jsonable(payload), indent=2) + "\n", encoding="utf-8")
         tmp_path.replace(self._store_path)
@@ -726,11 +739,13 @@ class ABIJobService:
             record.job_provenance_path = str(path)
             record.job_provenance_error = None
         except OSError as exc:
-            # Best-effort: provenance write failure must not crash the job / 尽力而为：溯源写入失败不能导致作业崩溃
+            # Best-effort: provenance write failure must not crash the job
+            # 尽力而为：溯源写入失败不能导致作业崩溃
             record.job_provenance_error = str(exc)
 
 
 # ── HTTP server factory / HTTP 服务器工厂 ───────────────────────────────
+
 
 def create_http_server(
     service: ABIJobService,
@@ -835,6 +850,7 @@ def create_http_server(
 
 # ── Convenience entry point / 便捷入口点 ─────────────────────────────────
 
+
 def serve(
     *,
     host: str = "127.0.0.1",
@@ -866,6 +882,7 @@ def serve(
 
 
 # ── HTTP routing / HTTP 路由 ────────────────────────────────────────────
+
 
 def _handle_get(service: ABIJobService, path: str) -> Tuple[int, Mapping[str, Any]]:
     """Route a GET request to the appropriate service method.
@@ -903,6 +920,7 @@ def _handle_post(
 
 
 # ── Request parsing & validation / 请求解析与验证 ──────────────────────
+
 
 def _request_to_command(payload: Mapping[str, Any]) -> Tuple[str, Dict[str, Any]]:
     """Extract the canonical command and arguments from a request payload.
@@ -1078,6 +1096,7 @@ def _canonical_command(command: str) -> str:
 
 # ── Persistence helpers / 持久化辅助函数 ────────────────────────────────
 
+
 def _record_from_mapping(data: Mapping[str, Any]) -> JobRecord:
     """Reconstruct a ``JobRecord`` from a deserialized JSON dict.
 
@@ -1135,6 +1154,7 @@ def _optional_float(value: Any) -> Optional[float]:
 
 # ── Artifact collection / 产物收集 ──────────────────────────────────────
 
+
 def _collect_artifacts(result: Mapping[str, Any], artifacts: Dict[str, Any]) -> None:
     """Walk the result envelope and collect output file paths.
 
@@ -1149,7 +1169,8 @@ def _collect_artifacts(result: Mapping[str, Any], artifacts: Dict[str, Any]) -> 
     for key in ("outdir", "plan_path", "result_dir", "workflow"):
         if key in result:
             artifacts[key] = result[key]
-    # If we found an output directory, enumerate its known sub-paths / 如果找到输出目录，枚举其已知子路径
+    # If we found an output directory, enumerate its known sub-paths
+    # 如果找到输出目录，枚举其已知子路径
     if "outdir" in artifacts:
         _collect_outdir_artifacts(str(artifacts["outdir"]), artifacts)
     # Written files explicitly listed by the agent / agent 显式列出的已写入文件
@@ -1259,6 +1280,7 @@ def _path_parts(path: str) -> list[str]:
 
 # ── Process management / 进程管理 ────────────────────────────────────────
 
+
 def _kill_process(proc: "subprocess.Popen[str]", pid: Optional[int]) -> None:
     """Send SIGTERM (then SIGKILL after 3s grace) to a subprocess.
 
@@ -1294,7 +1316,8 @@ def _kill_process(proc: "subprocess.Popen[str]", pid: Optional[int]) -> None:
             os.kill(target_pid, signal.SIGKILL)
         except OSError:
             pass
-    # Drain pipes so the parent does not deadlock on buffered I/O / 排空管道以防止父进程因缓冲 I/O 死锁
+    # Drain pipes so the parent does not deadlock on buffered I/O
+    # 排空管道以防止父进程因缓冲 I/O 死锁
     try:
         proc.communicate(timeout=1)
     except (subprocess.TimeoutExpired, OSError):

@@ -5,7 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from abi.plugins.metagenomic_plasmid._engine.sample_sheet import parse_sample_sheet, single_sample_context
+from abi.plugins.metagenomic_plasmid._engine.sample_sheet import (
+    parse_sample_sheet,
+    single_sample_context,
+)
 from abi.plugins.metagenomic_plasmid._engine.schemas import (
     VALID_PLATFORMS,
     ExecutionPlan,

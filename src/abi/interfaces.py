@@ -301,6 +301,7 @@ class ABIInitializablePlugin(ABIPlugin, Protocol):
        ``plugin.root = Path(package.__path__[0])``.
     3. Call ``load_config()``, ``build_plan()``, etc. as normal.
     """
+
     root: Path
     # Absolute path to the plugin package's root directory.
     # Set by the ABI core after discovery, before any method call.

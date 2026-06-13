@@ -7,12 +7,12 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional
 
+from abi.config import resolved_mamba_root, write_yaml
 from abi.provenance import (
     write_commands_tsv,
     write_resolved_inputs_tsv,
     write_tool_versions,
 )
-from abi.config import resolved_mamba_root, write_yaml
 from abi.report import write_generic_report
 from abi.tables import StandardTableManager
 

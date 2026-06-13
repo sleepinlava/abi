@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from abi.plugins.metagenomic_plasmid._engine.schemas import ExecutionPlan
-from abi.plugins.metagenomic_plasmid._engine.standard_tables import read_standard_table, summarize_standard_tables
+from abi.plugins.metagenomic_plasmid._engine.standard_tables import (
+    read_standard_table,
+    summarize_standard_tables,
+)
 
 
 def write_markdown_report(

@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping
 
+from abi.errors import ToolError as ABIToolError
 from abi.plugins.metagenomic_plasmid._engine.config import write_resolved_config
 from abi.plugins.metagenomic_plasmid._engine.filesystem import ensure_directory
 from abi.plugins.metagenomic_plasmid._engine.logger import (
@@ -17,7 +18,10 @@ from abi.plugins.metagenomic_plasmid._engine.logger import (
     write_resolved_inputs_tsv,
     write_tool_versions,
 )
-from abi.plugins.metagenomic_plasmid._engine.parsers import parse_standard_outputs, supports_standard_parsing
+from abi.plugins.metagenomic_plasmid._engine.parsers import (
+    parse_standard_outputs,
+    supports_standard_parsing,
+)
 from abi.plugins.metagenomic_plasmid._engine.progress import (
     PipelineProgressRecorder,
     write_minimal_progress_artifacts,
@@ -41,7 +45,6 @@ from abi.plugins.metagenomic_plasmid._engine.statistics import (
     compute_network_fallback,
 )
 from abi.plugins.metagenomic_plasmid._engine.timeouts import mapping_block
-from abi.errors import ToolError as ABIToolError
 
 PLASMID_DETECTION_DIR = "04_plasmid_detection"
 

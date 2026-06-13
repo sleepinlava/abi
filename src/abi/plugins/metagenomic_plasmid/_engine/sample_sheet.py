@@ -7,7 +7,12 @@ from pathlib import Path
 from typing import Iterable, List, Mapping, Optional
 
 from abi.plugins.metagenomic_plasmid._engine.config import PROJECT_ROOT
-from abi.plugins.metagenomic_plasmid._engine.schemas import VALID_PLATFORMS, SampleContext, SampleInput, SampleSheetError
+from abi.plugins.metagenomic_plasmid._engine.schemas import (
+    VALID_PLATFORMS,
+    SampleContext,
+    SampleInput,
+    SampleSheetError,
+)
 
 REQUIRED_COLUMNS = {"sample_id", "platform"}
 SUPPORTED_COLUMNS = {

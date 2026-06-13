@@ -53,6 +53,7 @@ implementation.
 与 ``MetagenomicPlasmidPlugin`` 不同，此插件**不**将逻辑委托给 ``_engine/``
 子包——所有逻辑都内联在此单一模块中。这使得演示自包含且易于审计，可作为参考实现。
 """
+
 from __future__ import annotations
 
 import csv
@@ -131,9 +132,11 @@ class MetatranscriptomicsPlugin:
         if config_path:
             config = deep_merge(config, load_yaml(config_path))
         config = deep_merge(config, compact_overrides(overrides))
-        # Resolve paths so downstream code never deals with raw relative paths / 解析路径，下游代码不再处理原始相对路径
+        # Resolve paths so downstream code never deals with raw relative paths
+        # 解析路径，下游代码不再处理原始相对路径
         _resolve_config_paths(config)
-        # Fail-fast: surface missing keys before any work starts / 快速失败：在任何工作开始前暴露缺失的键
+        # Fail-fast: surface missing keys before any work starts
+        # 快速失败：在任何工作开始前暴露缺失的键
         self._validate_config(config)
         return config
 
@@ -196,7 +199,8 @@ class MetatranscriptomicsPlugin:
         resources = config.get("resources", {})
         if not isinstance(resources, Mapping):
             resources = {}
-        # Sentinels so plan generation succeeds even without real indices / 哨兵值保证即使没有真实索引也能生成计划
+        # Sentinels so plan generation succeeds even without real indices
+        # 哨兵值保证即使没有真实索引也能生成计划
         genome_index = str(resources.get("genome_index", "GENOME_INDEX_NOT_CONFIGURED"))
         annotation_gtf = str(resources.get("annotation_gtf", "ANNOTATION_GTF_NOT_CONFIGURED"))
         steps: List[ABIPlanStep] = []
@@ -379,6 +383,7 @@ class MetatranscriptomicsPlugin:
 
 # ── Sample sheet parser / 样本表解析器 ──────────────────────────────────
 
+
 def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleContext:
     """Parse a TSV sample sheet into a typed ``ABISampleContext``.
 
@@ -410,7 +415,8 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
         if missing:
             raise ValueError(f"Sample sheet missing required columns: {sorted(missing)}")
         samples = []
-        # start=2 so error messages reference the correct spreadsheet row / start=2 使错误信息引用正确的电子表格行号
+        # start=2 so error messages reference the correct spreadsheet row
+        # start=2 使错误信息引用正确的电子表格行号
         for index, row in enumerate(reader, start=2):
             sample_id = _clean(row.get("sample_id"))
             read1 = _clean(row.get("read1"))
@@ -426,7 +432,8 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
                     sample_id=sample_id,
                     # Default platform to "rna_seq" when not specified / 未指定时默认为 "rna_seq"
                     platform=_clean(row.get("platform")) or "rna_seq",
-                    # group falls back to condition for DE-tool compatibility / group 回退到 condition 以兼容差异表达工具
+                    # group falls back to condition for DE-tool compatibility
+                    # group 回退到 condition 以兼容差异表达工具
                     group=_clean(row.get("group")) or _clean(row.get("condition")),
                     read1=read1,
                     read2=read2,
@@ -435,7 +442,8 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
             )
     if not samples:
         raise ValueError("Sample sheet contains no sample rows")
-    # Upfront file-existence check: fail with all missing paths at once / 预先检查文件存在性：一次性报告所有缺失的路径
+    # Upfront file-existence check: fail with all missing paths at once
+    # 预先检查文件存在性：一次性报告所有缺失的路径
     if check_files:
         missing_files = []
         for sample in samples:
@@ -457,6 +465,7 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
 
 
 # ── Config path resolution / 配置路径解析 ──────────────────────────────
+
 
 def _resolve_config_paths(config: Dict[str, Any]) -> None:
     """Resolve relative paths in the config dict in-place.
@@ -499,6 +508,7 @@ def _resolve_path(value: str | Path, *, base_dirs: Iterable[Path]) -> Path:
 
 # ── featureCounts parser / featureCounts 解析器 ──────────────────────────
 
+
 def _parse_featurecounts(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
     """Parse all featureCounts output files in ``output_dir``.
 
@@ -514,7 +524,8 @@ def _parse_featurecounts(output_dir: Path, sample_id: str) -> List[Dict[str, Any
     rows: List[Dict[str, Any]] = []
     for path in sorted(output_dir.glob("*featureCounts*.txt")):
         with path.open("r", encoding="utf-8", newline="") as handle:
-            # Skip comment lines (featureCounts header metadata) / 跳过注释行（featureCounts 头部元数据）
+            # Skip comment lines (featureCounts header metadata)
+            # 跳过注释行（featureCounts 头部元数据）
             reader = csv.DictReader(
                 (line for line in handle if not line.startswith("#")),
                 delimiter="\t",
@@ -532,7 +543,8 @@ def _parse_featurecounts(output_dir: Path, sample_id: str) -> List[Dict[str, Any
                         "sample_id": sample_id,
                         "gene_id": gene_id,
                         "count": row.get(count_field, ""),
-                        "tpm": "",  # TPM not computed by featureCounts alone / TPM 不由 featureCounts 单独计算
+                        "tpm": "",  # TPM not computed by featureCounts alone
+                        # TPM 不由 featureCounts 单独计算
                         "tool": "featurecounts",
                         "source_file": str(path),
                     }
@@ -541,6 +553,7 @@ def _parse_featurecounts(output_dir: Path, sample_id: str) -> List[Dict[str, Any
 
 
 # ── String cleaning / 字符串清理 ────────────────────────────────────────
+
 
 def _clean(value: Any) -> Optional[str]:
     """Strip whitespace from a value; return None for empty/whitespace-only.

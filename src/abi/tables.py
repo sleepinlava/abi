@@ -48,7 +48,9 @@ class StandardTableManager:
     # Usage pattern / 使用模式
         manager = StandardTableManager({"samples": ["sample_id", "platform"]})
         manager.ensure_tables("output_dir/")
-        manager.append_rows("output_dir/", {"samples": [{"sample_id": "S1", "platform": "illumina"}]})
+        manager.append_rows(
+            "output_dir/", {"samples": [{"sample_id": "S1", "platform": "illumina"}]}
+        )
         manager.summarize("output_dir/")  # {"samples": {"rows": 1, "path": "..."}}
     """
 

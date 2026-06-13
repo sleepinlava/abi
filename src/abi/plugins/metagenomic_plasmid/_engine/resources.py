@@ -13,7 +13,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Sequence
 
-from abi.plugins.metagenomic_plasmid._engine.config import PROJECT_ROOT, resolved_mamba_root, write_yaml
+from abi.plugins.metagenomic_plasmid._engine.config import (
+    PROJECT_ROOT,
+    resolved_mamba_root,
+    write_yaml,
+)
 from abi.plugins.metagenomic_plasmid._engine.filesystem import ensure_directory
 from abi.plugins.metagenomic_plasmid._engine.schemas import AutoPlasmError
 from abi.plugins.metagenomic_plasmid._engine.skills.registry import ToolRegistry

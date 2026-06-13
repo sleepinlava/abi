@@ -14,7 +14,10 @@ from typing import Any, Dict, List, Mapping, Optional
 
 from abi.plugins.metagenomic_plasmid._engine.config import PROJECT_ROOT, resolved_mamba_root
 from abi.plugins.metagenomic_plasmid._engine.schemas import ToolError
-from abi.plugins.metagenomic_plasmid._engine.timeouts import DEFAULT_TOOL_TIMEOUT_SECONDS, timeout_from_env_or_value
+from abi.plugins.metagenomic_plasmid._engine.timeouts import (
+    DEFAULT_TOOL_TIMEOUT_SECONDS,
+    timeout_from_env_or_value,
+)
 
 OPTIONAL_TEMPLATE_FIELDS = {"abundance_label", "metaphlan_long_reads_flag"}
 

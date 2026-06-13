@@ -61,7 +61,6 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Union
 
-from abi.provenance import RunLogger
 from abi.agent.context import build_agent_context, render_doctor_agent
 from abi.agent.envelopes import (
     confirmation_required_envelope,
@@ -76,6 +75,7 @@ from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
 from abi.json_utils import load_json_object
 from abi.plugins import get_plugin, list_plugins
+from abi.provenance import RunLogger
 from abi.results import validate_abi_result_dir
 from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
 from abi.schemas import ABIError

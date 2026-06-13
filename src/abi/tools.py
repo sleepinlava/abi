@@ -107,6 +107,7 @@ class RunResult:
     - log_file: Optional path to the step log (if configured) / 步骤日志路径
     - status: "success", "failed", "timeout", or "dry_run" / 执行状态
     """
+
     tool_name: str
     command: List[str]
     return_code: int
@@ -260,6 +261,7 @@ class SafeFormatDict(dict):
         params = SafeFormatDict({"input": "file.fasta"})
         template.format_map(params)  # → "tool --flag  --input file.fasta"
     """
+
     def __missing__(self, key: str) -> str:
         """Return "" for any key not in the dict. / 字典中不存在的键返回 ""。"""
         return ""
