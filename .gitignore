@@ -82,3 +82,6 @@ cmake_install.cmake
 Makefile
 CTestTestfile.cmake
 Testing/
+
+# docs
+Rebuild.md
