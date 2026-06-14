@@ -264,9 +264,7 @@ class GenericABIExecutor:
                     break
         except Exception as exc:
             if not failed_error:
-                failed_error = ToolError(
-                    f"Unexpected error during {_last_step_id}: {exc}"
-                )
+                failed_error = ToolError(f"Unexpected error during {_last_step_id}: {exc}")
                 failed_error.__cause__ = exc
 
         # Summarize which standard tables were populated.

@@ -1296,9 +1296,7 @@ def install_skills_command(
             "count": len(copied),
         }
         if output_json:
-            _emit_agent_json(
-                json.dumps({"status": "success", "result": result})
-            )
+            _emit_agent_json(json.dumps({"status": "success", "result": result}))
         else:
             typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
         if skipped:

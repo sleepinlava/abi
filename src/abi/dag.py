@@ -46,11 +46,7 @@ def infer_dag(
 ) -> ABIDAG:
     """Infer a DAG by matching normalized input paths to prior output paths."""
     root = Path(project_root or PROJECT_ROOT).resolve()
-    step_list = [
-        step
-        for step in steps
-        if not getattr(step, "skipped", False)
-    ]
+    step_list = [step for step in steps if not getattr(step, "skipped", False)]
     output_map: Dict[str, tuple[str, str]] = {}
     produced_by_step: Dict[str, Dict[str, str]] = {}
 

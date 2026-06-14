@@ -76,7 +76,7 @@ def get_agent_guide() -> str:
         "\n"
         "JSON envelope contract (every command returns one of three):\n"
         '  success               — "result" holds the payload\n'
-        '  confirmation_required — user must approve before proceeding (run only)\n'
+        "  confirmation_required — user must approve before proceeding (run only)\n"
         '  error                 — "error_code" + "diagnostic_hints" for recovery\n'
         "\n"
         "Transport methods (use any one):\n"

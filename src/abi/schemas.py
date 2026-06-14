@@ -63,14 +63,16 @@ __all__ = [
 # 这些冻结集合构成了 schema 契约：任何不在其中的值都会在解析/校验阶段被拒绝，
 # 而不会等到流水线深层执行时才暴露。
 
-VALID_PLATFORMS: frozenset[str] = frozenset({
-    "generic",
-    "illumina",
-    "ont",
-    "pacbio_hifi",
-    "hybrid",
-    "assembly",
-})
+VALID_PLATFORMS: frozenset[str] = frozenset(
+    {
+        "generic",
+        "illumina",
+        "ont",
+        "pacbio_hifi",
+        "hybrid",
+        "assembly",
+    }
+)
 # Supported sequencing / assembly platforms. Used by SampleSheet parser to
 # validate the ``platform`` column and by the plan builder to select
 # platform-appropriate tools.
@@ -86,13 +88,15 @@ VALID_MODES: frozenset[str] = frozenset({"auto", "interactive"})
 # auto -- 全自动无人值守执行（CI / 无头部署）。
 # interactive -- 智能体在关键决策点可能暂停等待人工确认（开发 / 探索性工作流）。
 
-VALID_PLASMID_STRATEGIES: frozenset[str] = frozenset({
-    "single_tool",
-    "union",
-    "intersection",
-    "majority_vote",
-    "weighted_vote",
-})
+VALID_PLASMID_STRATEGIES: frozenset[str] = frozenset(
+    {
+        "single_tool",
+        "union",
+        "intersection",
+        "majority_vote",
+        "weighted_vote",
+    }
+)
 # Plasmid-calling consensus strategies. The plan builder chooses tool
 # combinations based on the selected strategy.
 # ``single_tool``  -- run one tool only.

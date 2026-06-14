@@ -283,8 +283,17 @@ def classify_exception(exc: Exception, *, command: str) -> tuple[str, List[Dict[
                 "tool input or environment."
             ),
         )
-    if any(phrase in lowered for phrase in ("parse fail", "parse error", "parsing fail",
-                                             "cannot parse", "unable to parse", "could not parse")):
+    if any(
+        phrase in lowered
+        for phrase in (
+            "parse fail",
+            "parse error",
+            "parsing fail",
+            "cannot parse",
+            "unable to parse",
+            "could not parse",
+        )
+    ):
         # Tool ran but its output couldn't be parsed into ABI standard tables.
         # 工具运行了但输出无法解析为 ABI 标准表。
         return _diagnosis(

@@ -79,9 +79,7 @@ def load_tool_contracts(plugin_root: str | Path) -> Dict[str, Dict[str, Any]]:
     if not contracts_dir.exists():
         raise ContractValidationError(f"Missing tool_contracts directory: {contracts_dir}")
     contracts: Dict[str, Dict[str, Any]] = {}
-    for path in sorted(
-        list(contracts_dir.glob("*.yaml")) + list(contracts_dir.glob("*.yml"))
-    ):
+    for path in sorted(list(contracts_dir.glob("*.yaml")) + list(contracts_dir.glob("*.yml"))):
         contract = load_yaml(path)
         validate_tool_contract(contract, path=path)
         tool_id = str(contract["tool_id"])
