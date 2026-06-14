@@ -11,7 +11,7 @@ bioinformatics pipeline code directly.
 abi install-skills
 ```
 
-This copies 42 bundled SKILL.md files to `~/.claude/skills/abi/`. After
+This copies 41 bundled SKILL.md files to `~/.claude/skills/abi/`. After
 installation, Claude Code automatically loads the skills and knows how to
 use the `abi` CLI and its bioinformatics tools.
 

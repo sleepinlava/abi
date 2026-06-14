@@ -91,11 +91,28 @@ cloud batch executors.
 
 ## Error Codes
 
-ABI uses stable error codes from `abi.diagnostics`, including
-`unknown_analysis_type`, `invalid_config`, `invalid_sample_sheet`,
-`missing_input`, `missing_resource`, `missing_database`, `tool_not_found`,
-`permission_required`, `runtime_not_supported`, `nonzero_exit`,
-`parse_failed`, `empty_result`, `artifact_missing`, and `internal_error`.
+ABI uses 14 stable error codes from `abi.diagnostics`, enumerating every
+recognized failure mode:
+
+| Code | Triggers when |
+| --- | --- |
+| `unknown_analysis_type` | plugin ID not recognized |
+| `invalid_config` | YAML/JSON config failed schema validation |
+| `invalid_sample_sheet` | sample sheet missing or malformed |
+| `missing_input` | a required input file does not exist |
+| `missing_resource` | a resource is NOT_CONFIGURED or missing |
+| `missing_database` | a bioinformatics database is unavailable |
+| `tool_not_found` | an external tool executable is not on PATH |
+| `permission_required` | execution requires explicit user confirmation |
+| `runtime_not_supported` | the requested engine is not local/nextflow |
+| `nonzero_exit` | an external command returned non-zero |
+| `parse_failed` | tool output could not be parsed into tables |
+| `empty_result` | the pipeline produced no output |
+| `artifact_missing` | a required result artifact is absent |
+| `internal_error` | unexpected/unclassified error at the ABI boundary |
+
+The frozen set is defined in `abi.diagnostics.ERROR_CODES` and each error
+response carries a stable `error_code` + actionable `diagnostic_hints`.
 
 ## Plugin Contracts
 

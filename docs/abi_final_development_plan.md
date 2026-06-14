@@ -42,15 +42,11 @@ required tools:
 ```bash
 pytest
 ruff check src/abi tests
+ruff format --check src/abi tests
 mypy src/abi/ --ignore-missing-imports
-black --check src/abi tests
 python -m build
 python -m twine check dist/*
 ```
-
-The current development sandbox has shown directory-level `black --check`
-process-hang behavior; per-file `black --check` and `twine check` remain
-release criteria.
 
 ## Evidence Artifacts
 

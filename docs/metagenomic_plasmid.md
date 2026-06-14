@@ -1,8 +1,9 @@
 # Metagenomic Plasmid Integration
 
-The `metagenomic_plasmid` ABI plugin uses the bundled `abi.autoplasm` pipeline.
-This replaces the earlier split development model where an external
-`autoplasm` package supplied the plasmid workflow.
+The `metagenomic_plasmid` ABI plugin uses the bundled `abi.autoplasm` pipeline
+(23 Python files in `plugins/metagenomic_plasmid/_engine/`). This replaces the
+earlier split development model where an external `autoplasm` package supplied
+the plasmid workflow.
 
 ## Public Shape
 
@@ -10,6 +11,8 @@ This replaces the earlier split development model where an external
 - ABI plugin id: `metagenomic_plasmid`
 - Internal Python namespace: `abi.autoplasm`
 - Compatibility command: `autoplasm`
+- Tool contracts: 43 (all bioinformatics tools in the plasmid pipeline)
+- Engine: 23 files under `_engine/` (pipeline, logger, tools, assembly, etc.)
 
 There is no supported top-level `import autoplasm` API.
 

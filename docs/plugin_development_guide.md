@@ -91,6 +91,10 @@ Plugins should import from the public SDK:
 | `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
 | `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV writers |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
+| `abi.diagnostics` | `DiagnosticHint`, `classify_exception`, `ERROR_CODES` |
+| `abi.json_utils` | `load_json_file`, `load_json_payload` with `ABIJSONError` |
+| `abi.interfaces` | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin` protocols |
+| `abi._shared` | `_read_tsv`, `_display_command`, `_plan_dict`, `_common_overrides` |
 
 ## Execution Safety
 

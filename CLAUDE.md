@@ -72,12 +72,12 @@ src/abi/
     metatranscriptomics.py Native demo plugin (inline, no sub-package)
   autoplasm/          Backward-compatible re-export shim → metagenomic_plasmid/_engine/
   _shared.py          Shared utilities: _read_tsv, _display_command, _plan_dict, _common_overrides (93 lines)
-  provenance.py       RunLogger, PipelineProgressRecorder, TSV writers (743 lines)
-  tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1051 lines)
+  provenance.py       RunLogger, PipelineProgressRecorder, TSV writers (749 lines)
+  tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1058 lines)
   schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
-  executor.py         GenericABIExecutor — step iteration, tool invocation, provenance generation
+  executor.py         GenericABIExecutor — step iteration, tool invocation, provenance generation (891 lines)
   permissions.py      read_only / planning_write / execution levels
-  diagnostics.py      Error taxonomy + DiagnosticHint + classify_exception (384 lines)
+  diagnostics.py      Error taxonomy + DiagnosticHint + classify_exception (400 lines)
   jobs/service.py     HTTP Job Service with subprocess force-kill (SIGTERM → SIGKILL)
   json_utils.py       JSON file/payload loading with ABIJSONError wrapping
   timeouts.py         Timeout parsing: parse_timeout_seconds, timeout_from_env_or_value
@@ -114,7 +114,7 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 ### The two plugins
 
 - **`metagenomic_plasmid`**: The complex plugin. Engine lives in `_engine/` (8,434 lines migrated from original AutoPlasm). 43 tool contracts, plasmid detection/annotation/abundance pipeline. Plugin class in `__init__.py` delegates to `._engine.*` modules.
-- **`metatranscriptomics`**: The portability demo. 297 lines, 4 tools (fastp, STAR, HISAT2, featureCounts), one standard table (`gene_expression.tsv`). All logic inline — proves the same `ABIAgentInterface` drives radically different analyses.
+- **`metatranscriptomics`**: The portability demo. 574 lines, 4 tools (fastp, STAR, HISAT2, featureCounts), one standard table (`gene_expression.tsv`). All logic inline — proves the same `ABIAgentInterface` drives radically different analyses.
 
 ### autoplasm/ is a backward-compat shim
 

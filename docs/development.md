@@ -6,25 +6,36 @@ This repository publishes one Python distribution: `abi-agent`.
 
 ```
 src/abi/
-  agent/          ABIAgentInterface, JSON envelopes, agent context
-  plugins/        Built-in analysis-type plugins
+  agent/              ABIAgentInterface, JSON envelopes, agent context export
+  plugins/            Built-in analysis-type plugins
     metagenomic_plasmid/   Self-contained plugin package (engine in _engine/)
-    metatranscriptomics.py Native ABI demo plugin
-  autoplasm/      Backward-compatible re-export shim → plugins/metagenomic_plasmid/_engine/
-  provenance.py   RunLogger, PipelineProgressRecorder, TSV provenance writers
-  tools.py        ToolRegistry, ToolSkill, GenericCommandSkill, RunResult
-  schemas.py      Canonical ExecutionPlan, PlanStep, SampleInput, SampleContext
-  executor.py     GenericABIExecutor
-  permissions.py  read_only / planning_write / execution
-  diagnostics.py  Error taxonomy and diagnostic hints
-  tables.py       StandardTableManager
-  report.py       Generic report writer
-  jobs/           HTTP Job Service (service, client)
-  runtimes/       local, Nextflow runtimes
-  exporters/      Nextflow DSL2 exporter
-  mcp/            Optional MCP stdio server (exposed via ``abi-mcp``)
-  skills/         Agent skill files → installed into ~/.claude/skills/abi/ via ``abi install-skills``
-  cli.py          Typer CLI (abi, abi-mcp, autoplasm entry points)
+    metatranscriptomics.py Native ABI demo plugin (574 lines)
+  autoplasm/          Backward-compatible re-export shim → plugins/metagenomic_plasmid/_engine/
+  _shared.py          Shared utilities: _read_tsv, _display_command, _plan_dict, _common_overrides
+  provenance.py       RunLogger, PipelineProgressRecorder, TSV provenance writers
+  tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult
+  schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
+  executor.py         GenericABIExecutor — step iteration, tool invocation, provenance
+  permissions.py      read_only / planning_write / execution levels
+  diagnostics.py      Error taxonomy + DiagnosticHint + classify_exception
+  interfaces.py       ABIPlugin, ABIDryRunPlugin, ABIInitializablePlugin protocols
+  json_utils.py       JSON file/payload loading with ABIJSONError wrapping
+  timeouts.py         Timeout parsing: parse_timeout_seconds, timeout_from_env_or_value
+  dag.py              DAG inference engine for workflow dependency ordering
+  config.py           Configuration loading and management
+  resources.py        Resource status checking (on-disk existence validation)
+  filesystem.py       Filesystem utilities
+  results.py          Result writing and management
+  tables.py           StandardTableManager
+  report.py           Generic report writer
+  contracts/          Contract definitions (ABIPluginManifest, workflow specs)
+  openai_contracts.py OpenAI function-calling tool descriptor generation
+  jobs/               HTTP Job Service (service, client)
+  runtimes/           local, Nextflow runtimes
+  exporters/          Nextflow DSL2 exporter
+  mcp/                Optional MCP stdio server (exposed via ``abi-mcp``)
+  skills/             Agent skill files (41 bundled) → installed via ``abi install-skills``
+  cli.py              Typer CLI (abi, abi-mcp, autoplasm entry points)
 ```
 
 The `abi.autoplasm` package is a backward-compatible re-export shim that proxies
@@ -36,12 +47,15 @@ core modules for shared infrastructure.
 
 | Module | Purpose |
 | --- | --- |
-| `abi.interfaces` | Plugin protocol classes |
-| `abi.schemas` | Canonical schema types (SampleInput, ExecutionPlan, etc.) |
-| `abi.tools` | ToolRegistry, ToolSkill, GenericCommandSkill |
-| `abi.provenance` | RunLogger, PipelineProgressRecorder, TSV writers |
-| `abi.errors` | ABIError, ConfigError, SampleSheetError, ToolError |
-| `abi.testing` | Plugin contract assertions |
+| `abi.interfaces` | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin` protocol classes |
+| `abi.schemas` | `SampleInput`, `SampleContext`, `PlanStep`, `ExecutionPlan` |
+| `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
+| `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV provenance writers |
+| `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
+| `abi.diagnostics` | Error taxonomy + `DiagnosticHint` + `classify_exception` |
+| `abi.json_utils` | JSON file/payload loading with `ABIJSONError` |
+| `abi.timeouts` | `parse_timeout_seconds`, `timeout_from_env_or_value` |
+| `abi.testing` | `assert_plugin_contract` |
 
 ## Local Setup
 

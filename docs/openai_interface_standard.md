@@ -45,7 +45,7 @@ codes, and recovery rules.
 
 ## Agent Skills (Claude Code)
 
-ABI bundles 42 SKILL.md files (one for each bioinformatics tool plus an
+ABI bundles 41 SKILL.md files (one for each bioinformatics tool plus an
 ``abi_agent`` operating skill) inside the package at ``src/abi/skills/``.
 Install them into Claude Code with:
 
