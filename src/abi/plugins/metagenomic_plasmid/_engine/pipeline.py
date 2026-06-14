@@ -636,6 +636,18 @@ class PipelineExecutor:
                 message=str(exc),
             )
             return {"status": "failed", "return_code": "", "reason": reason}
+        except Exception as exc:
+            # Catch unexpected failures (OSError, FileNotFoundError, etc.)
+            # so the pipeline records the step failure instead of crashing.
+            # 捕获意外失败（OSError、FileNotFoundError 等），
+            # 使流水线记录步骤失败而不是崩溃。
+            reason = _tool_failure_reason(
+                step,
+                return_code="",
+                stderr_path=params["stderr_path"],
+                message=f"Unexpected error: {exc.__class__.__name__}: {exc}",
+            )
+            return {"status": "failed", "return_code": "", "reason": reason}
         if result.return_code != 0:
             reason = _tool_failure_reason(
                 step,
@@ -651,15 +663,19 @@ class PipelineExecutor:
         parsed_status = "not_supported"
         standard_tables = ""
         if supports_standard_parsing(step.tool_id):
-            rows_by_table = parse_standard_outputs(
-                step.tool_id,
-                step.outputs.get("output_dir", params.get("output_dir", "")),
-                str(step.sample_id or ""),
-            )
-            with self._tables_lock:
-                written = append_standard_rows(tables_dir, rows_by_table)
-            parsed_status = "parsed" if written else "no_standard_rows"
-            standard_tables = ",".join(sorted(written))
+            try:
+                rows_by_table = parse_standard_outputs(
+                    step.tool_id,
+                    step.outputs.get("output_dir", params.get("output_dir", "")),
+                    str(step.sample_id or ""),
+                )
+                with self._tables_lock:
+                    written = append_standard_rows(tables_dir, rows_by_table)
+                parsed_status = "parsed" if written else "no_standard_rows"
+                standard_tables = ",".join(sorted(written))
+            except Exception:
+                parsed_status = "parse_failed"
+                standard_tables = ""
         return {
             "status": result.status,
             "return_code": result.return_code,

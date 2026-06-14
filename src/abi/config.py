@@ -59,7 +59,7 @@ def deep_merge(base: Dict[str, Any], override: Mapping[str, Any]) -> Dict[str, A
     for key, value in override.items():
         if value is None:
             continue
-        if isinstance(value, Mapping) and isinstance(result.get(key), dict):
+        if isinstance(value, Mapping) and isinstance(result.get(key), Mapping):
             result[key] = deep_merge(result[key], value)
         else:
             result[key] = deepcopy(value)

@@ -234,6 +234,17 @@ def classify_exception(exc: Exception, *, command: str) -> tuple[str, List[Dict[
             "Fix the sample sheet columns and paths, then rerun plan or dry-run.",
             artifact=_extract_path(message),
         )
+    if "database" in lowered or "db_path" in lowered or "db_dir" in lowered:
+        # A bioinformatics reference database (BLAST, Kraken2, etc.) is missing.
+        # Must check before "config" since ConfigError often wraps database errors.
+        # 生物信息学参考数据库 (BLAST, Kraken2 等) 缺失。
+        # 必须在 "config" 之前检查，因为 ConfigError 经常包装数据库错误。
+        return _diagnosis(
+            "missing_database",
+            "A required bioinformatics database is not configured or unavailable.",
+            "Run the resource checker or configure a valid local database path.",
+            artifact=_extract_path(message),
+        )
     if "config" in lowered or error_type in {"ConfigError"}:
         # Config loading/validation failed — probably a YAML schema mismatch.
         # 配置加载/验证失败 — 可能是 YAML schema 不匹配。
@@ -241,15 +252,6 @@ def classify_exception(exc: Exception, *, command: str) -> tuple[str, List[Dict[
             "invalid_config",
             "The ABI configuration could not be loaded or validated.",
             "Check the YAML file and plugin config schema, then retry.",
-            artifact=_extract_path(message),
-        )
-    if "database" in lowered:
-        # A bioinformatics reference database (BLAST, Kraken2, etc.) is missing.
-        # 生物信息学参考数据库 (BLAST, Kraken2 等) 缺失。
-        return _diagnosis(
-            "missing_database",
-            "A required bioinformatics database is not configured or unavailable.",
-            "Run the resource checker or configure a valid local database path.",
             artifact=_extract_path(message),
         )
     if "resource" in lowered or "not_configured" in lowered:
@@ -281,7 +283,8 @@ def classify_exception(exc: Exception, *, command: str) -> tuple[str, List[Dict[
                 "tool input or environment."
             ),
         )
-    if "parse" in lowered:
+    if any(phrase in lowered for phrase in ("parse fail", "parse error", "parsing fail",
+                                             "cannot parse", "unable to parse", "could not parse")):
         # Tool ran but its output couldn't be parsed into ABI standard tables.
         # 工具运行了但输出无法解析为 ABI 标准表。
         return _diagnosis(

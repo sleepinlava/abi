@@ -141,9 +141,15 @@ class NextflowExporter:
     ) -> str:
         processes = []
         for step_id in dag.topological_order:
+            binding = dag.binding_for(step_id)
+            # Internal steps are Python-side processing with no Nextflow
+            # equivalent — skip them during export.
+            # 内部步骤是 Python 端处理，没有 Nextflow 等价物——在导出时跳过。
+            if getattr(binding.step, "tool_id", "") == "internal":
+                continue
             processes.append(
                 self._step_to_process(
-                    dag.binding_for(step_id),
+                    binding,
                     registry,
                     smoke=smoke,
                     project_root=project_root,

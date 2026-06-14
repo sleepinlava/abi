@@ -722,6 +722,9 @@ def _minimal_step_status(
 def _tsv_value(value: Any) -> str:
     """Coerce any value to a TSV-safe string. None → "" to keep columns aligned.
 
+    Embedded tabs and newlines are replaced with spaces so they cannot corrupt
+    the TSV column structure.
+
     # Why not just str(None)? / 为什么不直接用 str(None)？
     `str(None)` produces the literal string "None", which is ambiguous (did we
     mean the Python None or the user-specified value "None"?). We convert None
@@ -730,7 +733,10 @@ def _tsv_value(value: Any) -> str:
     """
     if value is None:
         return ""
-    return str(value)
+    result = str(value)
+    if any(ch in result for ch in ("\t", "\n", "\r")):
+        result = result.replace("\t", "  ").replace("\n", " | ").replace("\r", "")
+    return result
 
 
 def _timestamp() -> str:

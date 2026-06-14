@@ -117,7 +117,12 @@ def test_infer_dag_accepts_metagenomic_plasmid_shared_output_dirs(tmp_path):
 
     dag = infer_dag(plan.steps, sequential_fallback=True)
 
-    assert dag.roots == ["S1_qc_fastp"]
+    # Internal steps (tool_id == "internal") are now included in the DAG so
+    # their output paths are correctly tracked as dependencies for downstream
+    # steps.  Roots include internal steps that have no upstream dependencies.
+    # 内部步骤 (tool_id == "internal") 现在包含在 DAG 中，以便其输出路径
+    # 正确作为下游步骤的依赖关系被跟踪。根节点包括没有上游依赖的内部步骤。
+    assert "S1_input_validation_internal" in dag.roots
     assert "S1_qc_fastp" in dag.topological_order
     assert "S1_qc_fastqc" in dag.topological_order
 

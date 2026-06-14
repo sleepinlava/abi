@@ -95,7 +95,6 @@ include = [
     "src/abi",
     "plugins",
     "scripts",
-    "skills",
     "tests",
     "examples",
     "README.md",

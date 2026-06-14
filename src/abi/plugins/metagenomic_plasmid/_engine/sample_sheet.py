@@ -132,9 +132,17 @@ def _resolve_existing_input_path(value: str | Path, sheet_dir: Path) -> Path:
     if raw_path.exists():
         return raw_path.resolve()
     for base_dir in (sheet_dir, PROJECT_ROOT):
-        candidate = base_dir / raw_path
+        candidate = (base_dir / raw_path).resolve()
+        # Guard against path traversal: a relative path like ../../etc/passwd
+        # would escape the project directory. Reject paths outside the base.
+        # 防止路径遍历：如 ../../etc/passwd 这样的相对路径会逃逸到项目目录之外。
+        # 拒绝位于 base 目录之外的路径。
+        try:
+            candidate.relative_to(base_dir.resolve())
+        except ValueError:
+            continue
         if candidate.exists():
-            return candidate.resolve()
+            return candidate
     return raw_path
 
 

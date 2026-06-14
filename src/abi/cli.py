@@ -114,6 +114,32 @@ job_app = typer.Typer(help="Submit and inspect queued ABI Job Service operations
 app.add_typer(job_app, name="job")
 
 
+def _resolve_skills_source() -> Path:
+    """Resolve the bundled skills directory inside the ABI package.
+
+    Uses ``importlib.resources`` (Python ≥ 3.9) when available, falling back
+    to ``Path(abi.__file__).parent / "skills"`` for compatibility with
+    zip-imports and frozen environments.
+
+    解析 ABI 包内的 skills 目录。优先使用 importlib.resources，
+    在 zip 导入或冻结环境中回退到 __file__ 路径。
+    """
+    try:
+        from importlib.resources import files as _resources_files
+
+        _path = _resources_files("abi") / "skills"
+        if _path.is_dir():
+            return Path(str(_path))
+    except Exception:
+        pass
+    import abi
+
+    _path = Path(abi.__file__).parent / "skills"
+    if not _path.is_dir():
+        raise ABIError(f"ABI skills directory not found: {_path}")
+    return _path
+
+
 def _fail(exc: Exception) -> None:
     """Handle CLI errors: print to stderr in red and exit with code 1.
 
@@ -152,9 +178,9 @@ def _emit_agent_json(payload: str) -> None:
     try:
         data = loads_json(payload, label="agent response")
     except ABIError:
-        return
+        raise typer.Exit(code=1)
     if not isinstance(data, dict):
-        return
+        raise typer.Exit(code=1)
     status = data.get("status")
     if status == "error":
         raise typer.Exit(code=1)
@@ -537,7 +563,12 @@ def report_command(
         if not plan_path.exists():
             raise ABIError(f"Missing execution plan: {plan_path}")
         plan_data = load_json_object(plan_path)
-        plugin_id = analysis_type or str(plan_data.get("analysis_type") or "metagenomic_plasmid")
+        plugin_id = analysis_type or str(plan_data.get("analysis_type") or "")
+        if not plugin_id:
+            raise ABIError(
+                "No analysis type specified. Pass --type or ensure the execution plan "
+                "contains an analysis_type field."
+            )
         plugin = get_plugin(plugin_id)
         outputs = plugin.write_report(plan_data, result_dir)
         typer.echo(json.dumps({key: str(value) for key, value in outputs.items()}, indent=2))
@@ -1168,12 +1199,17 @@ def install_skills_command(
     target: Optional[Path] = typer.Option(
         None,
         "--target",
-        help="Target skills directory (default: ~/.claude/skills).",
+        help="Target skills directory (default: ~/.claude/skills/abi).",
     ),
     force: bool = typer.Option(
         False,
         "--force",
         help="Overwrite existing skill files.",
+    ),
+    output_json: bool = typer.Option(
+        False,
+        "--output-json",
+        help="Emit the agent JSON envelope.",
     ),
 ) -> None:
     """Install ABI agent skills into a Claude Code skills directory.
@@ -1199,35 +1235,72 @@ def install_skills_command(
     （默认 ``~/.claude/skills/abi/``）。安装后，Claude Code 将自动加载
     这些 skills，并知道如何使用 ``abi`` CLI 及其生物信息学工具。
     """
-    import abi
-
     try:
-        source = Path(abi.__file__).parent / "skills"
-        if not source.is_dir():
-            raise ABIError(f"ABI skills directory not found: {source}")
+        _source = _resolve_skills_source()
         dest = target or (Path.home() / ".claude" / "skills" / "abi")
         copied: List[str] = []
         skipped: List[str] = []
-        for item in sorted(source.iterdir()):
-            skill_file = item / "SKILL.md" if item.is_dir() else item
-            if not skill_file.is_file() or skill_file.suffix != ".md":
+
+        # Collect skill files: only SKILL.md files in subdirectories (skip bare
+        # files like README.md that are human documentation, not agent skills).
+        install_plan: list[tuple[Path, Path, Path]] = []  # (skill_file, dest_subdir, dest_file)
+        for item in sorted(_source.iterdir()):
+            if not item.is_dir():
                 continue
-            dest_subdir = dest / item.name if item.is_dir() else dest
-            dest_file = dest_subdir / "SKILL.md" if item.is_dir() else dest_subdir / item.name
+            skill_file = item / "SKILL.md"
+            if not skill_file.is_file():
+                continue
+            dest_subdir = dest / item.name
+            dest_file = dest_subdir / "SKILL.md"
             if dest_file.exists() and not force:
                 skipped.append(str(dest_file))
                 continue
-            dest_subdir.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(skill_file, dest_file)
-            copied.append(str(dest_file))
+            install_plan.append((skill_file, dest_subdir, dest_file))
+
+        # Atomic install: copy to temp dir first, then rename into place.
+        tmp_dest: Optional[Path] = None
+        try:
+            if install_plan:
+                import tempfile
+
+                tmp_dest = Path(tempfile.mkdtemp(prefix=".abi-skills-", dir=dest.parent))
+                for skill_file, dest_subdir, dest_file in install_plan:
+                    tmp_subdir = tmp_dest / dest_subdir.name
+                    tmp_subdir.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(skill_file, tmp_subdir / "SKILL.md")
+                # Ensure target directory exists for the rename
+                dest.mkdir(parents=True, exist_ok=True)
+                for skill_file, dest_subdir, dest_file in install_plan:
+                    dest_subdir.mkdir(parents=True, exist_ok=True)
+                    final_src = tmp_dest / dest_subdir.name / "SKILL.md"
+                    shutil.copy2(final_src, dest_file)
+                    copied.append(str(dest_file))
+                # Clean up temp directory
+                shutil.rmtree(tmp_dest, ignore_errors=True)
+                tmp_dest = None
+            elif not skipped and not any(
+                (dest / d.name / "SKILL.md").exists()
+                for d in sorted(_source.iterdir())
+                if d.is_dir()
+            ):
+                pass  # No skills to install and dest is empty — still report success
+        finally:
+            if tmp_dest is not None:
+                shutil.rmtree(tmp_dest, ignore_errors=True)
+
         result = {
-            "source": str(source),
+            "source": str(_source),
             "target": str(dest),
             "copied": copied,
             "skipped": skipped,
             "count": len(copied),
         }
-        typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
+        if output_json:
+            _emit_agent_json(
+                json.dumps({"status": "success", "result": result})
+            )
+        else:
+            typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
         if skipped:
             typer.secho(
                 f"Skipped {len(skipped)} existing files (use --force to overwrite).",
@@ -1775,33 +1848,38 @@ def dispatch_command(
     参数解析优先级：``--arguments-file`` > ``--arguments`` > stdin。
     输出是带有 status、message 和 data 字段的 JSON 信封。
     """
-    # Resolve arguments from the highest-priority source.
-    # 从最高优先级来源解析参数。
-    if arguments_file is not None:
-        arguments = load_json_object(arguments_file, label=f"arguments file {arguments_file}")
-    elif arguments_json is not None:
-        # Try parsing as inline JSON first; if that fails, treat it as a file path.
-        # 首先尝试作为内联 JSON 解析；如果失败，将其视为文件路径。
-        try:
-            arguments = json.loads(arguments_json)
-        except json.JSONDecodeError:
-            arguments = load_json_object(
-                Path(arguments_json), label=f"arguments path {arguments_json}"
-            )
-    else:
-        # Read arguments from stdin — the default for subprocess piped input.
-        # 从 stdin 读取参数——子进程管道输入的默认方式。
-        import sys as _sys
-
-        raw = _sys.stdin.read()
-        if raw.strip():
-            arguments = json.loads(raw)
+    try:
+        # Resolve arguments from the highest-priority source.
+        # 从最高优先级来源解析参数。
+        if arguments_file is not None:
+            arguments = load_json_object(arguments_file, label=f"arguments file {arguments_file}")
+        elif arguments_json is not None:
+            # Try parsing as inline JSON first; if that fails, treat it as a file path.
+            # 首先尝试作为内联 JSON 解析；如果失败，将其视为文件路径。
+            try:
+                arguments = json.loads(arguments_json)
+            except json.JSONDecodeError:
+                arguments = load_json_object(
+                    Path(arguments_json), label=f"arguments path {arguments_json}"
+                )
         else:
-            arguments = {}
-    if not isinstance(arguments, dict):
-        raise typer.BadParameter("Arguments must be a JSON object.")
-    interface = ABIAgentInterface()
-    typer.echo(interface.dispatch(command, arguments), nl=False)
+            # Read arguments from stdin — the default for subprocess piped input.
+            # 从 stdin 读取参数——子进程管道输入的默认方式。
+            import sys as _sys
+
+            raw = _sys.stdin.read()
+            if raw.strip():
+                arguments = json.loads(raw)
+            else:
+                arguments = {}
+        if not isinstance(arguments, dict):
+            raise typer.BadParameter("Arguments must be a JSON object.")
+        interface = ABIAgentInterface()
+        typer.echo(interface.dispatch(command, arguments), nl=False)
+    except typer.Exit:
+        raise
+    except Exception as exc:
+        _fail(exc)
 
 
 def main() -> None:

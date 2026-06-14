@@ -49,7 +49,7 @@ def infer_dag(
     step_list = [
         step
         for step in steps
-        if not getattr(step, "skipped", False) and getattr(step, "tool_id", "") != "internal"
+        if not getattr(step, "skipped", False)
     ]
     output_map: Dict[str, tuple[str, str]] = {}
     produced_by_step: Dict[str, Dict[str, str]] = {}
@@ -134,7 +134,15 @@ def _normalize_path(value: Any, project_root: Path) -> str:
 def _is_shared_output_path(key: str, normalized_path: str) -> bool:
     if key in {"output_dir", "outdir", "work_dir", "report_dir", "tables_dir"}:
         return True
-    return not Path(normalized_path).suffix
+    path = Path(normalized_path)
+    if not path.suffix:
+        # Extensionless paths may be directories OR files like README/Makefile.
+        # Only treat as shared-output dir if the name suggests a directory.
+        # 无扩展名路径可能是目录也可能是 README/Makefile 这样的文件。
+        # 仅当名称表明是目录时才视为共享输出目录。
+        dir_indicators = {"output", "result", "tmp", "temp", "log", "db", "index", "ref"}
+        return path.name.lower() in dir_indicators or path.name.endswith("_dir")
+    return False
 
 
 def _topological_order(step_ids: List[str], edges: Mapping[str, List[str]]) -> List[str]:

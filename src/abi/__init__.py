@@ -71,8 +71,8 @@ def get_agent_guide() -> str:
         "  2. plan          — build execution plan, write execution_plan.json\n"
         "  3. dry_run       — render commands + provenance, NO real tools run\n"
         "  4. inspect       — check provenance for failures before execution\n"
-        "  5. report        — regenerate reports from completed runs\n"
-        "  6. run           — execute (REQUIRES user confirmation)\n"
+        "  5. run           — execute (REQUIRES user confirmation)\n"
+        "  6. report        — regenerate reports from completed runs\n"
         "\n"
         "JSON envelope contract (every command returns one of three):\n"
         '  success               — "result" holds the payload\n'
@@ -93,7 +93,8 @@ def get_agent_guide() -> str:
         "  - Use abi install-skills to register ABI skills for Claude Code.\n"
         "\n"
         "Plugin discovery:\n"
-        "  import abi; abi.list_plugins_summary()  # returns list of (id, name, desc)\n"
+        "  import abi; abi.list_plugins_summary()"
+        "  # returns list of dicts with keys analysis_type, name, description\n"
         "  abi list-types --output-json  # from CLI\n"
     )
 
@@ -118,5 +119,5 @@ def list_plugins_summary() -> list[dict[str, str]]:
             }
             for p in list_plugins()
         ]
-    except Exception:
+    except ImportError:
         return []

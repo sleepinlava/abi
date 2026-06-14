@@ -10,6 +10,19 @@ from abi.runtimes.base import RuntimeOptions, RuntimeResult
 from abi.tables import StandardTableManager
 
 
+def _coerce_bool(value: Any) -> bool:
+    """Coerce a config value to bool, handling string representations.
+
+    ``bool("false") == True`` in Python, so we need explicit handling for
+    common string falsy values from env vars and YAML string substitution.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in {"", "false", "0", "no", "off", "none"}
+    return bool(value)
+
+
 class LocalRuntime:
     """Run ABI plans through the existing local GenericABIExecutor."""
 
@@ -36,11 +49,11 @@ class LocalRuntime:
         table_manager = StandardTableManager(self.plugin.table_schemas())
         executor = GenericABIExecutor(
             self.plugin.registry(),
-            RunLogger(str(config["log_dir"])),
+            RunLogger(str(config.get("log_dir", ""))),
             table_manager=table_manager,
             parse_outputs=self.plugin.parse_outputs,
             report_title=self.plugin.report_title,
-            mock_tools=dry_run or bool(config.get("mock_tools")),
+            mock_tools=dry_run or _coerce_bool(config.get("mock_tools")),
         )
         outputs = executor.run(plan, config, dry_run=dry_run)
         return RuntimeResult(status="success", return_code=0, outputs=dict(outputs))

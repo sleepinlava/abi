@@ -149,11 +149,9 @@ def test_registry_builds_opera_ms_command_with_fasta_normalization():
 def test_registry_skill_docs_exist():
     from pathlib import Path
 
-    import abi
-
     # skill_path values in tool_registry.yaml are relative (skills/<tool>/SKILL.md).
     # Skills now live inside the ABI package at src/abi/skills/.
-    skills_root = Path(abi.__file__).parent / "skills"
+    skills_root = _resolve_skills_root()
     registry = ToolRegistry.from_path()
     missing = []
     for tool in registry.list_tools():
@@ -165,6 +163,23 @@ def test_registry_skill_docs_exist():
             if not candidate.exists():
                 missing.append(f"{skill_path} (expected at {candidate})")
     assert missing == []
+
+
+def _resolve_skills_root():
+    """Resolve the bundled skills directory inside the ABI package."""
+    from pathlib import Path as _Path
+
+    try:
+        from importlib.resources import files as _resources_files
+
+        _path = _resources_files("abi") / "skills"
+        if _path.is_dir():
+            return _Path(str(_path))
+    except Exception:
+        pass
+    import abi
+
+    return _Path(abi.__file__).parent / "skills"
 
 
 def test_integronfinder_uses_dedicated_biopython_compat_env():

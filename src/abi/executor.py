@@ -247,18 +247,27 @@ class GenericABIExecutor:
         # 采用 fail-fast 语义：第一个失败的步骤停止迭代。
         command_rows = []
         failed_error: ToolError | None = None
-        for step in plan.steps:
-            row, error = self._execute_step(
-                step,
-                dry_run=dry_run,
-                provenance=provenance,
-                tables_dir=tables_dir,
-                progress_recorder=progress_recorder,
-            )
-            command_rows.append(row)
-            if error:
-                failed_error = error
-                break
+        _last_step_id = "unknown"
+        try:
+            for step in plan.steps:
+                _last_step_id = getattr(step, "tool_id", str(step))
+                row, error = self._execute_step(
+                    step,
+                    dry_run=dry_run,
+                    provenance=provenance,
+                    tables_dir=tables_dir,
+                    progress_recorder=progress_recorder,
+                )
+                command_rows.append(row)
+                if error:
+                    failed_error = error
+                    break
+        except Exception as exc:
+            if not failed_error:
+                failed_error = ToolError(
+                    f"Unexpected error during {_last_step_id}: {exc}"
+                )
+                failed_error.__cause__ = exc
 
         # Summarize which standard tables were populated.
         # 汇总哪些标准表格已被填充。

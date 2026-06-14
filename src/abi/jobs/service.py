@@ -562,13 +562,16 @@ class ABIJobService:
         ``self._processes`` 中，以便 ``cancel()`` 可以定位并终止它。
         """
         args_json = json.dumps(record.arguments, ensure_ascii=False)
-        proc = subprocess.Popen(
-            ["abi", "dispatch", "--command", record.command, "--arguments", args_json],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+        # Hold the lock across Popen creation and registration so that
+        # cancel() cannot miss a process that is about to start.
+        # 在 Popen 创建和注册期间持有锁，防止 cancel() 遗漏即将启动的进程。
         with self._lock:
+            proc = subprocess.Popen(
+                ["abi", "dispatch", "--command", record.command, "--arguments", args_json],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
             self._processes[job_id] = proc
             # Record the OS PID for force-kill and diagnostics
             # 记录 OS PID 用于强制终止和诊断
@@ -1316,11 +1319,16 @@ def _kill_process(proc: "subprocess.Popen[str]", pid: Optional[int]) -> None:
             os.kill(target_pid, signal.SIGKILL)
         except OSError:
             pass
-    # Drain pipes so the parent does not deadlock on buffered I/O
-    # 排空管道以防止父进程因缓冲 I/O 死锁
+    # Wait for the process to finish (stdout/stderr are already being
+    # consumed by proc.communicate() in _dispatch_subprocess).  Calling
+    # proc.communicate() here would race with that thread and corrupt
+    # internal Popen state.
+    # 等待进程结束（stdout/stderr 已由 _dispatch_subprocess 中的
+    # proc.communicate() 处理）。在此调用 proc.communicate() 会与
+    # 该线程竞争并损坏内部 Popen 状态。
     try:
-        proc.communicate(timeout=1)
-    except (subprocess.TimeoutExpired, OSError):
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
         pass
 
 
