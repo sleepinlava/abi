@@ -36,7 +36,6 @@ from typing import Any, Dict, List, Mapping, Optional
 
 from abi.errors import ABIError
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Data types
 # ═══════════════════════════════════════════════════════════════════════════
@@ -71,9 +70,7 @@ class ContractViolationError(ABIError):
     def __init__(self, step_id: str, violations: List[ContractViolation]) -> None:
         self.step_id = step_id
         self.violations = violations
-        detail = "; ".join(
-            f"{v.check}: {v.detail}" for v in violations[:5]
-        )
+        detail = "; ".join(f"{v.check}: {v.detail}" for v in violations[:5])
         if len(violations) > 5:
             detail += f" (+{len(violations) - 5} more)"
         super().__init__(f"Step {step_id!r} contract violated: {detail}")
@@ -236,9 +233,7 @@ def validate_output_contract(
         # ── extensions ──
         allowed_exts = contract.get("extensions")
         if allowed_exts and isinstance(allowed_exts, list) and file_path is not None:
-            if file_path.is_file() and not any(
-                path_str.endswith(ext) for ext in allowed_exts
-            ):
+            if file_path.is_file() and not any(path_str.endswith(ext) for ext in allowed_exts):
                 violations.append(
                     ContractViolation(
                         check="extension",
@@ -271,6 +266,23 @@ def validate_output_contract(
                             )
                         )
 
+        # ── min_files (directory contents count) ──
+        min_files = contract.get("min_files")
+        if min_files is not None and file_path is not None:
+            actual_files = _count_regular_files(file_path)
+            if actual_files < int(min_files):
+                violations.append(
+                    ContractViolation(
+                        check="min_files",
+                        detail=(
+                            f"Output {key!r} has {actual_files} files, minimum {min_files} required"
+                        ),
+                        path=path_str,
+                        expected=f">= {min_files}",
+                        actual=str(actual_files),
+                    )
+                )
+
         # ── min_contigs (FASTA-specific) ──
         min_contigs = contract.get("min_contigs")
         if min_contigs is not None and file_path is not None and file_path.is_file():
@@ -290,9 +302,12 @@ def validate_output_contract(
                 )
 
         # ── JSON schema check ──
+        required_keys = contract.get("required_keys")
         schema = contract.get("schema")
-        if schema and isinstance(schema, Mapping) and file_path is not None:
-            if file_path.is_file() and file_path.suffix in {".json"}:
+        if file_path is not None and file_path.is_file() and file_path.suffix == ".json":
+            if required_keys and isinstance(required_keys, list):
+                violations.extend(_validate_json_required_keys(file_path, required_keys, key))
+            if schema and isinstance(schema, Mapping):
                 json_violations = _validate_json_schema(file_path, schema, key)
                 violations.extend(json_violations)
 
@@ -588,6 +603,15 @@ def _file_or_dir_size(path: Path) -> int:
     return 0
 
 
+def _count_regular_files(path: Path) -> int:
+    """Count regular files under a directory, or return 1 for a regular file."""
+    if path.is_file():
+        return 1
+    if path.is_dir():
+        return sum(1 for child in path.rglob("*") if child.is_file())
+    return 0
+
+
 def _count_fasta_contigs(path: Path) -> int:
     """Count ``>`` header lines in a FASTA file."""
     count = 0
@@ -599,6 +623,51 @@ def _count_fasta_contigs(path: Path) -> int:
     except Exception:
         return 0
     return count
+
+
+def _validate_json_required_keys(
+    file_path: Path,
+    required_keys: List[Any],
+    output_key: str,
+) -> List[ContractViolation]:
+    """Validate that a JSON file contains required top-level keys."""
+    violations: List[ContractViolation] = []
+    try:
+        with file_path.open("r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception as exc:
+        return [
+            ContractViolation(
+                check="json_parse",
+                detail=f"Cannot parse JSON output {output_key!r}: {exc}",
+                path=str(file_path),
+            )
+        ]
+
+    if not isinstance(data, Mapping):
+        return [
+            ContractViolation(
+                check="json_required_key",
+                detail=f"JSON output {output_key!r} is not an object",
+                path=str(file_path),
+                expected="object",
+                actual=type(data).__name__,
+            )
+        ]
+
+    for required_key in required_keys:
+        key = str(required_key)
+        if key not in data:
+            violations.append(
+                ContractViolation(
+                    check="json_required_key",
+                    detail=f"Required key {key!r} not found in {output_key!r}",
+                    path=str(file_path),
+                    expected=key,
+                    actual="missing",
+                )
+            )
+    return violations
 
 
 def _validate_json_schema(
@@ -644,9 +713,7 @@ def _validate_json_schema(
                 violations.append(
                     ContractViolation(
                         check="json_schema",
-                        detail=(
-                            f"Key {dotted_key!r} not found in {output_key!r}"
-                        ),
+                        detail=(f"Key {dotted_key!r} not found in {output_key!r}"),
                         path=str(file_path),
                         expected=dotted_key,
                         actual=f"missing at {'.'.join(path_traversed) or 'root'}",

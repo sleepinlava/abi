@@ -88,6 +88,7 @@ Generic executer — the orchestration engine for ABI pipelines.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping
 
@@ -95,7 +96,6 @@ from abi._shared import _display_command
 from abi.config import resolved_mamba_root, write_yaml
 from abi.contracts.step_contract import (
     ContractViolationError,
-    compute_file_checksum,
     evaluate_assertions,
     save_checksums,
     validate_output_contract,
@@ -534,9 +534,7 @@ class GenericABIExecutor:
         # 执行前契约：验证输入校验和
         contract = params.get("_contract", {})
         if self.enforce_contracts and contract:
-            input_violations = verify_input_checksums(
-                step.step_id, params, self._checksums
-            )
+            input_violations = verify_input_checksums(step.step_id, params, self._checksums)
             if input_violations:
                 raise ContractViolationError(step.step_id, input_violations)
 
@@ -573,11 +571,19 @@ class GenericABIExecutor:
             output_spec = contract.get("outputs", {})
             assertions = contract.get("assertions", [])
 
+            # 0. Resolve actual output paths — the planner may generate abstract
+            #    paths (e.g. S1.fastp.clean_read1) that do not match what the tool
+            #    actually produces (e.g. S1_R1.clean.fastq.gz).  After execution we
+            #    derive the real paths from the output directory so contract
+            #    validation checks the files that actually exist.
+            # 0. 解析实际输出路径——规划器可能生成抽象路径（如 S1.fastp.clean_read1），
+            #    与工具实际生成的路径（如 S1_R1.clean.fastq.gz）不匹配。
+            #    执行后，我们从输出目录推导实际路径，以便契约验证检查真实存在的文件。
+            resolved_outputs = _resolve_actual_outputs(step.outputs, output_spec, step.sample_id)
+
             # 1. Validate output files against declared contracts.
             # 1. 根据声明的契约验证输出文件。
-            contract_result = validate_output_contract(
-                step.step_id, step.outputs, output_spec
-            )
+            contract_result = validate_output_contract(step.step_id, resolved_outputs, output_spec)
             if not contract_result.passed:
                 raise ContractViolationError(step.step_id, contract_result.violations)
 
@@ -589,7 +595,7 @@ class GenericABIExecutor:
             # 3. Evaluate runtime assertions.
             # 3. 评估运行时断言。
             if assertions:
-                assertion_context = _build_assertion_context(step, params)
+                assertion_context = _build_assertion_context(step, resolved_outputs)
                 assertion_violations = evaluate_assertions(assertions, assertion_context)
                 if assertion_violations:
                     raise ContractViolationError(step.step_id, assertion_violations)
@@ -860,20 +866,33 @@ class GenericABIExecutor:
         这在任何步骤执行之前调用，因此工具不会因其预期的输出目录尚不存在而失败。
         """
         for step in steps:
-            for output_path in step.outputs.values():
+            # Collect output_dir paths to avoid pre-creating them — some tools
+            # (megahit, metaflye) refuse to run if their output directory already
+            # exists, even when empty.  We still create parent directories for
+            # file outputs and for the output_dir itself.
+            # 收集 output_dir 路径以避免预创建——部分工具（megahit、metaflye）
+            # 即使其输出目录为空也会拒绝已存在的目录。
+            # 我们仍为文件输出和 output_dir 本身创建父目录。
+            output_dir = step.outputs.get("output_dir")
+            tool_output_dirs = {Path(str(output_dir)).resolve()} if output_dir else set()
+            for key, output_path in step.outputs.items():
                 if output_path is None:
                     continue
                 path = Path(str(output_path))
-                if path.suffix:
-                    # Path has a file extension (e.g., /out/results.csv) — create the parent.
-                    # 路径有文件扩展名（例如 /out/results.csv）——创建父目录。
+                if key == "output_dir":
                     ensure_directory(
                         path.parent,
                         label=f"Output parent directory for {step.step_id}",
                     )
+                    continue  # the tool creates output_dir itself
+                if path.suffix:
+                    parent = path.parent.resolve()
+                    if parent not in tool_output_dirs:
+                        ensure_directory(
+                            parent,
+                            label=f"Output parent directory for {step.step_id}",
+                        )
                 else:
-                    # Path has no extension (e.g., /out/my_tool/) — create it as a directory.
-                    # 路径没有扩展名（例如 /out/my_tool/）——将其作为目录创建。
                     ensure_directory(path, label=f"Output directory for {step.step_id}")
 
 
@@ -901,21 +920,26 @@ def _execution_options(config: Mapping[str, Any]) -> Dict[str, Any]:
     return {"record_progress": progress or dashboard_enabled}
 
 
-def _build_assertion_context(step: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def _build_assertion_context(step: Any, resolved_outputs: Dict[str, Any]) -> Dict[str, Any]:
     """Build the evaluation context for step assertions.
 
     Populates:
     - ``output_files``: ``{key: exists}`` for each output path.
-    - ``output_json``: parsed JSON content for ``.json`` output files.
+    - ``output_json``: parsed JSON content.  When exactly one ``.json`` output
+      file is found its content is placed directly (so assertions write
+      ``output_json.summary.total_reads``).  When multiple JSON outputs
+      exist they are keyed by output name.
     - ``return_code``: 0 (assertions only run on successful steps).
     """
     from pathlib import Path
 
     context: Dict[str, Any] = {"return_code": 0}
     output_files: Dict[str, bool] = {}
-    output_json: Dict[str, Any] = {}
+    json_outputs: Dict[str, Any] = {}
 
-    for key, value in getattr(step, "outputs", {}).items():
+    for key, value in resolved_outputs.items():
+        if key == "_contract":
+            continue
         if not isinstance(value, (str, Path)):
             continue
         path = Path(str(value))
@@ -923,13 +947,157 @@ def _build_assertion_context(step: Any, params: Dict[str, Any]) -> Dict[str, Any
         output_files[key] = exists
         if exists and path.suffix == ".json":
             try:
-                output_json[key] = json.loads(path.read_text(encoding="utf-8"))
+                json_outputs[key] = json.loads(path.read_text(encoding="utf-8"))
             except Exception:
                 pass
 
     context["output_files"] = output_files
-    context["output_json"] = output_json
+    # Flatten: if only one JSON output, use its content directly so
+    # assertions can write ``output_json.field`` instead of
+    # ``output_json.key.field``.
+    # 扁平化：如果只有一个 JSON 输出，直接使用其内容，
+    # 这样断言可以写 ``output_json.field`` 而不是 ``output_json.key.field``。
+    if len(json_outputs) == 1:
+        context["output_json"] = next(iter(json_outputs.values()))
+    else:
+        context["output_json"] = json_outputs
     return context
+
+
+def _resolve_actual_outputs(
+    planned_outputs: Dict[str, Any],
+    output_spec: Dict[str, Any],
+    sample_id: str,
+) -> Dict[str, Any]:
+    """Resolve actual output file paths after tool execution.
+
+    The planner may generate abstract output paths (e.g.
+    ``S1.fastp.clean_read1``) that do not match what the tool actually
+    produces (e.g. ``S1_R1.clean.fastq.gz``).  After the tool runs
+    successfully, this function derives the real paths by scanning the
+    output directory, matching files by expected format/extension against
+    the contract's output specification.
+
+    Returns a dict with the same keys as ``planned_outputs`` but with
+    values corrected to point to actual on-disk files where possible.
+    """
+    from pathlib import Path
+
+    resolved = dict(planned_outputs)
+    output_dir = resolved.get("output_dir", "")
+    if not output_dir:
+        return resolved
+
+    outdir = Path(str(output_dir))
+    if not outdir.exists():
+        return resolved
+
+    # Format → file extension(s) mapping.
+    # 格式 → 文件扩展名映射。
+    _FORMAT_EXT: Dict[str, str] = {
+        "fastq.gz": ".fastq.gz",
+        "fastq": ".fastq",
+        "fasta": ".fasta",
+        "fna": ".fna",
+        "fa": ".fa",
+        "json": ".json",
+        "html": ".html",
+        "tsv": ".tsv",
+        "csv": ".csv",
+        "txt": ".txt",
+        "bam": ".bam",
+        "sam": ".sam",
+        "gfa": ".gfa",
+        "gff": ".gff",
+        "gff3": ".gff3",
+        "png": ".png",
+        "svg": ".svg",
+        "pdf": ".pdf",
+    }
+
+    # Gather all regular files in the output directory (non-recursive).
+    # 收集输出目录中的所有常规文件（非递归）。
+    try:
+        dir_files = sorted((f for f in outdir.iterdir() if f.is_file()), key=lambda f: f.name)
+    except OSError:
+        return resolved
+
+    assigned: set = set()  # track files already matched to a key
+
+    for key, spec in output_spec.items():
+        if key == "output_dir" or not isinstance(spec, dict):
+            continue
+
+        planned = resolved.get(key, "")
+        if planned and Path(str(planned)).exists():
+            assigned.add(str(Path(str(planned)).resolve()))
+            continue  # Already correct.
+
+        fmt = str(spec.get("format", ""))
+        extensions = _FORMAT_EXT.get(fmt)
+        if not extensions:
+            # Try the format itself as an extension (e.g. "fastq.gz").
+            extensions = f".{fmt}" if fmt else ""
+
+        if extensions:
+            candidates = [
+                f
+                for f in dir_files
+                if f.name.endswith(extensions)
+                and str(f.resolve()) not in assigned
+                and not f.name.endswith((".stdout.log", ".stderr.log"))
+            ]
+            if candidates:
+                best_candidate = max(
+                    candidates,
+                    key=lambda candidate: _output_candidate_score(key, sample_id, candidate),
+                )
+                resolved[key] = str(best_candidate)
+                assigned.add(str(best_candidate.resolve()))
+
+    return resolved
+
+
+def _output_candidate_score(key: str, sample_id: str, candidate: Path) -> int:
+    """Score how well an on-disk file matches a declared output key."""
+    name = candidate.name.lower()
+    normalized_key = key.lower()
+    score = 0
+
+    if sample_id and sample_id.lower() in name:
+        score += 5
+    if normalized_key in name:
+        score += 20
+    compact_key = normalized_key.replace("_", "")
+    if compact_key and compact_key in name.replace("_", "").replace("-", "").replace(".", ""):
+        score += 10
+    for token in normalized_key.split("_"):
+        if len(token) > 1 and token in name:
+            score += 2
+
+    pair = _read_pair_for_key(normalized_key)
+    if pair:
+        opposite = "2" if pair == "1" else "1"
+        if _filename_has_read_pair(name, pair):
+            score += 50
+        if _filename_has_read_pair(name, opposite):
+            score -= 50
+
+    return score
+
+
+def _read_pair_for_key(key: str) -> str:
+    """Return ``"1"`` or ``"2"`` when an output key names a read pair side."""
+    if "read1" in key or key.endswith("r1"):
+        return "1"
+    if "read2" in key or key.endswith("r2"):
+        return "2"
+    return ""
+
+
+def _filename_has_read_pair(name: str, pair: str) -> bool:
+    """Detect R1/R2 or read1/read2 as a delimited filename token."""
+    return bool(re.search(rf"(^|[^a-z0-9])(?:r|read)?{pair}([^a-z0-9]|$)", name))
 
 
 def _tool_failure_reason(

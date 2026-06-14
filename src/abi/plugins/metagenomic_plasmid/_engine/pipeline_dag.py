@@ -113,9 +113,7 @@ class PipelineDAG:
             if platform in node_data.get("platforms", [])
         }
 
-    def active_node_ids(
-        self, platform: str, config: Mapping[str, Any]
-    ) -> Set[str]:
+    def active_node_ids(self, platform: str, config: Mapping[str, Any]) -> Set[str]:
         """Return the set of node IDs that should be ACTIVE for this run.
 
         "Active" means:
@@ -148,9 +146,7 @@ class PipelineDAG:
 
         return active
 
-    def resolve_dependencies(
-        self, active_ids: Set[str], platform: str
-    ) -> Dict[str, List[str]]:
+    def resolve_dependencies(self, active_ids: Set[str], platform: str) -> Dict[str, List[str]]:
         """Resolve effective dependencies for each active node.
 
         For each active node, its effective dependencies are the subset of
@@ -227,9 +223,7 @@ class PipelineDAG:
                     adjacency[dep].append(node_id)
 
         # Kahn's algorithm
-        queue: deque[str] = deque(
-            nid for nid, deg in in_degree.items() if deg == 0
-        )
+        queue: deque[str] = deque(nid for nid, deg in in_degree.items() if deg == 0)
         # Stable order: when multiple nodes have in-degree 0, prioritize
         # by spec order (the order they appear in _nodes).
         spec_order = {nid: i for i, nid in enumerate(self._nodes)}
@@ -248,8 +242,7 @@ class PipelineDAG:
         if len(order) != len(resolved_deps):
             remaining = set(resolved_deps) - set(order)
             raise ValueError(
-                f"Cycle detected in pipeline DAG. "
-                f"Unresolved nodes: {sorted(remaining)}"
+                f"Cycle detected in pipeline DAG. Unresolved nodes: {sorted(remaining)}"
             )
 
         return order
@@ -274,9 +267,7 @@ class PipelineDAG:
 # ── Helpers / 辅助函数 ─────────────────────────────────────────────────────
 
 
-def _evaluate_condition(
-    condition: Mapping[str, Any], config: Mapping[str, Any]
-) -> bool:
+def _evaluate_condition(condition: Mapping[str, Any], config: Mapping[str, Any]) -> bool:
     """Evaluate a node enable_condition against the config.
 
     Supported operators:

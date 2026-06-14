@@ -86,6 +86,7 @@ Testing/
 # Demo execution artifacts
 data/e_coli_demo/
 results/e_coli_demo/
+smoke_test
 
 # docs
 Rebuild.md

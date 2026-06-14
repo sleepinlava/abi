@@ -16,7 +16,6 @@ from abi.plugins.metagenomic_plasmid._engine.pipeline_dag import (
     _evaluate_condition,
 )
 
-
 # ── Minimal DAG spec for testing ─────────────────────────────────────────
 
 MINIMAL_SPEC = {

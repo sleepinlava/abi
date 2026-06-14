@@ -7,25 +7,21 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from abi.contracts.step_contract import (
     ContractViolation,
     ContractViolationError,
-    StepContractResult,
+    _count_fasta_contigs,
+    _parse_size,
     compute_file_checksum,
     compute_output_checksums,
     evaluate_assertions,
-    save_checksums,
     load_checksums,
+    save_checksums,
     validate_output_contract,
     verify_input_checksums,
-    _parse_size,
-    _count_fasta_contigs,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Helpers
@@ -132,9 +128,7 @@ class TestValidateOutputContract:
 
     def test_file_missing_fails(self, tmp_path):
         spec = {"out_file": {"contract": {"min_size": "1B"}}}
-        result = validate_output_contract(
-            "s1", {"out_file": str(tmp_path / "nope.txt")}, spec
-        )
+        result = validate_output_contract("s1", {"out_file": str(tmp_path / "nope.txt")}, spec)
         assert not result.passed
         assert any(v.check == "file_exists" for v in result.violations)
 
@@ -165,6 +159,16 @@ class TestValidateOutputContract:
         assert len(violations) == 1
         assert "missing.csv" in violations[0].detail
 
+    def test_min_files_check(self, tmp_path):
+        d = tmp_path / "index"
+        d.mkdir()
+        (d / "a.bt2").write_text("a")
+        (d / "b.bt2").write_text("b")
+        spec = {"index_dir": {"contract": {"min_files": 4}}}
+        result = validate_output_contract("s1", {"index_dir": str(d)}, spec)
+        assert not result.passed
+        assert any(v.check == "min_files" for v in result.violations)
+
     def test_min_contigs(self, tmp_path):
         f = tmp_path / "assembly.fa"
         f.write_text(">contig1\nATCG\n")
@@ -192,6 +196,14 @@ class TestValidateOutputContract:
         assert not result.passed
         violations = [v for v in result.violations if v.check == "json_schema"]
         assert len(violations) >= 1
+
+    def test_json_required_keys_check(self, tmp_path):
+        f = tmp_path / "report.json"
+        f.write_text(json.dumps({"details": {}}))
+        spec = {"json_report": {"contract": {"required_keys": ["summary"]}}}
+        result = validate_output_contract("s1", {"json_report": str(f)}, spec)
+        assert not result.passed
+        assert any(v.check == "json_required_key" for v in result.violations)
 
     def test_computes_checksums_for_valid_outputs(self, tmp_path):
         f = tmp_path / "out.txt"
@@ -250,9 +262,11 @@ class TestEvaluateAssertions:
         assert len(violations) == 1
 
     def test_comparison_assertion(self):
-        ctx = {"output_json": {}, "output_files": {}, "return_code": 0}
         violations = evaluate_assertions(
-            ["output_json.summary.after_filtering.total_reads <= output_json.summary.before_filtering.total_reads"],
+            [
+                "output_json.summary.after_filtering.total_reads "
+                "<= output_json.summary.before_filtering.total_reads"
+            ],
             {
                 "output_json": {
                     "summary": {
@@ -295,9 +309,7 @@ class TestVerifyInputChecksums:
 
     def test_missing_file_reported(self, tmp_path):
         checksums = {str(tmp_path / "gone.txt"): "b" * 64}
-        violations = verify_input_checksums(
-            "s1", {"read1": str(tmp_path / "gone.txt")}, checksums
-        )
+        violations = verify_input_checksums("s1", {"read1": str(tmp_path / "gone.txt")}, checksums)
         assert any(v.check == "checksum_verify" for v in violations)
 
 

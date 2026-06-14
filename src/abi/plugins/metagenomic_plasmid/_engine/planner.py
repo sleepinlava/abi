@@ -789,9 +789,7 @@ def build_plan_from_dag(
     order = dag.topological_order(resolved_deps)
 
     # Separate project-level from sample-level nodes
-    project_node_ids = [
-        nid for nid in order if dag.category_for(nid) in _PROJECT_LEVEL_CATEGORIES
-    ]
+    project_node_ids = [nid for nid in order if dag.category_for(nid) in _PROJECT_LEVEL_CATEGORIES]
     sample_node_ids = [
         nid for nid in order if dag.category_for(nid) not in _PROJECT_LEVEL_CATEGORIES
     ]
@@ -841,9 +839,7 @@ def build_plan_from_dag(
         else:
             steps.append(step)
 
-    selected_tools = sorted(
-        {step.tool_id for step in steps if step.tool_id != "internal"}
-    )
+    selected_tools = sorted({step.tool_id for step in steps if step.tool_id != "internal"})
 
     return ExecutionPlan(
         project_name=str(config["project_name"]),
