@@ -5,10 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from abi.autoplasm.resources import (
+from abi.plugins.metagenomic_plasmid._engine.resources import (
     check_resources as check_autoplasm_resources,
-)
-from abi.autoplasm.resources import (
     setup_resources as setup_autoplasm_resources,
 )
 from abi.errors import ABIError
