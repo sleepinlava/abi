@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.1.0] - 2026-06-14
 
 ### Added
 - `abi-mcp` console_script entry point for starting the MCP stdio server directly.
