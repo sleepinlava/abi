@@ -75,7 +75,9 @@ src/abi/
   provenance.py       RunLogger, PipelineProgressRecorder, TSV writers (749 lines)
   tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1058 lines)
   schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
-  executor.py         GenericABIExecutor — step iteration, tool invocation, provenance generation (891 lines)
+  executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement (981 lines)
+  contracts/          Step contract enforcement, checksum chaining, assertion evaluation
+    step_contract.py    ContractViolation, validate_output_contract, evaluate_assertions (685 lines)
   permissions.py      read_only / planning_write / execution levels
   diagnostics.py      Error taxonomy + DiagnosticHint + classify_exception (400 lines)
   jobs/service.py     HTTP Job Service with subprocess force-kill (SIGTERM → SIGKILL)
@@ -93,6 +95,7 @@ src/abi/
 | `abi.schemas` | `SampleInput`, `SampleContext`, `PlanStep`, `ExecutionPlan` |
 | `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
 | `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV provenance writers |
+| `abi.contracts.step_contract` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, checksum chaining |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
 | `abi.testing` | `assert_plugin_contract` |
 
@@ -113,7 +116,7 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 
 ### The two plugins
 
-- **`metagenomic_plasmid`**: The complex plugin. Engine lives in `_engine/` (8,434 lines migrated from original AutoPlasm). 43 tool contracts, plasmid detection/annotation/abundance pipeline. Plugin class in `__init__.py` delegates to `._engine.*` modules.
+- **`metagenomic_plasmid`**: The complex plugin. Engine lives in `_engine/` (39 files, 9,006 lines). 67 tool contracts, 84-node DAG specification (`pipeline_dag.yaml`), plasmid detection/annotation/abundance pipeline. Plugin class in `__init__.py` delegates to `._engine.*` modules. DAG-driven planner (`_engine/pipeline_dag.py`) is the single source of truth for workflow topology.
 - **`metatranscriptomics`**: The portability demo. 574 lines, 4 tools (fastp, STAR, HISAT2, featureCounts), one standard table (`gene_expression.tsv`). All logic inline — proves the same `ABIAgentInterface` drives radically different analyses.
 
 ### autoplasm/ is a backward-compat shim
@@ -124,7 +127,16 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 
 The lifecycle for any tool is: `check_installation → plan → validate_inputs → select_params → build_command → run → parse_outputs → normalize_outputs`. GenericCommandSkill handles this from YAML tool_contracts; only tools with complex post-processing need Python subclasses.
 
-`_validate_template_params` ensures required template fields have non-empty values before execution. `_check_dotted_fields` rejects `{key.attr}` references in templates (SafeFormatDict cannot resolve attribute access on plain string values). `RESOURCE_FIELDS` controls which template fields are checked for on-disk existence by `_resource_status()` — add new resource-type field names here when they appear in tool contracts.
+Each contract may declare a `normalization` block (`parser` + `tables`) that maps tool outputs to standard tables via `abi.autoplasm.parsers` functions. 32 tools have custom parsers; the remaining 35 use generic TSV import or are intermediate steps whose output is consumed by downstream tools.
+
+### Step contract enforcement
+
+`contracts/step_contract.py` enforces output contracts on every tool execution in 3 phases:
+1. **Pre-execution**: verify input file checksums against recorded values (checksum chaining)
+2. **Post-execution**: validate output files (existence, min_size, extensions, contains, min_contigs, JSON schema)
+3. **Assertions**: evaluate runtime assertions (e.g. `output_json.summary.total_reads > 0`) against tool outputs
+
+Contract violations raise `ContractViolationError` with structured diagnostics. Checksums are persisted to `provenance/checksums.json` for downstream verification.
 
 ### Shared utilities (`_shared.py`)
 
@@ -141,7 +153,7 @@ All ABI core modules and `_engine/` subpackages import these from `abi._shared`.
 
 ### Provenance artifacts
 
-Every run writes to `<outdir>/provenance/`: `commands.tsv`, `resolved_inputs.tsv`, `tool_versions.tsv`, `resources.json`, `environment.yml`, `run_summary.json`, `progress.json`/`progress.jsonl`, `step_logs/`. These are always written even on failure — post-mortem inspection is always possible.
+Every run writes to `<outdir>/provenance/`: `commands.tsv`, `resolved_inputs.tsv`, `tool_versions.tsv`, `resources.json`, `environment.yml`, `run_summary.json`, `checksums.json`, `progress.json`/`progress.jsonl`, `step_logs/`. These are always written even on failure — post-mortem inspection is always possible.
 
 ### Job Service execution modes
 

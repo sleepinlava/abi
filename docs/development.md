@@ -15,7 +15,7 @@ src/abi/
   provenance.py       RunLogger, PipelineProgressRecorder, TSV provenance writers
   tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult
   schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
-  executor.py         GenericABIExecutor — step iteration, tool invocation, provenance
+  executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement, provenance (981 lines)
   permissions.py      read_only / planning_write / execution levels
   diagnostics.py      Error taxonomy + DiagnosticHint + classify_exception
   interfaces.py       ABIPlugin, ABIDryRunPlugin, ABIInitializablePlugin protocols
@@ -28,7 +28,7 @@ src/abi/
   results.py          Result writing and management
   tables.py           StandardTableManager
   report.py           Generic report writer
-  contracts/          Contract definitions (ABIPluginManifest, workflow specs)
+  contracts/          Contract definitions + step contract enforcement (step_contract.py, 685 lines)
   openai_contracts.py OpenAI function-calling tool descriptor generation
   jobs/               HTTP Job Service (service, client)
   runtimes/           local, Nextflow runtimes
@@ -51,6 +51,7 @@ core modules for shared infrastructure.
 | `abi.schemas` | `SampleInput`, `SampleContext`, `PlanStep`, `ExecutionPlan` |
 | `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
 | `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV provenance writers |
+| `abi.contracts.step_contract` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, checksum chaining |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
 | `abi.diagnostics` | Error taxonomy + `DiagnosticHint` + `classify_exception` |
 | `abi.json_utils` | JSON file/payload loading with `ABIJSONError` |

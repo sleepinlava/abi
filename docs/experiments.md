@@ -46,4 +46,4 @@ Initial tasks:
 | Plugin | Tools | Lines | Standard Table |
 | --- | --- | --- | --- |
 | `metatranscriptomics` | fastp, STAR, HISAT2, featureCounts | 574 | `gene_expression.tsv` |
-| `metagenomic_plasmid` | 43 tool contracts (23 engine files) | ~8,500 | `plasmid_detection.tsv`, `plasmid_abundance.tsv`, etc. |
+| `metagenomic_plasmid` | 67 tool contracts (39 engine files, 9,006 lines) | ~9,000 | `plasmid_predictions.tsv`, `abundance.tsv`, etc. (16 standard tables) |
