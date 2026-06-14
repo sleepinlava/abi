@@ -68,12 +68,14 @@ from abi.agent.envelopes import (
     json_dumps,
     success_envelope,
 )
-from abi.plugins.metagenomic_plasmid._engine.result_validation import validate_result_dir as validate_autoplasm_result_dir
 from abi.diagnostics import classify_exception
 from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
 from abi.json_utils import load_json_object
 from abi.plugins import get_plugin, list_plugins
+from abi.plugins.metagenomic_plasmid._engine.result_validation import (
+    validate_result_dir as validate_autoplasm_result_dir,
+)
 from abi.provenance import RunLogger
 from abi.results import validate_abi_result_dir
 from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
