@@ -1,0 +1,41 @@
+abi_version: '0.1'
+tool_id: kneaddata
+name: KneadData
+category: host_removal
+purpose: Integrated host read decontamination using Bowtie2 + Trimmomatic.
+when_to_use:
+- short_reads
+- host_reference_available
+- decontamination_required
+inputs:
+  read1:
+    type: file
+    format: fastq
+    required: true
+  read2:
+    type: file
+    format: fastq
+    required: true
+  host_reference:
+    type: directory
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-qc
+  executable: kneaddata
+  command_template: kneaddata --input {read1} --input {read2} --reference-db {host_reference}
+    --output {output_dir} --threads {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check read1, read2, and host_reference database paths.
+  tool_not_found:
+    hint: Install kneaddata in the autoplasm-qc environment.
+  nonzero_exit:
+    hint: Inspect KneadData log in provenance/step_logs.

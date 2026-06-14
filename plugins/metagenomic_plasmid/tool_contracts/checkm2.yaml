@@ -1,0 +1,31 @@
+abi_version: '0.1'
+tool_id: checkm2
+name: CheckM2
+category: mag_host_genomes
+purpose: Quality assessment of metagenomic bins (completeness, contamination).
+when_to_use:
+- mag_bins_available
+inputs:
+  mag_bins:
+    type: directory
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-stats
+  executable: checkm2
+  command_template: checkm2 predict --input {mag_bins} --output-directory {output_dir}
+    --threads {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check MAG bins directory path.
+  tool_not_found:
+    hint: Install checkm2 in the autoplasm-stats environment.
+  nonzero_exit:
+    hint: Inspect CheckM2 log in provenance/step_logs.

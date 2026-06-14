@@ -1,0 +1,38 @@
+abi_version: '0.1'
+tool_id: recycler
+name: Recycler
+category: plasmid_binning
+purpose: Plasmid reconstruction from assembly graph cycles.
+when_to_use:
+- assembly_graph_available
+- plasmid_binning_required
+inputs:
+  assembly_graph:
+    type: file
+    format: gfa
+    required: true
+  plasmid_contigs:
+    type: file
+    format: fasta
+    required: true
+  bam:
+    type: file
+    format: bam
+    required: true
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-plasmid-binning
+  executable: recycle.py
+  command_template: recycle.py -g {assembly_graph} -k {plasmid_contigs} -b {bam} -o
+    {output_dir}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check assembly graph, plasmid contigs, and BAM paths.
+  tool_not_found:
+    hint: Install Recycler in the autoplasm-plasmid-binning environment.
+  nonzero_exit:
+    hint: Inspect Recycler stderr log in provenance/step_logs.

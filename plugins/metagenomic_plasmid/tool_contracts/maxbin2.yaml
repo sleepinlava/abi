@@ -1,0 +1,45 @@
+abi_version: '0.1'
+tool_id: maxbin2
+name: MaxBin2
+category: mag_host_genomes
+purpose: Metagenomic binning using tetranucleotide frequencies and coverage.
+when_to_use:
+- assembly_available
+- paired_reads_available
+- binning_required
+inputs:
+  assembly:
+    type: file
+    format: fasta
+    required: true
+  read1:
+    type: file
+    format: fastq
+    required: true
+  read2:
+    type: file
+    format: fastq
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-stats
+  executable: run_MaxBin.pl
+  command_template: run_MaxBin.pl -contig {assembly} -reads {read1} -reads2 {read2}
+    -out {output_dir}/{sample_id}.maxbin2 --thread {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check assembly FASTA and paired read paths.
+  tool_not_found:
+    hint: Install maxbin2 in the autoplasm-stats environment.
+  nonzero_exit:
+    hint: Inspect MaxBin2 stderr log in provenance/step_logs.

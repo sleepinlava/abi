@@ -53,7 +53,7 @@ from abi.tools import ToolRegistry
 from ._engine.config import load_config as load_autoplasm_config
 from ._engine.parsers import parse_standard_outputs
 from ._engine.pipeline import PipelineExecutor
-from ._engine.planner import build_plan
+from ._engine.planner import build_plan, build_plan_from_dag
 from ._engine.report.html import write_html_report
 from ._engine.report.markdown import write_markdown_report
 from ._engine.standard_tables import TABLE_SCHEMAS, summarize_standard_tables
@@ -125,16 +125,20 @@ class MetagenomicPlasmidPlugin:
 
     # ── Plan construction / 计划构建 ─────────────────────────────────────
 
-    def build_plan(self, config: Mapping[str, Any], *, check_files: bool = True) -> Any:
+    def build_plan(
+        self, config: Mapping[str, Any], *, check_files: bool = True, use_dag: bool = True
+    ) -> Any:
         """Build an execution plan from the normalized configuration.
 
-        Delegates to ``_engine.planner.build_plan`` which inspects the config,
-        resolves tools, and produces an ``ExecutionPlan`` with a linear
-        sequence of ``PlanStep`` items.
+        When ``use_dag=True`` (default), reads the canonical
+        ``pipeline_dag.yaml`` spec and generates steps from it.  When
+        ``use_dag=False``, falls back to the legacy hardcoded planner.
 
-        从规范化配置构建执行计划。委托给 ``_engine.planner.build_plan``，
-        检查配置、解析工具并生成包含线性 ``PlanStep`` 序列的 ``ExecutionPlan``。
+        从规范化配置构建执行计划。use_dag=True（默认）时读取规范的
+        pipeline_dag.yaml 并从中生成步骤。use_dag=False 时回退到旧的硬编码规划器。
         """
+        if use_dag:
+            return build_plan_from_dag(config, check_files=check_files)
         return build_plan(config, check_files=check_files)
 
     # ── Tool registry / 工具注册表 ───────────────────────────────────────

@@ -1,0 +1,38 @@
+abi_version: '0.1'
+tool_id: platon
+name: Platon
+category: plasmid_detection
+purpose: Plasmid contig detection and typing from assembled contigs.
+when_to_use:
+- assembly_available
+- plasmid_detection_required
+inputs:
+  assembly:
+    type: file
+    format: fasta
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-plasmid-detect
+  executable: platon
+  command_template: platon --threads {threads} --output {output_dir} --prefix {sample_id}
+    {assembly}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check assembly FASTA path.
+  missing_database:
+    hint: Configure Platon database path in resources.
+  tool_not_found:
+    hint: Install platon in the autoplasm-plasmid-detect environment.
+  nonzero_exit:
+    hint: Inspect Platon stderr log in provenance/step_logs.

@@ -30,6 +30,9 @@ execution:
     "{threads}" "{project_root}"
   network: false
   writes_output: true
+normalization:
+  parser: "abi.autoplasm.parsers:parse_opera_ms"
+  tables: [assembly_summary]
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.

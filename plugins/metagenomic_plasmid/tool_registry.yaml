@@ -212,6 +212,15 @@ tools:
     required: false
     skill_path: skills/plasmidhostfinder/SKILL.md
     command_template: "plasmidhostfinder.py -i {plasmid_contigs} -o {output_dir} -l {level} -t {threshold} -p {database}"
+  - id: prodigal
+    name: Prodigal
+    category: annotation
+    env_name: autoplasm-annotation
+    executable: prodigal
+    default_enabled: true
+    required: false
+    command_template: "prodigal -i {plasmid_contigs} -o {output_dir}/{sample_id}.prodigal.gff -a {output_dir}/{sample_id}.prodigal.faa -d {output_dir}/{sample_id}.prodigal.ffn -p meta"
+    inputs: [plasmid_contigs]
   - id: bakta
     name: Bakta
     category: annotation
@@ -382,3 +391,282 @@ tools:
     required: false
     skill_path: skills/report_markdown/SKILL.md
     command_template: "autoplasm report --result-dir {project_outdir}"
+  # ── MAG / Host genome tools ──
+  - id: metabat2
+    name: MetaBAT2
+    category: mag_host_genomes
+    env_name: autoplasm-stats
+    executable: metabat2
+    default_enabled: false
+    required: false
+    command_template: "metabat2 -i {assembly} -a {bam} -o {output_dir}/{sample_id}.metabat2 --threads {threads}"
+    inputs: [assembly, bam]
+  - id: checkm2
+    name: CheckM2
+    category: mag_host_genomes
+    env_name: autoplasm-stats
+    executable: checkm2
+    default_enabled: false
+    required: false
+    command_template: "checkm2 predict --input {mag_bins} --output-directory {output_dir} --threads {threads}"
+    inputs: [mag_bins]
+  - id: gtdbtk
+    name: GTDB-Tk
+    category: mag_host_genomes
+    env_name: autoplasm-stats
+    executable: gtdbtk
+    default_enabled: false
+    required: false
+    command_template: "gtdbtk classify_wf --genome_dir {mag_bins} --out_dir {output_dir} --cpus {threads}"
+    inputs: [mag_bins]
+  # ── Host-plasmid linking ──
+  - id: minced
+    name: MinCED
+    category: host_plasmid_linking
+    env_name: autoplasm-annotation
+    executable: minced
+    default_enabled: false
+    required: false
+    command_template: "minced -spacers {output_dir}/{sample_id}.crispr_spacers.fa {host_genomes} {plasmid_contigs}"
+    inputs: [host_genomes, plasmid_contigs]
+  # ── Visualization ──
+  - id: pycirclize
+    name: pyCirclize
+    category: visualization
+    env_name: autoplasm-visualization
+    executable: python
+    default_enabled: false
+    required: false
+    command_template: >-
+      python -c "from pycirclize import Circos; import pandas as pd;
+      ann = pd.read_csv('{annotations}', sep='\t');
+      typing = pd.read_csv('{typing}', sep='\t');
+      circos = Circos({plasmid_contigs}, size=500);
+      circos.savefig('{output_dir}/{sample_id}.circular_map.png')"
+    inputs: [annotations, typing, plasmid_contigs]
+    limitations: "Requires pycirclize Python package; uses inline script for integration."
+  - id: pyvis
+    name: pyvis
+    category: visualization
+    env_name: autoplasm-visualization
+    executable: python
+    default_enabled: false
+    required: false
+    command_template: >-
+      python -c "from pyvis.network import Network;
+      import pandas as pd;
+      links = pd.read_csv('{host_plasmid_links}', sep='\t');
+      net = Network(height='750px', width='100%');
+      net.show_buttons();
+      net.save_graph('{output_dir}/{sample_id}.host_plasmid_network.html')"
+    inputs: [host_plasmid_links]
+    limitations: "Requires pyvis Python package; uses inline script for integration."
+  # ── Additional QC tools ──
+  - id: chopper
+    name: Chopper
+    category: qc
+    env_name: autoplasm-qc
+    executable: chopper
+    default_enabled: false
+    required: false
+    command_template: "chopper --threads {threads} --input {long_reads} > {output_dir}/{sample_id}.chopper.fastq"
+    inputs: [long_reads]
+    limitations: "Alternative ONT long-read QC filter; Rust-based for speed."
+  - id: porechop
+    name: Porechop
+    category: qc
+    env_name: autoplasm-qc
+    executable: porechop
+    default_enabled: false
+    required: false
+    command_template: "porechop -i {long_reads} -o {output_dir}/{sample_id}.porechop.fastq --threads {threads}"
+    inputs: [long_reads]
+    limitations: "ONT adapter trimmer; may be superseded by Porechop_ABI."
+  # ── Additional host removal ──
+  - id: bwa
+    name: BWA
+    category: host_removal
+    env_name: autoplasm-abundance
+    executable: bwa
+    default_enabled: false
+    required: false
+    command_template: >-
+      sh -c 'bwa index "$1" && bwa mem -t "$2" "$1" "$3" "$4" > "$5"' autoplasm "{host_reference}" "{threads}" "{read1}" "{read2}" "{output_dir}/{sample_id}.host_removed.sam"
+    inputs: [host_reference, read1, read2]
+    limitations: "Alternative short-read host removal using BWA-MEM."
+  - id: kneaddata
+    name: KneadData
+    category: host_removal
+    env_name: autoplasm-qc
+    executable: kneaddata
+    default_enabled: false
+    required: false
+    command_template: "kneaddata --input {read1} --input {read2} --reference-db {host_reference} --output {output_dir} --threads {threads}"
+    inputs: [read1, read2, host_reference]
+    limitations: "Wrapper around Bowtie2/Trimmomatic for host decontamination."
+  # ── Additional plasmid detection ──
+  - id: platon
+    name: Platon
+    category: plasmid_detection
+    env_name: autoplasm-plasmid-detect
+    executable: platon
+    default_enabled: false
+    required: false
+    command_template: "platon --threads {threads} --output {output_dir} --prefix {sample_id} {assembly}"
+    inputs: [assembly]
+  # ── Additional plasmid binning ──
+  - id: scapp
+    name: SCAPP
+    category: plasmid_binning
+    env_name: autoplasm-plasmid-binning
+    executable: scapp
+    default_enabled: false
+    required: false
+    command_template: "scapp --contigs {assembly} --graphs {assembly_graph} --output {output_dir} --threads {threads}"
+    inputs: [assembly, assembly_graph]
+    limitations: "Requires assembly graph in GFA format."
+  - id: recycler
+    name: Recycler
+    category: plasmid_binning
+    env_name: autoplasm-plasmid-binning
+    executable: recycle.py
+    default_enabled: false
+    required: false
+    command_template: "recycle.py -g {assembly_graph} -k {plasmid_contigs} -b {bam} -o {output_dir}"
+    inputs: [assembly_graph, plasmid_contigs, bam]
+    limitations: "Requires plasmid candidate FASTA + assembly graph + BAM."
+  # ── Additional typing ──
+  - id: pmlst
+    name: pMLST
+    category: typing
+    env_name: autoplasm-annotation
+    executable: pmlst
+    default_enabled: false
+    required: false
+    command_template: "pmlst --input {plasmid_contigs} --output {output_dir}/{sample_id}.pmlst.tsv --threads {threads}"
+    inputs: [plasmid_contigs]
+    limitations: "Plasmid MLST typing; may require species-specific scheme selection."
+  - id: conjscan
+    name: CONJscan
+    category: typing
+    env_name: autoplasm-annotation
+    executable: conjscan
+    default_enabled: false
+    required: false
+    command_template: "macsyfinder conjscan --db-type ordered_replicon --sequence-db {plasmid_contigs} --output-dir {output_dir} --threads {threads}"
+    inputs: [plasmid_contigs]
+    limitations: "Requires MacSyFinder + CONJscan module; detects conjugative systems."
+  - id: macsyfinder
+    name: MacSyFinder
+    category: typing
+    env_name: autoplasm-annotation
+    executable: macsyfinder
+    default_enabled: false
+    required: false
+    command_template: "macsyfinder --sequence-db {plasmid_contigs} --db-type ordered_replicon --output-dir {output_dir} --threads {threads}"
+    inputs: [plasmid_contigs]
+  # ── Additional annotation ──
+  - id: rgi
+    name: RGI/CARD
+    category: annotation
+    env_name: autoplasm-annotation
+    executable: rgi
+    default_enabled: false
+    required: false
+    command_template: "rgi main --input_sequence {plasmid_contigs} --output_file {output_dir}/{sample_id}.rgi.tsv --input_type contig --num_threads {threads}"
+    inputs: [plasmid_contigs]
+    limitations: "Requires CARD database; RGI = Resistance Gene Identifier."
+  - id: eggnog_mapper
+    name: eggNOG-mapper
+    category: annotation
+    env_name: autoplasm-annotation
+    executable: emapper.py
+    default_enabled: false
+    required: false
+    command_template: "emapper.py -i {plasmid_contigs} --output {output_dir}/{sample_id}.eggnog --cpu {threads}"
+    inputs: [plasmid_contigs]
+    limitations: "Requires eggNOG database download; functional annotation."
+  # ── Additional MAG tools ──
+  - id: maxbin2
+    name: MaxBin2
+    category: mag_host_genomes
+    env_name: autoplasm-stats
+    executable: run_MaxBin.pl
+    default_enabled: false
+    required: false
+    command_template: "run_MaxBin.pl -contig {assembly} -reads {read1} -reads2 {read2} -out {output_dir}/{sample_id}.maxbin2 --thread {threads}"
+    inputs: [assembly, read1, read2]
+  - id: concoct
+    name: CONCOCT
+    category: mag_host_genomes
+    env_name: autoplasm-stats
+    executable: concoct
+    default_enabled: false
+    required: false
+    command_template: "concoct --composition_file {assembly} --coverage_file {abundance} -o {output_dir} --threads {threads}"
+    inputs: [assembly, abundance]
+  - id: semibin
+    name: SemiBin
+    category: mag_host_genomes
+    env_name: autoplasm-stats
+    executable: SemiBin
+    default_enabled: false
+    required: false
+    command_template: "SemiBin single_easy_bin --input_contigs {assembly} --input_bam {bam} --output {output_dir} --threads {threads}"
+    inputs: [assembly, bam]
+  - id: das_tool
+    name: DAS Tool
+    category: mag_host_genomes
+    env_name: autoplasm-stats
+    executable: DAS_Tool
+    default_enabled: false
+    required: false
+    command_template: "DAS_Tool --inputbasenames {output_dir}/metabat2,{output_dir}/maxbin2,{output_dir}/concoct --contigs {assembly} --outputbasename {output_dir}/{sample_id}.das_tool --threads {threads}"
+    inputs: [assembly]
+    limitations: "Meta-binner aggregator; requires upstream bins from MetaBAT2/MaxBin2/CONCOCT."
+  # ── Additional assembly / QC ──
+  - id: hybridspades
+    name: hybridSPAdes
+    category: assembly
+    env_name: autoplasm-assembly
+    executable: spades.py
+    default_enabled: false
+    required: false
+    command_template: "spades.py -1 {read1} -2 {read2} --nanopore {long_reads} --meta -o {output_dir} -t {threads}"
+    inputs: [read1, read2, long_reads]
+    limitations: "SPAdes hybrid mode for short + long read co-assembly."
+  - id: bandage
+    name: Bandage
+    category: assembly_qc
+    env_name: autoplasm-assembly
+    executable: Bandage
+    default_enabled: false
+    required: false
+    command_template: "Bandage image {assembly_graph} {output_dir}/{sample_id}.bandage.png --height 3000 --width 4000"
+    inputs: [assembly_graph]
+    limitations: "Assembly graph visualization; GUI tool with CLI image export."
+  # ── Additional visualization ──
+  - id: dna_features_viewer
+    name: dna-features-viewer
+    category: visualization
+    env_name: autoplasm-visualization
+    executable: python
+    default_enabled: false
+    required: false
+    command_template: >-
+      python -c "from dna_features_viewer import GraphicRecord; from Bio import SeqIO;
+      rec = SeqIO.read('{plasmid_contigs}', 'fasta');
+      graph = GraphicRecord(sequence=rec, features=[]);
+      graph.plot(figure_width=10, output='{output_dir}/{sample_id}.features.png')"
+    inputs: [plasmid_contigs]
+    limitations: "Requires dna_features_viewer + biopython Python packages."
+  - id: hic_evidence
+    name: Hi-C meta3C
+    category: host_plasmid_linking
+    env_name: autoplasm-stats
+    executable: python
+    default_enabled: false
+    required: false
+    command_template: "python -c \"import pandas as pd; links = pd.read_csv('{host_plasmid_links}', sep='\\t'); links.to_csv('{output_dir}/{sample_id}.hic_linked.tsv', sep='\\t', index=False)\""
+    inputs: [host_plasmid_links]
+    limitations: "Placeholder for Hi-C/meta3C host-plasmid linkage analysis."

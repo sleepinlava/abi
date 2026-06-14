@@ -1,0 +1,33 @@
+abi_version: '0.1'
+tool_id: hic_evidence
+name: Hi-C / meta3C Evidence
+category: host_plasmid_linking
+purpose: Integrate Hi-C or meta3C contact data for host-plasmid linkage.
+when_to_use:
+- hic_data_available
+- host_plasmid_linking_required
+inputs:
+  host_plasmid_links:
+    type: file
+    format: tsv
+    required: true
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-stats
+  executable: python
+  command_template: python -c "import pandas as pd; links = pd.read_csv('{host_plasmid_links}',
+    sep='\t'); links.to_csv('{output_dir}/{sample_id}.hic_linked.tsv', sep='\t', index=False)"
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check host_plasmid_links TSV path.
+  tool_not_found:
+    hint: Install pandas in the autoplasm-stats environment.
+  nonzero_exit:
+    hint: Inspect Python stderr log in provenance/step_logs.

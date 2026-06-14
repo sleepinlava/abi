@@ -1,0 +1,37 @@
+abi_version: '0.1'
+tool_id: das_tool
+name: DAS Tool
+category: mag_host_genomes
+purpose: 'Meta-binner aggregator: selects optimal bins from multiple binning tools.'
+when_to_use:
+- multiple_binners_run
+- bin_refinement_required
+inputs:
+  assembly:
+    type: file
+    format: fasta
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-stats
+  executable: DAS_Tool
+  command_template: DAS_Tool --inputbasenames {output_dir}/metabat2,{output_dir}/maxbin2,{output_dir}/concoct
+    --contigs {assembly} --outputbasename {output_dir}/{sample_id}.das_tool --threads
+    {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Ensure MetaBAT2, MaxBin2, and CONCOCT have completed.
+  tool_not_found:
+    hint: Install das_tool in the autoplasm-stats environment.
+  nonzero_exit:
+    hint: Inspect DAS Tool stderr log in provenance/step_logs.

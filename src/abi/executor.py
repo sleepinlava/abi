@@ -93,6 +93,14 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping
 
 from abi._shared import _display_command
 from abi.config import resolved_mamba_root, write_yaml
+from abi.contracts.step_contract import (
+    ContractViolationError,
+    compute_file_checksum,
+    evaluate_assertions,
+    save_checksums,
+    validate_output_contract,
+    verify_input_checksums,
+)
 from abi.errors import ToolError
 from abi.filesystem import ensure_directory
 from abi.provenance import (
@@ -127,6 +135,7 @@ class GenericABIExecutor:
         parse_outputs: Callable[[str, str | Path, str], Mapping[str, Iterable[Mapping[str, Any]]]],
         report_title: str = "ABI Report",
         mock_tools: bool = False,
+        enforce_contracts: bool = True,
     ) -> None:
         # ToolRegistry provides tool discovery and instantiation.
         # ToolRegistry 提供工具发现和实例化。
@@ -146,6 +155,13 @@ class GenericABIExecutor:
         # When True, tools run with mock wrappers (no real computation).
         # 为 True 时，工具使用 mock 包装器运行（不执行真实计算）。
         self.mock_tools = mock_tools
+        # When True, enforce output contracts, assertions, and checksum chains
+        # declared in pipeline_dag.yaml (via step params._contract).
+        # 为 True 时，执行 pipeline_dag.yaml 中声明的输出契约、断言和校验和链。
+        self.enforce_contracts = enforce_contracts
+        # Accumulated checksum map across all executed steps.
+        # 跨所有已执行步骤累积的校验和映射。
+        self._checksums: Dict[str, str] = {}
 
     def dry_run(self, plan: Any, config: Mapping[str, Any]) -> Dict[str, Path]:
         """Execute a dry run — plan and validate without invoking real tools.
@@ -513,6 +529,17 @@ class GenericABIExecutor:
         # 这确保即使工具崩溃也能捕获输出用于诊断。
         params["stdout_path"] = str(step_log_dir / f"{step.step_id}.stdout.log")
         params["stderr_path"] = str(step_log_dir / f"{step.step_id}.stderr.log")
+
+        # ── Pre-execution contract: verify input checksums ──
+        # 执行前契约：验证输入校验和
+        contract = params.get("_contract", {})
+        if self.enforce_contracts and contract:
+            input_violations = verify_input_checksums(
+                step.step_id, params, self._checksums
+            )
+            if input_violations:
+                raise ContractViolationError(step.step_id, input_violations)
+
         try:
             result = skill.run(params, dry_run=False)
         except ToolError as exc:
@@ -539,6 +566,38 @@ class GenericABIExecutor:
                 "return_code": result.return_code,
                 "reason": reason,
             }
+
+        # ── Post-execution contract: validate outputs, assertions, checksums ──
+        # 执行后契约：验证输出、断言、校验和
+        if self.enforce_contracts and contract:
+            output_spec = contract.get("outputs", {})
+            assertions = contract.get("assertions", [])
+
+            # 1. Validate output files against declared contracts.
+            # 1. 根据声明的契约验证输出文件。
+            contract_result = validate_output_contract(
+                step.step_id, step.outputs, output_spec
+            )
+            if not contract_result.passed:
+                raise ContractViolationError(step.step_id, contract_result.violations)
+
+            # 2. Merge computed checksums.
+            # 2. 合并计算的校验和。
+            if contract_result.checksums:
+                self._checksums.update(contract_result.checksums)
+
+            # 3. Evaluate runtime assertions.
+            # 3. 评估运行时断言。
+            if assertions:
+                assertion_context = _build_assertion_context(step, params)
+                assertion_violations = evaluate_assertions(assertions, assertion_context)
+                if assertion_violations:
+                    raise ContractViolationError(step.step_id, assertion_violations)
+
+            # 4. Persist checksums to provenance.
+            # 4. 将校验和持久化到溯源目录。
+            if self._checksums:
+                save_checksums(provenance, self._checksums)
 
         # Parse tool outputs into structured table data.
         # The parse_outputs callback is plugin-specific and understands each tool's
@@ -840,6 +899,37 @@ def _execution_options(config: Mapping[str, Any]) -> Dict[str, Any]:
     dashboard = execution.get("dashboard", {})
     dashboard_enabled = isinstance(dashboard, Mapping) and bool(dashboard.get("enable", False))
     return {"record_progress": progress or dashboard_enabled}
+
+
+def _build_assertion_context(step: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Build the evaluation context for step assertions.
+
+    Populates:
+    - ``output_files``: ``{key: exists}`` for each output path.
+    - ``output_json``: parsed JSON content for ``.json`` output files.
+    - ``return_code``: 0 (assertions only run on successful steps).
+    """
+    from pathlib import Path
+
+    context: Dict[str, Any] = {"return_code": 0}
+    output_files: Dict[str, bool] = {}
+    output_json: Dict[str, Any] = {}
+
+    for key, value in getattr(step, "outputs", {}).items():
+        if not isinstance(value, (str, Path)):
+            continue
+        path = Path(str(value))
+        exists = path.exists()
+        output_files[key] = exists
+        if exists and path.suffix == ".json":
+            try:
+                output_json[key] = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+    context["output_files"] = output_files
+    context["output_json"] = output_json
+    return context
 
 
 def _tool_failure_reason(

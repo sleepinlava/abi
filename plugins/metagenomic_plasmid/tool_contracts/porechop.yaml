@@ -1,0 +1,36 @@
+abi_version: '0.1'
+tool_id: porechop
+name: Porechop
+category: qc
+purpose: ONT adapter trimming and read splitting.
+when_to_use:
+- ont_reads
+- adapter_trimming_required
+inputs:
+  long_reads:
+    type: file
+    format: fastq
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-qc
+  executable: porechop
+  command_template: porechop -i {long_reads} -o {output_dir}/{sample_id}.porechop.fastq
+    --threads {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check long_reads FASTQ path.
+  tool_not_found:
+    hint: Install porechop in the autoplasm-qc environment.
+  nonzero_exit:
+    hint: Inspect Porechop stderr log in provenance/step_logs.

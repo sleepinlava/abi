@@ -215,6 +215,18 @@ class NextflowExporter:
         channel_by_step: Dict[str, str] = {}
         for step_id in dag.topological_order:
             binding = dag.binding_for(step_id)
+            # Internal steps have no Nextflow process — pass the input channel
+            # through unchanged so downstream external steps can still wire.
+            # 内部步骤没有 Nextflow 进程 — 将输入通道原样传递，
+            # 以便下游外部步骤仍可连接。
+            if getattr(binding.step, "tool_id", "") == "internal":
+                if binding.dependencies:
+                    # Pass through the first dependency's channel
+                    dep_channel = channel_by_step.get(binding.dependencies[0], "abi_root")
+                    channel_by_step[step_id] = dep_channel
+                else:
+                    channel_by_step[step_id] = "abi_root"
+                continue
             output_channel = _channel_name(binding.process_name)
             input_channel = "abi_root"
             if binding.dependencies:

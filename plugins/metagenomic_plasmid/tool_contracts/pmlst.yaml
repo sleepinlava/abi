@@ -1,0 +1,36 @@
+abi_version: '0.1'
+tool_id: pmlst
+name: pMLST
+category: typing
+purpose: Plasmid multi-locus sequence typing.
+when_to_use:
+- plasmid_contigs_available
+- mlst_typing_required
+inputs:
+  plasmid_contigs:
+    type: file
+    format: fasta
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-annotation
+  executable: pmlst
+  command_template: pmlst --input {plasmid_contigs} --output {output_dir}/{sample_id}.pmlst.tsv
+    --threads {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check plasmid_contigs FASTA path.
+  tool_not_found:
+    hint: Install pmlst in the autoplasm-annotation environment.
+  nonzero_exit:
+    hint: Inspect pMLST stderr log in provenance/step_logs.

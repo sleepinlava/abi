@@ -1,0 +1,33 @@
+abi_version: '0.1'
+tool_id: macsyfinder
+name: MacSyFinder
+category: typing
+purpose: Macromolecular system detection in plasmid sequences.
+when_to_use:
+- plasmid_contigs_available
+- secretion_system_detection
+inputs:
+  plasmid_contigs:
+    type: file
+    format: fasta
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-annotation
+  executable: macsyfinder
+  command_template: macsyfinder --sequence-db {plasmid_contigs} --db-type ordered_replicon
+    --output-dir {output_dir} --threads {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check plasmid_contigs FASTA path.
+  tool_not_found:
+    hint: Install MacSyFinder in the autoplasm-annotation environment.
+  nonzero_exit:
+    hint: Inspect MacSyFinder stderr log in provenance/step_logs.

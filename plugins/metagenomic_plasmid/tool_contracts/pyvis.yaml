@@ -1,0 +1,34 @@
+abi_version: '0.1'
+tool_id: pyvis
+name: pyvis
+category: visualization
+purpose: Generate interactive host-plasmid interaction network graphs.
+when_to_use:
+- host_plasmid_links_available
+- network_visualization_required
+inputs:
+  host_plasmid_links:
+    type: file
+    format: tsv
+    required: true
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-visualization
+  executable: python
+  command_template: python -c "from pyvis.network import Network; import pandas as
+    pd; links = pd.read_csv('{host_plasmid_links}', sep='\t'); net = Network(height='750px',
+    width='100%'); net.show_buttons(); net.save_graph('{output_dir}/{sample_id}.host_plasmid_network.html')"
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check host-plasmid links TSV path.
+  tool_not_found:
+    hint: Install pyvis in the autoplasm-visualization environment.
+  nonzero_exit:
+    hint: Inspect Python stderr log in provenance/step_logs.

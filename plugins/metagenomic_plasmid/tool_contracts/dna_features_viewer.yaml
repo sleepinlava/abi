@@ -1,0 +1,34 @@
+abi_version: '0.1'
+tool_id: dna_features_viewer
+name: dna-features-viewer
+category: visualization
+purpose: Generate linear DNA feature maps from annotated plasmid contigs.
+when_to_use:
+- annotations_available
+- feature_visualization_required
+inputs:
+  plasmid_contigs:
+    type: file
+    format: fasta
+    required: true
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-visualization
+  executable: python
+  command_template: python -c "from dna_features_viewer import GraphicRecord; from
+    Bio import SeqIO; rec = SeqIO.read('{plasmid_contigs}', 'fasta'); graph = GraphicRecord(sequence=rec,
+    features=[]); graph.plot(figure_width=10, output='{output_dir}/{sample_id}.features.png')"
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check plasmid_contigs FASTA path.
+  tool_not_found:
+    hint: Install dna_features_viewer + biopython in the autoplasm-visualization environment.
+  nonzero_exit:
+    hint: Inspect Python stderr log in provenance/step_logs.

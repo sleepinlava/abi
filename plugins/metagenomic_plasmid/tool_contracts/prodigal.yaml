@@ -1,0 +1,29 @@
+abi_version: "0.1"
+tool_id: prodigal
+name: Prodigal
+category: annotation
+purpose: Gene calling on plasmid contigs — predicts protein-coding genes.
+when_to_use:
+  - plasmid_contigs_available
+  - gene_calling_required
+inputs:
+  plasmid_contigs: {type: file, format: fasta, required: true}
+  sample_id: {type: string, required: true}
+outputs:
+  output_dir: {type: directory}
+  gff: {type: file, format: gff}
+  faa: {type: file, format: faa}
+  ffn: {type: file, format: ffn}
+execution:
+  env_name: autoplasm-annotation
+  executable: prodigal
+  command_template: "prodigal -i {plasmid_contigs} -o {output_dir}/{sample_id}.prodigal.gff -a {output_dir}/{sample_id}.prodigal.faa -d {output_dir}/{sample_id}.prodigal.ffn -p meta"
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: "Check plasmid_contigs path from plasmid consensus step."
+  tool_not_found:
+    hint: "Install prodigal in the autoplasm-annotation environment."
+  nonzero_exit:
+    hint: "Inspect Prodigal stderr log in provenance/step_logs."

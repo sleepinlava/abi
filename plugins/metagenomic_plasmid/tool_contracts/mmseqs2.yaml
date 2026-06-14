@@ -28,6 +28,9 @@ execution:
     {output_dir}/tmp --threads {threads}
   network: false
   writes_output: true
+normalization:
+  parser: "abi.autoplasm.parsers:parse_mmseqs2"
+  tables: [comparative_hits]
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.

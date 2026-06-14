@@ -1,0 +1,43 @@
+abi_version: '0.1'
+tool_id: pycirclize
+name: pyCirclize
+category: visualization
+purpose: Generate circular plasmid maps from annotations and typing data.
+when_to_use:
+- annotations_available
+- typing_available
+- visualization_required
+inputs:
+  annotations:
+    type: file
+    format: tsv
+    required: true
+  typing:
+    type: file
+    format: tsv
+    required: true
+  plasmid_contigs:
+    type: file
+    format: fasta
+    required: true
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-visualization
+  executable: python
+  command_template: python -c "from pycirclize import Circos; import pandas as pd;
+    ann = pd.read_csv('{annotations}', sep='\t'); typing = pd.read_csv('{typing}',
+    sep='\t'); circos = Circos({plasmid_contigs}, size=500); circos.savefig('{output_dir}/{sample_id}.circular_map.png')"
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check annotations TSV, typing TSV, and plasmid contig paths.
+  tool_not_found:
+    hint: Install pycirclize in the autoplasm-visualization environment.
+  nonzero_exit:
+    hint: Inspect Python stderr log in provenance/step_logs.

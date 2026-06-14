@@ -1,0 +1,38 @@
+abi_version: '0.1'
+tool_id: eggnog_mapper
+name: eggNOG-mapper
+category: annotation
+purpose: Functional annotation of plasmid CDS against eggNOG orthologous groups.
+when_to_use:
+- plasmid_contigs_available
+- functional_annotation_required
+inputs:
+  plasmid_contigs:
+    type: file
+    format: fasta
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-annotation
+  executable: emapper.py
+  command_template: emapper.py -i {plasmid_contigs} --output {output_dir}/{sample_id}.eggnog
+    --cpu {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check plasmid_contigs FASTA path.
+  missing_database:
+    hint: Download eggNOG database with 'download_eggnog_data.py'.
+  tool_not_found:
+    hint: Install eggnog-mapper in the autoplasm-annotation environment.
+  nonzero_exit:
+    hint: Inspect eggNOG-mapper stderr log in provenance/step_logs.

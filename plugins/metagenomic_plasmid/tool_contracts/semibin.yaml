@@ -1,0 +1,38 @@
+abi_version: '0.1'
+tool_id: semibin
+name: SemiBin
+category: mag_host_genomes
+purpose: Deep learning-based metagenomic binning with semi-supervised learning.
+when_to_use:
+- assembly_available
+- bam_available
+- dl_binning_required
+inputs:
+  assembly:
+    type: file
+    format: fasta
+    required: true
+  bam:
+    type: file
+    format: bam
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-stats
+  executable: SemiBin
+  command_template: SemiBin single_easy_bin --input_contigs {assembly} --input_bam
+    {bam} --output {output_dir} --threads {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check assembly FASTA and BAM paths.
+  tool_not_found:
+    hint: Install SemiBin in the autoplasm-stats environment.
+  nonzero_exit:
+    hint: Inspect SemiBin stderr log in provenance/step_logs.

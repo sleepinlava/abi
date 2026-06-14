@@ -1,0 +1,40 @@
+abi_version: '0.1'
+tool_id: metabat2
+name: MetaBAT2
+category: mag_host_genomes
+purpose: Metagenomic binning of assembled contigs using coverage and composition.
+when_to_use:
+- assembly_available
+- coverage_bam_available
+inputs:
+  assembly:
+    type: file
+    format: fasta
+    required: true
+  bam:
+    type: file
+    format: bam
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-stats
+  executable: metabat2
+  command_template: metabat2 -i {assembly} -a {bam} -o {output_dir}/{sample_id}.metabat2
+    --threads {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check assembly FASTA and sorted BAM paths.
+  tool_not_found:
+    hint: Install metabat2 in the autoplasm-stats environment.
+  nonzero_exit:
+    hint: Inspect MetaBAT2 stderr log in provenance/step_logs.

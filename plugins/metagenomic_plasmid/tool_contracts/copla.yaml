@@ -25,6 +25,9 @@ execution:
     {reflist} --output-dir {output_dir}
   network: false
   writes_output: true
+normalization:
+  parser: "abi.autoplasm.parsers:parse_copla"
+  tables: [plasmid_typing]
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.

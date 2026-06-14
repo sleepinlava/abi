@@ -741,3 +741,260 @@ def _unique(values: Iterable[str]) -> List[str]:
             unique_values.append(value)
             seen.add(value)
     return unique_values
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DAG-Driven Planner (new — reads pipeline_dag.yaml as source of truth)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Categories whose nodes operate at the PROJECT level (not per-sample).
+_PROJECT_LEVEL_CATEGORIES: frozenset[str] = frozenset(
+    {"report", "diversity", "network", "statistics"}
+)
+
+
+def build_plan_from_dag(
+    config: Mapping[str, Any],
+    sample_context: SampleContext | None = None,
+    *,
+    check_files: bool = True,
+) -> ExecutionPlan:
+    """Build an execution plan from the canonical ``pipeline_dag.yaml`` spec.
+
+    This replaces the hardcoded ``_route_for_platform()`` / ``_sample_steps()``
+    logic.  The DAG spec is the single source of truth for which tools run on
+    which platform in which order.  The planner only resolves *how* (paths and
+    parameter values).
+
+    Args:
+        config: Fully-resolved pipeline configuration (from ``load_config()``).
+        sample_context: Pre-parsed sample context.  If ``None``, it is derived
+            from the config via ``context_from_config()``.
+        check_files: When ``True``, validate that referenced input files exist.
+
+    Returns:
+        A fully-typed ``ExecutionPlan`` with topologically ordered steps.
+    """
+    from abi.plugins.metagenomic_plasmid._engine.pipeline_dag import PipelineDAG
+
+    dag = PipelineDAG.from_yaml()
+    context = sample_context or context_from_config(config, check_files=check_files)
+    platform = _resolve_platform(context, config)
+    outdir = Path(str(config["outdir"]))
+    threads = int(config["threads"])
+
+    # Resolve which nodes are active for this platform + config
+    active_ids = dag.active_node_ids(platform, config)
+    resolved_deps = dag.resolve_dependencies(active_ids, platform)
+    order = dag.topological_order(resolved_deps)
+
+    # Separate project-level from sample-level nodes
+    project_node_ids = [
+        nid for nid in order if dag.category_for(nid) in _PROJECT_LEVEL_CATEGORIES
+    ]
+    sample_node_ids = [
+        nid for nid in order if dag.category_for(nid) not in _PROJECT_LEVEL_CATEGORIES
+    ]
+
+    steps: List[PlanStep] = []
+    skipped: List[PlanStep] = []
+
+    # Generate per-sample steps
+    for sample in context.samples:
+        sample_params = _dag_sample_base_params(sample, config, platform)
+        for node_id in sample_node_ids:
+            node = dag.node(node_id)
+            step = _dag_step_for_node(
+                node_id=node_id,
+                node=node,
+                sample=sample,
+                config=config,
+                platform=platform,
+                base_params=sample_params,
+                resolved_deps=resolved_deps,
+            )
+            if step.skipped:
+                skipped.append(step)
+            else:
+                steps.append(step)
+
+    # Generate project-level steps (report, multi-sample analysis)
+    project_params = {
+        "threads": threads,
+        "mode": config.get("mode", "auto"),
+        "project_outdir": str(outdir),
+        "output_dir": str(outdir / "report"),
+        "sample_count": len(context.samples),
+        "abundance_table": str(outdir / "10_abundance" / "plasmid_abundance_tpm.tsv"),
+    }
+    for node_id in project_node_ids:
+        node = dag.node(node_id)
+        step = _dag_project_step(
+            node_id=node_id,
+            node=node,
+            config=config,
+            platform=platform,
+            params=project_params,
+        )
+        if step.skipped:
+            skipped.append(step)
+        else:
+            steps.append(step)
+
+    selected_tools = sorted(
+        {step.tool_id for step in steps if step.tool_id != "internal"}
+    )
+
+    return ExecutionPlan(
+        project_name=str(config["project_name"]),
+        mode=str(config["mode"]),
+        threads=threads,
+        outdir=str(outdir),
+        log_dir=str(config["log_dir"]),
+        samples=context.samples,
+        sample_context=context,
+        selected_tools=selected_tools,
+        steps=steps,
+        skipped_steps=skipped,
+        provenance_dir=str(outdir / "provenance"),
+    )
+
+
+def _resolve_platform(sample_context: SampleContext, config: Mapping[str, Any]) -> str:
+    """Determine the active platform from the sample context or config."""
+    if sample_context.samples:
+        return sample_context.samples[0].platform
+    input_config = config.get("input", {})
+    if isinstance(input_config, Mapping):
+        plat = input_config.get("platform")
+        if plat:
+            return str(plat)
+    return "illumina"
+
+
+def _dag_sample_base_params(
+    sample: SampleInput,
+    config: Mapping[str, Any],
+    platform: str,
+) -> Dict[str, Any]:
+    """Build the base parameter dict shared by all sample-level nodes."""
+    params: Dict[str, Any] = sample.to_dict()
+    params.update(
+        {
+            "threads": int(config["threads"]),
+            "mode": config.get("mode", "auto"),
+            "platform": platform,
+            "data_profile": _data_profile_dag(sample, config),
+        }
+    )
+    if platform in {"pacbio_hifi"}:
+        params["minimap2_preset"] = "map-hifi"
+    elif platform in {"ont", "hybrid"}:
+        params["minimap2_preset"] = "map-ont"
+    return params
+
+
+def _data_profile_dag(sample: SampleInput, config: Mapping[str, Any]) -> str:
+    """Resolve the data profile label for DAG-driven planning."""
+    workflow = config.get("workflow", {})
+    if isinstance(workflow, Mapping) and workflow.get("data_profile"):
+        return str(workflow["data_profile"])
+    input_config = config.get("input", {})
+    if isinstance(input_config, Mapping) and input_config.get("data_profile"):
+        return str(input_config["data_profile"])
+    return DATA_PROFILE_BY_PLATFORM.get(sample.platform, sample.platform)
+
+
+def _dag_step_for_node(
+    *,
+    node_id: str,
+    node: Mapping[str, Any],
+    sample: SampleInput,
+    config: Mapping[str, Any],
+    platform: str,
+    base_params: Dict[str, Any],
+    resolved_deps: Mapping[str, List[str]],
+) -> PlanStep:
+    """Build a single ``PlanStep`` for one sample-level DAG node."""
+    tool_id = str(node.get("tool_id", "internal"))
+    category = str(node.get("category", ""))
+    outdir = Path(str(config["outdir"])) / STEP_DIRS.get(category, category) / sample.sample_id
+    step_id = f"{sample.sample_id}_{node_id}"
+
+    # Merge node outputs with computed output_dir.
+    # Append tool_id to generic output keys so that nodes in the same
+    # category (e.g. typing_plasmidfinder + typing_mob_typer) produce
+    # distinct output paths — required by the DAG inference engine.
+    outputs: Dict[str, Any] = {"output_dir": str(outdir)}
+    for key, spec in node.get("outputs", {}).items():
+        if isinstance(spec, Mapping) and key != "output_dir":
+            # Use tool-specific suffix to avoid collisions
+            outputs[key] = str(outdir / f"{sample.sample_id}.{tool_id}.{key}")
+
+    # Build params: base + node inputs + tool-specific overrides
+    step_params: Dict[str, Any] = dict(base_params)
+    step_params["output_dir"] = str(outdir)
+    step_params["sample_id"] = sample.sample_id
+
+    # Resolve tool parameters from config
+    tool_params = _tool_runtime_params(config, tool_id)
+    step_params.update(tool_params)
+
+    # Record which upstream nodes feed into this step (for provenance)
+    deps = list(resolved_deps.get(node_id, []))
+    if deps:
+        step_params["_upstream_nodes"] = deps
+
+    # Embed the step contract from the DAG spec so the executor can enforce
+    # output validation, assertions, and checksum chaining at runtime.
+    # 将 DAG 规范中的步骤契约嵌入，以便执行器在运行时执行输出验证、
+    # 断言和校验和链。
+    step_params["_contract"] = {
+        "outputs": node.get("outputs", {}),
+        "assertions": node.get("assertions", []),
+        "node_id": node_id,
+    }
+
+    return PlanStep(
+        step_id=step_id,
+        sample_id=sample.sample_id,
+        step_name=node.get("name", category),
+        tool_id=tool_id,
+        category=category,
+        inputs=sample.to_dict(),
+        outputs=outputs,
+        params=step_params,
+    )
+
+
+def _dag_project_step(
+    *,
+    node_id: str,
+    node: Mapping[str, Any],
+    config: Mapping[str, Any],
+    platform: str,
+    params: Dict[str, Any],
+) -> PlanStep:
+    """Build a single ``PlanStep`` for one project-level DAG node."""
+    tool_id = str(node.get("tool_id", "internal"))
+    category = str(node.get("category", ""))
+    outdir = Path(str(config["outdir"])) / STEP_DIRS.get(category, category)
+
+    outputs: Dict[str, Any] = {"outdir": str(outdir)}
+    for key, spec in node.get("outputs", {}).items():
+        if isinstance(spec, Mapping) and key != "outdir":
+            outputs[key] = str(outdir / key)
+
+    step_params = dict(params)
+    step_params["output_dir"] = str(outdir)
+
+    return PlanStep(
+        step_id=node_id,
+        sample_id=None,
+        step_name=node.get("name", category),
+        tool_id=tool_id,
+        category=category,
+        inputs={},
+        outputs=outputs,
+        params=step_params,
+    )

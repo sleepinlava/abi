@@ -1,14 +1,18 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: report_markdown
 name: AutoPlasm Markdown report
 category: report
 purpose: Render the AutoPlasm markdown report from ABI result artifacts.
 when_to_use:
-  - report_required
+- report_required
 inputs:
-  project_outdir: {type: directory, required: true}
+  project_outdir:
+    type: directory
+    required: true
 outputs:
-  report_md: {type: file, format: markdown}
+  report_md:
+    type: file
+    format: markdown
 execution:
   env_name: autoplasm-base
   executable: autoplasm
@@ -17,6 +21,6 @@ execution:
   writes_output: true
 failure_handling:
   artifact_missing:
-    hint: "Run plan or dry-run before report generation."
+    hint: Run plan or dry-run before report generation.
   nonzero_exit:
-    hint: "Check report inputs under tables/ and provenance/."
+    hint: Check report inputs under tables/ and provenance/.

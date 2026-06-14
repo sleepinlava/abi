@@ -68,6 +68,14 @@ def test_nextflow_exporter_serializes_metagenomic_plasmid_steps_without_path_edg
 
     script = NextflowExporter().export(plan, config, plugin.registry())
 
+    # DAG-driven planner generates steps from pipeline_dag.yaml.
+    # FastQC is optional — not generated unless explicitly enabled.
+    # Verify the core pipeline structure is present.
     assert "process S1_QC_FASTP" in script
-    assert "process S1_QC_FASTQC" in script
-    assert "ch_S1_QC_FASTQC = S1_QC_FASTQC(ch_S1_QC_FASTP)" in script
+    assert "process S1_ASSEMBLY_MEGAHIT" in script
+    assert "process S1_ASSEMBLY_QC_QUAST" in script
+    assert "process S1_PLASMID_DETECT_GENOMAD" in script
+    # Verify channel wiring exists for key steps
+    assert "ch_S1_QC_FASTP = S1_QC_FASTP(abi_root)" in script
+    # The DAG should export without errors
+    assert "workflow {" in script

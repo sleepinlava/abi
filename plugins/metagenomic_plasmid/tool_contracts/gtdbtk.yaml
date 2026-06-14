@@ -1,0 +1,34 @@
+abi_version: '0.1'
+tool_id: gtdbtk
+name: GTDB-Tk
+category: mag_host_genomes
+purpose: Taxonomic classification of MAGs against the GTDB reference tree.
+when_to_use:
+- mag_bins_available
+- quality_filtered_mags
+inputs:
+  mag_bins:
+    type: directory
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-stats
+  executable: gtdbtk
+  command_template: gtdbtk classify_wf --genome_dir {mag_bins} --out_dir {output_dir}
+    --cpus {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check MAG bins directory path.
+  missing_database:
+    hint: Configure GTDB-Tk database with 'gtdbtk db download'.
+  tool_not_found:
+    hint: Install gtdbtk in the autoplasm-stats environment.
+  nonzero_exit:
+    hint: Inspect GTDB-Tk log in provenance/step_logs.

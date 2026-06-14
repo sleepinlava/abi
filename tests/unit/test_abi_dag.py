@@ -117,14 +117,17 @@ def test_infer_dag_accepts_metagenomic_plasmid_shared_output_dirs(tmp_path):
 
     dag = infer_dag(plan.steps, sequential_fallback=True)
 
-    # Internal steps (tool_id == "internal") are now included in the DAG so
-    # their output paths are correctly tracked as dependencies for downstream
-    # steps.  Roots include internal steps that have no upstream dependencies.
-    # 内部步骤 (tool_id == "internal") 现在包含在 DAG 中，以便其输出路径
-    # 正确作为下游步骤的依赖关系被跟踪。根节点包括没有上游依赖的内部步骤。
-    assert "S1_input_validation_internal" in dag.roots
+    # The DAG-driven planner generates steps directly from pipeline_dag.yaml
+    # without synthetic "internal" steps.  Roots should include the first
+    # real tool step (fastp for Illumina).
+    # DAG 驱动的规划器直接从 pipeline_dag.yaml 生成步骤，
+    # 无合成的 "internal" 步骤。根节点应为第一个真实工具步骤（Illumina 为 fastp）。
+    assert "S1_qc_fastp" in dag.roots
     assert "S1_qc_fastp" in dag.topological_order
-    assert "S1_qc_fastqc" in dag.topological_order
+    assert "S2_qc_fastp" in dag.topological_order
+    # Verify the plasmid detection chain is intact
+    assert "S1_plasmid_detect_genomad" in dag.topological_order
+    assert "S1_plasmid_consensus" in dag.topological_order
 
 
 def test_infer_dag_ignores_structured_non_path_values():

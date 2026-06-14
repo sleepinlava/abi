@@ -1,0 +1,41 @@
+abi_version: '0.1'
+tool_id: hybridspades
+name: hybridSPAdes
+category: assembly
+purpose: Hybrid short + long read metagenomic assembly via SPAdes meta mode.
+when_to_use:
+- hybrid_reads
+- assembly_required
+inputs:
+  read1:
+    type: file
+    format: fastq
+    required: true
+  read2:
+    type: file
+    format: fastq
+    required: true
+  long_reads:
+    type: file
+    format: fastq
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-assembly
+  executable: spades.py
+  command_template: spades.py -1 {read1} -2 {read2} --nanopore {long_reads} --meta
+    -o {output_dir} -t {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check read1, read2, and long_reads paths.
+  tool_not_found:
+    hint: Install spades in the autoplasm-assembly environment.
+  nonzero_exit:
+    hint: Inspect SPAdes log in provenance/step_logs.

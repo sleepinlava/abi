@@ -1,0 +1,37 @@
+abi_version: '0.1'
+tool_id: minced
+name: MinCED
+category: host_plasmid_linking
+purpose: CRISPR spacer discovery for host-plasmid linkage evidence.
+when_to_use:
+- host_genomes_available
+- crispr_analysis_required
+inputs:
+  host_genomes:
+    type: file
+    format: fasta
+    required: true
+  plasmid_contigs:
+    type: file
+    format: fasta
+    required: true
+  sample_id:
+    type: string
+    required: true
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-annotation
+  executable: minced
+  command_template: minced -spacers {output_dir}/{sample_id}.crispr_spacers.fa {host_genomes}
+    {plasmid_contigs}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check host genome and plasmid contig paths.
+  tool_not_found:
+    hint: Install minced in the autoplasm-annotation environment.
+  nonzero_exit:
+    hint: Inspect MinCED stderr log in provenance/step_logs.

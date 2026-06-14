@@ -1,0 +1,37 @@
+abi_version: '0.1'
+tool_id: scapp
+name: SCAPP
+category: plasmid_binning
+purpose: Plasmid reconstruction from assembly graph using SCAPP.
+when_to_use:
+- assembly_graph_available
+- plasmid_reconstruction_required
+inputs:
+  assembly:
+    type: file
+    format: fasta
+    required: true
+  assembly_graph:
+    type: file
+    format: gfa
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+outputs:
+  output_dir:
+    type: directory
+execution:
+  env_name: autoplasm-plasmid-binning
+  executable: scapp
+  command_template: scapp --contigs {assembly} --graphs {assembly_graph} --output
+    {output_dir} --threads {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check assembly FASTA and GFA graph paths.
+  tool_not_found:
+    hint: Install SCAPP in the autoplasm-plasmid-binning environment.
+  nonzero_exit:
+    hint: Inspect SCAPP stderr log in provenance/step_logs.
