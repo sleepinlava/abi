@@ -54,8 +54,8 @@ for p in abi.list_plugins_summary():
 3. `abi_plan` — build execution plan
 4. `abi_dry_run` — validate commands and provenance (no real tools)
 5. `abi_inspect` — check provenance for failures
-6. `abi_report` — regenerate reports
-7. `abi_run` — execute **only after explicit user approval**
+6. `abi_run` — execute **only after explicit user approval**
+7. `abi_report` — regenerate reports from standard tables and provenance
 
 ## Transport Methods
 
@@ -118,6 +118,28 @@ On error, inspect in order:
 4. `result_dir/provenance/step_logs/<step_id>.stderr.log` — raw tool error output
 
 Do not parse raw tool outputs first. Prefer standard tables under `tables/`.
+
+## Contract and Reproducibility Checks
+
+When asked whether a workflow is constrained, verifiable, or reproducible, check
+the artifacts rather than relying on dry-run alone:
+
+1. `execution_plan.json` has the expected analysis type, samples, steps, and
+   output paths.
+2. `provenance/commands.tsv` has no failed or unintended skipped steps.
+3. `provenance/resolved_inputs.tsv` has no missing required inputs.
+4. `provenance/checksums.json` exists after real execution with enforced
+   contracts.
+5. `provenance/tool_versions.tsv` and `provenance/resources.json` identify the
+   executables and resources used.
+6. `tables/*.tsv` contain the biological result rows used by reports.
+7. The workflow route and interpretation limits are checked against
+   `docs/workflow_validation.md`.
+
+Do not claim that a dry-run proves biological validity. Dry-run validates
+planning and command rendering. Scientific claims require real tool outputs,
+configured databases, version/resource manifests, and benchmark acceptance
+checks.
 
 ## Golden Traces
 

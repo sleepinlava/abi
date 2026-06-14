@@ -125,3 +125,31 @@ Each plugin must provide:
 
 `abi.testing.assert_plugin_contract()` validates runtime Python interfaces and
 machine-readable plugin assets.
+
+## Step Contracts and Reproducibility
+
+Runtime step contracts are embedded in `PlanStep.params["_contract"]` by
+plugins that support contract enforcement. For the DAG-driven
+`metagenomic_plasmid` plugin, this block is copied from `pipeline_dag.yaml`.
+
+Supported output checks include:
+
+- existence of declared files or directories
+- `min_size`
+- `extensions`
+- directory `contains`
+- `min_files`
+- FASTA `min_contigs`
+- JSON `required_keys`
+- dotted JSON `schema`
+- runtime `assertions`
+- checksum recording for downstream verification
+
+Executors may resolve actual files after a tool succeeds when a planner path is
+abstract but the tool writes fixed filenames. Resolved outputs, not abstract
+planner placeholders, are used for output contracts and assertions.
+
+Scientific reproducibility requires more than the ABI envelope. Production
+workflows should also pin tool versions, record database/model manifests and
+checksums, and validate known benchmark datasets. The repository-level target is
+tracked in [Workflow Validation and Scientific Evidence Plan](workflow_validation.md).

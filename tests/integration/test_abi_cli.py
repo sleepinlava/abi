@@ -491,8 +491,8 @@ def test_abi_export_agent_context_outputs_machine_readable_guidance():
         "plan",
         "dry_run",
         "inspect",
-        "report",
         "run",
+        "report",
     ]
     assert payload["execution_requires_confirmation"] is True
     assert "abi_run" in payload["unsafe_tools"]

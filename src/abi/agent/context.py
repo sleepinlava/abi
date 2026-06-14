@@ -46,7 +46,7 @@ __all__ = ["build_agent_context", "render_doctor_agent"]
 # An agent should never skip a step in this sequence without good reason.
 # 推荐的 agent 生命周期安全调用顺序。
 # Agent 不应无故跳过此序列中的任何步骤。
-SAFE_SEQUENCE = ["list_types", "plan", "dry_run", "inspect", "report", "run"]
+SAFE_SEQUENCE = ["list_types", "plan", "dry_run", "inspect", "run", "report"]
 
 # Key output artifacts the agent should know about.
 # These are the canonical locations for results; agents should reference these
@@ -58,6 +58,7 @@ IMPORTANT_ARTIFACTS = [
     "provenance/commands.tsv",
     "provenance/resolved_inputs.tsv",
     "provenance/tool_versions.tsv",
+    "provenance/checksums.json",
     "provenance/resources.json",
     "provenance/progress.jsonl",
     "tables/*.tsv",
@@ -142,6 +143,8 @@ def build_agent_context(plugin: Any) -> Dict[str, Any]:
             "Do not call abi_run unless the user has approved execution.",
             "On errors, inspect error_code and diagnostic_hints before changing inputs.",
             "Read standard tables under tables/ instead of parsing raw tool outputs.",
+            "Do not claim biological validity from dry_run alone; inspect "
+            "docs/workflow_validation.md.",
         ],
     }
 
@@ -172,6 +175,7 @@ def render_doctor_agent(plugin: Any) -> str:
         "  - Never execute abi_run without explicit user approval.",
         "  - Read tables/*.tsv for results instead of raw tool outputs.",
         "  - Use error_code and diagnostic_hints for recovery.",
+        "  - Treat dry_run as planning evidence, not biological validation.",
         "",
         "Standard tables:",
     ]

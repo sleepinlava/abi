@@ -17,6 +17,9 @@ Default assembler for ONT long-read metagenomes.
 Contig FASTA and assembly graph.
 
 - Registry outputs: `output_dir, tool-specific result files`.
+- Flye/metaFlye creates `output_dir` itself and may fail if that directory
+  already exists. Agents should not pre-create or reuse a populated metaFlye
+  output directory; ABI prepares only the parent directory.
 - Step stdout/stderr from real execution are captured under `provenance/step_logs/`.
 
 ## Environment

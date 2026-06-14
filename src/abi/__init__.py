@@ -54,6 +54,7 @@ def get_agent_guide() -> str:
     - Transport methods (CLI JSON, MCP, OpenAI tools)
     - How to read results from standard tables
     - Error recovery rules
+    - Scientific validation boundary for dry-run vs real execution
 
     Inject the returned text into your system prompt, or call
     ``abi doctor-agent --type <analysis_type>`` for a more detailed
@@ -91,6 +92,8 @@ def get_agent_guide() -> str:
         "  - On error, inspect error_code and diagnostic_hints before retrying.\n"
         "  - Call dry_run before run to validate the workflow.\n"
         "  - Use abi install-skills to register ABI skills for Claude Code.\n"
+        "  - Do NOT claim biological validity from dry_run alone; use real outputs,\n"
+        "    resource manifests, benchmarks, and docs/workflow_validation.md.\n"
         "\n"
         "Plugin discovery:\n"
         "  import abi; abi.list_plugins_summary()"

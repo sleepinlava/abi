@@ -182,6 +182,8 @@ More details:
 - [Agent Usage Guide](docs/agent_usage.md)
 - [Development Guide](docs/development.md)
 - [Plugin Development Guide](docs/plugin_development_guide.md)
+- [Development Plan](docs/abi_final_development_plan.md)
+- [Workflow Validation Plan](docs/workflow_validation.md)
 - [OpenAI Interface Standard](docs/openai_interface_standard.md)
 - [Job Service Guide](docs/job_service.md)
 - [Experiment Plan](docs/experiments.md)

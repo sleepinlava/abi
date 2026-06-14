@@ -178,6 +178,8 @@ python -m twine check dist/*
 - [Agent 使用指南](docs/agent_usage.md)
 - [开发指南](docs/development.md)
 - [插件开发指南](docs/plugin_development_guide.md)
+- [发展计划](docs/abi_final_development_plan.md)
+- [工作流验证计划](docs/workflow_validation.md)
 - [OpenAI 接口标准](docs/openai_interface_standard.md)
 - [Job Service 指南](docs/job_service.md)
 - [实验计划](docs/experiments.md)

@@ -17,6 +17,9 @@ Default assembler for `illumina` samples.
 Contig FASTA, assembly logs, intermediate graph files.
 
 - Registry outputs: `output_dir, tool-specific result files`.
+- MEGAHIT creates `output_dir` itself and commonly refuses to run if that
+  directory already exists. Agents should not pre-create or reuse a populated
+  MEGAHIT output directory; ABI prepares only the parent directory.
 - Step stdout/stderr from real execution are captured under `provenance/step_logs/`.
 
 ## Environment

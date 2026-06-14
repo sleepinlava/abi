@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `docs/workflow_validation.md` to track the path toward a constrained,
+  verifiable, reproducible, and literature-backed metagenomic plasmid workflow.
+- Executor regression tests covering output directory preparation, actual-output
+  resolution, R1/R2 matching, and JSON assertion context handling.
+
+### Changed
+- Development, plugin, ABI spec, metagenomic plasmid, roadmap, README, and
+  agent-facing docs now describe runtime step contracts and scientific
+  validation boundaries.
+- `ruff format --check src tests` is now clean across the repository.
+
+### Fixed
+- **Executor**: output contract validation and assertions now use resolved
+  on-disk output files when planner paths are abstract.
+- **Executor**: `output_dir` is no longer pre-created for tools that must create
+  their own output directory; only its parent directory is prepared.
+- **Executor**: actual-output matching is deterministic and read-pair aware, so
+  `clean_read1`/`clean_read2` do not silently swap R1/R2 files.
+- **Contracts**: `min_files` and JSON `required_keys` contracts are now enforced.
+- **Lint**: removed stale imports and import-order issues found by `ruff check`.
+
 ## [1.1.0] - 2026-06-14
 
 ### Added

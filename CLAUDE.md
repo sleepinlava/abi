@@ -75,9 +75,9 @@ src/abi/
   provenance.py       RunLogger, PipelineProgressRecorder, TSV writers (749 lines)
   tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1058 lines)
   schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
-  executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement (981 lines)
+  executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement
   contracts/          Step contract enforcement, checksum chaining, assertion evaluation
-    step_contract.py    ContractViolation, validate_output_contract, evaluate_assertions (685 lines)
+    step_contract.py    ContractViolation, validate_output_contract, evaluate_assertions
   permissions.py      read_only / planning_write / execution levels
   diagnostics.py      Error taxonomy + DiagnosticHint + classify_exception (400 lines)
   jobs/service.py     HTTP Job Service with subprocess force-kill (SIGTERM → SIGKILL)
@@ -131,12 +131,18 @@ Each contract may declare a `normalization` block (`parser` + `tables`) that map
 
 ### Step contract enforcement
 
-`contracts/step_contract.py` enforces output contracts on every tool execution in 3 phases:
+`contracts/step_contract.py` enforces step contracts on every real tool execution:
 1. **Pre-execution**: verify input file checksums against recorded values (checksum chaining)
-2. **Post-execution**: validate output files (existence, min_size, extensions, contains, min_contigs, JSON schema)
-3. **Assertions**: evaluate runtime assertions (e.g. `output_json.summary.total_reads > 0`) against tool outputs
+2. **Actual-output resolution**: map abstract planner outputs to real files in `output_dir` when tools write fixed filenames
+3. **Post-execution**: validate output files and directories (existence, min_size, extensions, contains, min_files, min_contigs, JSON required_keys, JSON schema)
+4. **Assertions**: evaluate runtime assertions (e.g. `output_json.summary.total_reads > 0`) against resolved tool outputs
 
 Contract violations raise `ContractViolationError` with structured diagnostics. Checksums are persisted to `provenance/checksums.json` for downstream verification.
+
+Do not claim that a workflow is biologically validated from dry-run alone or
+from individual tool papers alone. Use `docs/workflow_validation.md` to assess
+the gap between the current constrained control layer and a fully validated,
+literature-backed, reproducible scientific workflow.
 
 ### Shared utilities (`_shared.py`)
 

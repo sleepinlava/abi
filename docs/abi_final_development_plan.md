@@ -55,3 +55,40 @@ python -m twine check dist/*
 - Experiment scaffold lives in `docs/experiments/`.
 - Demo output must contain `execution_plan.json`, `provenance/`, `tables/`,
   and `report/`.
+
+## Next Development Roadmap
+
+The next phase is to move ABI from a strong control plane to a validated,
+literature-backed scientific workflow.
+
+### 1. Contract Completeness
+
+- Extend runtime contracts to validate input size, extension, directory file
+  counts, and optional/required input semantics before execution.
+- Add a contract-lint command for `pipeline_dag.yaml`, `tool_registry.yaml`, and
+  `tool_contracts/*.yaml`.
+- Promote contract violations into stable agent-facing diagnostic codes.
+
+### 2. Reproducibility Manifests
+
+- Record real tool versions through per-tool version probes.
+- Add database/model manifests with source, version, checksum, license note, and
+  validation date.
+- Support pinned conda-lock files or containers for smoke-test routes.
+
+### 3. Biological Validation
+
+- Add small positive and negative benchmark datasets for the default route.
+- Define expected rows and thresholds in standard tables, not only raw files.
+- Track known limitations for host prediction, plasmid binning, abundance, and
+  correlation-network interpretation.
+
+### 4. Literature-Backed Reporting
+
+- Maintain a citation registry keyed by tool id and workflow stage.
+- Emit methods, versions, database manifests, and citations into reports.
+- Mark optional tools as `validated`, `available`, or `experimental` based on
+  fixture coverage and literature review.
+
+Detailed acceptance criteria and the initial evidence map live in
+[Workflow Validation and Scientific Evidence Plan](workflow_validation.md).

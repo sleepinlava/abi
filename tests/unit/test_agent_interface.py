@@ -86,7 +86,7 @@ def test_agent_interface_exports_agent_context():
     assert payload["command"] == "export_agent_context"
     assert payload["result"]["analysis_type"] == "metatranscriptomics"
     assert payload["result"]["execution_requires_confirmation"] is True
-    assert payload["result"]["safe_sequence"][-1] == "run"
+    assert payload["result"]["safe_sequence"][-1] == "report"
     assert "abi_run" in payload["result"]["unsafe_tools"]
     assert "abi_run" not in payload["result"]["default_exported_tools"]
     assert "gene_expression" in payload["result"]["standard_tables"]
@@ -98,7 +98,7 @@ def test_agent_interface_doctor_agent_returns_short_guide():
     assert payload["status"] == "success"
     assert payload["result"]["analysis_type"] == "metatranscriptomics"
     assert "Safe call order" in payload["result"]["text"]
-    assert "report -> run" in payload["result"]["text"]
+    assert "run -> report" in payload["result"]["text"]
 
 
 def test_agent_interface_dispatch_accepts_cli_style_tool_aliases():

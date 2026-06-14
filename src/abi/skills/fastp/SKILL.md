@@ -16,7 +16,10 @@ Use for `illumina` or the short-read side of `hybrid` samples.
 ## Outputs
 Clean FASTQ files, HTML report, JSON report.
 
-- Registry outputs: `clean_reads, html, json`.
+- Registry outputs: `clean_read1, clean_read2, html_report, json_report`.
+- Expected fixed filenames are `{sample_id}_R1.clean.fastq.gz`,
+  `{sample_id}_R2.clean.fastq.gz`, `{sample_id}.fastp.html`, and
+  `{sample_id}.fastp.json`.
 - Step stdout/stderr from real execution are captured under `provenance/step_logs/`.
 
 ## Environment
@@ -45,6 +48,9 @@ Fail clearly if required inputs, executables, databases, or output files are mis
 
 ## Normalization
 Normalize cleaned read paths and QC report paths into the QC step output contract.
+The ABI executor resolves actual files from `output_dir` before contract checks;
+`clean_read1` must match the R1 file and `clean_read2` must match the R2 file.
+The JSON report is used by assertions such as total read-count checks.
 
 ## Agent Usage Notes
 - Prefer editing config files or sample sheets, then run `autoplasm plan` and `autoplasm dry-run` before real execution.

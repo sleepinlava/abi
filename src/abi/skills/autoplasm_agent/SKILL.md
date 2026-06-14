@@ -25,7 +25,10 @@ Do not hand-run bioinformatics tools directly unless debugging one failed step. 
 
 Use the narrowest AutoPlasm entry point that fits the user's request:
 
-- Read or explain current capabilities: inspect `README.md`, `docs/cli_usage.md`, `docs/requirements_status.md`, `skills/README.md`, and `config/tool_registry.yaml`.
+- Read or explain current capabilities: inspect `README.md`, `docs/metagenomic_plasmid.md`,
+  `docs/workflow_validation.md`, `src/abi/skills/README.md`,
+  `plugins/metagenomic_plasmid/tool_registry.yaml`, and
+  `plugins/metagenomic_plasmid/pipeline_dag.yaml`.
 - Validate input metadata: run `validate-sample-sheet`.
 - Check executables: run `check-tools`; do not accept globally installed tools as substitutes for repository-local envs.
 - Check databases/models/indexes: run `check-resources`.
@@ -34,22 +37,26 @@ Use the narrowest AutoPlasm entry point that fits the user's request:
 - Execute a batch project: run `run` only after preflight is clean.
 - Execute one sample: run `run-single` only when the user gives enough single-sample input.
 - Rebuild a report: run `report --result-dir ...`.
-- Update tool behavior: edit registry/config/wrappers, then update the matching `skills/{tool}/SKILL.md`.
+- Update tool behavior: edit registry/config/wrappers, then update the matching
+  `src/abi/skills/{tool}/SKILL.md`.
 
 ## Repository Anchors
 
-- CLI entry point: `src/abi/autoplasm/cli.py`
-- Planner: `src/abi/autoplasm/planner.py`
-- Executor: `src/abi/autoplasm/pipeline.py`
-- Tool wrapper base: `src/abi/autoplasm/skills/base.py`
-- Registry loader: `src/abi/autoplasm/skills/registry.py`
-- Tool registry: `config/tool_registry.yaml`
+- ABI CLI entry point: `src/abi/cli.py`
+- Compatibility CLI entry point: `src/abi/autoplasm/cli.py`
+- Generic executor: `src/abi/executor.py`
+- Step contract enforcement: `src/abi/contracts/step_contract.py`
+- Plugin package: `src/abi/plugins/metagenomic_plasmid/`
+- Plugin engine: `src/abi/plugins/metagenomic_plasmid/_engine/`
+- Pipeline DAG: `plugins/metagenomic_plasmid/pipeline_dag.yaml`
+- Tool registry: `plugins/metagenomic_plasmid/tool_registry.yaml`
+- Tool contracts: `plugins/metagenomic_plasmid/tool_contracts/`
 - Default config: `config/default.yaml`
 - Profiles: `config/profiles/*.yaml`
 - Environment files: `envs/*.yml`
-- Tool docs: `skills/{tool}/SKILL.md`
-- User manual: `docs/cli_usage.md`
-- Tool matrix: `docs/tool_matrix.md`
+- Tool docs: `src/abi/skills/{tool}/SKILL.md`
+- User manual: `docs/metagenomic_plasmid.md`
+- Validation plan: `docs/workflow_validation.md`
 
 ## Environment Rules
 
@@ -203,6 +210,7 @@ After dry-run or run, inspect:
 - `provenance/commands.tsv`
 - `provenance/resolved_inputs.tsv`
 - `provenance/tool_versions.tsv`
+- `provenance/checksums.json`
 - `provenance/resources.json`
 - `provenance/environment.yml`
 - `provenance/run_summary.json`
@@ -216,6 +224,11 @@ After dry-run or run, inspect:
 - `report/report.md`
 - `report/report.html`
 - `report/methods.md`
+
+Contract enforcement happens only on real execution after external tools
+succeed. The executor validates resolved on-disk outputs, so fixed filenames
+such as `S1_R1.clean.fastq.gz` and `S1_R2.clean.fastq.gz` can satisfy abstract
+planner outputs such as `clean_read1` and `clean_read2`.
 
 Important `commands.tsv` statuses:
 
@@ -278,22 +291,29 @@ Do not delete user outputs as a recovery tactic. `autoplasm clean` is intentiona
 When changing CLI behavior, update:
 
 - `README.md`
-- `docs/cli_usage.md`
-- relevant `skills/{tool}/SKILL.md`
-- `docs/requirements_status.md` if requirement status changes
+- `docs/agent_usage.md`
+- `src/abi/skills/abi_agent/SKILL.md`
+- `src/abi/skills/autoplasm_agent/SKILL.md`
+- relevant `src/abi/skills/{tool}/SKILL.md`
+- `CHANGELOG.md`
 
 When changing a registry entry, update:
 
-- `config/tool_registry.yaml`
-- matching `skills/{tool}/SKILL.md`
+- `plugins/metagenomic_plasmid/tool_registry.yaml`
+- matching `plugins/metagenomic_plasmid/tool_contracts/{tool}.yaml`
+- matching `src/abi/skills/{tool}/SKILL.md`
 - environment YAML if executable availability changes
-- `skills/README.md` if category, default status, required status, or runtime environment changes
+- `src/abi/skills/README.md` if category, default status, required status, or runtime environment changes
 
 ## Interpretation Boundaries
 
 Do not overstate results:
 
 - Dry-run proves planning and command rendering only.
+- Published component tools support a route stage, not the whole ABI workflow.
+- A workflow is scientifically validated only after real execution on curated
+  benchmark data with pinned tools, versioned databases, expected standard-table
+  outputs, and documented acceptance thresholds.
 - Plasmid clusters are operational groups, not species.
 - Plasmid binning can be incomplete.
 - Host prediction is evidence, not proof.

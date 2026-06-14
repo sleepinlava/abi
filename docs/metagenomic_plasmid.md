@@ -14,7 +14,7 @@ package supplied the plasmid workflow.
 - Tool contracts: 67 (all bioinformatics tools in the plasmid pipeline, 32 with normalization parsers)
 - Engine: 39 files under `_engine/` (pipeline, planner, DAG, parsers, normalize, report, skills, etc.)
 - Pipeline DAG: `pipeline_dag.yaml` (84 nodes, 5 platforms, 16 standard tables) — single source of truth
-- Step contract enforcement: `contracts/step_contract.py` — output validation + assertions + checksum chaining
+- Step contract enforcement: `contracts/step_contract.py` — output validation, actual-output resolution, assertions, and checksum chaining
 
 There is no supported top-level `import autoplasm` API.
 
@@ -44,3 +44,16 @@ The package includes small configs, tool contracts, test fixtures, and examples.
 It does not include real databases, mamba environments, or user results.
 
 Use `resources/` for local databases and keep those files outside git.
+
+## Validation Position
+
+The metagenomic plasmid route is now structured as a constrained workflow:
+`pipeline_dag.yaml` defines node order, outputs, contracts, and assertions;
+the generic executor writes provenance and enforces contracts after each
+successful external command.
+
+This is not yet the same as a fully validated biological workflow. The current
+codebase provides the control layer needed for validation, while the remaining
+work is to pin environments, version databases, curate positive/negative
+benchmark datasets, and connect route-level reports to method citations. See
+[Workflow Validation and Scientific Evidence Plan](workflow_validation.md).

@@ -164,6 +164,8 @@ After a run, always reference these canonical artifacts:
 | `provenance/commands.tsv` | All commands with status (success/failed/skipped) |
 | `provenance/resolved_inputs.tsv` | All resolved input paths |
 | `provenance/tool_versions.tsv` | Tool versions used |
+| `provenance/checksums.json` | Checksums recorded by enforced step contracts |
+| `provenance/resources.json` | Database/model/resource availability records |
 | `provenance/run_summary.json` | Overall run summary |
 | `provenance/step_logs/*.log` | Per-step stdout/stderr logs |
 | `tables/*.tsv` | **Standard result tables** (READ THESE for results) |
@@ -171,6 +173,28 @@ After a run, always reference these canonical artifacts:
 | `report/report.html` | HTML report |
 
 **Always read `tables/*.tsv` for structured results.** Never parse raw tool stdout.
+
+## Contract and Reproducibility Checks
+
+When evaluating whether a workflow is constrained, verifiable, or reproducible,
+inspect the ABI artifacts directly:
+
+1. `execution_plan.json` matches the requested plugin, samples, platforms, and route.
+2. `provenance/commands.tsv` has no failed or unintended skipped steps.
+3. `provenance/resolved_inputs.tsv` has no missing required inputs.
+4. `provenance/checksums.json` exists after real execution when contracts are enforced.
+5. `provenance/tool_versions.tsv` and `provenance/resources.json` identify tools and resources.
+6. `tables/*.tsv` contain the result rows used for biological interpretation.
+7. `docs/workflow_validation.md` documents which route stages are literature-backed and which still need benchmark validation.
+
+Do not claim that a dry-run proves biological validity. Dry-run validates planning,
+command rendering, and provenance shape only. Scientific claims require real tool
+outputs, configured databases, version/resource manifests, benchmark acceptance
+checks, and method citations.
+
+Step contracts may resolve actual tool output files after execution before
+validating outputs and assertions. This is expected for tools whose command
+templates write fixed filenames while the planner carries abstract output keys.
 
 ## commands.tsv Status Values
 
