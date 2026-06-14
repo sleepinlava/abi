@@ -42,3 +42,35 @@ abi doctor-agent --type metagenomic_plasmid
 
 The context lists safe call order, standard tables, important artifacts, error
 codes, and recovery rules.
+
+## Agent Skills (Claude Code)
+
+ABI bundles 42 SKILL.md files (one for each bioinformatics tool plus an
+``abi_agent`` operating skill) inside the package at ``src/abi/skills/``.
+Install them into Claude Code with:
+
+```bash
+abi install-skills         # → ~/.claude/skills/abi/
+abi install-skills --force # overwrite existing files
+```
+
+Claude Code automatically loads all skills from ``~/.claude/skills/`` on
+each session start.
+
+## MCP Server
+
+```bash
+abi-mcp                    # start MCP stdio server
+python -m abi.mcp.server   # equivalent (if abi-mcp not available)
+```
+
+The server registers all ABI agent tools (list_types, plan, dry_run, inspect,
+report, run, etc.) as MCP tools for Claude Desktop and Claude Code.
+
+## Python API
+
+```python
+import abi
+print(abi.get_agent_guide())        # compact guide for system prompt injection
+print(abi.list_plugins_summary())   # [(analysis_type, name, description), ...]
+```

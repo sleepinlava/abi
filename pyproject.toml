@@ -58,6 +58,7 @@ dev = [
 
 [project.scripts]
 abi = "abi.cli:main"
+abi-mcp = "abi.mcp.server:main"
 autoplasm = "abi.autoplasm.cli:main"
 
 [project.entry-points."abi.plugins"]
@@ -81,7 +82,6 @@ packages = ["src/abi"]
 "scripts/hifiasm_gfa_to_fasta.sh" = "scripts/hifiasm_gfa_to_fasta.sh"
 "scripts/normalize_hifiadapterfilt_output.sh" = "scripts/normalize_hifiadapterfilt_output.sh"
 "scripts/normalize_opera_ms_output.sh" = "scripts/normalize_opera_ms_output.sh"
-"skills" = "skills"
 
 [tool.hatch.build.targets.sdist]
 include = [

@@ -58,6 +58,12 @@ abi doctor-agent --type metatranscriptomics
 # Headless agent dispatch (used by Job Service workers)
 abi dispatch --command list-types --arguments '{}'
 
+# Start MCP stdio server for Claude Desktop / Claude Code
+abi-mcp
+
+# Install ABI agent skills into Claude Code (~/.claude/skills/abi/)
+abi install-skills
+
 # Job Service with optional force-kill subprocess workers
 abi job-service --workers 2 --store jobs.json --subprocess-workers
 ```
@@ -83,7 +89,7 @@ autoplasm dry-run --config examples/config_minimal.yaml --profile dry_run
 Agent Platforms (Claude / ChatGPT / Cursor / CI)
         │
         v
-Transport Layer   CLI JSON  │  OpenAI Tools  │  MCP  │  HTTP Job API
+Transport Layer   CLI JSON  │  OpenAI Tools  │  MCP  │  HTTP Job API  │  Skills
         │
         v
 ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch
@@ -116,8 +122,17 @@ Runtimes            local  │  Nextflow  │  HPC  │  cloud
 - CLI JSON through `--output-json`
 - `abi dispatch --command <name> --arguments '<json>'` for headless subprocess dispatch
 - OpenAI-compatible descriptors from `abi export-openai-tools`
-- Optional MCP stdio server via `python -m abi.mcp.server`
+- MCP stdio server via `abi-mcp` (or `python -m abi.mcp.server`)
 - HTTP Job Service via `abi job-service` and `abi job submit/list/status/artifacts/cancel`
+- Skills via `abi install-skills` (copies bundled SKILL.md files to `~/.claude/skills/abi/`)
+
+Agents can also get operating instructions programmatically:
+
+```python
+import abi
+print(abi.get_agent_guide())        # compact operating guide for system prompt
+print(abi.list_plugins_summary())   # list all installed analysis plugins
+```
 
 Execution tools require explicit confirmation. `abi run`, `abi_run`, and Job
 Service execution submissions return `confirmation_required` unless

@@ -28,6 +28,12 @@ python -m twine check dist/*
 abi list-types
 abi dry-run --type metatranscriptomics --outdir /tmp/abi-smoke
 autoplasm --help
+
+# Agent integration
+abi-mcp                          # start MCP stdio server for Claude Desktop / Claude Code
+abi install-skills               # install ABI skills into ~/.claude/skills/abi/
+abi doctor-agent --type metagenomic_plasmid   # print per-plugin operating guide
+abi export-openai-tools --type metagenomic_plasmid --format responses  # OpenAI function descriptors
 ```
 
 ## Architecture
@@ -76,6 +82,7 @@ src/abi/
   json_utils.py       JSON file/payload loading with ABIJSONError wrapping
   timeouts.py         Timeout parsing: parse_timeout_seconds, timeout_from_env_or_value
   cli.py              Typer CLI: abi + autoplasm entry points
+  skills/             Agent skill files (abi_agent + per-tool), installed via ``abi install-skills``
 ```
 
 ### Key modules for plugin authors (Public SDK)

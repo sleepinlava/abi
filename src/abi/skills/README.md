@@ -5,6 +5,28 @@
 - 人类维护者：确认每个工具的用途、输入、输出、资源要求和失败排查方式。
 - agent 智能体：在修改配置、生成计划、执行 dry-run、解释 provenance 或排查失败时，按统一规则调用 AutoPlasm CLI。
 
+## 安装 Skills 到 Claude Code
+
+```bash
+# 安装所有 skills 到 ~/.claude/skills/abi/
+abi install-skills
+
+# 自定义目标目录
+abi install-skills --target /path/to/skills
+
+# 覆盖已有文件
+abi install-skills --force
+```
+
+安装后，Claude Code 会自动加载 skills 目录中的所有 SKILL.md 文件。
+
+## 0. Agent Skills
+
+| 文件 | 用途 |
+| --- | --- |
+| `skills/abi_agent/SKILL.md` | **ABI CLI agent skill** — 教 agent 如何使用 pip 安装后的 `abi` 命令（含 --output-json、MCP、OpenAI tools 等传输方式）。 |
+| `skills/autoplasm_agent/SKILL.md` | 仓库级 operator skill，说明 agent 如何在源码开发模式下使用 CLI、配置、registry、资源检查和 provenance。
+
 Python pipeline 的真实执行入口仍然是 `config/tool_registry.yaml` 和 `src/abi/autoplasm/skills/` 下的 wrapper。Markdown skill 文件负责把同一份契约写清楚，避免 agent 手工拼接不可追踪的命令。
 
 ## 1. 文件类型

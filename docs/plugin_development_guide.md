@@ -37,7 +37,7 @@ plugins/my_analysis/
   standard_tables.yaml
   tool_contracts/
     tool_a.yaml
-  skills/
+  skills/               ← SKILL.md files bundled with the package
     tool_a/SKILL.md
   _engine/             ← optional: complex engine code (see metagenomic_plasmid)
 ```
@@ -45,6 +45,21 @@ plugins/my_analysis/
 For complex plugins with substantial internal logic, use a self-contained
 package with a private `_engine/` subdirectory. See `plugins/metagenomic_plasmid/`
 for the canonical example.
+
+## Skills and Agent Integration
+
+Each tool should have a `SKILL.md` file under `skills/<tool_name>/SKILL.md`.
+Skills are bundled inside the package at `src/abi/skills/` and installed into
+Claude Code via:
+
+```bash
+abi install-skills      # → ~/.claude/skills/abi/
+```
+
+To add a new skill, create the directory and SKILL.md file under
+`src/abi/skills/<tool_name>/SKILL.md`. The `abi_agent/SKILL.md` skill teaches
+Claude Code how to use the `abi` CLI itself; other skills document individual
+bioinformatics tools.
 
 ## Tool Contracts
 

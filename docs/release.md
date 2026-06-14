@@ -22,6 +22,10 @@ environment when possible:
 abi list-types
 autoplasm --help
 abi dry-run --type metagenomic_plasmid --config examples/config_minimal.yaml --profile dry_run
+abi doctor-agent --type metatranscriptomics
+abi export-openai-tools --type metatranscriptomics --format json
+abi install-skills --target /tmp/abi-smoke-skills
+abi-mcp --help 2>/dev/null || python -m abi.mcp.server --help 2>/dev/null || true
 ```
 
 ## GitHub Actions

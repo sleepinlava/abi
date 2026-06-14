@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `abi-mcp` console_script entry point for starting the MCP stdio server directly.
+- `abi install-skills` CLI command to install bundled SKILL.md skill files into
+  `~/.claude/skills/abi/` for Claude Code auto-discovery.
+- `abi_agent/SKILL.md` — new agent skill teaching Claude Code how to use the
+  pip-installed `abi` CLI (lifecycle, transport methods, error recovery).
+- `abi.get_agent_guide()` and `abi.list_plugins_summary()` Python API for
+  agents to get operating instructions without calling the CLI.
+- Enhanced `abi/__init__.py` with package documentation and agent-facing helper
+  functions.
+
+### Changed
+- **Skills relocated**: moved from repo-root `skills/` to `src/abi/skills/` so
+  they are installed inside the package and always available at runtime.
+- `abi` package `__init__.py` now exports `get_agent_guide()` and
+  `list_plugins_summary()` in addition to `__version__`.
+- Updated `test_registry_skill_docs_exist` to resolve skill paths against the
+  in-package `skills/` directory.
+
 ## [1.0.0] - 2026-06-13
 
 ### Added

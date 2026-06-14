@@ -56,6 +56,12 @@ abi doctor-agent --type metatranscriptomics
 # 无头 Agent 调度（Job Service worker 使用）
 abi dispatch --command list-types --arguments '{}'
 
+# 启动 MCP stdio 服务（用于 Claude Desktop / Claude Code）
+abi-mcp
+
+# 将 ABI agent skills 安装到 Claude Code（~/.claude/skills/abi/）
+abi install-skills
+
 # 带 force-kill 子进程 worker 的 Job Service
 abi job-service --workers 2 --store jobs.json --subprocess-workers
 ```
@@ -81,7 +87,7 @@ autoplasm dry-run --config examples/config_minimal.yaml --profile dry_run
 Agent 平台 (Claude / ChatGPT / Cursor / CI)
         │
         v
-传输层       CLI JSON  │  OpenAI Tools  │  MCP  │  HTTP Job API
+传输层       CLI JSON  │  OpenAI Tools  │  MCP  │  HTTP Job API  │  Skills
         │
         v
 ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch
@@ -114,8 +120,17 @@ ABI 核心层          schemas  │  provenance  │  permissions  │  diagnost
 - 通过 `--output-json` 输出的 CLI JSON
 - `abi dispatch --command <name> --arguments '<json>'` 无头子进程调度
 - `abi export-openai-tools` 生成的 OpenAI 兼容工具描述符
-- 可选 MCP stdio 服务 `python -m abi.mcp.server`
+- MCP stdio 服务 `abi-mcp`（或 `python -m abi.mcp.server`）
 - HTTP Job Service：`abi job-service` 和 `abi job submit/list/status/artifacts/cancel`
+- Skills 安装 `abi install-skills`（将内置 SKILL.md 文件复制到 `~/.claude/skills/abi/`）
+
+Agent 也可以通过 Python API 获取操作指南：
+
+```python
+import abi
+print(abi.get_agent_guide())        # 紧凑操作指南，可注入 system prompt
+print(abi.list_plugins_summary())   # 列出所有已安装分析插件
+```
 
 执行类工具需要显式确认。除非传入 `confirm_execution=true` 或 `--confirm-execution`，
 否则 `abi run`、`abi_run` 和 Job Service 执行提交会返回 `confirmation_required`。

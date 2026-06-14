@@ -28,6 +28,7 @@ Command                       Purpose
 ``check-resources``           Check database/index/model resources (read-only).
 ``setup-resources``           Download/mock/plan resource setup.
 ``doctor-agent``              Print a safe operating guide for ABI agent callers.
+``install-skills``            Install ABI agent skills into ~/.claude/skills/.
 ``dispatch``                  Headless subprocess dispatch for Job Service workers.
 ``job-service``               Start the HTTP Job Service for queued operations.
 ``job submit``                Submit a job to the ABI Job Service.
@@ -1158,6 +1159,86 @@ def doctor_agent_command(
     try:
         plugin = get_plugin(analysis_type)
         typer.echo(render_doctor_agent(plugin), nl=False)
+    except Exception as exc:
+        _fail(exc)
+
+
+@app.command("install-skills")
+def install_skills_command(
+    target: Optional[Path] = typer.Option(
+        None,
+        "--target",
+        help="Target skills directory (default: ~/.claude/skills).",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Overwrite existing skill files.",
+    ),
+) -> None:
+    """Install ABI agent skills into a Claude Code skills directory.
+
+    Copies all SKILL.md files from the ABI package's bundled skills directory
+    into the target directory (default ``~/.claude/skills/abi/``). After
+    installation, Claude Code will automatically load these skills and
+    know how to use the ``abi`` CLI and its bioinformatics tools.
+
+    Skills installed:
+
+    - ``abi_agent`` — operating guide for the ``abi`` CLI (lifecycle, transport
+      methods, error recovery).
+    - Per-tool skills for 40+ bioinformatics tools (fastp, megahit, genomad,
+      bakta, etc.).
+
+    Use ``abi doctor-agent --type <analysis_type>`` for a text guide you can
+    paste directly into an LLM system prompt.
+
+    将 ABI agent skills 安装到 Claude Code skills 目录。
+
+    将所有 SKILL.md 文件从 ABI 包捆绑的 skills 目录复制到目标目录
+    （默认 ``~/.claude/skills/abi/``）。安装后，Claude Code 将自动加载
+    这些 skills，并知道如何使用 ``abi`` CLI 及其生物信息学工具。
+    """
+    import abi
+
+    try:
+        source = Path(abi.__file__).parent / "skills"
+        if not source.is_dir():
+            raise ABIError(f"ABI skills directory not found: {source}")
+        dest = target or (Path.home() / ".claude" / "skills" / "abi")
+        copied: List[str] = []
+        skipped: List[str] = []
+        for item in sorted(source.iterdir()):
+            skill_file = item / "SKILL.md" if item.is_dir() else item
+            if not skill_file.is_file() or skill_file.suffix != ".md":
+                continue
+            dest_subdir = dest / item.name if item.is_dir() else dest
+            dest_file = dest_subdir / "SKILL.md" if item.is_dir() else dest_subdir / item.name
+            if dest_file.exists() and not force:
+                skipped.append(str(dest_file))
+                continue
+            dest_subdir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(skill_file, dest_file)
+            copied.append(str(dest_file))
+        result = {
+            "source": str(source),
+            "target": str(dest),
+            "copied": copied,
+            "skipped": skipped,
+            "count": len(copied),
+        }
+        typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
+        if skipped:
+            typer.secho(
+                f"Skipped {len(skipped)} existing files (use --force to overwrite).",
+                fg=typer.colors.YELLOW,
+                err=True,
+            )
+        typer.secho(
+            f"Installed {len(copied)} skill(s) to {dest}",
+            fg=typer.colors.GREEN,
+            err=True,
+        )
     except Exception as exc:
         _fail(exc)
 

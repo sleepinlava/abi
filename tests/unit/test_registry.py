@@ -147,15 +147,23 @@ def test_registry_builds_opera_ms_command_with_fasta_normalization():
 
 
 def test_registry_skill_docs_exist():
+    from pathlib import Path
+
+    import abi
+
+    # skill_path values in tool_registry.yaml are relative (skills/<tool>/SKILL.md).
+    # Skills now live inside the ABI package at src/abi/skills/.
+    skills_root = Path(abi.__file__).parent / "skills"
     registry = ToolRegistry.from_path()
     missing = []
     for tool in registry.list_tools():
         skill_path = tool.get("skill_path")
         if skill_path:
-            from pathlib import Path
-
-            if not Path(skill_path).exists():
-                missing.append(skill_path)
+            # Resolve: strip the leading "skills/" prefix and look inside package
+            tool_name = Path(skill_path).parent.name
+            candidate = skills_root / tool_name / "SKILL.md"
+            if not candidate.exists():
+                missing.append(f"{skill_path} (expected at {candidate})")
     assert missing == []
 
 
