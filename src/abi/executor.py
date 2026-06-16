@@ -792,15 +792,21 @@ class GenericABIExecutor:
         rows = []
         for tool in self.registry.list_tools():
             skill = self.registry.create(str(tool.get("id")), mock_tools=self.mock_tools)
+            installed = skill.check_installation()
+            version = ""
+            if installed and not self.mock_tools:
+                # B5/B2 fix: capture actual version string (non-fatal)
+                try:
+                    version = skill.capture_version()
+                except Exception:
+                    version = "capture_failed"
             rows.append(
                 {
                     "tool_id": tool.get("id"),
                     "executable": tool.get("executable", ""),
                     "env_name": tool.get("env_name", ""),
-                    # Version string is left empty here; plugins can populate it.
-                    # 版本字符串在此留空；插件可以填充它。
-                    "version": "",
-                    "status": "ok" if skill.check_installation() else "missing",
+                    "version": version,
+                    "status": "ok" if installed else "missing",
                 }
             )
         path.parent.mkdir(parents=True, exist_ok=True)

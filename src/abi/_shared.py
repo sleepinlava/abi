@@ -28,11 +28,26 @@ def _read_tsv(path: Path) -> list[dict[str, str]]:
 
     Used for reading provenance files (commands.tsv, resolved_inputs.tsv) which
     may not exist yet for fresh or incomplete runs.
+
+    Column order is deterministic — ``csv.DictReader`` returns ``OrderedDict``
+    subclasses in Python 3.7+, preserving the TSV header order exactly (B14).
     """
     if not path.exists():
         return []
     with path.open("r", encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle, delimiter="\t"))
+
+
+def _sorted_columns(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Return rows with columns sorted alphabetically for deterministic output (B14).
+
+    Use this when writing golden files or comparing standard table output
+    where column order must be stable across Python versions and platforms.
+    """
+    if not rows:
+        return rows
+    sorted_keys = sorted(rows[0].keys())
+    return [{k: row[k] for k in sorted_keys} for row in rows]
 
 
 def _display_command(command: Iterable[str]) -> str:
@@ -91,3 +106,24 @@ def _common_overrides(
     if progress is not None:
         overrides["execution"] = {"progress": progress}
     return compact_overrides(overrides)
+
+
+def _fetch_url_safe(url: str, *, timeout: float = 10.0) -> str:
+    """Fetch a URL with timeout and graceful fallback (B9/B22 fix).
+
+    Returns the response body as a string on success, or ``""`` on any
+    failure (timeout, DNS error, HTTP error).  Never raises — callers
+    should check for an empty return value and handle the fallback.
+
+    Use this for non-critical external resources (CrossRef API, database
+    source URLs) where the pipeline should not abort on network issues.
+    """
+    import urllib.error as _error
+    import urllib.request as _request
+
+    try:
+        req = _request.Request(url, headers={"User-Agent": "ABI/1.0"})
+        with _request.urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except (_error.URLError, _error.HTTPError, OSError, ValueError, TimeoutError):
+        return ""

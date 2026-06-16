@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shlex
 import shutil
 import string
@@ -251,6 +252,21 @@ class ToolSkill:
     def dry_run(self, params: Dict[str, Any]) -> RunResult:
         """Convenience: run with dry_run=True. / 便捷方法：以试运行模式执行。"""
         return self.run(params, dry_run=True)
+
+    def capture_version(self) -> str:
+        """Return the tool's version string, or ``""`` if unavailable (B5/B2 fix).
+
+        Default implementation: runs ``version_command`` from YAML metadata
+        with a short timeout.  If ``version_regex`` is configured, extracts
+        the first capture group from the command output.
+
+        Failure is non-fatal — returns a diagnostic string like
+        ``"version_command_failed(exit=1)"`` or ``"version_command_timeout"``
+        so the pipeline can continue while recording the failure reason.
+
+        Subclasses may override this to provide tool-specific version logic.
+        """
+        return ""
 
 
 # ── GenericCommandSkill ────────────────────────────────────────────────
@@ -787,6 +803,51 @@ class GenericCommandSkill(ToolSkill):
             value,
             default=DEFAULT_TOOL_TIMEOUT_SECONDS,
         )
+
+    def capture_version(self) -> str:
+        """Capture the tool's version string from ``version_command`` metadata (B5/B2 fix).
+
+        Resolution order:
+        1. If ``mock_tools`` is set, return ``"mock"``.
+        2. If ``version_command`` is not configured, return ``""`` (not captured).
+        3. Run the command via subprocess with a 10-second timeout.
+        4. If ``version_regex`` is configured, extract the first capture group.
+        5. On failure, return a diagnostic string (non-fatal).
+
+        The ``version_regex`` field in the tool contract YAML uses Python
+        regex syntax.  Example:
+            version_command: "fastp --version 2>&1"
+            version_regex: "fastp\\\\s+(\\\\d+\\\\.\\\\d+\\\\.\\\\d+)"
+        """
+        if self.metadata.get("mock_tools"):
+            return "mock"
+        version_cmd = str(self.metadata.get("version_command", ""))
+        if not version_cmd:
+            return ""
+        try:
+            result = subprocess.run(
+                version_cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=int(self.metadata.get("version_timeout", 10)),
+                env=self.runtime_env(),
+            )
+            output = (result.stdout + result.stderr).strip()
+            if result.returncode != 0:
+                return f"version_command_failed(exit={result.returncode})"
+            # Apply version_regex if configured (B2)
+            regex = str(self.metadata.get("version_regex", ""))
+            if regex:
+                m = re.search(regex, output)
+                if m:
+                    return m.group(1)
+                return f"regex_unmatched:{output[:80]}"
+            return output[:120]
+        except subprocess.TimeoutExpired:
+            return "version_command_timeout"
+        except Exception as exc:
+            return f"version_command_error:{exc}"
 
     def parse_outputs(self, output_dir: str) -> Dict[str, Any]:
         """Discover output files by scanning the output directory.

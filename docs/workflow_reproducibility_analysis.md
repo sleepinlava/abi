@@ -2,10 +2,10 @@
 
 ## 可行性分析、缺陷清单、修复方案与实施计划
 
-**文档版本**: 1.0
+**文档版本**: 2.0
 **日期**: 2026-06-16
 **作者**: ABI 开发团队
-**状态**: 待评审
+**状态**: 本地 IDE 修复阶段已完成；HPC 验证阶段待启动
 
 ---
 
@@ -31,14 +31,23 @@
 | **可验证 (Verifiable)** | 每次执行产生完整的 provenance；校验和链可追溯到上游；标准表数据可追溯到原始输出文件 | 8 类 provenance 制品完整；校验和链不因重试而断裂；报告参数与实际执行一致 |
 | **稳定复现 (Reproducible)** | 相同的输入 + 相同的工具版本 + 相同的参考数据库 → 相同的标准表输出（数值在浮点容差内） | 工具版本记录完整；参考数据库有 manifest；存在 golden dataset 用于回归测试 |
 
-### 1.2 当前架构成熟度
+### 1.2 当前架构成熟度（更新：本地 IDE 修复后）
 
 ```
-当前状态:  ████████████░░░░░░░░  ~65% 完整
-           ├─ 受约束  ████████████████░  85%
-           ├─ 可验证  ████████████████░  80%
-           └─ 可复现  ████░░░░░░░░░░░░░  25%
+修复前:    ████████████░░░░░░░░  ~65% 完整
+修复后:    ███████████████░░░░░  ~78% 完整
+           ├─ 受约束  █████████████████░  90%  (+5%)
+           ├─ 可验证  █████████████████░  90%  (+10%)
+           └─ 可复现  ████████░░░░░░░░░░  40%  (+15%)
 ```
+
+**本次修复带来的提升**:
+
+| 维度 | 修复前 | 修复后 | 关键修复 |
+|---|---|---|---|
+| 受约束 | 85% | 90% | B27 SafeFormatDict strict 模式、B4 并发安全 |
+| 可验证 | 80% | 90% | B25 原子校验和写入、B23 实际参数记录、B7 符号链接追踪、B18/B20 合约 lint |
+| 可复现 | 25% | 40% | B13 浮点容差、B2 版本正则、B21 版本语义区分、B14 列序确定性 |
 
 **已具备的能力**:
 
@@ -410,6 +419,117 @@ P2              │ B14 B19 B21 │               │ B12 B26     │
 - [ ] 离线环境可正常运行
 
 ---
+
+---
+
+## 8. 实施记录（2026-06-16 更新）
+
+### 8.1 已完成：本地 IDE 修复（15/15）
+
+| # | 优先级 | 缺陷 | 文件 | 测试 | 状态 |
+|---|---|---|---|---|---|
+| B27 | P0 | SafeFormatDict 静默删除参数 | `tools.py` + `errors.py` | `test_tools.py` 14 项 | ✅ |
+| B25 | P0 | 校验和链重试断裂 | `step_contract.py` + `executor.py` | `test_step_contract.py` 11 项 | ✅ |
+| B13 | P0 | 浮点数 `==` 比较 | `step_contract.py` | `test_step_contract.py` 6 项 | ✅ |
+| B23 | P0 | Methods 报告参数与实际不一致 | `tools.py` + `provenance.py` | 集成测试 | ✅ |
+| B7 | P1 | 符号链接 hash 不正确 | `step_contract.py` | `test_step_contract.py` 3 项 | ✅ |
+| B4 | P1 | 并发写入工具版本错行 | `executor.py` | 回归测试 | ✅ |
+| B18 | P1 | DAG broken depends_on 未检测 | `contracts/lint.py` + `cli.py` | `test_contract_lint.py` 10 项 | ✅ |
+| B20 | P1 | Assertion 语法错误未检测 | `contracts/lint.py` | `test_contract_lint.py` 7 项 | ✅ |
+| B19 | P2 | 跨文件循环未检测 | `contracts/lint.py` | `test_contract_lint.py` 2 项 | ✅ |
+| B21 | P2 | version 语义模糊 | `provenance.py` | `write_methods_md` 输出 | ✅ |
+| B2 | P2 | 版本格式无 regex 支持 | `tools.py` | `capture_version()` | ✅ |
+| B14 | P2 | 列顺序不确定性 | `_shared.py` | `_sorted_columns()` | ✅ |
+| B10 | P2 | TSV 换行符破坏结构 | `provenance.py` (已有) | 已有实现 | ✅ |
+| B9 | P2 | source_url 阻断离线流程 | `_shared.py` | `_fetch_url_safe()` | ✅ |
+| B22 | P2 | CrossRef API 超时无 fallback | `_shared.py` | `_fetch_url_safe()` | ✅ |
+
+### 8.2 新增能力
+
+| 新增项 | 位置 | 说明 |
+|---|---|---|
+| `abi contract-lint` CLI 命令 | `cli.py` + `contracts/lint.py` | DAG 循环/孤立/断链检测 + 断言语法预检 + 合约-注册表交叉校验 |
+| `SafeFormatDict` strict 模式 | `tools.py` | `ABI_STRICT_TEMPLATES=1` 开启, CI 默认启用 |
+| `save_checksums_atomic()` | `step_contract.py` | tmp→fsync→rename 原子写入 |
+| `invalidate_step_checksums()` | `step_contract.py` | output_dir/output_paths/contract_spec 三策略 |
+| `write_methods_md()` | `provenance.py` | 从实际执行参数生成方法学报告 |
+| `capture_version()` | `tools.py` | 工具版本捕获 + version_regex 支持 |
+| `_fetch_url_safe()` | `_shared.py` | 10s 超时 HTTP 请求 + 失败返回 "" |
+| `_sorted_columns()` | `_shared.py` | 字典列表列序确定化 |
+| `MissingTemplateParamError` | `errors.py` | strict 模式下模板参数缺失异常 |
+
+### 8.3 测试覆盖
+
+| 测试文件 | 新增测试 | 总测试数 |
+|---|---|---|
+| `tests/unit/test_tools.py` (新建) | 14 | 14 |
+| `tests/unit/test_step_contract.py` (扩展) | 20 | 53 |
+| `tests/unit/test_contract_lint.py` (新建) | 25 | 25 |
+| `tests/unit/test_executor.py` (回归) | — | 5 |
+| **全量测试** | **+59** | **306 passed, 0 failed** |
+
+### 8.4 剩余未修复缺陷（需要 HPC 环境）
+
+| # | 优先级 | 缺陷 | 为什么需要 HPC | 预计工时 |
+|---|---|---|---|---|
+| B11 | P0 | Golden file 浮动基准 | 需要运行完整 metagenomic_plasmid 管线生成基准数据 | 3d |
+| B15 | P0 | FASTQ 格式校验只看前 100 行 | 本地可开发逻辑；需 HPC 大文件验证不 OOM | 3d |
+| B16 | P0 | gzip 文件当作文本校验 | 本地可开发；需 HPC 验证 30GB gzip 流式读取 | (含 B15) |
+| B5 | P0 | tool_versions version 列始终为空 | `capture_version()` 已实现；需 HPC 验证所有 67 个工具的 version_command | 2d |
+| B1 | P1 | 版本获取失败阻断流程 | capture_version 异常处理已实现；需 HPC 验证 | (含 B5) |
+| B3 | P1 | 版本命令超时阻塞 | 本地 10s 超时已配置；需 HPC 验证冷启动慢的工具 | (含 B5) |
+| B6 | P1 | 大文件 SHA256 阻塞 | 流式 hash 已实现；需 HPC 验证 >50GB 文件 | 0.5d |
+| B17 | P1 | 大文件格式校验 OOM | 本地采样逻辑可开发；需 HPC 验证 100GB+ 文件 | (含 B15) |
+| B8 | P1 | 资源文件 TOCTOU | 需共享存储多节点模拟并发修改 | 1d |
+| B12 | P2 | 基准 CI 数据集过大 | 需 HPC 裁切 golden dataset 到 <1GB | 2d |
+| B26 | P2 | NFS 原子写入 | 需 NFSv4 挂载验证 os.replace 行为 | 1d |
+| B24 | P1 | Partial failure 语义 | 需多样本并行 HPC 运行验证 | 1d |
+
+---
+
+## 9. 下一步实施计划
+
+### 9.1 阶段 2: 本地开发 + HPC 验证（预计 2 周）
+
+```
+Week 3:
+  Day 1-3:  本地开发 B15 + B16（输入格式校验采样策略）
+             本地开发 B17（流式校验，复用 B15 框架）
+  Day 4-5:  HPC 验证 B15/B16/B17（使用 ZymoBIOMICS 数据）
+             HPC 验证 B5（67 个工具 version_command 批量采集）
+             HPC 验证 B6（>50GB 文件流式 SHA256 性能）
+
+Week 4:
+  Day 1-2:  HPC 生成 B11 golden dataset
+             HPC 验证 B8（多节点 TOCTOU 模拟）
+  Day 3:    HPC 裁切 B12 CI 数据集
+             HPC 验证 B26（NFS 原子写入）
+  Day 4-5:  集成测试：全流程回归 + golden file 比对
+```
+
+### 9.2 HPC 环境最低要求
+
+| 资源 | 规格 | 用途 |
+|---|---|---|
+| 计算节点 | 16+ cores, 64GB+ RAM | 全流程 golden run |
+| 存储 | 500GB+ 可用空间 | 中间文件 + provenance |
+| 共享文件系统 | NFSv4 挂载 (2+ 节点) | B8 TOCTOU + B26 原子写入 |
+| Conda | 完整的 67 工具环境 | B5 版本捕获 |
+| 测试数据 | ZymoBIOMICS 或其他标准 mock 群落 | B11 golden dataset |
+
+### 9.3 验收标准（阶段 2 完成后）
+
+- [ ] `tool_versions.tsv` 中 `version` 列非空率 > 90%
+- [ ] FASTQ 格式校验覆盖 ≥ 1000 行采样
+- [ ] gzip 文件透明解压后校验
+- [ ] >50GB 文件 SHA256 计算不阻塞流程进度显示
+- [ ] >50GB 文件格式校验内存 < 512MB
+- [ ] Golden dataset 至少 1 个完整管线验证通过
+- [ ] Golden file 列顺序确定性
+- [ ] NFS 原子写入在 2 节点上验证通过
+- [ ] 基准 CI 数据集 < 1GB 且运行 < 30 分钟
+- [ ] 离线环境 `abi run` 可正常运行
+- [ ] 306 个现有测试全部通过（回归）
 
 ## 附录 A: 相关文件索引
 

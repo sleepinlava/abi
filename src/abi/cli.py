@@ -1880,6 +1880,86 @@ def dispatch_command(
         _fail(exc)
 
 
+@app.command("contract-lint")
+def contract_lint_command(
+    analysis_type: str = typer.Option(
+        "metagenomic_plasmid",
+        "--type",
+        help="ABI analysis type whose DAG and contracts to lint.",
+    ),
+    strict: bool = typer.Option(
+        False,
+        "--strict",
+        help="Treat warnings as errors (non-zero exit code on warnings).",
+    ),
+) -> None:
+    """Lint pipeline DAG and tool contracts for structural errors (B18/B20/B19).
+
+    Checks performed:
+
+    - **DAG cyclics** — detects cycles in ``depends_on`` via topological sort.
+    - **Broken dependencies** — ``depends_on`` references to non-existent nodes.
+    - **Orphan nodes** — nodes with no dependents and no dependencies.
+    - **Assertion syntax** — compiles every assertion expression to check validity.
+    - **Contract consistency** — cross-references contracts with the tool registry.
+
+    Exit code 0 means no errors found.  Use ``--strict`` to also fail on warnings.
+
+    对管道 DAG 和工具合约进行结构错误静态检查。
+    """
+    try:
+        from abi.contracts.lint import run_contract_lint
+        from abi.plugins import get_plugin
+
+        plugin = get_plugin(analysis_type)
+        # Load DAG spec
+        dag_path = Path(plugin.root) / "pipeline_dag.yaml"
+        if not dag_path.exists():
+            typer.echo(json.dumps({
+                "findings": [{
+                    "severity": "error",
+                    "check": "missing_dag",
+                    "detail": f"DAG file not found: {dag_path}",
+                    "location": str(dag_path),
+                }],
+                "error_count": 1,
+                "warning_count": 0,
+                "passed": False,
+            }, indent=2))
+            raise typer.Exit(code=1)
+
+        import yaml as _yaml
+        with dag_path.open("r", encoding="utf-8") as fh:
+            dag_spec = _yaml.safe_load(fh)
+
+        # Load tool contracts if available
+        contracts = None
+        registry_ids = None
+        contracts_dir = Path(plugin.root) / "tool_contracts"
+        if contracts_dir.exists():
+            from abi.contracts import load_tool_contracts
+            try:
+                contracts = load_tool_contracts(plugin.root)
+            except Exception:
+                contracts = None
+            if hasattr(plugin, "registry"):
+                registry = plugin.registry()
+                registry_ids = {str(t.get("id", "")) for t in registry.list_tools()}
+
+        result = run_contract_lint(dag_spec, contracts=contracts, registry_tool_ids=registry_ids)
+
+        typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
+
+        if not result["passed"]:
+            raise typer.Exit(code=1)
+        if strict and result["warning_count"] > 0:
+            raise typer.Exit(code=1)
+    except typer.Exit:
+        raise
+    except Exception as exc:
+        _fail(exc)
+
+
 def main() -> None:
     """Entry point for the ``abi`` console script.
 
