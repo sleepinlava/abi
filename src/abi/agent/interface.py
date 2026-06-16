@@ -81,6 +81,7 @@ from abi.results import validate_abi_result_dir
 from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
 from abi.schemas import ABIError
 from abi.tables import StandardTableManager
+from abi.tool_descriptors import TOOL_ALIASES
 
 
 class ABIAgentInterface:
@@ -490,37 +491,7 @@ class ABIAgentInterface:
         # 支持连字符别名 (如 "dry-run") 和前缀别名 (如 "abi_dry_run")。
         """
         args = dict(arguments or {})
-        aliases = {
-            "list": "list_types",
-            "list-types": "list_types",
-            "list_types": "list_types",
-            "abi_list": "list_types",
-            "abi_list_types": "list_types",
-            "plan": "plan",
-            "abi_plan": "plan",
-            "dry_run": "dry_run",
-            "dry-run": "dry_run",
-            "abi_dry_run": "dry_run",
-            "inspect": "inspect",
-            "abi_inspect": "inspect",
-            "report": "report",
-            "abi_report": "report",
-            "run": "run",
-            "abi_run": "run",
-            "export_nextflow": "export_nextflow",
-            "export-nextflow": "export_nextflow",
-            "abi_export_nextflow": "export_nextflow",
-            "export_agent_context": "export_agent_context",
-            "export-agent-context": "export_agent_context",
-            "abi_export_agent_context": "export_agent_context",
-            "doctor_agent": "doctor_agent",
-            "doctor-agent": "doctor_agent",
-            "abi_doctor_agent": "doctor_agent",
-            "validate_result": "abi_validate_result",
-            "validate-result": "abi_validate_result",
-            "abi_validate_result": "abi_validate_result",
-            "autoplasm_validate_result": "autoplasm_validate_result",
-        }
+        aliases = TOOL_ALIASES
         method_name = aliases.get(tool_name, tool_name)
         method = getattr(self, method_name, None)
         if method is None:

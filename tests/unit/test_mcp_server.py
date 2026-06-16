@@ -3,6 +3,7 @@ import inspect
 import pytest
 
 from abi.agent import ABIAgentInterface
+from abi.tool_descriptors import ABI_AGENT_TOOLS, TOOL_ALIASES
 
 
 class FakeMCP:
@@ -60,15 +61,9 @@ def test_mcp_server_tool_signatures_cover_agent_interface_parameters(monkeypatch
     monkeypatch.setattr(server, "FastMCP", FakeMCP)
     mcp = server.create_server()
     mapping = {
-        "abi_plan": "plan",
-        "abi_dry_run": "dry_run",
-        "abi_inspect": "inspect",
-        "abi_report": "report",
-        "abi_run": "run",
-        "abi_export_nextflow": "export_nextflow",
-        "abi_export_agent_context": "export_agent_context",
-        "abi_doctor_agent": "doctor_agent",
-        "abi_validate_result": "abi_validate_result",
+        name: TOOL_ALIASES[name]
+        for name in ABI_AGENT_TOOLS
+        if name in TOOL_ALIASES and not name.startswith("autoplasm")
     }
 
     for tool_name, method_name in mapping.items():

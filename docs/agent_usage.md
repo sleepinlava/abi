@@ -72,14 +72,33 @@ abi report --type metatranscriptomics --result-dir results/rnaseq_demo --output-
 All commands return JSON envelopes with status `success`, `confirmation_required`,
 or `error`.
 
-### OpenAI Tools
+### Multi-LLM Tools
+
+ABI exports tool descriptors for all major LLM providers from a single source of truth.
 
 ```bash
-# Export function descriptors (omit abi_run by default for safety)
-abi export-openai-tools --type metagenomic_plasmid --format responses
+# OpenAI-compatible providers (Chat Completions API)
+abi export-tools --type metagenomic_plasmid --format openai --provider openai
+abi export-tools --type metagenomic_plasmid --format openai --provider deepseek
+abi export-tools --type metagenomic_plasmid --format openai --provider zhipu   # 智谱 GLM
+abi export-tools --type metagenomic_plasmid --format openai --provider kimi     # Moonshot
+abi export-tools --type metagenomic_plasmid --format openai --provider qwen     # 通义千问
+abi export-tools --type metagenomic_plasmid --format openai --provider minimax  # MiniMax
 
-# Include execution tools
-abi export-openai-tools --type metagenomic_plasmid --format responses --include-execution
+# Anthropic Claude (tool_use format)
+abi export-tools --type metagenomic_plasmid --format anthropic
+
+# Google Gemini (function_declarations format)
+abi export-tools --type metagenomic_plasmid --format gemini
+
+# Include execution tools in export
+abi export-tools --type metagenomic_plasmid --format openai --include-execution
+```
+
+### OpenAI Tools (legacy, backward compat)
+
+```bash
+abi export-openai-tools --type metagenomic_plasmid --format responses
 ```
 
 ### MCP

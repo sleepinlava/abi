@@ -4,7 +4,9 @@
 
 ABI 是一个面向 AI Agent 驱动的生物信息学工作流的 Python 接口层。它将分析插件标准化为统一的
 `plan -> dry-run -> run -> inspect -> report` 生命周期，提供 provenance 审计追踪、
-标准 TSV 表、OpenAI 兼容工具描述符、可选 MCP 传输、Nextflow 导出/运行支持，
+标准 TSV 表、**多 LLM 工具描述符**（OpenAI、Anthropic Claude、Google Gemini、
+DeepSeek、智谱 GLM、Kimi、通义千问 Qwen、MiniMax），可选 MCP 传输、
+Nextflow 导出/运行支持、DAG/合约静态分析，
 以及带 force-kill 能力的队列化 HTTP Job Service。
 
 [![PyPI](https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=blue)](https://pypi.org/project/abi-agent/)
@@ -49,9 +51,18 @@ abi report --result-dir results/ --type metatranscriptomics
 
 # 导出 Agent/运行时接口
 abi export-nextflow --type metatranscriptomics --output workflow.nf
-abi export-openai-tools --type metatranscriptomics --format responses
+abi export-openai-tools --type metatranscriptomics --format responses    # 向后兼容
+abi export-tools --type metatranscriptomics --format openai --provider openai   # OpenAI
+abi export-tools --type metatranscriptomics --format openai --provider deepseek # DeepSeek
+abi export-tools --type metatranscriptomics --format openai --provider zhipu    # 智谱 GLM
+abi export-tools --type metatranscriptomics --format anthropic           # Claude
+abi export-tools --type metatranscriptomics --format gemini              # Gemini
 abi export-agent-context --type metatranscriptomics --format json
 abi doctor-agent --type metatranscriptomics
+
+# 静态合约 / DAG 验证
+abi contract-lint --type metagenomic_plasmid
+abi contract-lint --type metagenomic_plasmid --strict
 
 # 无头 Agent 调度（Job Service worker 使用）
 abi dispatch --command list-types --arguments '{}'
@@ -87,7 +98,7 @@ autoplasm dry-run --config examples/config_minimal.yaml --profile dry_run
 Agent 平台 (Claude / ChatGPT / Cursor / CI)
         │
         v
-传输层       CLI JSON  │  OpenAI Tools  │  MCP  │  HTTP Job API  │  Skills
+传输层       CLI JSON  │  OpenAI/Anthropic/Gemini Tools  │  MCP  │  HTTP Job API  │  Skills
         │
         v
 ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch
@@ -119,8 +130,9 @@ ABI 核心层          schemas  │  provenance  │  permissions  │  diagnost
 
 - 通过 `--output-json` 输出的 CLI JSON
 - `abi dispatch --command <name> --arguments '<json>'` 无头子进程调度
-- `abi export-openai-tools` 生成的 OpenAI 兼容工具描述符
-- MCP stdio 服务 `abi-mcp`（或 `python -m abi.mcp.server`）
+- **多 LLM 描述符** `abi export-tools --format openai|anthropic|gemini [--provider ...]` 覆盖 7+ 厂商
+- `abi export-openai-tools` 生成的 OpenAI 兼容工具描述符（向后兼容）
+- MCP stdio 服务 `abi-mcp`（或 `python -m abi.mcp.server`）— 从 SSOT 自动生成
 - HTTP Job Service：`abi job-service` 和 `abi job submit/list/status/artifacts/cancel`
 - Skills 安装 `abi install-skills`（将内置 SKILL.md 文件复制到 `~/.claude/skills/abi/`）
 
@@ -196,7 +208,9 @@ python -m twine check dist/*
 | `abi.schemas` | `SampleInput`, `SampleContext`, `PlanStep`, `ExecutionPlan`（含 `ABI` 前缀别名） |
 | `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
 | `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV 审计追踪写入器 |
-| `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
+| `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError`, `MissingTemplateParamError` |
+| `abi.contracts` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, `save_checksums_atomic`, `run_contract_lint` |
+| `abi.tool_descriptors` | `ABI_AGENT_TOOLS`, `TOOL_ALIASES`, `export_openai_compatible`, `export_anthropic`, `export_gemini`, `PROVIDER_PROFILES` |
 | `abi.testing` | `assert_plugin_contract` |
 
 注册第三方插件：

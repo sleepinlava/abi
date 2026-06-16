@@ -89,7 +89,7 @@ from abi.agent.context import build_agent_context, render_doctor_agent
 from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
 from abi.json_utils import load_json_object, loads_json
-from abi.openai_contracts import export_openai_tools
+from abi.openai_contracts import export_openai_tools  # backward compat
 from abi.plugins import get_plugin, list_plugins
 from abi.provenance import RunLogger
 from abi.resources import check_resources, setup_resources
@@ -97,6 +97,12 @@ from abi.results import validate_abi_result_dir
 from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
 from abi.schemas import ABIError
 from abi.tables import StandardTableManager
+from abi.tool_descriptors import (
+    PROVIDER_PROFILES,
+    export_anthropic,
+    export_gemini,
+    export_openai_compatible,
+)
 
 # Main Typer app. ``no_args_is_help=True`` means running ``abi`` with no
 # arguments prints the help text instead of an error.
@@ -1035,6 +1041,79 @@ def export_openai_tools_command(
         _fail(exc)
 
 
+# Build the list of known providers for CLI help text.
+_KNOWN_PROVIDERS = sorted(PROVIDER_PROFILES)
+_PROVIDER_HELP = (
+    "LLM provider for OpenAI-compatible format quirks. "
+    f"Known: {', '.join(_KNOWN_PROVIDERS)}. "
+    "Ignored for anthropic and gemini formats."
+)
+
+# Build the list of known format families for CLI help text.
+_FORMAT_HELP = "Descriptor format family: openai (default), anthropic, or gemini."
+
+
+@app.command("export-tools")
+def export_tools_command(
+    analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
+    descriptor_format: str = typer.Option(
+        "openai",
+        "--format",
+        help=_FORMAT_HELP,
+    ),
+    provider: str = typer.Option(
+        "openai",
+        "--provider",
+        help=_PROVIDER_HELP,
+    ),
+    include_execution: bool = typer.Option(
+        False,
+        "--include-execution",
+        help="Include execution tools such as abi_run in the export.",
+    ),
+) -> None:
+    """Export ABI tool descriptors for any supported LLM provider.
+
+    Supports three format families and all major LLM providers:
+
+    \b
+      --format openai   → OpenAI / DeepSeek / 智谱 GLM / Kimi / Qwen / MiniMax
+      --format anthropic → Anthropic Claude
+      --format gemini    → Google Gemini
+
+    Use ``--provider`` to select provider-specific quirks within the
+    OpenAI-compatible family (e.g. ``--provider deepseek`` or
+    ``--provider zhipu``).  The ``--provider`` flag is ignored for
+    the anthropic and gemini formats.
+
+    导出适用于任何支持的大模型的 ABI 工具描述符。
+    支持三种格式家族: openai (OpenAI / DeepSeek / 智谱 / Kimi / Qwen / MiniMax)、
+    anthropic (Claude)、gemini (Google)。
+    """
+    try:
+        plugin = get_plugin(analysis_type)
+        fmt = descriptor_format.lower().strip()
+        if fmt == "openai":
+            tools = export_openai_compatible(
+                plugin,
+                include_execution=include_execution,
+                provider=provider,
+            )
+        elif fmt == "anthropic":
+            tools = export_anthropic(plugin, include_execution=include_execution)
+        elif fmt == "gemini":
+            result = export_gemini(plugin, include_execution=include_execution)
+            typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
+            return
+        else:
+            raise ValueError(
+                f"Unknown format {descriptor_format!r}. Expected: openai, anthropic, or gemini."
+            )
+        typer.echo(json.dumps(tools, indent=2, ensure_ascii=False))
+    except Exception as exc:
+        _fail(exc)
+
+
 @app.command("export-agent-context")
 def export_agent_context_command(
     analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
@@ -1130,6 +1209,11 @@ def setup_resources_command(
     log_dir: Optional[str] = typer.Option(None, "--log-dir", help="Log directory."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show resource setup plan only."),
     mock: bool = typer.Option(False, "--mock", help="Create mock resource directories."),
+    confirm: bool = typer.Option(
+        False,
+        "--confirm",
+        help="Confirm execution. Required for real resource setup (S13 fix).",
+    ),
 ) -> None:
     """Download, mock, or plan setup for ABI analysis resources.
 
@@ -1139,6 +1223,8 @@ def setup_resources_command(
     - ``--dry-run``: shows what would be done without making changes.
     - ``--mock``: creates empty mock directories for smoke testing.
 
+    Real execution requires ``--confirm`` for safety, similar to ``abi run``.
+
     Resources are downloaded once and reused across runs.
 
     下载、模拟或规划 ABI 分析资源的设置。
@@ -1146,7 +1232,17 @@ def setup_resources_command(
     - 正常：下载并安装资源到配置的路径。
     - ``--dry-run``：显示将要执行的操作而不做更改。
     - ``--mock``：创建空的 mock 目录用于 smoke 测试。
+
+    真实执行需要 ``--confirm`` 以确保安全，类似 ``abi run``。
     """
+    if not dry_run and not mock and not confirm:
+        typer.echo(
+            "Resource setup requires --confirm for real execution. "
+            "Use --dry-run to preview or --mock for smoke testing, "
+            "then re-run with --confirm to proceed.",
+            err=True,
+        )
+        raise typer.Exit(2)
     try:
         cfg = _load_plugin_config(
             analysis_type=analysis_type,
@@ -1912,34 +2008,67 @@ def contract_lint_command(
         from abi.plugins import get_plugin
 
         plugin = get_plugin(analysis_type)
+        if not hasattr(plugin, "root"):
+            typer.echo(
+                json.dumps(
+                    {
+                        "findings": [
+                            {
+                                "severity": "error",
+                                "check": "missing_root",
+                                "detail": (
+                                    f"Plugin {analysis_type!r} does not provide "
+                                    f"a filesystem root — cannot lint."
+                                ),
+                                "location": "",
+                            }
+                        ],
+                        "error_count": 1,
+                        "warning_count": 0,
+                        "passed": False,
+                    },
+                    indent=2,
+                )
+            )
+            raise typer.Exit(code=1)
         # Load DAG spec
-        dag_path = Path(plugin.root) / "pipeline_dag.yaml"
+        root = Path(plugin.root)
+        dag_path = root / "pipeline_dag.yaml"
         if not dag_path.exists():
-            typer.echo(json.dumps({
-                "findings": [{
-                    "severity": "error",
-                    "check": "missing_dag",
-                    "detail": f"DAG file not found: {dag_path}",
-                    "location": str(dag_path),
-                }],
-                "error_count": 1,
-                "warning_count": 0,
-                "passed": False,
-            }, indent=2))
+            typer.echo(
+                json.dumps(
+                    {
+                        "findings": [
+                            {
+                                "severity": "error",
+                                "check": "missing_dag",
+                                "detail": f"DAG file not found: {dag_path}",
+                                "location": str(dag_path),
+                            }
+                        ],
+                        "error_count": 1,
+                        "warning_count": 0,
+                        "passed": False,
+                    },
+                    indent=2,
+                )
+            )
             raise typer.Exit(code=1)
 
         import yaml as _yaml
+
         with dag_path.open("r", encoding="utf-8") as fh:
             dag_spec = _yaml.safe_load(fh)
 
         # Load tool contracts if available
         contracts = None
         registry_ids = None
-        contracts_dir = Path(plugin.root) / "tool_contracts"
+        contracts_dir = root / "tool_contracts"
         if contracts_dir.exists():
             from abi.contracts import load_tool_contracts
+
             try:
-                contracts = load_tool_contracts(plugin.root)
+                contracts = load_tool_contracts(str(root))
             except Exception:
                 contracts = None
             if hasattr(plugin, "registry"):

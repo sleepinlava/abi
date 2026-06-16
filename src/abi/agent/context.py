@@ -36,8 +36,8 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from abi.diagnostics import ERROR_CODES
-from abi.openai_contracts import ABI_AGENT_TOOLS, export_openai_tools
 from abi.permissions import TOOL_PERMISSIONS, PermissionLevel
+from abi.tool_descriptors import ABI_AGENT_TOOLS, export_json
 
 __all__ = ["build_agent_context", "render_doctor_agent"]
 
@@ -118,7 +118,7 @@ def build_agent_context(plugin: Any) -> Dict[str, Any]:
     # "unsafe_tools" requiring confirmation.
     # 导出不包含执行工具的工具描述符, 确保 agent 默认发布安全工具集。
     # 执行工具单独列为 "unsafe_tools", 需要用户确认。
-    tools = export_openai_tools(plugin, descriptor_format="json", include_execution=False)
+    tools = export_json(plugin, include_execution=False)
     execution_tools = [
         name
         for name, permission in TOOL_PERMISSIONS.items()

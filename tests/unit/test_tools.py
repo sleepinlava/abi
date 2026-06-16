@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -11,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 import pytest
 
 from abi.errors import MissingTemplateParamError
-from abi.tools import SafeFormatDict, OPTIONAL_TEMPLATE_FIELDS
+from abi.tools import SafeFormatDict
 
 
 class TestSafeFormatDictLenient:

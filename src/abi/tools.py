@@ -334,8 +334,7 @@ class SafeFormatDict(dict):
                 f"register it in OPTIONAL_TEMPLATE_FIELDS."
             )
         _logger.warning(
-            "Template parameter %r missing from params for tool %r; "
-            "substituting empty string.",
+            "Template parameter %r missing from params for tool %r; substituting empty string.",
             key,
             self.tool_name or "unknown",
         )
@@ -570,9 +569,17 @@ class GenericCommandSkill(ToolSkill):
                 ", ".join(sorted(set(fmt_dict.missing_keys))),
             )
         try:
-            return shlex.split(template)
+            tokens = shlex.split(template)
         except ValueError as exc:
             raise ToolError(f"{self.name}: could not parse command template: {exc}") from exc
+        # S6: if any parameter value starts with "-", insert "--" after the
+        # tool binary to prevent user-supplied values from being interpreted
+        # as CLI flags by the tool.
+        values = _template_values(selected)
+        if any(isinstance(v, str) and str(v).startswith("-") for v in values.values()):
+            if len(tokens) > 1:
+                tokens.insert(1, "--")
+        return tokens
 
     def _required_template_fields(self) -> List[str]:
         """Parse the command template and return all unique field names.
@@ -720,6 +727,13 @@ class GenericCommandSkill(ToolSkill):
             Path(str(selected["stdout_path"])) if selected.get("stdout_path") else None
         )
         stderr_path = Path(str(selected["stderr_path"])) if selected.get("stderr_path") else None
+        # S4: validate output paths stay within the output directory
+        _output_dir = (
+            Path(str(selected["output_dir"])).resolve() if selected.get("output_dir") else None
+        )
+        if _output_dir:
+            stdout_path = _safe_output_path(stdout_path, _output_dir) if stdout_path else None
+            stderr_path = _safe_output_path(stderr_path, _output_dir) if stderr_path else None
         stdout_handle = None
         stderr_handle = None
         timeout_seconds = self._timeout_seconds(selected)
@@ -810,24 +824,33 @@ class GenericCommandSkill(ToolSkill):
         Resolution order:
         1. If ``mock_tools`` is set, return ``"mock"``.
         2. If ``version_command`` is not configured, return ``""`` (not captured).
-        3. Run the command via subprocess with a 10-second timeout.
+        3. Run the command via subprocess (list form, no shell) with a 10-second timeout.
         4. If ``version_regex`` is configured, extract the first capture group.
         5. On failure, return a diagnostic string (non-fatal).
 
         The ``version_regex`` field in the tool contract YAML uses Python
         regex syntax.  Example:
-            version_command: "fastp --version 2>&1"
+            version_command: "fastp --version"
             version_regex: "fastp\\\\s+(\\\\d+\\\\.\\\\d+\\\\.\\\\d+)"
+
+        .. note::
+
+            ``version_command`` is split via ``shlex.split()`` and run as a
+            token list (no ``shell=True``) to prevent command injection through
+            compromised YAML tool contracts (S1/S2 fix).
         """
         if self.metadata.get("mock_tools"):
             return "mock"
-        version_cmd = str(self.metadata.get("version_command", ""))
-        if not version_cmd:
+        version_cmd_str = str(self.metadata.get("version_command", ""))
+        if not version_cmd_str:
             return ""
         try:
+            version_cmd_list = shlex.split(version_cmd_str)
+        except ValueError:
+            return "version_command_parse_error"
+        try:
             result = subprocess.run(
-                version_cmd,
-                shell=True,
+                version_cmd_list,
                 capture_output=True,
                 text=True,
                 timeout=int(self.metadata.get("version_timeout", 10)),
@@ -1033,6 +1056,23 @@ def _template_values(values: Mapping[str, Any]) -> Dict[str, Any]:
     Applies _template_value() to each value in the mapping. / 将每个值转为模板安全字符串。
     """
     return {key: _template_value(value) for key, value in values.items()}
+
+
+def _safe_output_path(path: Path | None, output_dir: Path) -> Path | None:
+    """Validate that *path* resolves inside *output_dir* (S4 fix).
+
+    Raises ``ToolError`` if the resolved path escapes the output directory,
+    preventing path-traversal attacks via user-controlled output paths.
+    """
+    if path is None:
+        return None
+    resolved = (output_dir / path).resolve()
+    output_resolved = output_dir.resolve()
+    if not (str(resolved).startswith(str(output_resolved) + os.sep) or resolved == output_resolved):
+        raise ToolError(
+            f"Output path {path!s} escapes output directory {output_dir}. Resolved to: {resolved}"
+        )
+    return resolved
 
 
 def _template_value(value: Any) -> Any:

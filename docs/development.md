@@ -29,7 +29,8 @@ src/abi/
   tables.py           StandardTableManager
   report.py           Generic report writer
   contracts/          Contract definitions + step contract enforcement
-  openai_contracts.py OpenAI function-calling tool descriptor generation
+  tool_descriptors.py Unified tool descriptor SSOT (3 format families, 7+ LLM providers)
+  openai_contracts.py Backward-compat re-export shim → tool_descriptors
   jobs/               HTTP Job Service (service, client)
   runtimes/           local, Nextflow runtimes
   exporters/          Nextflow DSL2 exporter

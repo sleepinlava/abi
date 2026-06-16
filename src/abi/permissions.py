@@ -134,7 +134,9 @@ def permission_for_tool(tool_name: str) -> PermissionLevel:
     如果 tool_name 不在 TOOL_PERMISSIONS 中，返回 PLANNING_WRITE --
     一个允许非破坏性操作但阻止执行的安全默认值。
     """
-    return TOOL_PERMISSIONS.get(tool_name, PermissionLevel.PLANNING_WRITE)
+    # S11: default to READ_ONLY for unknown tools — unregistered tools
+    # should not be allowed to write files or execute by default.
+    return TOOL_PERMISSIONS.get(tool_name, PermissionLevel.READ_ONLY)
 
 
 def requires_confirmation(tool_name: str) -> bool:

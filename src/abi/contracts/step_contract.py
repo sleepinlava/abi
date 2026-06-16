@@ -27,6 +27,7 @@ recovery action.  Downstream steps are blocked.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import math
@@ -85,13 +86,48 @@ class ContractViolationError(ABIError):
 CHECKSUMS_FILENAME = "checksums.json"
 
 
-def load_checksums(provenance_dir: str | Path) -> Dict[str, str]:
+def load_checksums(
+    provenance_dir: str | Path,
+    *,
+    step_id: str = "",
+    strict: bool | None = None,
+) -> Dict[str, str]:
     """Load the recorded checksum map from a provenance directory.
 
-    Returns an empty dict if no checksums file exists yet (first step).
+    Args:
+        provenance_dir: Path to the provenance directory.
+        strict: If True, raise ContractViolation when ``checksums.json`` is
+            missing.  Defaults to the ``ABI_REQUIRE_CHECKSUMS`` environment
+            variable (S8 fix).
+
+    Returns:
+        Checksum map (file path → SHA256 hex string), or ``{}`` when the
+        file is absent and strict mode is off.
+
+    Raises:
+        ContractViolationError: When strict mode is on and the file is missing.
     """
+    if strict is None:
+        strict = os.environ.get("ABI_REQUIRE_CHECKSUMS") == "1"
     path = Path(provenance_dir) / CHECKSUMS_FILENAME
     if not path.exists():
+        if strict:
+            raise ContractViolationError(
+                step_id=step_id,
+                violations=[
+                    ContractViolation(
+                        check="missing_checksums",
+                        detail=f"Checksum file {path} required but not found. "
+                        f"Set ABI_REQUIRE_CHECKSUMS=0 to skip this check.",
+                        path=str(path),
+                    )
+                ],
+            )
+        import logging
+
+        logging.getLogger("abi.contracts").warning(
+            "checksums.json not found; input integrity not verified for this step"
+        )
         return {}
     with path.open("r", encoding="utf-8") as fh:
         return dict(json.load(fh))
@@ -187,9 +223,11 @@ def invalidate_step_checksums(
                 key_parent = str(Path(checksum_key).parent)
                 for output_name in declared_output_names:
                     # Match: output name appears in the checksum path or filename
-                    if (output_name in checksum_key
-                            or output_name in key_basename
-                            or output_name in key_parent):
+                    if (
+                        output_name in checksum_key
+                        or output_name in key_basename
+                        or output_name in key_parent
+                    ):
                         to_remove.append(checksum_key)
                         break
 
@@ -414,6 +452,53 @@ def validate_output_contract(
     return StepContractResult(passed=passed, violations=violations, checksums=checksums)
 
 
+# Forbidden AST node types in assertion expressions (S3 fix).
+# These could be used to define functions, generate values, or cause side effects
+# beyond simple expression evaluation.
+_FORBIDDEN_AST_NODES = frozenset(
+    {
+        ast.Lambda,
+        ast.FunctionDef,
+        ast.AsyncFunctionDef,
+        ast.ClassDef,
+        ast.ListComp,
+        ast.SetComp,
+        ast.DictComp,
+        ast.GeneratorExp,
+        ast.DictComp,
+        ast.Yield,
+        ast.YieldFrom,
+        ast.Await,
+        ast.NamedExpr,  # walrus operator :=
+    }
+)
+
+
+def _validate_assertion_ast(expression: str) -> str | None:
+    """Reject assertion expressions containing forbidden Python constructs (S3 fix).
+
+    Returns an error message string if forbidden constructs are found,
+    or ``None`` if the expression passes validation.
+    """
+    try:
+        tree = ast.parse(expression, mode="eval")
+    except SyntaxError:
+        return None  # will be caught by eval() itself
+    for node in ast.walk(tree):
+        if type(node) in _FORBIDDEN_AST_NODES:
+            return f"{type(node).__name__} is not allowed in assertion expressions"
+        # Block attribute access on dunder names (escaping __class__ etc.)
+        if isinstance(node, ast.Attribute) and isinstance(node.attr, str):
+            if node.attr.startswith("__"):
+                return f"Attribute access on {node.attr!r} is not allowed"
+        # Block subscript access with dunder names
+        if isinstance(node, ast.Subscript):
+            if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
+                if node.slice.value.startswith("__"):
+                    return f"Subscript access with {node.slice.value!r} is not allowed"
+    return None
+
+
 def _normalise_assertion(expression: str) -> str:
     """Normalise natural-language assertion syntax to valid Python.
 
@@ -461,7 +546,9 @@ class _AttrDict:
 
     def __getattr__(self, name: str) -> Any:
         # Called only when normal attribute lookup fails.
-        # Return None for missing keys rather than raising.
+        # S3: block dunder attribute access to prevent eval escape vectors.
+        if name.startswith("__"):
+            raise AttributeError(f"Access to {name!r} is blocked in assertion expressions")
         return None
 
     def __bool__(self) -> bool:
@@ -579,6 +666,18 @@ def evaluate_assertions(
         # Normalise natural-language ``x exists`` → ``exists(x)`` so it's
         # valid Python syntax for eval(). 只转换 "x exists" 语法为有效的 Python。
         expr = _normalise_assertion(assertion)
+        # S3: AST pre-scan rejects forbidden constructs (lambdas, functions, etc.)
+        ast_error = _validate_assertion_ast(expr)
+        if ast_error:
+            violations.append(
+                ContractViolation(
+                    check="assertion",
+                    detail=f"Forbidden construct in {assertion!r}: {ast_error}",
+                    expected="safe expression without lambdas or function definitions",
+                    actual=ast_error,
+                )
+            )
+            continue
         try:
             result = eval(expr, {"__builtins__": {}}, safe_namespace)
         except Exception as exc:

@@ -3,9 +3,10 @@
 ABI is a Python interface layer for agent-driven bioinformatics workflows. It
 standardizes analysis plugins behind a common
 `plan -> dry-run -> run -> inspect -> report` lifecycle, with provenance,
-standard TSV tables, OpenAI-compatible tool descriptors, optional MCP transport,
-Nextflow export/runtime support, and a queue-backed HTTP Job Service with
-force-kill capability.
+standard TSV tables, **multi-LLM tool descriptors** (OpenAI, Anthropic Claude,
+Google Gemini, DeepSeek, 智谱 GLM, Kimi, Qwen, MiniMax), optional MCP transport,
+Nextflow export/runtime support, DAG/contract static analysis, and a queue-backed
+HTTP Job Service with force-kill capability.
 
 [![PyPI](https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=blue)](https://pypi.org/project/abi-agent/)
 [![Python](https://img.shields.io/pypi/pyversions/abi-agent?style=flat-square)](https://pypi.org/project/abi-agent/)
@@ -51,9 +52,18 @@ abi report --result-dir results/ --type metatranscriptomics
 
 # Export agent/runtime interfaces
 abi export-nextflow --type metatranscriptomics --output workflow.nf
-abi export-openai-tools --type metatranscriptomics --format responses
+abi export-openai-tools --type metatranscriptomics --format responses    # legacy compat
+abi export-tools --type metatranscriptomics --format openai --provider openai   # OpenAI
+abi export-tools --type metatranscriptomics --format openai --provider deepseek # DeepSeek
+abi export-tools --type metatranscriptomics --format openai --provider zhipu    # 智谱 GLM
+abi export-tools --type metatranscriptomics --format anthropic           # Claude
+abi export-tools --type metatranscriptomics --format gemini              # Gemini
 abi export-agent-context --type metatranscriptomics --format json
 abi doctor-agent --type metatranscriptomics
+
+# Static contract / DAG validation
+abi contract-lint --type metagenomic_plasmid
+abi contract-lint --type metagenomic_plasmid --strict
 
 # Headless agent dispatch (used by Job Service workers)
 abi dispatch --command list-types --arguments '{}'
@@ -89,7 +99,7 @@ autoplasm dry-run --config examples/config_minimal.yaml --profile dry_run
 Agent Platforms (Claude / ChatGPT / Cursor / CI)
         │
         v
-Transport Layer   CLI JSON  │  OpenAI Tools  │  MCP  │  HTTP Job API  │  Skills
+Transport Layer   CLI JSON  │  OpenAI/Anthropic/Gemini Tools  │  MCP  │  HTTP Job API  │  Skills
         │
         v
 ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch
@@ -121,8 +131,9 @@ Runtimes            local  │  Nextflow  │  HPC  │  cloud
 
 - CLI JSON through `--output-json`
 - `abi dispatch --command <name> --arguments '<json>'` for headless subprocess dispatch
-- OpenAI-compatible descriptors from `abi export-openai-tools`
-- MCP stdio server via `abi-mcp` (or `python -m abi.mcp.server`)
+- **Multi-LLM descriptors** from `abi export-tools --format openai|anthropic|gemini [--provider ...]` covering 7+ providers
+- OpenAI-compatible descriptors from `abi export-openai-tools` (backward compat)
+- MCP stdio server via `abi-mcp` (or `python -m abi.mcp.server`) — auto-generated from SSOT
 - HTTP Job Service via `abi job-service` and `abi job submit/list/status/artifacts/cancel`
 - Skills via `abi install-skills` (copies bundled SKILL.md files to `~/.claude/skills/abi/`)
 
@@ -200,7 +211,9 @@ Plugin authors should depend on these public modules:
 | `abi.schemas` | `SampleInput`, `SampleContext`, `PlanStep`, `ExecutionPlan` (`ABI`-prefixed aliases available) |
 | `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
 | `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV provenance writers |
-| `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
+| `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError`, `MissingTemplateParamError` |
+| `abi.contracts` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, `save_checksums_atomic`, `run_contract_lint` |
+| `abi.tool_descriptors` | `ABI_AGENT_TOOLS`, `TOOL_ALIASES`, `export_openai_compatible`, `export_anthropic`, `export_gemini`, `PROVIDER_PROFILES` |
 | `abi.testing` | `assert_plugin_contract` |
 
 Register third-party plugins with:

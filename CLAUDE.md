@@ -34,6 +34,14 @@ abi-mcp                          # start MCP stdio server for Claude Desktop / C
 abi install-skills               # install ABI skills into ~/.claude/skills/abi/
 abi doctor-agent --type metagenomic_plasmid   # print per-plugin operating guide
 abi export-openai-tools --type metagenomic_plasmid --format responses  # OpenAI function descriptors
+abi export-tools --type metagenomic_plasmid --format openai --provider deepseek  # DeepSeek/Zhipu/Kimi/Qwen
+abi export-tools --type metagenomic_plasmid --format anthropic  # Anthropic Claude tool_use
+abi export-tools --type metagenomic_plasmid --format gemini     # Google Gemini function_declarations
+abi contract-lint --type metagenomic_plasmid [--strict]  # Static DAG/contract validation
+abi setup-resources --type metagenomic_plasmid --confirm  # Resource setup (confirmation required)
+
+# Job Service (default localhost, requires ABI_JOB_SECRET for remote binding)
+abi job-service --host 127.0.0.1 --port 18791 --workers 2
 ```
 
 ## Architecture

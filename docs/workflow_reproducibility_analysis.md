@@ -2,10 +2,10 @@
 
 ## 可行性分析、缺陷清单、修复方案与实施计划
 
-**文档版本**: 2.0
+**文档版本**: 2.2
 **日期**: 2026-06-16
 **作者**: ABI 开发团队
-**状态**: 本地 IDE 修复阶段已完成；HPC 验证阶段待启动
+**状态**: 本地 IDE 修复阶段已完成；多 LLM 工具描述符系统已完成；HPC 验证阶段待启动
 
 ---
 
@@ -554,3 +554,196 @@ Week 4:
 | `ABI_TOOL_TIMEOUT_SECONDS` | 随工具不同 | B3/B6 超时控制 |
 | `ABI_MAMBA_ROOT` | 自动检测 | Conda 环境路径 |
 | `ABI_VERSION_TIMEOUT` | `10` | B5 版本命令超时(秒) |
+
+---
+
+## 10. 多 LLM 工具描述符系统（2026-06-16 新增）
+
+### 10.1 背景与目标
+
+ABI 最初仅支持 OpenAI 格式的工具描述符导出，存在三个架构问题：
+
+1. **单一 LLM 格式** — 仅有 OpenAI `responses`/`apps-sdk`/`json` 三种格式，不支持 Anthropic Claude、Google Gemini 及其他厂商
+2. **元数据分散** — `ABI_AGENT_TOOLS` 在 `openai_contracts.py`、dispatch 别名在 `agent/interface.py`、MCP 工具签名在 `mcp/server.py`，三处手动同步
+3. **MCP 参数重复** — MCP server 手动编写 10 个 `@mcp.tool()` 函数（~150 行），参数声明与 `ABI_AGENT_TOOLS` 重复
+
+**目标**: 统一单点真相（SSOT），消除重复，覆盖全部主流 LLM 厂商。
+
+### 10.2 实施内容
+
+#### 架构重构
+
+```
+Before (fragmented):                         After (unified):
+─────────────────                           ────────────────
+openai_contracts.py (SSOT)                  tool_descriptors.py ← NEW (SSOT)
+agent/interface.py (inline aliases)           ABI_AGENT_TOOLS + TOOL_ALIASES
+mcp/server.py (10 manual functions)           + PROVIDER_PROFILES (7 providers)
+                                              + 3 format family exporters
+                                            openai_contracts.py ← compat shim
+                                            mcp/server.py ← auto-gen from SSOT
+```
+
+#### LLM 厂商格式覆盖
+
+| 格式家族 | 厂商 | CLI 命令 |
+|---|---|---|
+| **OpenAI-compatible** | OpenAI, DeepSeek, 智谱 GLM, Kimi, Qwen, MiniMax | `abi export-tools --format openai --provider <name>` |
+| **Anthropic** | Claude | `abi export-tools --format anthropic` |
+| **Gemini** | Google Gemini | `abi export-tools --format gemini` |
+
+#### 厂商特有配置文件
+
+7 个提供商配置文件 (`PROVIDER_PROFILES`) 控制厂商特定差异：
+
+| 参数 | 说明 | 示例 |
+|---|---|---|
+| `strict` | 是否包含 OpenAI `strict: true` | DeepSeek/OpenAI/Kimi: True; Zhipu/Qwen: False |
+| `additional_properties` | Schema 中是否包含 `additionalProperties` | False 或 None (省略) |
+| `name_rules` | 工具命名规则验证 | `standard`: `[a-zA-Z0-9_-]`; `zhipu`: `[a-zA-Z0-9_]` (无破折号) |
+
+#### 新增/修改文件
+
+| 文件 | 改动 | 行数变化 |
+|---|---|---|
+| `src/abi/tool_descriptors.py` | **新建** — SSOT + 3 格式家族 + 7 提供商 | +420 |
+| `src/abi/openai_contracts.py` | 重写为兼容 shim | 249→20 |
+| `src/abi/agent/interface.py` | `dispatch()` 导入 `TOOL_ALIASES` | -28 |
+| `src/abi/agent/context.py` | 使用 `export_json()` | ~2 |
+| `src/abi/mcp/server.py` | 自动生成 MCP 工具 | 210→95 |
+| `src/abi/cli.py` | 新增 `export-tools` 命令 | +80 |
+| `tests/unit/test_tool_descriptors.py` | **新建** — 73 测试 (格式 + 边界 + 异常) | +900 |
+
+### 10.3 测试覆盖
+
+| 测试类别 | 测试项数 | 覆盖内容 |
+|---|---|---|
+| **格式正确性** | 21 | Anthropic `input_schema`、Gemini `function_declarations`、OpenAI 嵌套结构 |
+| **提供商特性** | 12 | `strict` on/off、`additionalProperties` on/off/省略、名称规则 |
+| **边界/异常** | 25 | 空提供商标识符、大小写不敏感、null 字节注入、特殊字符、超长名称 |
+| **确定性** | 5 | 多次调用产出一致、错误后状态不变、跨提供商独立性 |
+| **MCP 自生成** | 5 | 零参数工具、多参数工具、返回值注解、遗留别名注册 |
+| **向后兼容** | 6 | 旧导入路径、`responses` 扁平格式、`apps-sdk` 格式一致性 |
+| **一致性** | 7 | 跨格式工具名一致、工具数量一致、只读工具完整 |
+| **JSON 序列化** | 3 | 所有格式可直接序列化、无 NaN/Infinity |
+| **压力/容量** | 2 | 50 次 × 7 提供商循环、快速格式切换 |
+| **总计** | **73** | 新增（前有 32 格式测试 + 73 边界测试 = 105 total） |
+
+### 10.4 当前仍存在的问题
+
+| # | 问题 | 严重度 | 说明 |
+|---|---|---|---|
+| **D1** | 无实时 API 客户端 | P1 | ABI 导出工具描述符但无内置 OpenAI/Anthropic/Gemini HTTP 客户端 — agent 平台需自行发送 API 请求 |
+| **D2** | 无 token 预算 | P2 | 工具描述符未计量 token 消耗；长描述可能超出模型上下文窗口 |
+| **D3** | 无流式响应桥接 | P2 | `dispatch()` 的长时间运行调用无 SSE/流式通道供 LLM agent 订阅 |
+| **D4** | `permissions.py` 重复 | P2 | `TOOL_PERMISSIONS` 与 `ABI_AGENT_TOOLS` 的 `permission` 字段不完全同步 |
+| **D5** | 提供商特有响应格式 | P2 | 每个 LLM 厂商的工具调用响应格式各异（OpenAI: `tool_calls[]`、Anthropic: `tool_use` 块、Gemini: `function_call`）— `dispatch()` 未适配这些差异 |
+| **D6** | 无模型级别能力检测 | P3 | 无法根据模型能力（如 token 窗口大小、parallel tool calling 支持）动态调整工具列表 |
+
+### 10.5 下一步优化建议
+
+**阶段 A — 本地可完成 (2-3d)**:
+1. D4: `permissions.py` 从 `ABI_AGENT_TOOLS` 动态派生 `TOOL_PERMISSIONS`
+2. D2: 添加 `estimate_tokens()` 辅助函数，基于 `tiktoken` 或字符计数
+
+**阶段 B — 需要外部接入验证 (2-3d)**:
+3. D5: 适配 OpenAI `tool_calls` / Anthropic `tool_use` / Gemini `function_call` 响应格式，使 `dispatch()` 能正确解析所有平台的工具调用结果
+4. D1: 添加可选 `ABILLMClient` 基类，提供 `call_with_tools()` 参考实现
+
+**阶段 C — 长期 (3-5d)**:
+5. D3: `jobs/service.py` SSE endpoint 用于流式进度事件
+6. D6: 模型能力注册表 + 自动工具列表裁剪
+
+---
+
+## 11. 数据安全审计（2026-06-16）
+
+### 11.1 审计范围与方法
+
+对 ABI 代码库进行了全面的数据安全审计，覆盖 8 个类别：注入风险、路径遍历、不安全 eval/exec、子进程命令注入、反序列化安全、认证/授权、敏感数据暴露、数据完整性。
+
+### 11.2 发现总结
+
+| 风险级别 | 数量 | 关键领域 |
+|---|---|---|
+| **HIGH** | 2 | `shell=True` 版本命令执行 |
+| **MEDIUM** | 5 | eval 安全、路径验证、参数注入、认证缺失、校验和绕过 |
+| **LOW** | 10 | exec 生成、路径沙箱、错误暴露、权限默认值 |
+| **POSITIVE** | 7 | 安全 JSON/YAML 加载、符号链接校验和、原子写入、确认门控 |
+
+### 11.3 HIGH 风险详情
+
+#### S1: `shell=True` in `capture_version()` — `tools.py:830`
+
+```python
+subprocess.run(version_cmd, shell=True, ...)
+```
+
+`version_cmd` 从 YAML tool contract 的 `version_command` 字段直接取值后传入 `shell=True`。若 YAML 合约被篡改，可注入任意 shell 命令。
+
+**缓解因素**: tool contract YAML 是已安装软件包的一部分，非运行时用户输入。`capture_version()` 失败不阻断主流程。
+
+**建议修复**: 使用 `shlex.split(version_cmd)` 将命令拆分为列表参数，移除 `shell=True`。
+
+#### S2: `shell=True` 同上 — 影响所有 67 个工具的版本捕获
+
+同一问题影响所有配置了 `version_command` 的工具合约。
+
+### 11.4 MEDIUM 风险详情
+
+| # | 文件:行 | 问题 | 修复建议 |
+|---|---|---|---|
+| **S3** | `step_contract.py:583` | `eval()` 用于 DAG 断言表达式求值。尽管限定了 `{"__builtins__": {}}`，但 eval 在受控输入上仍存在固有风险 | 引入轻量表达式求值器或沙盒 AST walker |
+| **S4** | `tools.py:719-737` | `stdout_path`/`stderr_path` 未验证是否在 output_dir 内，攻击者可设置 `stdout_path=/etc/passwd` 覆盖系统文件 | 添加路径决议 + `is_relative_to(output_dir)` 检查 |
+| **S5** | `exporters/nextflow.py:333-339` | `_absolute_path()` 未检查相对路径解析后是否仍在 project_root 内 | 添加 `Path.resolve()` + `is_relative_to()` 检查 |
+| **S6** | `tools.py:553-573` | 用户参数值以 `-` 开头时可注入意外 CLI 标志（如 `--help`、`--config`） | 为已知值添加 `--` 参数分隔符或 `--option=value` 格式 |
+| **S7** | `jobs/service.py:752-851` | HTTP Job Service 无认证机制（默认 localhost 绑定） | 生产部署建议：始终使用 `--host 127.0.0.1`；可选添加 token-based auth header |
+| **S8** | `step_contract.py:88-97` | `checksums.json` 缺失时校验和链静默绕过 | 首次运行记录警告；添加 `require_checksums` 配置选项 |
+
+### 11.5 LOW 风险精选
+
+| # | 问题 | 说明 |
+|---|---|---|
+| **S9** | `mcp/server.py:89` — `exec()` 从静态元数据生成 MCP 工具 | 代码源是代码库中预定义的字典，非用户输入 |
+| **S10** | `provenance.py` — 审计追迹写入路径由用户可配置的 `outdir` 决定 | 路径来源来自可信插件配置 |
+| **S11** | `permissions.py:137` — 未注册工具默认 `PLANNING_WRITE` | 未知工具可写入文件；应默认为 READ_ONLY |
+| **S12** | `diagnostics.py:381-400` — 错误消息提取文件系统路径 | 设计使然，可帮助诊断；可能泄露内部结构 |
+| **S13** | `cli.py:1192-1250` — `setup-resources` 缺少确认门控 | 与 `run` 命令不同，资源下载无需显式确认 |
+| **S14** | `tools.py:139-147` — `RunResult.resolved_params` 记录完整参数 | 包含用户指定的路径和标识符，写入 provenance |
+| **S15** | `lint.py:199-240` — `_StubAttr` 过度宽松 | 预检 eval 通过几乎所有语法正确表达式 |
+
+### 11.6 正面发现（防御性设计）
+
+| # | 机制 | 位置 |
+|---|---|---|
+| **P1** | 所有 YAML 加载使用 `yaml.safe_load()`（无 `yaml.load`） | `config.py`, `tools.py`, `pipeline_dag.py` |
+| **P2** | 所有 JSON 加载使用 `json.loads()`（无自定义解码器） | `json_utils.py` |
+| **P3** | 无 `pickle`/`dill`/`marshal`/`shelve` 反序列化 | 全代码库 |
+| **P4** | 工具执行命令使用列表形式 + 无 `shell=True` | `tools.py:738-746`、`nextflow.py:135-144` |
+| **P5** | 符号链接校验和解析为链接目标 | `step_contract.py:218-219` |
+| **P6** | `tmp → fsync → os.replace` 原子写入 | `provenance.py:605-618`、`jobs/service.py:685-712` |
+| **P7** | 执行类工具需要 `confirm_execution=True` | `permissions.py`、`cli.py`、`jobs/service.py` |
+| **P8** | 默认 bind 到 `127.0.0.1`（非 `0.0.0.0`） | `jobs/service.py:756` |
+| **P9** | 零硬编码密钥/token/密码 | 全代码库 |
+| **P10** | Golden traces 不含真实路径或敏感数据 | `golden_traces/*.jsonl` |
+
+### 11.7 修复实施记录（2026-06-16）✅
+
+| # | 缺陷 | 修复技术 | 文件 | 状态 |
+|---|---|---|---|---|
+| **S1/S2** | `shell=True` 版本命令执行 | `shlex.split()` 列表形式替代 `shell=True` | `tools.py:capture_version()` | ✅ |
+| **S3** | `eval()` 断言逃逸 | `_SafeAttrDict` 阻断 `__` 访问 + AST 预扫禁止 Lambda/函数定义/推导式 | `step_contract.py` | ✅ |
+| **S4** | stdout/stderr 路径逃逸 | `_safe_output_path()` 决议 + 隔离检查 | `tools.py` | ✅ |
+| **S5** | `_absolute_path()` 无隔离 | `resolve()` + `is_relative_to()` 检查 | `exporters/nextflow.py` | ✅ |
+| **S6** | CLI flag 注入 | 参数值以 `-` 开头时在工具二进制后插入 `--` 分隔符 | `tools.py:build_command()` | ✅ |
+| **S7** | Job Service 无认证 | 非 localhost 绑定时强制 `ABI_JOB_SECRET` + `Bearer` token 验证 | `jobs/service.py` | ✅ |
+| **S8** | checksum 链静默绕过 | `load_checksums(strict=...)` + `ABI_REQUIRE_CHECKSUMS` 环境变量 | `contracts/step_contract.py` | ✅ |
+| **S11** | 未注册工具默认权限过高 | 从 `PLANNING_WRITE` 改为 `READ_ONLY` | `permissions.py` | ✅ |
+| **S13** | setup-resources 无确认门控 | 添加 `--confirm` 标志；无确认直接退出 | `cli.py` | ✅ |
+
+**全部 9 项安全修复已完成，实测 ~3h。**
+
+可接受（保留现状）:
+  S9 (MCP exec — 静态元数据输入)、S10 (provenance 路径 — 来自可信配置)、
+  S12 (错误路径暴露 — 诊断设计)、S14 (resolved_params — provenance 设计)、
+  S15 (_StubAttr 宽松 — 仅 lint 用)

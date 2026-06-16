@@ -135,6 +135,15 @@ class JobNotFoundError(JobServiceError):
     status_code = HTTPStatus.NOT_FOUND
 
 
+class UnauthorizedError(JobServiceError):
+    """Raised when a request lacks valid Authorization credentials (S7 fix).
+
+    当请求缺少有效 Authorization 凭证时抛出。
+    """
+
+    status_code = HTTPStatus.UNAUTHORIZED
+
+
 class ConfirmationRequiredError(JobServiceError):
     """Raised when an execution job is submitted without ``confirm_execution=true``.
 
@@ -750,11 +759,17 @@ class ABIJobService:
 # ── HTTP server factory / HTTP 服务器工厂 ───────────────────────────────
 
 
+def _is_localhost(host: str) -> bool:
+    """Return True if *host* is a loopback address (S7 fix)."""
+    return host in ("127.0.0.1", "localhost", "::1")
+
+
 def create_http_server(
     service: ABIJobService,
     *,
     host: str = "127.0.0.1",
     port: int = 18791,
+    required_secret: str | None = None,
 ) -> ThreadingHTTPServer:
     """Create a stdlib ``ThreadingHTTPServer`` bound to an ``ABIJobService``.
 
@@ -767,6 +782,8 @@ def create_http_server(
       log (ABI has its own structured logging).
     * All exceptions are caught at the HTTP boundary and serialized to
       JSON error responses so the client always gets a valid JSON payload.
+    * **S7 fix**: When binding to a non-localhost address, ``required_secret``
+      is enforced via ``Authorization: Bearer <secret>`` header validation.
 
     创建绑定到 ``ABIJobService`` 的标准库 ``ThreadingHTTPServer``。
     """
@@ -774,9 +791,18 @@ def create_http_server(
     class Handler(BaseHTTPRequestHandler):
         server_version = "ABIJobService/0.1"
 
+        def _check_auth(self) -> None:  # noqa: N802 - auth check helper
+            """Validate the Authorization header if auth is required (S7 fix)."""
+            if required_secret is None:
+                return  # localhost binding — no auth needed
+            auth = self.headers.get("Authorization", "")
+            if auth != f"Bearer {required_secret}":
+                raise UnauthorizedError("Unauthorized: missing or invalid Authorization header")
+
         def do_GET(self) -> None:  # noqa: N802 - stdlib hook name
             """Route GET requests to the job service."""
             try:
+                self._check_auth()
                 status, payload = _handle_get(service, self.path)
                 self._send_json(status, payload)
             except JobServiceError as exc:
@@ -796,6 +822,7 @@ def create_http_server(
         def do_POST(self) -> None:  # noqa: N802 - stdlib hook name
             """Route POST requests to the job service."""
             try:
+                self._check_auth()
                 body = self._read_json()
                 status, payload = _handle_post(service, self.path, body)
                 self._send_json(status, payload)
@@ -871,12 +898,20 @@ def serve(
     运行 ABI 作业服务直到被中断（如 Ctrl+C）。这是主要的 CLI 入口点。
     """
 
+    # S7: enforce auth for non-localhost bindings
+    secret = os.environ.get("ABI_JOB_SECRET") if not _is_localhost(host) else None
+    if not _is_localhost(host) and not secret:
+        raise JobServiceError(
+            f"Binding to non-localhost address {host!r} requires "
+            f"ABI_JOB_SECRET environment variable to be set."
+        )
+
     service = ABIJobService(
         max_workers=max_workers,
         store_path=store_path,
         subprocess_workers=subprocess_workers,
     )
-    server = create_http_server(service, host=host, port=port)
+    server = create_http_server(service, host=host, port=port, required_secret=secret)
     try:
         server.serve_forever()
     finally:

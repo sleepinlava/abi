@@ -44,7 +44,7 @@ class LintFinding:
     """A single static analysis finding."""
 
     severity: str  # "error", "warning"
-    check: str     # "cycle", "broken_dep", "orphan", "assertion_syntax", ...
+    check: str  # "cycle", "broken_dep", "orphan", "assertion_syntax", ...
     detail: str
     location: str = ""  # node_id, tool_id, or file path
 
@@ -69,33 +69,43 @@ def lint_dag(dag_spec: Mapping[str, Any]) -> List[LintFinding]:
 
     nodes: List[Dict[str, Any]] = list(dag_spec.get("nodes", []))
     if not nodes:
-        findings.append(LintFinding(
-            severity="error", check="empty_dag",
-            detail="DAG contains no nodes", location="pipeline_dag.yaml",
-        ))
+        findings.append(
+            LintFinding(
+                severity="error",
+                check="empty_dag",
+                detail="DAG contains no nodes",
+                location="pipeline_dag.yaml",
+            )
+        )
         return findings
 
     # Build index
     node_ids: Set[str] = {str(n["id"]) for n in nodes if "id" in n}
-    node_by_id: Dict[str, Dict[str, Any]] = {
-        str(n["id"]): n for n in nodes if "id" in n
-    }
+    node_by_id: Dict[str, Dict[str, Any]] = {str(n["id"]): n for n in nodes if "id" in n}
 
     # 1. Detect duplicate IDs
     seen: Set[str] = set()
     for node in nodes:
         nid = str(node.get("id", ""))
         if not nid:
-            findings.append(LintFinding(
-                severity="error", check="missing_id",
-                detail="Node missing 'id' field", location=str(node),
-            ))
+            findings.append(
+                LintFinding(
+                    severity="error",
+                    check="missing_id",
+                    detail="Node missing 'id' field",
+                    location=str(node),
+                )
+            )
             continue
         if nid in seen:
-            findings.append(LintFinding(
-                severity="error", check="duplicate_id",
-                detail=f"Duplicate node id {nid!r}", location=nid,
-            ))
+            findings.append(
+                LintFinding(
+                    severity="error",
+                    check="duplicate_id",
+                    detail=f"Duplicate node id {nid!r}",
+                    location=nid,
+                )
+            )
         seen.add(nid)
 
     # 2. Broken depends_on references (B18)
@@ -107,11 +117,14 @@ def lint_dag(dag_spec: Mapping[str, Any]) -> List[LintFinding]:
         for dep in deps:
             dep_str = str(dep)
             if dep_str not in node_ids:
-                findings.append(LintFinding(
-                    severity="error", check="broken_dep",
-                    detail=f"Node {nid!r} depends on {dep_str!r} which does not exist",
-                    location=nid,
-                ))
+                findings.append(
+                    LintFinding(
+                        severity="error",
+                        check="broken_dep",
+                        detail=f"Node {nid!r} depends on {dep_str!r} which does not exist",
+                        location=nid,
+                    )
+                )
 
     # 3. Cycle detection via Kahn's algorithm (B19)
     # Build adjacency and in-degree
@@ -144,12 +157,15 @@ def lint_dag(dag_spec: Mapping[str, Any]) -> List[LintFinding]:
     if sorted_count != len(node_ids):
         # Find nodes in cycles
         in_cycle = {nid for nid, deg in in_degree.items() if deg > 0}
-        findings.append(LintFinding(
-            severity="error", check="cycle",
-            detail=f"DAG contains cycles involving {len(in_cycle)} node(s): "
-                   f"{', '.join(sorted(in_cycle)[:10])}",
-            location="pipeline_dag.yaml",
-        ))
+        findings.append(
+            LintFinding(
+                severity="error",
+                check="cycle",
+                detail=f"DAG contains cycles involving {len(in_cycle)} node(s): "
+                f"{', '.join(sorted(in_cycle)[:10])}",
+                location="pipeline_dag.yaml",
+            )
+        )
 
     # 4. Orphan nodes (no dependencies and no dependents) — warning only
     has_dependents: Set[str] = set()
@@ -169,11 +185,14 @@ def lint_dag(dag_spec: Mapping[str, Any]) -> List[LintFinding]:
         has_deps = len(deps) > 0
         is_depended_on = nid in has_dependents
         if not has_deps and not is_depended_on:
-            findings.append(LintFinding(
-                severity="warning", check="orphan",
-                detail=f"Node {nid!r} has no dependencies and no dependents",
-                location=nid,
-            ))
+            findings.append(
+                LintFinding(
+                    severity="warning",
+                    check="orphan",
+                    detail=f"Node {nid!r} has no dependencies and no dependents",
+                    location=nid,
+                )
+            )
 
     return findings
 
@@ -181,6 +200,7 @@ def lint_dag(dag_spec: Mapping[str, Any]) -> List[LintFinding]:
 # ═══════════════════════════════════════════════════════════════════════════
 # Assertion syntax checks (B20)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 # Safe builtins allowed in assertion expressions
 class _StubAttr:
@@ -243,10 +263,20 @@ class _StubAttr:
 _STUB = _StubAttr()
 
 _ASSERTION_SAFE_BUILTINS: Dict[str, Any] = {
-    "True": True, "False": False, "None": None,
-    "int": int, "float": float, "str": str, "bool": bool,
-    "len": len, "abs": abs, "min": min, "max": max,
-    "sum": sum, "any": any, "all": all,
+    "True": True,
+    "False": False,
+    "None": None,
+    "int": int,
+    "float": float,
+    "str": str,
+    "bool": bool,
+    "len": len,
+    "abs": abs,
+    "min": min,
+    "max": max,
+    "sum": sum,
+    "any": any,
+    "all": all,
     "exists": lambda x: bool(x),
     "isclose": lambda a, b, rel_tol=1e-9, abs_tol=0.0: True,  # stub
     # Runtime context variables — stubbed for static analysis
@@ -295,10 +325,14 @@ def lint_assertion_syntax(
         for assertion in assertions:
             error = _precheck_assertion_expression(str(assertion))
             if error:
-                findings.append(LintFinding(
-                    severity="error", check="assertion_syntax",
-                    detail=error, location=nid,
-                ))
+                findings.append(
+                    LintFinding(
+                        severity="error",
+                        check="assertion_syntax",
+                        detail=error,
+                        location=nid,
+                    )
+                )
     return findings
 
 
@@ -327,46 +361,61 @@ def lint_tool_contracts(
         # Check required fields
         for field in ("name", "category", "purpose"):
             if not contract.get(field):
-                findings.append(LintFinding(
-                    severity="error", check="missing_field",
-                    detail=f"Tool contract {tool_id!r} missing required field {field!r}",
-                    location=tool_id,
-                ))
+                findings.append(
+                    LintFinding(
+                        severity="error",
+                        check="missing_field",
+                        detail=f"Tool contract {tool_id!r} missing required field {field!r}",
+                        location=tool_id,
+                    )
+                )
 
         # Check execution block
         execution = contract.get("execution", {})
         if not isinstance(execution, Mapping):
-            findings.append(LintFinding(
-                severity="error", check="missing_field",
-                detail=f"Tool contract {tool_id!r} missing 'execution' mapping",
-                location=tool_id,
-            ))
+            findings.append(
+                LintFinding(
+                    severity="error",
+                    check="missing_field",
+                    detail=f"Tool contract {tool_id!r} missing 'execution' mapping",
+                    location=tool_id,
+                )
+            )
         else:
             for exec_field in ("env_name", "executable", "command_template"):
                 if not execution.get(exec_field):
-                    findings.append(LintFinding(
-                        severity="warning", check="missing_field",
-                        detail=f"Tool {tool_id!r}: execution.{exec_field} is empty",
-                        location=tool_id,
-                    ))
+                    findings.append(
+                        LintFinding(
+                            severity="warning",
+                            check="missing_field",
+                            detail=f"Tool {tool_id!r}: execution.{exec_field} is empty",
+                            location=tool_id,
+                        )
+                    )
 
     # Cross-reference with registry
     if registry_tool_ids:
         contract_ids = set(contracts)
         missing_from_registry = contract_ids - registry_tool_ids
         for tool_id in sorted(missing_from_registry):
-            findings.append(LintFinding(
-                severity="warning", check="missing_contract",
-                detail=f"Tool {tool_id!r} has a contract but is not in the registry",
-                location=tool_id,
-            ))
+            findings.append(
+                LintFinding(
+                    severity="warning",
+                    check="missing_contract",
+                    detail=f"Tool {tool_id!r} has a contract but is not in the registry",
+                    location=tool_id,
+                )
+            )
         missing_contracts = registry_tool_ids - contract_ids
         for tool_id in sorted(missing_contracts):
-            findings.append(LintFinding(
-                severity="warning", check="missing_contract",
-                detail=f"Tool {tool_id!r} is in registry but has no contract file",
-                location=tool_id,
-            ))
+            findings.append(
+                LintFinding(
+                    severity="warning",
+                    check="missing_contract",
+                    detail=f"Tool {tool_id!r} is in registry but has no contract file",
+                    location=tool_id,
+                )
+            )
 
     return findings
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 from pathlib import Path
@@ -336,7 +337,14 @@ def _absolute_path(value: str, project_root: Path) -> Path:
     path = Path(value)
     if path.is_absolute():
         return path
-    return project_root / path
+    resolved = (project_root / path).resolve()
+    # S5: prevent path traversal escaping project root
+    root_resolved = project_root.resolve()
+    if not (str(resolved).startswith(str(root_resolved) + os.sep) or resolved == root_resolved):
+        raise ToolError(
+            f"Path {value!r} escapes project root {project_root}. Resolved to: {resolved}"
+        )
+    return resolved
 
 
 def _flatten_scalars(config: Mapping[str, Any]) -> Dict[str, Any]:

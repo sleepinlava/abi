@@ -29,7 +29,8 @@ src/abi/
   tables.py           StandardTableManager
   report.py           通用报告写入器
   contracts/          合约定义 + 步骤合约执行
-  openai_contracts.py OpenAI 函数调用工具描述符生成
+  tool_descriptors.py 统一工具描述符单点真相（3 格式家族、7+ LLM 提供商）
+  openai_contracts.py 向后兼容重新导出 shim → tool_descriptors
   jobs/               HTTP Job Service（服务端、客户端）
   runtimes/           local、Nextflow 运行时
   exporters/          Nextflow DSL2 导出器

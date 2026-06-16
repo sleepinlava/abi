@@ -8,13 +8,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from abi.contracts.lint import (
-    LintFinding,
     lint_assertion_syntax,
     lint_dag,
     lint_tool_contracts,
     run_contract_lint,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # B18: DAG structure checks
@@ -208,9 +206,9 @@ class TestLintAssertionSyntax:
     def test_multiple_nodes_checked(self):
         dag = {
             "nodes": [
-                {"id": "A", "assertions": ["return_code == 0"]},     # valid
-                {"id": "B", "assertions": ["output_json.x >"]},     # syntax error
-                {"id": "C", "assertions": ["output_json.x > 0"]},   # valid
+                {"id": "A", "assertions": ["return_code == 0"]},  # valid
+                {"id": "B", "assertions": ["output_json.x >"]},  # syntax error
+                {"id": "C", "assertions": ["output_json.x > 0"]},  # valid
             ]
         }
         findings = lint_assertion_syntax(dag)
@@ -262,9 +260,15 @@ class TestLintToolContracts:
         assert len(findings) > 0
 
     def test_cross_references_registry(self):
-        contracts = {"fastp": {"tool_id": "fastp", "name": "f", "category": "qc",
-                                "purpose": "trim", "execution": {"env_name": "e",
-                                "executable": "f", "command_template": "f"}}}
+        contracts = {
+            "fastp": {
+                "tool_id": "fastp",
+                "name": "f",
+                "category": "qc",
+                "purpose": "trim",
+                "execution": {"env_name": "e", "executable": "f", "command_template": "f"},
+            }
+        }
         registry_ids = {"fastp", "star"}
         findings = lint_tool_contracts(contracts, registry_tool_ids=registry_ids)
         # star is in registry but has no contract
@@ -301,6 +305,7 @@ class TestRunContractLint:
 
     def test_findings_are_serializable(self):
         import json
+
         dag = {"nodes": [{"id": "A", "depends_on": ["MISSING"]}]}
         result = run_contract_lint(dag)
         dumped = json.dumps(result)
@@ -310,9 +315,15 @@ class TestRunContractLint:
 
     def test_with_contracts_and_registry(self):
         dag = {"nodes": [{"id": "A", "depends_on": []}]}
-        contracts = {"fastp": {"tool_id": "fastp", "name": "f", "category": "qc",
-                                "purpose": "trim", "execution": {"env_name": "e",
-                                "executable": "f", "command_template": "f"}}}
+        contracts = {
+            "fastp": {
+                "tool_id": "fastp",
+                "name": "f",
+                "category": "qc",
+                "purpose": "trim",
+                "execution": {"env_name": "e", "executable": "f", "command_template": "f"},
+            }
+        }
         result = run_contract_lint(dag, contracts=contracts, registry_tool_ids={"fastp"})
         assert isinstance(result["findings"], list)
 

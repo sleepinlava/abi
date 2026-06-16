@@ -5,9 +5,9 @@ import pytest
 
 import abi.plugins as plugin_registry
 from abi.agent import ABIAgentInterface
-from abi.openai_contracts import ABI_AGENT_TOOLS, export_openai_tools
 from abi.plugins import get_plugin, list_plugins
 from abi.testing import assert_plugin_contract
+from abi.tool_descriptors import ABI_AGENT_TOOLS, TOOL_ALIASES, export_openai_tools
 
 FIXTURES = Path("tests/fixtures/tool_outputs")
 
@@ -143,16 +143,12 @@ def test_openai_tool_export_uses_agent_permissions_and_keeps_execution_opt_in():
 
 
 def test_openai_tool_schemas_cover_agent_interface_parameters():
+    # Build mapping from SSOT: only abi_* tool names that have corresponding
+    # ABIAgentInterface methods (excludes legacy autoplasm alias).
     mapping = {
-        "abi_plan": "plan",
-        "abi_dry_run": "dry_run",
-        "abi_inspect": "inspect",
-        "abi_report": "report",
-        "abi_run": "run",
-        "abi_export_nextflow": "export_nextflow",
-        "abi_export_agent_context": "export_agent_context",
-        "abi_doctor_agent": "doctor_agent",
-        "abi_validate_result": "abi_validate_result",
+        name: TOOL_ALIASES[name]
+        for name in ABI_AGENT_TOOLS
+        if name in TOOL_ALIASES and not name.startswith("autoplasm")
     }
 
     for tool_name, method_name in mapping.items():

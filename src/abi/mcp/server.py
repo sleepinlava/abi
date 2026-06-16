@@ -1,4 +1,9 @@
-"""Optional MCP stdio server for ABI agent tools."""
+"""Optional MCP stdio server for ABI agent tools.
+
+The MCP server auto-generates tool registrations from the unified tool
+descriptor SSOT (``abi.tool_descriptors``), eliminating the previous manual
+duplication of ~150 lines of parameter declarations.
+"""
 
 from __future__ import annotations
 
@@ -14,11 +19,96 @@ except ImportError:  # pragma: no cover - exercised when optional dependency is 
 else:
     FastMCP = _ImportedFastMCP
 
+# JSON Schema type → Python type mapping for auto-generated MCP tool signatures.
+_JSON_TO_PY_TYPE: dict[str, str] = {
+    "string": "str",
+    "integer": "int",
+    "boolean": "bool",
+}
+
+
+def _register_mcp_tools(mcp: Any, agent: ABIAgentInterface) -> None:
+    """Auto-register MCP tool functions from the unified SSOT metadata.
+
+    Reads ``ABI_AGENT_TOOLS`` and ``TOOL_ALIASES`` from
+    ``abi.tool_descriptors`` and dynamically creates properly-annotated
+    Python functions for each tool.  FastMCP introspects the type hints
+    to generate JSON Schema — the same information that was previously
+    maintained by hand in 10 separate ``@mcp.tool()`` functions.
+
+    The legacy ``autoplasm_validate_result`` alias is registered separately
+    to preserve backward compatibility with older MCP clients.
+    """
+    from abi.tool_descriptors import ABI_AGENT_TOOLS, TOOL_ALIASES
+
+    for tool_name, metadata in ABI_AGENT_TOOLS.items():
+        method_name = TOOL_ALIASES.get(tool_name)
+        if method_name is None:
+            continue
+
+        props = metadata.get("properties", {})
+        required = set(metadata.get("required", []))
+
+        # Sort parameters: required first, then optional (alphabetical within each).
+        # This avoids "non-default argument follows default argument" syntax errors.
+        param_names: list[str] = []
+        # Required params first (in definition order for determinism)
+        for pname in props:
+            if pname in required:
+                param_names.append(pname)
+        # Optional params second
+        for pname in props:
+            if pname not in required:
+                param_names.append(pname)
+
+        param_parts: list[str] = []
+        call_parts: list[str] = []
+        for pname in param_names:
+            pschema = props[pname]
+            json_type = pschema.get("type", "string")
+            py_type = _JSON_TO_PY_TYPE.get(json_type, "Any")
+            if pname in required:
+                param_parts.append(f"{pname}: {py_type}")
+            else:
+                param_parts.append(f"{pname}: Optional[{py_type}] = None")
+            call_parts.append(f"{pname}={pname}")
+
+        func_source = (
+            f"def {tool_name}({', '.join(param_parts)}) -> str:\n"
+            f'    """{metadata["description"]}"""\n'
+            f"    return agent.{method_name}({', '.join(call_parts)})\n"
+        )
+
+        namespace: dict[str, Any] = {
+            "agent": agent,
+            "Optional": Optional,
+            "str": str,
+            "int": int,
+            "bool": bool,
+        }
+        exec(func_source, namespace)
+        tool_func = namespace[tool_name]
+        mcp.tool()(tool_func)
+
+    # Legacy alias — preserve backward compatibility with MCP clients
+    # that reference the old ``autoplasm_validate_result`` tool name.
+    def autoplasm_validate_result(
+        result_dir: str,
+        allow_empty_tables: Optional[bool] = None,
+    ) -> str:
+        """Validate an ABI result directory (legacy autoplasm alias)."""
+        return agent.autoplasm_validate_result(
+            result_dir=result_dir,
+            allow_empty_tables=bool(allow_empty_tables),
+        )
+
+    mcp.tool()(autoplasm_validate_result)
+
 
 def create_server() -> object:
     """Create the ABI MCP server.
 
-    The MCP SDK is optional so the main Python 3.9 ABI environment remains
+    The MCP SDK is optional so the main Python 3.10 ABI environment remains
     dependency-light. Install the MCP extra or use a separate MCP environment
     before launching this server.
     """
@@ -30,173 +120,7 @@ def create_server() -> object:
 
     mcp = FastMCP("abi")
     agent = ABIAgentInterface()
-
-    @mcp.tool()
-    def abi_list_types() -> str:
-        """List installed ABI analysis plugin types."""
-        return agent.list_types()
-
-    @mcp.tool()
-    def abi_plan(
-        analysis_type: str,
-        config_path: Optional[str] = None,
-        sample_sheet: Optional[str] = None,
-        profile: str = "dry_run",
-        mode: Optional[str] = None,
-        threads: Optional[int] = None,
-        outdir: Optional[str] = None,
-        log_dir: Optional[str] = None,
-        check_files: bool = True,
-    ) -> str:
-        """Build and persist an ABI execution plan without running external tools."""
-        return agent.plan(
-            analysis_type=analysis_type,
-            config_path=config_path,
-            sample_sheet=sample_sheet,
-            profile=profile,
-            mode=mode,
-            threads=threads,
-            outdir=outdir,
-            log_dir=log_dir,
-            check_files=check_files,
-        )
-
-    @mcp.tool()
-    def abi_dry_run(
-        analysis_type: str,
-        config_path: Optional[str] = None,
-        sample_sheet: Optional[str] = None,
-        profile: str = "dry_run",
-        mode: Optional[str] = None,
-        threads: Optional[int] = None,
-        outdir: Optional[str] = None,
-        log_dir: Optional[str] = None,
-        progress: Optional[bool] = None,
-        check_files: bool = True,
-    ) -> str:
-        """Render commands and provenance artifacts without executing real tools."""
-        return agent.dry_run(
-            analysis_type=analysis_type,
-            config_path=config_path,
-            sample_sheet=sample_sheet,
-            profile=profile,
-            mode=mode,
-            threads=threads,
-            outdir=outdir,
-            log_dir=log_dir,
-            progress=progress,
-            check_files=check_files,
-        )
-
-    @mcp.tool()
-    def abi_inspect(result_dir: str) -> str:
-        """Inspect an ABI result directory and summarize run health."""
-        return agent.inspect(result_dir=result_dir)
-
-    @mcp.tool()
-    def abi_report(result_dir: str, analysis_type: Optional[str] = None) -> str:
-        """Regenerate report files from existing ABI results."""
-        return agent.report(result_dir=result_dir, analysis_type=analysis_type)
-
-    @mcp.tool()
-    def abi_export_nextflow(
-        analysis_type: str,
-        output: str,
-        config_path: Optional[str] = None,
-        sample_sheet: Optional[str] = None,
-        profile: str = "dry_run",
-        mode: Optional[str] = None,
-        threads: Optional[int] = None,
-        outdir: Optional[str] = None,
-        log_dir: Optional[str] = None,
-        smoke: bool = False,
-        mamba_root: Optional[str] = None,
-        check_files: bool = True,
-    ) -> str:
-        """Export an ABI execution plan as a Nextflow DSL2 workflow without running it."""
-        return agent.export_nextflow(
-            analysis_type=analysis_type,
-            output=output,
-            config_path=config_path,
-            sample_sheet=sample_sheet,
-            profile=profile,
-            mode=mode,
-            threads=threads,
-            outdir=outdir,
-            log_dir=log_dir,
-            smoke=smoke,
-            mamba_root=mamba_root,
-            check_files=check_files,
-        )
-
-    @mcp.tool()
-    def abi_export_agent_context(analysis_type: str) -> str:
-        """Export compact machine-readable context for ABI agent callers."""
-        return agent.export_agent_context(analysis_type=analysis_type)
-
-    @mcp.tool()
-    def abi_doctor_agent(analysis_type: str) -> str:
-        """Return a short operating guide for ABI agent callers."""
-        return agent.doctor_agent(analysis_type=analysis_type)
-
-    @mcp.tool()
-    def abi_validate_result(
-        result_dir: str,
-        allow_empty_tables: bool = True,
-    ) -> str:
-        """Validate an ABI result directory without modifying it."""
-        return agent.abi_validate_result(
-            result_dir=result_dir,
-            allow_empty_tables=allow_empty_tables,
-        )
-
-    @mcp.tool()
-    def abi_run(
-        analysis_type: str,
-        engine: str = "local",
-        config_path: Optional[str] = None,
-        sample_sheet: Optional[str] = None,
-        profile: str = "dry_run",
-        mode: Optional[str] = None,
-        threads: Optional[int] = None,
-        outdir: Optional[str] = None,
-        log_dir: Optional[str] = None,
-        workflow: Optional[str] = None,
-        work_dir: Optional[str] = None,
-        nxf_home: Optional[str] = None,
-        nextflow_bin: Optional[str] = None,
-        nextflow_profile: Optional[str] = None,
-        executor: Optional[str] = None,
-        resume: bool = False,
-        mamba_root: Optional[str] = None,
-        smoke: bool = False,
-        check_files: bool = True,
-        confirm_execution: bool = False,
-    ) -> str:
-        """Execute an ABI analysis after explicit user confirmation."""
-        return agent.run(
-            analysis_type=analysis_type,
-            engine=engine,
-            config_path=config_path,
-            sample_sheet=sample_sheet,
-            profile=profile,
-            mode=mode,
-            threads=threads,
-            outdir=outdir,
-            log_dir=log_dir,
-            workflow=workflow,
-            work_dir=work_dir,
-            nxf_home=nxf_home,
-            nextflow_bin=nextflow_bin,
-            nextflow_profile=nextflow_profile,
-            executor=executor,
-            resume=resume,
-            mamba_root=mamba_root,
-            smoke=smoke,
-            check_files=check_files,
-            confirm_execution=confirm_execution,
-        )
-
+    _register_mcp_tools(mcp, agent)
     return mcp
 
 

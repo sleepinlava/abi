@@ -67,14 +67,33 @@ abi report --type metatranscriptomics --result-dir results/rnaseq_demo --output-
 
 所有命令返回带有 `success`、`confirmation_required` 或 `error` 状态的 JSON 信封。
 
-### OpenAI 工具
+### 多 LLM 工具描述符
+
+ABI 从单一真相源为所有主流大模型提供者导出工具描述符。
 
 ```bash
-# 导出函数描述符（默认出于安全考虑省略 abi_run）
-abi export-openai-tools --type metagenomic_plasmid --format responses
+# OpenAI 兼容提供商（Chat Completions API）
+abi export-tools --type metagenomic_plasmid --format openai --provider openai
+abi export-tools --type metagenomic_plasmid --format openai --provider deepseek
+abi export-tools --type metagenomic_plasmid --format openai --provider zhipu   # 智谱 GLM
+abi export-tools --type metagenomic_plasmid --format openai --provider kimi     # Moonshot
+abi export-tools --type metagenomic_plasmid --format openai --provider qwen     # 通义千问
+abi export-tools --type metagenomic_plasmid --format openai --provider minimax  # MiniMax
+
+# Anthropic Claude（tool_use 格式）
+abi export-tools --type metagenomic_plasmid --format anthropic
+
+# Google Gemini（function_declarations 格式）
+abi export-tools --type metagenomic_plasmid --format gemini
 
 # 包含执行工具
-abi export-openai-tools --type metagenomic_plasmid --format responses --include-execution
+abi export-tools --type metagenomic_plasmid --format openai --include-execution
+```
+
+### OpenAI 工具（旧版，向后兼容）
+
+```bash
+abi export-openai-tools --type metagenomic_plasmid --format responses
 ```
 
 ### MCP
