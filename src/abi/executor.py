@@ -97,7 +97,8 @@ from abi.config import resolved_mamba_root, write_yaml
 from abi.contracts.step_contract import (
     ContractViolationError,
     evaluate_assertions,
-    save_checksums,
+    invalidate_step_checksums,
+    save_checksums_atomic,
     validate_output_contract,
     verify_input_checksums,
 )
@@ -237,6 +238,10 @@ class GenericABIExecutor:
             self._resolved_input_rows(plan, dry_run=dry_run),
             provenance / "resolved_inputs.tsv",
         )
+        # Write tool versions BEFORE step iteration to avoid concurrent access
+        # issues when parallel execution is enabled (B4 fix).
+        # 在步骤迭代之前写入工具版本，避免并发访问问题（B4 修复）。
+        versions_path = self._write_tool_versions(provenance / "tool_versions.tsv")
 
         # Determine whether to record structured pipeline progress events.
         # Progress recording is enabled when config.execution.progress is True
@@ -291,7 +296,7 @@ class GenericABIExecutor:
         # This ensures post-mortem diagnostics are available.
         # 写出所有溯源产物——即使失败也始终写出，确保事后诊断可用。
         commands_path = write_commands_tsv(command_rows, provenance / "commands.tsv")
-        versions_path = self._write_tool_versions(provenance / "tool_versions.tsv")
+        # tool_versions.tsv is written before step iteration (B4 fix).
         resources_path = self._write_resources(config, provenance / "resources.json")
         environment_path = self._write_environment(provenance / "environment.yml")
         report_paths = write_generic_report(
@@ -530,10 +535,15 @@ class GenericABIExecutor:
         params["stdout_path"] = str(step_log_dir / f"{step.step_id}.stdout.log")
         params["stderr_path"] = str(step_log_dir / f"{step.step_id}.stderr.log")
 
-        # ── Pre-execution contract: verify input checksums ──
-        # 执行前契约：验证输入校验和
+        # ── Pre-execution contract: invalidate stale checksums + verify inputs ──
+        # 执行前契约：清除过期校验和 + 验证输入校验和
         contract = params.get("_contract", {})
         if self.enforce_contracts and contract:
+            # B25: Invalidate any prior checksums for this step's outputs before
+            # re-execution (retry / resume safety).  Match by output directory.
+            step_outdir = params.get("output_dir") or params.get("outdir", "")
+            if step_outdir and self._checksums:
+                invalidate_step_checksums(self._checksums, output_dir=str(step_outdir))
             input_violations = verify_input_checksums(step.step_id, params, self._checksums)
             if input_violations:
                 raise ContractViolationError(step.step_id, input_violations)
@@ -600,10 +610,10 @@ class GenericABIExecutor:
                 if assertion_violations:
                     raise ContractViolationError(step.step_id, assertion_violations)
 
-            # 4. Persist checksums to provenance.
-            # 4. 将校验和持久化到溯源目录。
+            # 4. Persist checksums to provenance (atomic write, B25 fix).
+            # 4. 将校验和持久化到溯源目录（原子写入，B25 修复）。
             if self._checksums:
-                save_checksums(provenance, self._checksums)
+                save_checksums_atomic(provenance, self._checksums)
 
         # Parse tool outputs into structured table data.
         # The parse_outputs callback is plugin-specific and understands each tool's

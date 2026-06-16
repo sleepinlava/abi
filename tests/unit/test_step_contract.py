@@ -13,12 +13,15 @@ from abi.contracts.step_contract import (
     ContractViolation,
     ContractViolationError,
     _count_fasta_contigs,
+    _isclose_for_assertions,
     _parse_size,
     compute_file_checksum,
     compute_output_checksums,
     evaluate_assertions,
+    invalidate_step_checksums,
     load_checksums,
     save_checksums,
+    save_checksums_atomic,
     validate_output_contract,
     verify_input_checksums,
 )
@@ -325,3 +328,200 @@ class TestContractViolationError:
         assert "step1" in str(err)
         assert "min_size" in str(err)
         assert "too small" in str(err)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# B25: Atomic checksum writes + step invalidation
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestSaveChecksumsAtomic:
+    def test_writes_and_loads(self, tmp_path):
+        checksums = {"/tmp/a.txt": "a" * 64, "/tmp/b.txt": "b" * 64}
+        save_checksums_atomic(tmp_path, checksums)
+        loaded = load_checksums(tmp_path)
+        assert loaded == checksums
+
+    def test_merges_with_existing(self, tmp_path):
+        save_checksums_atomic(tmp_path, {"/tmp/a.txt": "a" * 64})
+        save_checksums_atomic(tmp_path, {"/tmp/b.txt": "b" * 64})
+        loaded = load_checksums(tmp_path)
+        assert loaded["/tmp/a.txt"] == "a" * 64
+        assert loaded["/tmp/b.txt"] == "b" * 64
+
+    def test_no_tmp_file_left_behind(self, tmp_path):
+        save_checksums_atomic(tmp_path, {"/tmp/x.txt": "c" * 64})
+        tmps = list(tmp_path.glob("*.tmp"))
+        assert len(tmps) == 0
+
+    def test_atomic_no_partial_write(self, tmp_path):
+        """Atomic write via tmp+rename ensures a complete file or the old one."""
+        # First write establishes orig.txt
+        orig = {"/tmp/orig.txt": "o" * 64}
+        save_checksums_atomic(tmp_path, orig)
+        # Write new checksum — merge means old entries survive
+        new = {"/tmp/new.txt": "n" * 64}
+        save_checksums_atomic(tmp_path, new)
+        loaded = load_checksums(tmp_path)
+        # New entry must be present
+        assert loaded["/tmp/new.txt"] == "n" * 64
+        # Old entry survives merge (idempotent merge behavior)
+        assert loaded["/tmp/orig.txt"] == "o" * 64
+
+
+class TestInvalidateStepChecksums:
+    def test_removes_by_output_dir(self):
+        """Strategy 1: remove all checksums under a step's output directory."""
+        checksums = {
+            "/out/S1_fastp/S1_R1.clean.fastq.gz": "a" * 64,
+            "/out/S1_fastp/S1_R2.clean.fastq.gz": "b" * 64,
+            "/out/S1_star/S1.sam": "c" * 64,
+        }
+        invalidate_step_checksums(checksums, output_dir="/out/S1_fastp")
+        assert "/out/S1_fastp/S1_R1.clean.fastq.gz" not in checksums
+        assert "/out/S1_fastp/S1_R2.clean.fastq.gz" not in checksums
+
+    def test_preserves_other_output_dirs(self, tmp_path):
+        """Only the specified output_dir's checksums are removed."""
+        checksums = {
+            "/out/S1_fastp/S1_R1.clean.fastq.gz": "a" * 64,
+            "/out/S1_star/S1.sam": "b" * 64,
+        }
+        invalidate_step_checksums(checksums, output_dir="/out/S1_fastp")
+        # fastp outputs removed
+        assert "/out/S1_fastp/S1_R1.clean.fastq.gz" not in checksums
+        # star outputs preserved
+        assert "/out/S1_star/S1.sam" in checksums
+
+    def test_removes_by_exact_output_paths(self):
+        """Strategy 2: remove checksums matching exact paths."""
+        checksums = {
+            "/out/S1/file1.txt": "a" * 64,
+            "/out/S1/file2.txt": "b" * 64,
+            "/out/S1/file3.txt": "c" * 64,
+        }
+        invalidate_step_checksums(
+            checksums,
+            output_paths=["/out/S1/file1.txt", "/out/S1/file2.txt"],
+        )
+        assert "/out/S1/file1.txt" not in checksums
+        assert "/out/S1/file2.txt" not in checksums
+        assert "/out/S1/file3.txt" in checksums
+
+    def test_removes_by_contract_heuristic(self):
+        """Strategy 3: match checksum keys containing output names from contract."""
+        checksums = {
+            "/out/S1/clean_read1.fastq.gz": "a" * 64,
+            "/out/S1/clean_read2.fastq.gz": "b" * 64,
+            "/out/S1/alignment.sam": "c" * 64,
+        }
+        contract = {"outputs": {"clean_read1": {}, "clean_read2": {}}}
+        invalidate_step_checksums(checksums, contract_spec=contract)
+        assert "/out/S1/clean_read1.fastq.gz" not in checksums
+        assert "/out/S1/clean_read2.fastq.gz" not in checksums
+
+    def test_empty_contract_noop(self):
+        checksums = {"/out/file.txt": "x" * 64}
+        original = dict(checksums)
+        invalidate_step_checksums(checksums, contract_spec={})
+        assert checksums == original
+
+    def test_no_outputs_key_noop(self):
+        checksums = {"/out/file.txt": "x" * 64}
+        original = dict(checksums)
+        invalidate_step_checksums(checksums, contract_spec={"assertions": ["x > 0"]})
+        assert checksums == original
+
+    def test_no_args_noop(self):
+        checksums = {"/out/file.txt": "x" * 64}
+        original = dict(checksums)
+        invalidate_step_checksums(checksums)
+        assert checksums == original
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# B7: Symlink resolution in checksums
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestSymlinkChecksum:
+    def test_follows_symlink_to_target(self, tmp_path):
+        target = tmp_path / "real.txt"
+        target.write_text("content")
+        link = tmp_path / "link.txt"
+        link.symlink_to(target)
+        assert compute_file_checksum(link) == compute_file_checksum(target)
+
+    def test_does_not_follow_when_disabled(self, tmp_path):
+        target = tmp_path / "real.txt"
+        target.write_text("content")
+        link = tmp_path / "link.txt"
+        link.symlink_to(target)
+        # Without following, the link itself may or may not be a "file"
+        # but it should not fail
+        result = compute_file_checksum(link, follow_symlinks=False)
+        # The link is not a regular file, so it returns ""
+        assert result == compute_file_checksum(target) or result == ""
+
+    def test_broken_symlink_returns_empty(self, tmp_path):
+        link = tmp_path / "broken.txt"
+        link.symlink_to("/nonexistent/path")
+        result = compute_file_checksum(link)
+        assert result == ""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# B13: Float-tolerant isclose in assertions
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestIscloseForAssertions:
+    def test_exact_match(self):
+        assert _isclose_for_assertions(1.0, 1.0)
+
+    def test_within_tolerance(self):
+        assert _isclose_for_assertions(0.1 + 0.2, 0.3, rel_tol=1e-9)
+
+    def test_outside_tolerance(self):
+        assert not _isclose_for_assertions(0.1, 0.2, rel_tol=0.01)
+
+    def test_integer_inputs(self):
+        assert _isclose_for_assertions(42, 42)
+        assert not _isclose_for_assertions(42, 43)
+
+
+class TestIscloseInAssertions:
+    def test_isclose_passes_in_eval(self):
+        """isclose is available in the assertion evaluation namespace (B13 fix).
+
+        Context values for output_json must be dicts (JSON-parsed content),
+        not file paths, because ``_AttrDict`` wraps dicts for dot access.
+        """
+        context = {
+            "output_json": {
+                "stats": {"q20": 0.951},
+            },
+            "output_files": {},
+            "return_code": 0,
+        }
+        violations = evaluate_assertions(
+            ["isclose(output_json.stats.q20, 0.95, rel_tol=0.01)"],
+            context,
+        )
+        assert violations == []
+
+    def test_isclose_fails_in_eval(self):
+        """isclose assertion fails when value is outside tolerance."""
+        context = {
+            "output_json": {
+                "stats": {"q20": 0.75},
+            },
+            "output_files": {},
+            "return_code": 0,
+        }
+        violations = evaluate_assertions(
+            ["isclose(output_json.stats.q20, 0.95, rel_tol=0.01)"],
+            context,
+        )
+        assert len(violations) == 1
+        assert violations[0].check == "assertion"

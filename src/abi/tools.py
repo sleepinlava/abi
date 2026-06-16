@@ -44,6 +44,7 @@ This module defines the canonical tool abstraction for the ABI pipeline:
 
 from __future__ import annotations
 
+import logging
 import os
 import shlex
 import shutil
@@ -57,8 +58,10 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 import yaml
 
 from abi.config import PROJECT_ROOT, resolved_mamba_root
-from abi.errors import ConfigError, ToolError
+from abi.errors import ConfigError, MissingTemplateParamError, ToolError
 from abi.timeouts import DEFAULT_TOOL_TIMEOUT_SECONDS, timeout_from_env_or_value
+
+_logger = logging.getLogger("abi.tools")
 
 __all__ = [
     "GenericCommandSkill",
@@ -129,6 +132,10 @@ class RunResult:
     outputs: Dict[str, Any] = field(default_factory=dict)
     log_file: Optional[str] = None
     status: str = "success"
+    # The fully-resolved parameters after select_params() merge (B23 fix).
+    # Records what was actually executed, not what was planned.
+    # select_params() 合并后的完整参数，记录实际执行的参数。
+    resolved_params: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to a plain dict for JSON serialization in logs/reports.
@@ -257,23 +264,65 @@ class ToolSkill:
 
 
 class SafeFormatDict(dict):
-    """A dict subclass that returns "" for missing keys during str.format_map().
+    """A dict subclass that handles missing keys during str.format_map().
 
     # Motivation / 动机
     Python's str.format_map() raises KeyError when a template contains a key
     that is not in the mapping.  Tool command templates may reference optional
     parameters (e.g. `{metaphlan_long_reads_flag}`) that are legitimately absent.
-    SafeFormatDict returns "" for these so the template renders cleanly with an
-    empty string in place of the missing parameter. / 缺键返回 "" 而非 KeyError。
 
-    # Usage / 用法
-        template = "tool --flag {optional_flag} --input {input}"
-        params = SafeFormatDict({"input": "file.fasta"})
-        template.format_map(params)  # → "tool --flag  --input file.fasta"
+    # Two modes / 两种模式
+
+    - **Strict** (``strict=True``): raises ``MissingTemplateParamError`` for
+      unrecognized keys.  Controlled by the ``ABI_STRICT_TEMPLATES`` env var
+      (default ``"1"`` in CI, ``"0"`` in production).  Use this during
+      development and testing to catch template typos early.
+    - **Lenient** (``strict=False``, default): returns ``""`` for missing keys
+      and logs a WARNING so the omission is traceable but does not abort the
+      pipeline.  Safe for production where unknown optional parameters are
+      tolerable.
+
+    # Tracked missing keys / 缺失键追踪
+    ``missing_keys`` records every key that was substituted with an empty
+    string.  Callers can inspect this after ``format_map()`` to detect
+    parameter gaps without aborting.
     """
 
+    def __init__(
+        self,
+        *args: Any,
+        strict: bool | None = None,
+        tool_name: str = "",
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        # Resolve strict mode: explicit arg > env var > default False
+        if strict is None:
+            strict = os.environ.get("ABI_STRICT_TEMPLATES", "0") == "1"
+        self.strict = strict
+        self.tool_name = tool_name
+        self.missing_keys: list[str] = []
+
     def __missing__(self, key: str) -> str:
-        """Return "" for any key not in the dict. / 字典中不存在的键返回 ""。"""
+        """Handle a missing template key.
+
+        In strict mode, raises ``MissingTemplateParamError``.
+        In lenient mode, logs a WARNING and returns ``""``.
+        """
+        self.missing_keys.append(key)
+        if self.strict:
+            tool_label = self.tool_name or "unknown"
+            raise MissingTemplateParamError(
+                f"{tool_label}: command template references undefined "
+                f"parameter {key!r}. Add it to select_params() defaults or "
+                f"register it in OPTIONAL_TEMPLATE_FIELDS."
+            )
+        _logger.warning(
+            "Template parameter %r missing from params for tool %r; "
+            "substituting empty string.",
+            key,
+            self.tool_name or "unknown",
+        )
         return ""
 
 
@@ -473,23 +522,37 @@ class GenericCommandSkill(ToolSkill):
     def command_text(self, params: Dict[str, Any]) -> str:
         """Render the command template as a string.
 
-        # SafeFormatDict usage / SafeFormatDict 的用途
-        If the template references a key not in params (e.g. an optional flag),
-        SafeFormatDict returns "" instead of raising KeyError. This means the
-        rendered command will have an empty placeholder rather than crashing.
-        / 引用不存在参数时不崩溃，而是渲染为空格。
+        Uses ``SafeFormatDict`` to handle missing template keys.
+        In strict mode (``ABI_STRICT_TEMPLATES=1``), unknown keys raise
+        ``MissingTemplateParamError``.  In lenient mode (default), they
+        produce a WARNING and render as empty strings.
         """
         selected = self.select_params(params, mode=str(params.get("mode", "auto")))
-        return self.command_template.format_map(SafeFormatDict(_template_values(selected)))
+        fmt_dict = SafeFormatDict(
+            _template_values(selected),
+            tool_name=self.name,
+        )
+        return self.command_template.format_map(fmt_dict)
 
     def build_command(self, params: Dict[str, Any]) -> List[str]:
         """Render and tokenize the command into a list of strings.
 
-        Uses shlex.split() to parse the rendered template, respecting quoting
-        rules (e.g. `--out "{output_dir}/report.html"`). / shlex.split() 解析渲染后的模板。
+        After rendering, inspects ``SafeFormatDict.missing_keys`` and logs
+        a summary of all missing parameters for diagnostic purposes.
         """
         selected = self.select_params(params, mode=str(params.get("mode", "auto")))
-        template = self.command_text(selected)
+        fmt_dict = SafeFormatDict(
+            _template_values(selected),
+            tool_name=self.name,
+        )
+        template = self.command_template.format_map(fmt_dict)
+        # Log a single summary line if any params were missing
+        if fmt_dict.missing_keys:
+            _logger.info(
+                "%s: missing template params: %s",
+                self.name,
+                ", ".join(sorted(set(fmt_dict.missing_keys))),
+            )
         try:
             return shlex.split(template)
         except ValueError as exc:
@@ -631,6 +694,7 @@ class GenericCommandSkill(ToolSkill):
                 duration_seconds=0.0,
                 outputs=dict(selected.get("outputs", {})),
                 status="dry_run",
+                resolved_params=dict(selected),
             )
 
         # ── Real execution / 实际执行 ──
@@ -702,6 +766,7 @@ class GenericCommandSkill(ToolSkill):
                 **({"stderr_path": str(stderr_path)} if stderr_path else {}),
             },
             status=status,
+            resolved_params=dict(selected),
         )
 
     def _timeout_seconds(self, selected: Mapping[str, Any]) -> float | None:

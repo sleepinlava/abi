@@ -41,6 +41,7 @@ from __future__ import annotations
 __all__ = [
     "ABIError",
     "ConfigError",
+    "MissingTemplateParamError",
     "SampleSheetError",
     "ToolError",
 ]
@@ -79,6 +80,22 @@ class ConfigError(ABIError):
     file path and line so the user can correct it.
     智能体不应自动重试 -- 配置必须由人类或配置生成工具修复。
     报告错误并包含确切的文件路径和行号，以便用户纠正。
+    """
+
+
+class MissingTemplateParamError(ABIError):
+    """Raised when a command template references an undefined parameter.
+
+    Raised by ``SafeFormatDict`` in strict mode when the template contains
+    ``{field_name}`` references that are not in the parameter dictionary
+    and not listed in ``OPTIONAL_TEMPLATE_FIELDS``.
+
+    **Agent recovery / 智能体恢复策略:**
+    The agent should add the missing parameter to ``select_params()`` or
+    register it in ``OPTIONAL_TEMPLATE_FIELDS``. This is a configuration
+    error that must be fixed before the pipeline can run.
+    智能体应将缺失参数添加到 ``select_params()`` 或注册到
+    ``OPTIONAL_TEMPLATE_FIELDS``。必须修复此配置错误才能运行管线。
     """
 
 

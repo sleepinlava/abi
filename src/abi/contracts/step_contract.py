@@ -29,6 +29,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -100,6 +102,9 @@ def save_checksums(provenance_dir: str | Path, checksums: Dict[str, str]) -> Pat
 
     Merges with any existing checksums (idempotent — later writes for the
     same path overwrite earlier ones).
+
+    Prefer ``save_checksums_atomic()`` for production use; this function is
+    retained for backward compatibility.
     """
     existing = load_checksums(provenance_dir)
     existing.update(checksums)
@@ -111,6 +116,88 @@ def save_checksums(provenance_dir: str | Path, checksums: Dict[str, str]) -> Pat
     return path
 
 
+def save_checksums_atomic(provenance_dir: str | Path, checksums: Dict[str, str]) -> Path:
+    """Persist checksums via tmp+rename for atomicity (B25 fix).
+
+    Writes to a ``.tmp`` file, calls ``fsync()``, then uses ``os.replace()``
+    which is atomic on POSIX filesystems.  On NFS, ``os.replace()`` is atomic
+    for the directory entry but the data may not be durable without an fsync
+    on the directory — for NFS safety, combine with ``B26`` (atomic_write).
+
+    Merges with existing checksums identically to ``save_checksums()``.
+    """
+    existing = load_checksums(provenance_dir)
+    existing.update(checksums)
+    path = Path(provenance_dir) / CHECKSUMS_FILENAME
+    tmp_path = path.with_suffix(".tmp")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tmp_path.open("w", encoding="utf-8") as fh:
+        json.dump(existing, fh, indent=2, sort_keys=True, ensure_ascii=False)
+        fh.write("\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp_path, path)
+    return path
+
+
+def invalidate_step_checksums(
+    checksums: Dict[str, str],
+    contract_spec: Mapping[str, Any] | None = None,
+    *,
+    output_paths: List[str] | None = None,
+    output_dir: str | Path | None = None,
+) -> None:
+    """Remove checksums for outputs that a step will regenerate (B25 fix).
+
+    Called before re-executing a step (retry / resume) so that stale
+    checksums from a prior partial execution do not persist.
+
+    Matching strategy (in order of preference):
+    1. ``output_dir`` — removes any checksum whose key falls within this directory.
+    2. ``output_paths`` — removes checksums matching exact output file paths.
+    3. ``contract_spec`` — legacy heuristic: matches by output key name as a
+       substring within checksum file paths.
+
+    At least one of ``contract_spec``, ``output_paths``, or ``output_dir``
+    should be provided.
+    """
+    to_remove: List[str] = []
+
+    # Strategy 1: output directory (most robust)
+    if output_dir is not None:
+        dir_str = str(output_dir)
+        for checksum_key in list(checksums):
+            if checksum_key.startswith(dir_str) or checksum_key.startswith(str(Path(dir_str))):
+                to_remove.append(checksum_key)
+
+    # Strategy 2: exact output paths
+    elif output_paths:
+        path_set = {str(p) for p in output_paths}
+        for checksum_key in list(checksums):
+            if checksum_key in path_set:
+                to_remove.append(checksum_key)
+
+    # Strategy 3: heuristic by contract output key names
+    elif contract_spec:
+        output_spec = contract_spec.get("outputs", {})
+        if output_spec:
+            declared_output_names = set(output_spec.keys())
+            for checksum_key in list(checksums):
+                key_basename = Path(checksum_key).name
+                key_parent = str(Path(checksum_key).parent)
+                for output_name in declared_output_names:
+                    # Match: output name appears in the checksum path or filename
+                    if (output_name in checksum_key
+                            or output_name in key_basename
+                            or output_name in key_parent):
+                        to_remove.append(checksum_key)
+                        break
+
+    for key in set(to_remove):  # Deduplicate
+        if key in checksums:
+            del checksums[key]
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Checksum computation
 # ═══════════════════════════════════════════════════════════════════════════
@@ -118,12 +205,18 @@ def save_checksums(provenance_dir: str | Path, checksums: Dict[str, str]) -> Pat
 _READ_SIZE = 65536  # 64 KiB chunks
 
 
-def compute_file_checksum(path: str | Path) -> str:
+def compute_file_checksum(path: str | Path, *, follow_symlinks: bool = True) -> str:
     """Compute the SHA256 hex digest of a file.
 
     Returns ``""`` if the file does not exist.
+
+    When ``follow_symlinks=True`` (default), symbolic links are resolved to
+    their target before hashing so the checksum reflects the actual content
+    rather than the link path (B7 fix).
     """
     file_path = Path(path)
+    if follow_symlinks and file_path.is_symlink():
+        file_path = file_path.resolve()
     if not file_path.is_file():
         return ""
     sha = hashlib.sha256()
@@ -329,6 +422,20 @@ def _normalise_assertion(expression: str) -> str:
     return re.sub(r"(\S+)\s+exists\s*$", r"exists(\1)", expression.strip())
 
 
+def _isclose_for_assertions(
+    a: float | int,
+    b: float | int,
+    rel_tol: float = 1e-9,
+    abs_tol: float = 0.0,
+) -> bool:
+    """Thin wrapper around ``math.isclose()`` for use in assertion expressions (B13 fix).
+
+    DAG assertions can use ``isclose()`` for float-tolerant comparisons:
+    ``"isclose(output_json.summary.q20_rate, 0.95, rel_tol=0.01)"``
+    """
+    return math.isclose(float(a), float(b), rel_tol=rel_tol, abs_tol=abs_tol)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Assertion evaluation
 # ═══════════════════════════════════════════════════════════════════════════
@@ -462,6 +569,9 @@ def evaluate_assertions(
             "all": all,
             # ``exists`` keyword: "output_files.x exists" → bool(output_files.x)
             "exists": lambda x: bool(x),
+            # ``isclose`` for float-tolerant assertions (B13 fix):
+            #   "isclose(output_json.summary.q20_rate, 0.95, rel_tol=0.01)"
+            "isclose": _isclose_for_assertions,
         }
     )
 
