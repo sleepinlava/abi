@@ -103,7 +103,9 @@ src/abi/
 | `abi.schemas` | `SampleInput`, `SampleContext`, `PlanStep`, `ExecutionPlan` |
 | `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
 | `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV provenance writers |
+| `abi.contracts` | `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec` — literature-backed workflow declarations (added 2026-06-17) |
 | `abi.contracts.step_contract` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, checksum chaining |
+| `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with L1 (literature) / L2 (path) / L3 (validation) |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
 | `abi.testing` | `assert_plugin_contract` |
 
@@ -122,10 +124,27 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 - `planning_write`: `plan`, `dry_run`, `report`, `export_nextflow` — writes plans/provenance, no tool execution
 - `execution`: `run` — **requires `confirm_execution=true`**, writes provenance, executes real tools
 
-### The two plugins
+### The five plugins (v0.1.5, 2026-06-17)
 
-- **`metagenomic_plasmid`**: The complex plugin. Engine lives in `_engine/` (39 files, 9,006 lines). 67 tool contracts, 84-node DAG specification (`pipeline_dag.yaml`), plasmid detection/annotation/abundance pipeline. Plugin class in `__init__.py` delegates to `._engine.*` modules. DAG-driven planner (`_engine/pipeline_dag.py`) is the single source of truth for workflow topology.
-- **`metatranscriptomics`**: The portability demo. 574 lines, 4 tools (fastp, STAR, HISAT2, featureCounts), one standard table (`gene_expression.tsv`). All logic inline — proves the same `ABIAgentInterface` drives radically different analyses.
+- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (20 modules, 7,713 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 2,019 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard.
+- **`metatranscriptomics`**: 3-tool portability demo. 574 lines inline. fastp, STAR/HISAT2, featureCounts.
+- **`rnaseq_expression`**: 4-tool standard RNA-seq. 426 lines inline. fastp → STAR → featureCounts → DESeq2. Has `pipeline_dag.yaml` (4 nodes). Added 2026-06-17.
+- **`amplicon_16s`**: 6-tool microbial community analysis. 483 lines inline. cutadapt → vsearch (derep/denoise/taxonomy) → diversity. Has `pipeline_dag.yaml` (7 nodes). Added 2026-06-17.
+- **`wgs_bacteria`**: 5-tool bacterial isolate analysis. 255 lines inline. fastp → SPAdes → Prokka → MLST → AMRFinderPlus. Has `pipeline_dag.yaml` (5 nodes). Added 2026-06-17.
+
+All plugins share the same `ABIAgentInterface` contract, tool contract format, and workflow declaration pattern. Each has a `pipeline_dag.yaml` for L1/L2/L3 DAG validation.
+
+### DAG inference with L1/L2/L3 (added 2026-06-17)
+
+`infer_dag()` now supports a three-layer correctness model via an optional `workflow_spec` parameter:
+
+- **L1 (Literature)**: Plugins declare a `workflow` section in `abi-plugin.yaml` with explicit `after` dependencies and literature citations. These are the ground-truth edges.
+- **L2 (Path)**: Path-level dataflow inference cross-validates declared edges by matching output→input file paths.
+- **L3 (Validation)**: Mismatches between L1 and L2 emit a `WARNING`. Declared edges take priority; inferred edges supplement gaps.
+
+When no `workflow_spec` is provided, `infer_dag()` behaves identically to the pre-L1/L2/L3 version (no regression).
+
+See: `abi.contracts.WorkflowSpec`, `abi.contracts.WorkflowStepSpec`, `abi.contracts.load_workflow_spec`.
 
 ### autoplasm/ is a backward-compat shim
 

@@ -1,0 +1,34 @@
+abi_version: "0.1"
+tool_id: vsearch_taxonomy
+name: vsearch SINTAX taxonomy
+category: taxonomy
+purpose: Assign taxonomy to ASVs using the SINTAX algorithm with a reference database.
+when_to_use:
+  - taxonomic_classification
+  - community_profiling
+inputs:
+  asv_fasta:
+    type: file
+    formats: [fasta]
+    required: true
+  taxonomy_db:
+    type: file
+    formats: [fasta, udb]
+    required: true
+outputs:
+  output_dir:
+    type: directory
+  taxonomy_tsv:
+    type: file
+    format: tsv
+execution:
+  env_name: amplicon
+  executable: vsearch
+  command_template: "vsearch --sintax {asv_fasta} --db {taxonomy_db} --sintax_cutoff 0.8 --tabbedout {output_dir}/taxonomy.tsv"
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: "ASV FASTA or taxonomy database not found. Verify vsearch_denoise completed and taxonomy_db is configured."
+  tool_not_found:
+    hint: "vsearch not found. Install: conda install -c bioconda vsearch"

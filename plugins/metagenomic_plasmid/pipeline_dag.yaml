@@ -738,7 +738,15 @@ nodes:
       consensus_method:
         type: string
         default: intersection
-        enum: [intersection, majority_vote, single_tool]
+        enum: [intersection, majority_vote, single_tool, weighted_vote]
+      tool_weights:
+        type: object
+        description: >
+          Per-tool weight map for weighted_vote strategy.
+          Tools not listed receive a default weight of 1.0.
+          Example: {genomad: 0.6, plasme: 0.25, plasx: 0.15}
+        default: {}
+        required: false
     outputs:
       plasmid_contigs:
         type: file

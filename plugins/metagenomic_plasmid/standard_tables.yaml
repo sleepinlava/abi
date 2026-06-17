@@ -20,6 +20,9 @@ tables:
     - support_count
     - total_tools
     - confidence_score
+    - weighted_score
+    - weight_threshold
+    - tool_weights
     - contig_length
     - evidence
     - warnings

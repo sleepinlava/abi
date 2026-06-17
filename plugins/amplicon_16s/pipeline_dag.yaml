@@ -1,0 +1,114 @@
+# ============================================================================
+# Amplicon 16S Pipeline DAG — Canonical Specification
+# ============================================================================
+
+abi_version: "0.1"
+pipeline_id: amplicon_16s
+pipeline_name: "Standard 16S rRNA Amplicon Community Analysis Pipeline"
+
+platforms:
+  - illumina
+
+standard_tables:
+  asv_table:
+    description: "ASV abundance per sample"
+  taxonomy:
+    description: "SINTAX taxonomic assignments (kingdom→species)"
+  alpha_diversity:
+    description: "Per-sample diversity metrics"
+  beta_diversity:
+    description: "Between-sample distance matrices"
+
+nodes:
+  # ── Primer Trimming ─────────────────────────────────────────────────
+  trim_cutadapt:
+    tool_id: cutadapt
+    category: qc
+    platforms: [illumina]
+    optional: false
+    depends_on: []
+    inputs:
+      read1:           {type: file, format: fastq.gz}
+      read2:           {type: file, format: fastq.gz}
+      forward_primer:  {type: string}
+      reverse_primer:  {type: string}
+    outputs:
+      trimmed_read1:  {type: file, format: fastq.gz}
+      trimmed_read2:  {type: file, format: fastq.gz}
+    assertions:
+      - "output_dir.exists()"
+
+  # ── Dereplicate ─────────────────────────────────────────────────────
+  derep_vsearch:
+    tool_id: vsearch_derep
+    category: preprocessing
+    platforms: [illumina]
+    optional: false
+    depends_on: [trim_cutadapt]
+    inputs:
+      merged_fasta:  {type: file, format: fasta, source: trim_cutadapt.trimmed_read1}
+    outputs:
+      derep_fasta:  {type: file, format: fasta, contract: {min_size: "100B"}}
+    assertions:
+      - "output_dir.exists()"
+
+  # ── Denoise UNOISE3 ─────────────────────────────────────────────────
+  denoise_unoise3:
+    tool_id: vsearch_denoise
+    category: denoising
+    platforms: [illumina]
+    optional: false
+    depends_on: [derep_vsearch]
+    inputs:
+      derep_fasta:  {type: file, format: fasta, source: derep_vsearch.derep_fasta}
+    outputs:
+      asv_fasta:  {type: file, format: fasta, contract: {min_size: "100B"}}
+    assertions:
+      - "output_dir.exists()"
+
+  # ── Optional OTU clustering ─────────────────────────────────────────
+  otu_cluster:
+    tool_id: vsearch_otu
+    category: clustering
+    platforms: [illumina]
+    optional: true
+    depends_on: [denoise_unoise3]
+    fallback_depends: [denoise_unoise3]
+    inputs:
+      asv_fasta:  {type: file, format: fasta, source: denoise_unoise3.asv_fasta}
+    outputs:
+      otu_table:  {type: file, format: tsv}
+    assertions:
+      - "output_dir.exists()"
+
+  # ── SINTAX Taxonomy ─────────────────────────────────────────────────
+  taxonomy_sintax:
+    tool_id: vsearch_taxonomy
+    category: taxonomy
+    platforms: [illumina]
+    optional: false
+    depends_on: [denoise_unoise3]
+    inputs:
+      asv_fasta:     {type: file, format: fasta, source: denoise_unoise3.asv_fasta}
+      taxonomy_db:   {type: file, format: fasta}
+    outputs:
+      taxonomy_tsv:  {type: file, format: tsv, contract: {min_size: "100B"}}
+    assertions:
+      - "output_dir.exists()"
+
+  # ── Diversity Metrics ───────────────────────────────────────────────
+  diversity:
+    tool_id: diversity_metrics
+    category: diversity
+    platforms: [illumina]
+    optional: false
+    depends_on: [denoise_unoise3]
+    inputs:
+      asv_table:        {type: file, format: tsv, source: denoise_unoise3.asv_fasta}
+      diversity_script: {type: file, format: py}
+      phylogeny_tree:   {type: file, format: nwk}
+    outputs:
+      alpha_tsv:  {type: file, format: tsv}
+      beta_tsv:   {type: file, format: tsv}
+    assertions:
+      - "output_dir.exists()"

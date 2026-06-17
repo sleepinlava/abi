@@ -1,0 +1,21 @@
+project_name: "wgs_bacteria_run"
+mode: dry_run
+threads: 4
+outdir: results/wgs_bacteria
+log_dir: logs/wgs_bacteria
+
+input:
+  sample_sheet: sample_sheet.tsv
+
+assembly:
+  tool: spades
+
+annotation:
+  genus: Escherichia
+  species: coli
+
+typing:
+  mlst_scheme: auto
+
+resources:
+  amrfinder_db: AMRFINDER_DB_NOT_CONFIGURED

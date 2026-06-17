@@ -1,0 +1,44 @@
+abi_version: "0.1"
+tool_id: star
+name: STAR
+category: alignment
+purpose: Align RNA-seq reads to a STAR genome index.
+when_to_use:
+  - rna_seq_alignment
+  - star_index_available
+inputs:
+  read1:
+    type: file
+    required: true
+  read2:
+    type: file
+    required: true
+  genome_index:
+    type: directory
+    required: true
+  output_prefix:
+    type: path
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+outputs:
+  bam:
+    type: file
+    format: bam
+execution:
+  env_name: rnaseq
+  executable: STAR
+  command_template: "STAR --runThreadN {threads} --genomeDir {genome_index} --readFilesIn {read1} {read2} --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {output_prefix}"
+  network: false
+  writes_output: true
+normalization:
+  tables:
+    - alignment_summary
+failure_handling:
+  missing_resource:
+    hint: "Configure resources.genome_index to a prepared STAR index."
+  tool_not_found:
+    hint: "Install STAR in the abi-stats environment."
+  nonzero_exit:
+    hint: "Inspect the STAR stderr log under provenance/step_logs."

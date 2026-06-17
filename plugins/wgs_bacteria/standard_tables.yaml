@@ -1,0 +1,58 @@
+tables:
+  qc_summary:
+    - sample_id
+    - tool
+    - metric
+    - value
+    - unit
+    - source_file
+  genome_assembly_stats:
+    - sample_id
+    - total_length
+    - num_contigs
+    - n50
+    - max_contig_length
+    - gc_content
+    - coverage
+    - tool
+    - source_file
+  genome_annotation:
+    - sample_id
+    - feature_id
+    - feature_type
+    - start
+    - end
+    - strand
+    - product
+    - gene_name
+    - ec_number
+    - tool
+    - source_file
+  mlst_profile:
+    - sample_id
+    - scheme
+    - sequence_type
+    - allele_1
+    - allele_2
+    - allele_3
+    - allele_4
+    - allele_5
+    - allele_6
+    - allele_7
+    - clonal_complex
+    - tool
+    - source_file
+  amr_profile:
+    - sample_id
+    - gene_symbol
+    - sequence_name
+    - scope
+    - element_type
+    - element_subtype
+    - target_class
+    - target_subclass
+    - method
+    - coverage_pct
+    - identity_pct
+    - tool
+    - source_file

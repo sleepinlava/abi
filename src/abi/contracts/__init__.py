@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import string
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 from abi.config import load_yaml
 
@@ -12,8 +13,11 @@ __all__ = [
     "PLUGIN_MANIFEST_NAME",
     "TOOL_CONTRACT_SCHEMA",
     "ContractValidationError",
+    "WorkflowStepSpec",
+    "WorkflowSpec",
     "load_plugin_manifest",
     "load_tool_contracts",
+    "load_workflow_spec",
     "validate_plugin_contract_files",
     "validate_tool_contract",
 ]
@@ -61,6 +65,46 @@ _GENERIC_TEMPLATE_FIELDS = {
 
 class ContractValidationError(ValueError):
     """Raised when plugin or tool contracts are inconsistent."""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Workflow specification — literature-backed, plugin-author-maintained
+# declarations of the correct tool execution order.
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@dataclass
+class WorkflowStepSpec:
+    """A single step in a literature-declared workflow.
+
+    Attributes:
+        id: Stable step identifier (e.g. ``"qc"``, ``"alignment"``).
+        tool: The ``tool_id`` registered in the plugin's tool registry.
+        after: List of ``id`` values this step depends on (may be empty).
+        optional: Whether this step may be skipped without breaking the workflow.
+        citation: BibTeX key or DOI for the literature reference.
+    """
+
+    id: str
+    tool: str
+    after: list[str] = field(default_factory=list)
+    optional: bool = False
+    citation: str | None = None
+
+
+@dataclass
+class WorkflowSpec:
+    """A literature-backed workflow declaration embedded in ``abi-plugin.yaml``.
+
+    Attributes:
+        name: Human-readable workflow name.
+        citation: Primary literature citation for the workflow as a whole.
+        steps: Ordered list of :class:`WorkflowStepSpec` entries.
+    """
+
+    name: str
+    citation: str | None = None
+    steps: list[WorkflowStepSpec] = field(default_factory=list)
 
 
 def load_plugin_manifest(plugin_root: str | Path) -> Dict[str, Any]:
@@ -194,6 +238,82 @@ def _validate_manifest(plugin: Any, root: Path, manifest: Mapping[str, Any]) -> 
             raise ContractValidationError(f"{plugin.plugin_id}: missing manifest path {declared}")
     if "core_contracts" in manifest:
         _require_string_list(manifest["core_contracts"], f"{plugin.plugin_id}: core_contracts")
+    if "workflow" in manifest:
+        _require_mapping(manifest["workflow"], f"{plugin.plugin_id}: workflow")
+        _validate_workflow_section(manifest["workflow"], plugin.plugin_id, str(root))
+
+
+def _validate_workflow_section(
+    workflow: Mapping[str, Any],
+    plugin_id: str,
+    plugin_root: str,
+) -> None:
+    """Validate the optional ``workflow`` section of a plugin manifest."""
+    label = f"{plugin_id}: workflow"
+    _require_non_empty_string(workflow.get("name"), f"{label}.name")
+    steps = workflow.get("steps")
+    if not isinstance(steps, list) or not steps:
+        raise ContractValidationError(f"{label}.steps must be a non-empty list")
+    step_ids: set[str] = set()
+    tool_ids: set[str] = set()
+    for idx, raw in enumerate(steps):
+        if not isinstance(raw, Mapping):
+            raise ContractValidationError(f"{label}.steps[{idx}] must be a mapping")
+        step = dict(raw)
+        sid = step.get("id")
+        tool = step.get("tool")
+        _require_non_empty_string(sid, f"{label}.steps[{idx}].id")
+        _require_non_empty_string(tool, f"{label}.steps[{idx}].tool")
+        if sid in step_ids:
+            raise ContractValidationError(f"{label}: duplicate step id {sid!r}")
+        step_ids.add(sid)
+        tool_ids.add(tool)
+        after = step.get("after", [])
+        if not isinstance(after, list):
+            raise ContractValidationError(f"{label}.steps[{idx}].after must be a list")
+        for dep in after:
+            if dep not in step_ids:
+                raise ContractValidationError(
+                    f"{label}.steps[{idx}].after: dependency {dep!r} not declared "
+                    f"before step {sid!r}"
+                )
+        optional = step.get("optional", False)
+        if not isinstance(optional, bool):
+            raise ContractValidationError(
+                f"{label}.steps[{idx}].optional must be a boolean"
+            )
+        citation = step.get("citation")
+        if citation is not None and not isinstance(citation, str):
+            raise ContractValidationError(
+                f"{label}.steps[{idx}].citation must be a string or null"
+            )
+
+
+def load_workflow_spec(plugin_root: str | Path) -> WorkflowSpec | None:
+    """Load a :class:`WorkflowSpec` from a plugin manifest, if declared.
+
+    Returns ``None`` when no ``workflow`` section is present.
+    """
+    manifest = load_plugin_manifest(plugin_root)
+    raw = manifest.get("workflow")
+    if raw is None:
+        return None
+    steps = [
+        WorkflowStepSpec(
+            id=str(s["id"]),
+            tool=str(s["tool"]),
+            after=[str(a) for a in s.get("after", [])],
+            optional=bool(s.get("optional", False)),
+            citation=s.get("citation") if isinstance(s.get("citation"), str) else None,
+        )
+        for s in raw.get("steps", [])
+    ]
+    citation = raw.get("citation")
+    return WorkflowSpec(
+        name=str(raw["name"]),
+        citation=str(citation) if isinstance(citation, str) else None,
+        steps=steps,
+    )
 
 
 def _validate_contract_matches_registry(

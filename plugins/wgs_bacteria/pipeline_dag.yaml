@@ -1,0 +1,102 @@
+# ============================================================================
+# WGS Bacterial Genome Pipeline DAG — Canonical Specification
+# ============================================================================
+
+abi_version: "0.1"
+pipeline_id: wgs_bacteria
+pipeline_name: "Standard Bacterial Isolate WGS Analysis Pipeline"
+
+platforms:
+  - illumina
+
+standard_tables:
+  genome_assembly_stats:
+    description: "Assembly quality metrics (N50, contig count, total length)"
+  genome_annotation:
+    description: "Prokka gene annotations (GFF, GenBank, protein FASTA)"
+  mlst_profile:
+    description: "7-allele MLST profile with sequence type"
+  amr_profile:
+    description: "AMRFinderPlus antimicrobial resistance gene calls"
+
+nodes:
+  # ── QC ──────────────────────────────────────────────────────────────
+  qc_fastp:
+    tool_id: fastp
+    category: qc
+    platforms: [illumina]
+    optional: false
+    depends_on: []
+    inputs:
+      read1:  {type: file, format: fastq.gz}
+      read2:  {type: file, format: fastq.gz}
+    outputs:
+      clean_read1:  {type: file, format: fastq.gz}
+      clean_read2:  {type: file, format: fastq.gz}
+    assertions:
+      - "output_dir.exists()"
+
+  # ── Assembly ────────────────────────────────────────────────────────
+  assembly_spades:
+    tool_id: spades
+    category: assembly
+    platforms: [illumina]
+    optional: false
+    depends_on: [qc_fastp]
+    inputs:
+      clean_read1:  {type: file, format: fastq.gz, source: qc_fastp.clean_read1}
+      clean_read2:  {type: file, format: fastq.gz, source: qc_fastp.clean_read2}
+    outputs:
+      contigs_fasta:    {type: file, format: fasta, contract: {min_size: "1KB"}}
+      scaffolds_fasta:  {type: file, format: fasta}
+    assertions:
+      - "output_dir.exists()"
+      - "output_files.contigs_fasta.min_size >= 1000"
+
+  # ── Annotation ──────────────────────────────────────────────────────
+  annotation_prokka:
+    tool_id: prokka
+    category: annotation
+    platforms: [illumina]
+    optional: false
+    depends_on: [assembly_spades]
+    inputs:
+      assembly_fasta:  {type: file, format: fasta, source: assembly_spades.contigs_fasta}
+      genus:           {type: string}
+      species:         {type: string}
+    outputs:
+      faa:  {type: file, format: fasta, contract: {min_size: "100B"}}
+      gff:  {type: file, format: gff, contract: {min_size: "100B"}}
+      gbk:  {type: file, format: gbk}
+    assertions:
+      - "output_dir.exists()"
+
+  # ── MLST ────────────────────────────────────────────────────────────
+  mlst:
+    tool_id: mlst
+    category: typing
+    platforms: [illumina]
+    optional: false
+    depends_on: [assembly_spades]
+    inputs:
+      assembly_fasta:  {type: file, format: fasta, source: assembly_spades.contigs_fasta}
+      scheme:          {type: string, default: auto}
+    outputs:
+      mlst_tsv:  {type: file, format: tsv, contract: {min_size: "50B"}}
+    assertions:
+      - "output_dir.exists()"
+
+  # ── AMR Profiling ───────────────────────────────────────────────────
+  amr:
+    tool_id: amrfinderplus
+    category: amr
+    platforms: [illumina]
+    optional: false
+    depends_on: [annotation_prokka]
+    inputs:
+      prokka_faa:  {type: file, format: fasta, source: annotation_prokka.faa}
+      prokka_gff:  {type: file, format: gff, source: annotation_prokka.gff}
+    outputs:
+      amr_tsv:  {type: file, format: tsv, contract: {min_size: "50B"}}
+    assertions:
+      - "output_dir.exists()"

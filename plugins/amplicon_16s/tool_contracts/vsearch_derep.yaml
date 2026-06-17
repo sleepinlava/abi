@@ -1,0 +1,30 @@
+abi_version: "0.1"
+tool_id: vsearch_derep
+name: vsearch dereplicate
+category: preprocessing
+purpose: Dereplicate full-length amplicon sequences with abundance annotation.
+when_to_use:
+  - amplicon_denoising
+  - dada2_alternative
+inputs:
+  merged_fasta:
+    type: file
+    formats: [fasta]
+    required: true
+outputs:
+  output_dir:
+    type: directory
+  derep_fasta:
+    type: file
+    format: fasta
+execution:
+  env_name: amplicon
+  executable: vsearch
+  command_template: "vsearch --derep_fulllength {merged_fasta} --output {output_dir}/derep.fasta --sizeout --relabel uniq."
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: "Merged FASTQ/FASTA file not found. Verify that primer trimming completed successfully."
+  tool_not_found:
+    hint: "vsearch not found. Install: conda install -c bioconda vsearch"

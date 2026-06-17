@@ -1,33 +1,31 @@
 abi_version: "0.1"
-plugin_id: metatranscriptomics
-display_name: Metatranscriptomics Demo
-description: "Minimal RNA-seq style ABI portability demo: fastp, STAR/HISAT2, featureCounts."
-report_title: Metatranscriptomics ABI Report
+plugin_id: rnaseq_expression
+display_name: RNA-seq Gene Expression Quantification
+description: "Standard RNA-seq pipeline: QC (fastp) → alignment (STAR) → quantification (featureCounts) → differential expression (DESeq2)."
+report_title: RNA-seq Gene Expression ABI Report
 plugin_type: standalone
-entry_point: abi.plugins.metatranscriptomics:MetatranscriptomicsPlugin
+entry_point: abi.plugins.rnaseq_expression:RNASeqExpressionPlugin
 tool_registry: tool_registry.yaml
 standard_tables: standard_tables.yaml
 tool_contracts: tool_contracts
 core_contracts:
   - fastp
   - star
-  - hisat2
   - featurecounts
+  - deseq2
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Workflow declaration — literature-backed, plugin-author-maintained.
-# Used by infer_dag() as L1 ground truth.  Path-level inference (L2)
-# cross-validates against this declaration; mismatches trigger a WARNING.
 # ═══════════════════════════════════════════════════════════════════════════
 workflow:
-  name: "Standard RNA-seq Expression Quantification Pipeline"
-  citation: "Conesa et al. 2016, Genome Biology (doi:10.1186/s13059-016-0881-8) — survey of best practices for RNA-seq"
+  name: "Standard RNA-seq Differential Expression Pipeline"
+  citation: "Conesa et al. 2016, Genome Biology, doi:10.1186/s13059-016-0881-8"
   note: >
-    The pipeline uses fastp→STAR→featureCounts.  The commonly cited
-    Pertea et al. 2016 (Nature Protocols, doi:10.1038/nprot.2016.095)
-    describes HISAT2→StringTie→Ballgown for transcript-level analysis;
-    our pipeline targets gene-level quantification and uses STAR as the
-    aligner (see Conesa et al. 2016 for tool selection rationale).
+    Covers the complete gene-level RNA-seq workflow from raw reads to
+    differential expression.  STAR is the default aligner (Dobin et al.
+    2013); HISAT2 (Kim et al. 2019) can be substituted via config.
+    DESeq2 performs median-of-ratios normalisation and Wald-test
+    differential expression (Love et al. 2014).
   steps:
     - id: qc
       tool: fastp
@@ -44,3 +42,8 @@ workflow:
       after: [alignment]
       optional: false
       citation: "Liao et al. 2014, Bioinformatics, doi:10.1093/bioinformatics/btt656"
+    - id: differential_expression
+      tool: deseq2
+      after: [quantification]
+      optional: false
+      citation: "Love et al. 2014, Genome Biology, doi:10.1186/s13059-014-0550-8"

@@ -1,0 +1,33 @@
+tables:
+  qc_summary:
+    - sample_id
+    - tool
+    - metric
+    - value
+    - unit
+    - source_file
+  alignment_summary:
+    - sample_id
+    - tool
+    - metric
+    - value
+    - unit
+    - source_file
+  gene_expression:
+    - sample_id
+    - gene_id
+    - count
+    - tpm
+    - tool
+    - source_file
+  differential_expression:
+    - gene_id
+    - base_mean
+    - log2_fold_change
+    - lfc_se
+    - stat
+    - pvalue
+    - padj
+    - comparison
+    - tool
+    - source_file

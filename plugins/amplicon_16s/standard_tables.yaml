@@ -1,0 +1,37 @@
+tables:
+  asv_table:
+    - asv_id
+    - sample_id
+    - abundance
+    - sequence
+    - tool
+    - source_file
+  taxonomy:
+    - asv_id
+    - kingdom
+    - phylum
+    - class
+    - order
+    - family
+    - genus
+    - species
+    - confidence
+    - tool
+    - source_file
+  alpha_diversity:
+    - sample_id
+    - observed_features
+    - shannon_entropy
+    - simpson_index
+    - faith_pd
+    - chao1
+    - tool
+    - source_file
+  beta_diversity:
+    - comparison
+    - distance_metric
+    - sample_a
+    - sample_b
+    - distance
+    - tool
+    - source_file

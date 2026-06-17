@@ -1,0 +1,60 @@
+tools:
+  - id: cutadapt
+    name: cutadapt
+    category: qc
+    env_name: amplicon
+    executable: cutadapt
+    default_enabled: true
+    required: true
+    command_template: "cutadapt -g {forward_primer} -G {reverse_primer} -o {output_dir}/{sample_id}_R1.trimmed.fastq.gz -p {output_dir}/{sample_id}_R2.trimmed.fastq.gz {read1} {read2} --cores {threads} --minimum-length 50"
+    inputs: [read1, read2, forward_primer, reverse_primer]
+
+  - id: vsearch_derep
+    name: vsearch dereplicate
+    category: preprocessing
+    env_name: amplicon
+    executable: vsearch
+    default_enabled: true
+    required: true
+    command_template: "vsearch --derep_fulllength {merged_fasta} --output {output_dir}/derep.fasta --sizeout --relabel uniq."
+    inputs: [merged_fasta]
+
+  - id: vsearch_denoise
+    name: vsearch UNOISE3 denoise
+    category: denoising
+    env_name: amplicon
+    executable: vsearch
+    default_enabled: true
+    required: true
+    command_template: "vsearch --cluster_unoise {derep_fasta} --centroids {output_dir}/asvs.fasta --uc {output_dir}/denoise.uc --minsize 8"
+    inputs: [derep_fasta]
+
+  - id: vsearch_otu
+    name: vsearch OTU clustering
+    category: clustering
+    env_name: amplicon
+    executable: vsearch
+    default_enabled: false
+    required: false
+    command_template: "vsearch --cluster_size {asv_fasta} --id 0.97 --centroids {output_dir}/otus.fasta --uc {output_dir}/otu.uc --otutabout {output_dir}/otu_table.tsv"
+    inputs: [asv_fasta]
+
+  - id: vsearch_taxonomy
+    name: vsearch SINTAX taxonomy
+    category: taxonomy
+    env_name: amplicon
+    executable: vsearch
+    default_enabled: true
+    required: true
+    command_template: "vsearch --sintax {asv_fasta} --db {taxonomy_db} --sintax_cutoff 0.8 --tabbedout {output_dir}/taxonomy.tsv"
+    inputs: [asv_fasta, taxonomy_db]
+
+  - id: diversity_metrics
+    name: Diversity Metrics
+    category: diversity
+    env_name: amplicon
+    executable: python
+    default_enabled: true
+    required: true
+    command_template: "python {diversity_script} --asv-table {asv_table} --output-dir {output_dir} --tree {phylogeny_tree}"
+    inputs: [asv_table, diversity_script]

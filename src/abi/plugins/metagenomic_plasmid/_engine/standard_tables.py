@@ -29,6 +29,9 @@ TABLE_SCHEMAS: Dict[str, List[str]] = {
         "support_count",
         "total_tools",
         "confidence_score",
+        "weighted_score",
+        "weight_threshold",
+        "tool_weights",
         "contig_length",
         "evidence",
         "warnings",
@@ -252,13 +255,38 @@ def write_consensus_table(
     *,
     strategy: str,
     detection_tools: Sequence[str] | None = None,
+    tool_weights: Mapping[str, float] | None = None,
 ) -> Path:
+    """Merge per-tool plasmid predictions into a single consensus table.
+
+    Parameters
+    ----------
+    strategy:
+        One of ``"single_tool"``, ``"union"``, ``"intersection"``,
+        ``"majority_vote"``, or ``"weighted_vote"``.
+    detection_tools:
+        If provided, restrict consensus to these tool IDs.
+    tool_weights:
+        Per-tool weight map for ``"weighted_vote"`` strategy (e.g.
+        ``{"genomad": 0.6, "plasme": 0.25, "plasx": 0.15}``).
+        Tools not listed receive a default weight of 1.0.
+        When *None* and strategy is ``"weighted_vote"``, all tools
+        receive equal weight (equivalent to ``"majority_vote"``).
+    """
     predictions = read_standard_table(tables_dir, "plasmid_predictions")
     configured_tools = [tool for tool in detection_tools or [] if tool]
     if configured_tools:
         consensus_source = [row for row in predictions if row.get("tool") in configured_tools]
     else:
         consensus_source = predictions
+
+    # Normalise weights: fill defaults for unlisted tools
+    resolved_weights: Dict[str, float] = {}
+    if strategy == "weighted_vote" and tool_weights:
+        for tool_id in (configured_tools or sorted(
+            {row.get("tool", "") for row in consensus_source if row.get("tool")}
+        )):
+            resolved_weights[tool_id] = float(tool_weights.get(tool_id, 1.0))
 
     by_sample_contig: Dict[tuple[str, str], List[Mapping[str, str]]] = {}
     for row in consensus_source:
@@ -276,8 +304,22 @@ def write_consensus_table(
         )
         total_tools = max(len(tools_for_denominator), len(support_tools), 1)
         support_count = len(support_tools)
-        final_call = _consensus_call(strategy, support_count, total_tools)
+
+        # ── Weighted-vote: compute weighted score ──
+        weighted_score: float | None = None
+        if strategy == "weighted_vote":
+            weighted_score = sum(
+                resolved_weights.get(tool, 1.0) for tool in support_tools
+            )
+            total_weight = sum(resolved_weights.values()) if resolved_weights else float(total_tools)
+            final_call = weighted_score >= (total_weight / 2.0)
+        else:
+            final_call = _consensus_call(strategy, support_count, total_tools)
+
         confidence = _consensus_confidence(rows, support_count, total_tools)
+        if weighted_score is not None and resolved_weights:
+            total_weight = sum(resolved_weights.values())
+            confidence = max(confidence, round(weighted_score / total_weight, 3))
         length = next(
             (row.get("contig_length", "") for row in rows if row.get("contig_length")),
             "",
@@ -288,26 +330,40 @@ def write_consensus_table(
             if row.get("tool")
         )
         warnings = _consensus_warnings(rows, final_call, support_count, total_tools)
-        consensus_rows.append(
-            {
-                "sample_id": sample_id,
-                "contig_id": contig_id,
-                "final_plasmid_call": final_call,
-                "decision_strategy": strategy,
-                "support_tools": ",".join(support_tools),
-                "support_count": support_count,
-                "total_tools": total_tools,
-                "confidence_score": confidence,
-                "contig_length": length,
-                "evidence": evidence,
-                "warnings": warnings,
-            }
-        )
+        row_data: Dict[str, Any] = {
+            "sample_id": sample_id,
+            "contig_id": contig_id,
+            "final_plasmid_call": final_call,
+            "decision_strategy": strategy,
+            "support_tools": ",".join(support_tools),
+            "support_count": support_count,
+            "total_tools": total_tools,
+            "confidence_score": confidence,
+            "contig_length": length,
+            "evidence": evidence,
+            "warnings": warnings,
+        }
+        if weighted_score is not None:
+            total_weight = sum(resolved_weights.values()) if resolved_weights else float(total_tools)
+            row_data["weighted_score"] = round(weighted_score, 3)
+            row_data["weight_threshold"] = round(total_weight / 2.0, 3)
+            row_data["tool_weights"] = ",".join(
+                f"{tool}:{resolved_weights.get(tool, 1.0):.2f}"
+                for tool in support_tools
+            )
+        consensus_rows.append(row_data)
 
     return write_standard_table(tables_dir, "plasmid_consensus", consensus_rows, append=False)
 
 
 def _consensus_call(strategy: str, support_count: int, total_tools: int) -> bool:
+    """Simple (unweighted) consensus decision.
+
+    For ``"weighted_vote"``, callers must compute the decision themselves
+    using per-tool weights and pass the result directly to the caller site
+    in :func:`write_consensus_table`.  This function treats
+    ``"weighted_vote"`` as a degenerate majority-vote fallback.
+    """
     if strategy == "intersection":
         return support_count == total_tools
     if strategy in {"majority_vote", "weighted_vote"}:

@@ -1,0 +1,19 @@
+project_name: "rnaseq_expression_run"
+mode: dry_run
+threads: 4
+outdir: results/rnaseq_expression
+log_dir: logs/rnaseq_expression
+
+input:
+  sample_sheet: sample_sheet.tsv
+
+alignment:
+  tool: star
+
+resources:
+  genome_index: GENOME_INDEX_NOT_CONFIGURED
+  annotation_gtf: ANNOTATION_GTF_NOT_CONFIGURED
+
+differential_expression:
+  comparison: "treatment_vs_control"
+  alpha: 0.05

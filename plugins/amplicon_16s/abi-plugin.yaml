@@ -1,0 +1,62 @@
+abi_version: "0.1"
+plugin_id: amplicon_16s
+display_name: Amplicon 16S rRNA Community Analysis
+description: "Microbial community profiling: primer trimming (cutadapt) → denoising/ASV (vsearch UNOISE3) → taxonomy (vsearch SINTAX) → diversity metrics."
+report_title: Amplicon 16S Community Analysis ABI Report
+plugin_type: standalone
+entry_point: abi.plugins.amplicon_16s:Amplicon16SPlugin
+tool_registry: tool_registry.yaml
+standard_tables: standard_tables.yaml
+tool_contracts: tool_contracts
+core_contracts:
+  - cutadapt
+  - vsearch_derep
+  - vsearch_denoise
+  - vsearch_otu
+  - vsearch_taxonomy
+  - diversity_metrics
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Workflow declaration — literature-backed, plugin-author-maintained.
+# ═══════════════════════════════════════════════════════════════════════════
+workflow:
+  name: "Standard 16S rRNA Amplicon Analysis Pipeline"
+  citation: "Bolyen et al. 2019, Nature Biotechnology, doi:10.1038/s41587-019-0209-9 (QIIME2 framework)"
+  note: >
+    This pipeline uses vsearch (Rognes et al. 2016, PeerJ,
+    doi:10.7717/peerj.2584) for all core steps — dereplication,
+    UNOISE3 denoising, chimera removal, OTU/ASV clustering, and
+    SINTAX taxonomic classification — providing a QIIME2-compatible
+    workflow without the QIIME2 dependency overhead.  Diversity
+    metrics follow the scikit-bio / QIIME2 conventions.
+  steps:
+    - id: primer_trimming
+      tool: cutadapt
+      after: []
+      optional: false
+      citation: "Martin 2011, EMBnet.journal, doi:10.14806/ej.17.1.200"
+    - id: dereplicate
+      tool: vsearch_derep
+      after: [primer_trimming]
+      optional: false
+      citation: "Rognes et al. 2016, PeerJ, doi:10.7717/peerj.2584"
+    - id: denoise
+      tool: vsearch_denoise
+      after: [dereplicate]
+      optional: false
+      citation: "Edgar 2016, bioRxiv, doi:10.1101/081257 (UNOISE3)"
+    - id: otu_cluster
+      tool: vsearch_otu
+      after: [denoise]
+      optional: true
+      citation: "Rognes et al. 2016, PeerJ, doi:10.7717/peerj.2584"
+    - id: taxonomy
+      tool: vsearch_taxonomy
+      after: [denoise]
+      optional: false
+      citation: "Edgar 2016, bioRxiv, doi:10.1101/081257 (SINTAX)"
+    - id: diversity
+      tool: diversity_metrics
+      after: [denoise]
+      optional: false
+      citation: "scikit-bio: http://scikit-bio.org (no standalone paper)"

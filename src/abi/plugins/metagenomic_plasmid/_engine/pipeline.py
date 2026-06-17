@@ -485,12 +485,20 @@ class PipelineExecutor:
         write_fastas: bool = True,
     ) -> List[Dict[str, Any]]:
         plasmid_detection = mapping_block(config, "plasmid_detection")
+        strategy = str(plasmid_detection.get("strategy", "single_tool"))
+        detection_tools = (
+            plasmid_detection.get("consensus_tools") or plasmid_detection.get("tools", [])
+        )
+        tool_weights = None
+        if strategy == "weighted_vote":
+            raw_weights = plasmid_detection.get("tool_weights")
+            if isinstance(raw_weights, dict):
+                tool_weights = {str(k): float(v) for k, v in raw_weights.items()}
         write_consensus_table(
             tables_dir,
-            strategy=str(plasmid_detection.get("strategy", "single_tool")),
-            detection_tools=(
-                plasmid_detection.get("consensus_tools") or plasmid_detection.get("tools", [])
-            ),
+            strategy=strategy,
+            detection_tools=detection_tools,
+            tool_weights=tool_weights,
         )
         if not write_fastas:
             return []

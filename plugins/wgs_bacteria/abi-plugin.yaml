@@ -1,0 +1,54 @@
+abi_version: "0.1"
+plugin_id: wgs_bacteria
+display_name: WGS Bacterial Genome Analysis
+description: "Clinical/food/environmental bacterial isolate analysis: QC (fastp) → assembly (SPAdes) → annotation (Prokka) → MLST → AMR profiling."
+report_title: WGS Bacterial Genome ABI Report
+plugin_type: standalone
+entry_point: abi.plugins.wgs_bacteria:WGSBacteriaPlugin
+tool_registry: tool_registry.yaml
+standard_tables: standard_tables.yaml
+tool_contracts: tool_contracts
+core_contracts:
+  - fastp
+  - spades
+  - prokka
+  - mlst
+  - amrfinderplus
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Workflow declaration — literature-backed, plugin-author-maintained.
+# ═══════════════════════════════════════════════════════════════════════════
+workflow:
+  name: "Standard Bacterial Isolate Genome Analysis Pipeline"
+  citation: "De Coster et al. 2018, Bioinformatics, doi:10.1093/bioinformatics/bty149 (Nanopore) and Wick et al. 2017, PLoS Comp Bio, doi:10.1371/journal.pcbi.1005595 (Unicycler)"
+  note: >
+    Covers the standard bacterial isolate workflow from raw reads to
+    epidemiological typing.  SPAdes (Bankevich et al. 2012, JCB,
+    doi:10.1089/cmb.2012.0021) is the default assembler; Unicycler
+    (Wick et al. 2017) can be substituted for hybrid assemblies.
+  steps:
+    - id: qc
+      tool: fastp
+      after: []
+      optional: false
+      citation: "Chen et al. 2018, Bioinformatics, doi:10.1093/bioinformatics/bty560"
+    - id: assembly
+      tool: spades
+      after: [qc]
+      optional: false
+      citation: "Bankevich et al. 2012, J. Computational Biology, doi:10.1089/cmb.2012.0021"
+    - id: annotation
+      tool: prokka
+      after: [assembly]
+      optional: false
+      citation: "Seemann 2014, Bioinformatics, doi:10.1093/bioinformatics/btu153"
+    - id: mlst
+      tool: mlst
+      after: [assembly]
+      optional: false
+      citation: "Jolley & Maiden 2010, BMC Bioinformatics, doi:10.1186/1471-2105-11-595 (MLST concept); Seemann T, mlst (https://github.com/tseemann/mlst)"
+    - id: amr_profiling
+      tool: amrfinderplus
+      after: [annotation]
+      optional: false
+      citation: "Feldgarden et al. 2019, Antimicrobial Agents & Chemotherapy, doi:10.1128/AAC.00483-19"

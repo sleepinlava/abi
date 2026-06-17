@@ -64,6 +64,9 @@ autoplasm = "abi.autoplasm.cli:main"
 [project.entry-points."abi.plugins"]
 metagenomic_plasmid = "abi.plugins.metagenomic_plasmid:MetagenomicPlasmidPlugin"
 metatranscriptomics = "abi.plugins.metatranscriptomics:MetatranscriptomicsPlugin"
+rnaseq_expression = "abi.plugins.rnaseq_expression:RNASeqExpressionPlugin"
+amplicon_16s = "abi.plugins.amplicon_16s:Amplicon16SPlugin"
+wgs_bacteria = "abi.plugins.wgs_bacteria:WGSBacteriaPlugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/abi"]

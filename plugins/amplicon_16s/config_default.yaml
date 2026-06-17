@@ -1,0 +1,21 @@
+project_name: "amplicon_16s_run"
+mode: dry_run
+threads: 4
+outdir: results/amplicon_16s
+log_dir: logs/amplicon_16s
+
+input:
+  sample_sheet: sample_sheet.tsv
+
+primers:
+  forward: GTGCCAGCMGCCGCGGTAA
+  reverse: GGACTACHVGGGTWTCTAAT
+
+resources:
+  taxonomy_db: TAXONOMY_DB_NOT_CONFIGURED
+  phylogeny_tree: PHYLOGENY_TREE_NOT_CONFIGURED
+  diversity_script: DIVERSITY_SCRIPT_NOT_CONFIGURED
+
+otu_clustering:
+  enabled: false
+  identity: 0.97

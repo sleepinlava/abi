@@ -1,0 +1,84 @@
+# ============================================================================
+# RNA-seq Expression Pipeline DAG — Canonical Specification
+# ============================================================================
+# Generated 2026-06-17.  Mirrors the inline build_plan() logic from
+# src/abi/plugins/rnaseq_expression.py in declarative form so that
+# infer_dag() L1/L2/L3 validation can cross-check the plan.
+# ============================================================================
+
+abi_version: "0.1"
+pipeline_id: rnaseq_expression
+pipeline_name: "Standard RNA-seq Differential Expression Pipeline"
+
+platforms:
+  - illumina
+
+standard_tables:
+  gene_expression:
+    description: "Per-gene raw counts from featureCounts"
+  differential_expression:
+    description: "DESeq2 results with log2FC, p-value, padj"
+
+nodes:
+  # ── QC ──────────────────────────────────────────────────────────────
+  qc_fastp:
+    tool_id: fastp
+    category: qc
+    platforms: [illumina]
+    optional: false
+    depends_on: []
+    inputs:
+      read1:  {type: file, format: fastq.gz}
+      read2:  {type: file, format: fastq.gz}
+    outputs:
+      clean_read1:  {type: file, format: fastq.gz}
+      clean_read2:  {type: file, format: fastq.gz}
+    assertions:
+      - "output_dir.exists()"
+
+  # ── Alignment ───────────────────────────────────────────────────────
+  alignment_star:
+    tool_id: star
+    category: alignment
+    platforms: [illumina]
+    optional: false
+    depends_on: [qc_fastp]
+    inputs:
+      clean_read1:  {type: file, format: fastq.gz, source: qc_fastp.clean_read1}
+      clean_read2:  {type: file, format: fastq.gz, source: qc_fastp.clean_read2}
+      genome_index: {type: directory}
+    outputs:
+      bam:  {type: file, format: bam, contract: {min_size: "1KB"}}
+    assertions:
+      - "output_dir.exists()"
+
+  # ── Quantification ──────────────────────────────────────────────────
+  quant_featurecounts:
+    tool_id: featurecounts
+    category: expression
+    platforms: [illumina]
+    optional: false
+    depends_on: [alignment_star]
+    inputs:
+      bam:             {type: file, format: bam, source: alignment_star.bam}
+      annotation_gtf:  {type: file, format: gtf}
+    outputs:
+      counts:  {type: file, format: tsv, contract: {min_size: "100B"}}
+    assertions:
+      - "output_dir.exists()"
+
+  # ── Differential Expression ─────────────────────────────────────────
+  de_deseq2:
+    tool_id: deseq2
+    category: differential_expression
+    platforms: [illumina]
+    optional: false
+    depends_on: [quant_featurecounts]
+    inputs:
+      count_matrix:     {type: file, format: tsv, source: quant_featurecounts.counts}
+      sample_metadata:  {type: file, format: tsv}
+      deseq2_script:    {type: file, format: R}
+    outputs:
+      de_results:  {type: file, format: tsv, contract: {min_size: "100B"}}
+    assertions:
+      - "output_dir.exists()"
