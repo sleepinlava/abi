@@ -12,14 +12,12 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List, Optional
 
+from abi._shared import _parse_fastp, _resolve_path
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
-from abi.report import write_full_report
-from abi.report.citations import load_citations
-from abi.report.limitations import load_limitations
+from abi.report import write_plugin_report
 from abi.schemas import ABIExecutionPlan, ABIPlanStep, ABISample, ABISampleContext
-from abi.tables import StandardTableManager
 from abi.timeouts import mapping_block
 from abi.tools import ToolRegistry
 
@@ -51,6 +49,7 @@ class WGSBacteriaPlugin:
         config = deep_merge(config, compact_overrides(overrides))
         _resolve_config_paths(config)
         self._validate_config(config)
+        self._last_config = config
         return config
 
     def build_sample_context(self, config, *, check_files=True):
@@ -76,67 +75,114 @@ class WGSBacteriaPlugin:
             qc_out = outdir / "01_qc" / sample.sample_id
             cr1 = qc_out / f"{sample.sample_id}_R1.clean.fastq.gz"
             cr2 = qc_out / f"{sample.sample_id}_R2.clean.fastq.gz"
-            steps.append(ABIPlanStep(
-                step_id=f"{sample.sample_id}_qc_fastp", sample_id=sample.sample_id,
-                step_name="read_qc", tool_id="fastp", category="qc",
-                inputs={"read1": sample.read1, "read2": sample.read2},
-                outputs={
-                    "output_dir": str(qc_out),
-                    "clean_read1": str(cr1),
-                    "clean_read2": str(cr2),
-                },
-                params={"sample_id": sample.sample_id, "threads": threads, "mode": config["mode"]},
-            ))
+            steps.append(
+                ABIPlanStep(
+                    step_id=f"{sample.sample_id}_qc_fastp",
+                    sample_id=sample.sample_id,
+                    step_name="read_qc",
+                    tool_id="fastp",
+                    category="qc",
+                    inputs={"read1": sample.read1, "read2": sample.read2},
+                    outputs={
+                        "output_dir": str(qc_out),
+                        "clean_read1": str(cr1),
+                        "clean_read2": str(cr2),
+                    },
+                    params={
+                        "sample_id": sample.sample_id,
+                        "threads": threads,
+                        "mode": config["mode"],
+                    },
+                )
+            )
 
             # Step 2: Assembly (SPAdes)
             asm_out = outdir / "02_assembly" / sample.sample_id
             contigs = asm_out / "contigs.fasta"
-            steps.append(ABIPlanStep(
-                step_id=f"{sample.sample_id}_assembly_spades", sample_id=sample.sample_id,
-                step_name="genome_assembly", tool_id="spades", category="assembly",
-                inputs={"clean_read1": str(cr1), "clean_read2": str(cr2)},
-                outputs={"output_dir": str(asm_out), "contigs_fasta": str(contigs)},
-                params={"sample_id": sample.sample_id, "threads": threads, "mode": config["mode"]},
-            ))
+            steps.append(
+                ABIPlanStep(
+                    step_id=f"{sample.sample_id}_assembly_spades",
+                    sample_id=sample.sample_id,
+                    step_name="genome_assembly",
+                    tool_id="spades",
+                    category="assembly",
+                    inputs={"clean_read1": str(cr1), "clean_read2": str(cr2)},
+                    outputs={"output_dir": str(asm_out), "contigs_fasta": str(contigs)},
+                    params={
+                        "sample_id": sample.sample_id,
+                        "threads": threads,
+                        "mode": config["mode"],
+                    },
+                )
+            )
 
             # Step 3: Annotation (Prokka)
             ann_out = outdir / "03_annotation" / sample.sample_id
             faa = ann_out / f"{sample.sample_id}.faa"
             gff = ann_out / f"{sample.sample_id}.gff"
-            steps.append(ABIPlanStep(
-                step_id=f"{sample.sample_id}_annotation_prokka", sample_id=sample.sample_id,
-                step_name="genome_annotation", tool_id="prokka", category="annotation",
-                inputs={"assembly_fasta": str(contigs), "genus": genus, "species": species},
-                outputs={"output_dir": str(ann_out), "faa": str(faa), "gff": str(gff)},
-                params={"sample_id": sample.sample_id, "threads": threads, "mode": config["mode"]},
-            ))
+            steps.append(
+                ABIPlanStep(
+                    step_id=f"{sample.sample_id}_annotation_prokka",
+                    sample_id=sample.sample_id,
+                    step_name="genome_annotation",
+                    tool_id="prokka",
+                    category="annotation",
+                    inputs={"assembly_fasta": str(contigs), "genus": genus, "species": species},
+                    outputs={"output_dir": str(ann_out), "faa": str(faa), "gff": str(gff)},
+                    params={
+                        "sample_id": sample.sample_id,
+                        "threads": threads,
+                        "mode": config["mode"],
+                    },
+                )
+            )
 
             # Step 4: MLST
             mlst_out = outdir / "04_mlst" / sample.sample_id
-            steps.append(ABIPlanStep(
-                step_id=f"{sample.sample_id}_mlst", sample_id=sample.sample_id,
-                step_name="mlst_typing", tool_id="mlst", category="typing",
-                inputs={"assembly_fasta": str(contigs), "scheme": mlst_scheme},
-                outputs={"output_dir": str(mlst_out)},
-                params={"sample_id": sample.sample_id, "mode": config["mode"]},
-            ))
+            steps.append(
+                ABIPlanStep(
+                    step_id=f"{sample.sample_id}_mlst",
+                    sample_id=sample.sample_id,
+                    step_name="mlst_typing",
+                    tool_id="mlst",
+                    category="typing",
+                    inputs={"assembly_fasta": str(contigs), "scheme": mlst_scheme},
+                    outputs={"output_dir": str(mlst_out)},
+                    params={"sample_id": sample.sample_id, "mode": config["mode"]},
+                )
+            )
 
             # Step 5: AMR profiling
             amr_out = outdir / "05_amr" / sample.sample_id
-            steps.append(ABIPlanStep(
-                step_id=f"{sample.sample_id}_amr", sample_id=sample.sample_id,
-                step_name="amr_profiling", tool_id="amrfinderplus", category="amr",
-                inputs={"prokka_faa": str(faa), "prokka_gff": str(gff)},
-                outputs={"output_dir": str(amr_out)},
-                params={"sample_id": sample.sample_id, "threads": threads, "mode": config["mode"]},
-            ))
+            steps.append(
+                ABIPlanStep(
+                    step_id=f"{sample.sample_id}_amr",
+                    sample_id=sample.sample_id,
+                    step_name="amr_profiling",
+                    tool_id="amrfinderplus",
+                    category="amr",
+                    inputs={"prokka_faa": str(faa), "prokka_gff": str(gff)},
+                    outputs={"output_dir": str(amr_out)},
+                    params={
+                        "sample_id": sample.sample_id,
+                        "threads": threads,
+                        "mode": config["mode"],
+                    },
+                )
+            )
 
         selected_tools = sorted({s.tool_id for s in steps if s.tool_id != "internal"})
         return ABIExecutionPlan(
-            project_name=str(config["project_name"]), analysis_type=self.plugin_id,
-            mode=str(config["mode"]), threads=threads, outdir=str(outdir),
-            log_dir=str(config["log_dir"]), samples=context.samples,
-            sample_context=context, selected_tools=selected_tools, steps=steps,
+            project_name=str(config["project_name"]),
+            analysis_type=self.plugin_id,
+            mode=str(config["mode"]),
+            threads=threads,
+            outdir=str(outdir),
+            log_dir=str(config["log_dir"]),
+            samples=context.samples,
+            sample_context=context,
+            selected_tools=selected_tools,
+            steps=steps,
             provenance_dir=str(outdir / "provenance"),
         )
 
@@ -148,6 +194,12 @@ class WGSBacteriaPlugin:
         return data.get("tables", {})
 
     def parse_outputs(self, tool_id, output_dir, sample_id):
+        if tool_id == "fastp":
+            return {"qc_summary": _parse_fastp(Path(output_dir), sample_id)}
+        if tool_id == "spades":
+            return {"genome_assembly_stats": _parse_spades(Path(output_dir), sample_id)}
+        if tool_id == "prokka":
+            return {"genome_annotation": _parse_prokka(Path(output_dir), sample_id)}
         if tool_id == "mlst":
             return {"mlst_profile": _parse_mlst(Path(output_dir), sample_id)}
         if tool_id == "amrfinderplus":
@@ -155,20 +207,7 @@ class WGSBacteriaPlugin:
         return {}
 
     def write_report(self, plan, result_dir):
-        tm = StandardTableManager(self.table_schemas())
-        summary = tm.summarize(Path(result_dir) / "tables")
-
-        root = self.root
-        citations = load_citations(root / "citation_registry.yaml") if (root / "citation_registry.yaml").exists() else []
-        limitations = load_limitations(root / "limitations.yaml") if (root / "limitations.yaml").exists() else []
-
-        return write_full_report(
-            plan, result_dir,
-            table_summary=summary,
-            title=self.report_title,
-            citations=citations,
-            limitations=limitations,
-        )
+        return write_plugin_report(self, plan, result_dir)
 
     def _validate_config(self, config):
         required = ["project_name", "mode", "threads", "outdir", "log_dir", "input"]
@@ -179,6 +218,7 @@ class WGSBacteriaPlugin:
 
 # (shared helpers: _parse_sample_sheet, _resolve_config_paths, _resolve_path, _clean)
 # These are near-identical across inline plugins. In production, import from abi._shared.
+
 
 def _parse_sample_sheet(path, *, check_files):
     ss = _resolve_path(path, base_dirs=[PROJECT_ROOT])
@@ -191,8 +231,7 @@ def _parse_sample_sheet(path, *, check_files):
         required = {"sample_id", "read1", "read2"}
         if required - set(r.fieldnames):
             raise ValueError(
-                f"Sample sheet missing columns: "
-                f"{sorted(required - set(r.fieldnames))}"
+                f"Sample sheet missing columns: {sorted(required - set(r.fieldnames))}"
             )
         samples = []
         for i, row in enumerate(r, start=2):
@@ -203,10 +242,16 @@ def _parse_sample_sheet(path, *, check_files):
                 raise ValueError(f"Row {i}: sample_id, read1, read2 required")
             r1 = str(_resolve_path(r1, base_dirs=[ss.parent, PROJECT_ROOT]))
             r2 = str(_resolve_path(r2, base_dirs=[ss.parent, PROJECT_ROOT]))
-            samples.append(ABISample(sample_id=sid, platform="illumina",
-                                     group=str(row.get("group", "")).strip() or None,
-                                     read1=r1, read2=r2,
-                                     condition=str(row.get("condition", "")).strip() or None))
+            samples.append(
+                ABISample(
+                    sample_id=sid,
+                    platform="illumina",
+                    group=str(row.get("group", "")).strip() or None,
+                    read1=r1,
+                    read2=r2,
+                    condition=str(row.get("condition", "")).strip() or None,
+                )
+            )
     groups = {s.group for s in samples if s.group}
     if check_files:
         missing_files = []
@@ -217,10 +262,13 @@ def _parse_sample_sheet(path, *, check_files):
                     missing_files.append(f"{sample.sample_id}:{field}={value}")
         if missing_files:
             raise ValueError("Input files do not exist: " + "; ".join(missing_files))
-    return ABISampleContext(samples=samples, multi_sample=len(samples) > 1,
-                            has_groups=len(groups) >= 2,
-                            enable_sample_analysis=len(samples) > 1,
-                            enable_differential_abundance=len(groups) >= 2)
+    return ABISampleContext(
+        samples=samples,
+        multi_sample=len(samples) > 1,
+        has_groups=len(groups) >= 2,
+        enable_sample_analysis=len(samples) > 1,
+        enable_differential_abundance=len(groups) >= 2,
+    )
 
 
 def _resolve_config_paths(config):
@@ -229,34 +277,7 @@ def _resolve_config_paths(config):
         ic["sample_sheet"] = str(_resolve_path(ic["sample_sheet"], base_dirs=[PROJECT_ROOT]))
 
 
-def _resolve_path(value, *, base_dirs):
-    """Resolve *value* against *base_dirs*, rejecting paths that escape.
-
-    Mirrors the path-traversal guard in the flagship plasmid plugin
-    (``metagenomic_plasmid/_engine/sample_sheet.py``).  Absolute paths and
-    paths that already exist are accepted only if they lie inside one of
-    the *base_dirs*.
-    """
-    p = Path(value)
-    # Absolute-or-existing fast path — but only if contained in a base dir.
-    if p.is_absolute() or p.exists():
-        for bd in base_dirs:
-            try:
-                p.resolve().relative_to(bd.resolve())
-                return p
-            except ValueError:
-                continue
-        # Fall through: could not validate containment; try base-relative lookup.
-    for bd in base_dirs:
-        c = (bd / p).resolve()
-        try:
-            c.relative_to(bd.resolve())
-        except ValueError:
-            # Path escapes the base directory — skip it.
-            continue
-        if c.exists():
-            return c
-    return p
+# (``_clean``, ``_resolve_path`` are imported from abi._shared)
 
 
 def _parse_mlst(output_dir, sample_id):
@@ -267,8 +288,13 @@ def _parse_mlst(output_dir, sample_id):
                 parts = line.strip().split("\t")
                 if len(parts) < 3:
                     continue
-                row = {"sample_id": sample_id, "scheme": parts[1], "sequence_type": parts[2],
-                       "tool": "mlst", "source_file": str(path)}
+                row = {
+                    "sample_id": sample_id,
+                    "scheme": parts[1],
+                    "sequence_type": parts[2],
+                    "tool": "mlst",
+                    "source_file": str(path),
+                }
                 for j, allele in enumerate(parts[3:10], 1):
                     row[f"allele_{j}"] = allele
                 row["clonal_complex"] = parts[3] if len(parts) > 3 else ""
@@ -284,27 +310,157 @@ def _parse_amrfinderplus(output_dir, sample_id):
             if not r.fieldnames:
                 continue
             for row in r:
-                rows.append({
-                    "sample_id": sample_id,
-                    "gene_symbol": row.get("Gene symbol", ""),
-                    "sequence_name": row.get("Sequence name", ""),
-                    "scope": row.get("Scope", ""),
-                    "element_type": row.get("Element type", ""),
-                    "element_subtype": row.get("Element subtype", ""),
-                    "target_class": row.get("Class", ""),
-                    "target_subclass": row.get("Subclass", ""),
-                    "method": row.get("Method", ""),
-                    "coverage_pct": row.get("% Coverage of reference sequence", ""),
-                    "identity_pct": row.get("% Identity to reference sequence", ""),
-                    "tool": "amrfinderplus",
-                    "source_file": str(path),
-                })
+                rows.append(
+                    {
+                        "sample_id": sample_id,
+                        "gene_symbol": row.get("Gene symbol", ""),
+                        "sequence_name": row.get("Sequence name", ""),
+                        "scope": row.get("Scope", ""),
+                        "element_type": row.get("Element type", ""),
+                        "element_subtype": row.get("Element subtype", ""),
+                        "target_class": row.get("Class", ""),
+                        "target_subclass": row.get("Subclass", ""),
+                        "method": row.get("Method", ""),
+                        "coverage_pct": row.get("% Coverage of reference sequence", ""),
+                        "identity_pct": row.get("% Identity to reference sequence", ""),
+                        "tool": "amrfinderplus",
+                        "source_file": str(path),
+                    }
+                )
     return rows
 
 
-def _clean(value):
-    """Strip whitespace and return None for empty strings."""
-    if value is None:
+# ── SPAdes assembly parser ───────────────────────────────────────────────
+
+
+def _parse_spades(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
+    """Parse SPAdes contigs FASTA → genome_assembly_stats rows.
+
+    Computes standard assembly metrics: total length, contig count, N50,
+    max contig length, and GC content from the contigs FASTA.
+    """
+    rows: List[Dict[str, Any]] = []
+    for path in sorted(output_dir.glob("contigs.fasta")):
+        lengths = _read_fasta_lengths(path)
+        if not lengths:
+            continue
+        total = sum(lengths)
+        n50 = _compute_n50(lengths)
+        gc = _compute_gc_content(path)
+        rows.append(
+            {
+                "sample_id": sample_id,
+                "total_length": total,
+                "num_contigs": len(lengths),
+                "n50": n50,
+                "max_contig_length": max(lengths),
+                "gc_content": round(gc, 2) if gc is not None else "",
+                "coverage": "",
+                "tool": "spades",
+                "source_file": str(path),
+            }
+        )
+    return rows
+
+
+# ── Prokka annotation parser ─────────────────────────────────────────────
+
+
+def _parse_prokka(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
+    """Parse Prokka GFF3 output → genome_annotation rows.
+
+    Each GFF feature row becomes one annotation entry.
+    """
+    rows: List[Dict[str, Any]] = []
+    for path in sorted(output_dir.glob("*.gff")):
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("\t")
+                if len(parts) < 9:
+                    continue
+                attrs = _parse_gff_attributes(parts[8])
+                rows.append(
+                    {
+                        "sample_id": sample_id,
+                        "feature_id": attrs.get("ID", ""),
+                        "feature_type": parts[2],
+                        "start": parts[3],
+                        "end": parts[4],
+                        "strand": parts[6],
+                        "product": attrs.get("product", ""),
+                        "gene_name": attrs.get("gene", attrs.get("Name", "")),
+                        "ec_number": attrs.get("eC_number", attrs.get("EC_number", "")),
+                        "tool": "prokka",
+                        "source_file": str(path),
+                    }
+                )
+    return rows
+
+
+# ── Shared helpers ───────────────────────────────────────────────────────
+
+
+def _read_fasta_lengths(path: Path) -> List[int]:
+    """Extract sequence lengths from a FASTA file."""
+    lengths: List[int] = []
+    current_len = 0
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if line.startswith(">"):
+                if current_len > 0:
+                    lengths.append(current_len)
+                current_len = 0
+            else:
+                current_len += len(line)
+        if current_len > 0:
+            lengths.append(current_len)
+    return lengths
+
+
+def _compute_n50(lengths: List[int]) -> int:
+    """Compute N50 from a list of contig lengths."""
+    if not lengths:
+        return 0
+    sorted_lengths = sorted(lengths, reverse=True)
+    total = sum(sorted_lengths)
+    cumulative = 0
+    for length in sorted_lengths:
+        cumulative += length
+        if cumulative >= total / 2.0:
+            return length
+    return 0
+
+
+def _compute_gc_content(path: Path) -> Optional[float]:
+    """Compute GC content from a FASTA file."""
+    gc = 0
+    total = 0
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if line.startswith(">"):
+                continue
+            for base in line.upper():
+                if base in ("G", "C"):
+                    gc += 1
+                    total += 1
+                elif base in ("A", "T", "U"):
+                    total += 1
+    if total == 0:
         return None
-    value = str(value).strip()
-    return value or None
+    return (gc / total) * 100.0
+
+
+def _parse_gff_attributes(attr_string: str) -> Dict[str, str]:
+    """Parse GFF3 column-9 attributes into a key→value dict."""
+    result: Dict[str, str] = {}
+    for pair in attr_string.split(";"):
+        pair = pair.strip()
+        if "=" in pair:
+            key, _, value = pair.partition("=")
+            result[key.strip()] = value.strip()
+    return result

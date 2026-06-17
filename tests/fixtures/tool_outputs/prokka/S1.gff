@@ -1,0 +1,11 @@
+##gff-version 3
+##sequence-region contig_1 1 5000
+contig_1	Prokka	source	1	5000	.	+	.	ID=contig_1;organism=Escherichia coli
+contig_1	Prokka	CDS	100	900	.	+	0	ID=CDS_00001;product=DNA polymerase III subunit alpha;gene=dnaE;eC_number=2.7.7.7
+contig_1	Prokka	CDS	1000	1800	.	-	0	ID=CDS_00002;product=RecA recombinase;gene=recA
+contig_1	Prokka	CDS	2000	2800	.	+	0	ID=CDS_00003;product=RNA polymerase sigma factor RpoD;gene=rpoD
+contig_1	Prokka	CDS	3000	3500	.	-	0	ID=CDS_00004;product=hypothetical protein
+contig_1	Prokka	tRNA	3600	3675	.	+	.	ID=tRNA_00001;product=tRNA-Ala
+contig_1	Prokka	tRNA	3700	3775	.	+	.	ID=tRNA_00002;product=tRNA-Gly
+contig_1	Prokka	rRNA	3800	4300	.	+	.	ID=rRNA_00001;product=16S ribosomal RNA
+contig_1	Prokka	tmRNA	4400	4800	.	+	.	ID=tmRNA_00001;product=transfer-messenger RNA

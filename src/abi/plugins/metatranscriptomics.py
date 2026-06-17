@@ -60,12 +60,10 @@ import csv
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
+from abi._shared import _clean, _parse_fastp, _parse_star, _resolve_path
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
-from abi.report import write_full_report
-from abi.report.citations import load_citations
-from abi.report.limitations import load_limitations
+from abi.report import write_plugin_report
 from abi.schemas import ABIExecutionPlan, ABIPlanStep, ABISample, ABISampleContext
-from abi.tables import StandardTableManager
 from abi.timeouts import mapping_block
 from abi.tools import ToolRegistry
 
@@ -140,6 +138,7 @@ class MetatranscriptomicsPlugin:
         # Fail-fast: surface missing keys before any work starts
         # 快速失败：在任何工作开始前暴露缺失的键
         self._validate_config(config)
+        self._last_config = config
         return config
 
     # ── Sample context / 样本上下文 ──────────────────────────────────────
@@ -330,46 +329,23 @@ class MetatranscriptomicsPlugin:
         output_dir: str | Path,
         sample_id: str,
     ) -> Mapping[str, List[Dict[str, Any]]]:
-        """Parse tool output files into the standard table format.
-
-        Only ``featurecounts`` produces tabular data.  All other tools
-        (fastp, STAR) return an empty mapping because their outputs are
-        structured reports or binary files, not tables.
-
-        仅 ``featurecounts`` 产生表格数据。其他工具（fastp、STAR）返回空映射，
-        因为它们的输出是结构化报告或二进制文件，而非表格。
-        """
-        if tool_id != "featurecounts":
-            return {}
-        return {"gene_expression": _parse_featurecounts(Path(output_dir), sample_id)}
+        if tool_id == "fastp":
+            return {"qc_summary": _parse_fastp(Path(output_dir), sample_id)}
+        if tool_id in ("star", "hisat2"):
+            return {"alignment_summary": _parse_star(Path(output_dir), sample_id)}
+        if tool_id == "featurecounts":
+            return {"gene_expression": _parse_featurecounts(Path(output_dir), sample_id)}
+        return {}
 
     # ── Report generation / 报告生成 ─────────────────────────────────────
 
     def write_report(self, plan: Any, result_dir: str | Path) -> Dict[str, Path]:
         """Generate a full ABI report with methods, citations, and limitations.
 
-        Uses ``StandardTableManager`` for table summaries and delegates to
-        ``write_full_report`` which renders Markdown, HTML, methods, and
-        resource manifest.
-
-        使用 ``StandardTableManager`` 汇总表格，委托 ``write_full_report`` 渲染
-        完整报告（Markdown、HTML、方法章节、资源清单）。
+        Delegates to ``write_plugin_report`` which handles table summaries,
+        figure rendering, methods, and resource manifest generation.
         """
-        table_manager = StandardTableManager(self.table_schemas())
-        summary = table_manager.summarize(Path(result_dir) / "tables")
-
-        root = self.root
-        citations = load_citations(root / "citation_registry.yaml") if (root / "citation_registry.yaml").exists() else []
-        limitations = load_limitations(root / "limitations.yaml") if (root / "limitations.yaml").exists() else []
-
-        return write_full_report(
-            plan,
-            result_dir,
-            table_summary=summary,
-            title=self.report_title,
-            citations=citations,
-            limitations=limitations,
-        )
+        return write_plugin_report(self, plan, result_dir)
 
     # ── Validation / 验证 ────────────────────────────────────────────────
 
@@ -499,26 +475,7 @@ def _resolve_config_paths(config: Dict[str, Any]) -> None:
         input_config["sample_sheet"] = str(_resolve_path(sample_sheet, base_dirs=[PROJECT_ROOT]))
 
 
-def _resolve_path(value: str | Path, *, base_dirs: Iterable[Path]) -> Path:
-    """Resolve a path against a chain of base directories.
-
-    Resolution logic / 解析逻辑：
-    1. Absolute paths and paths that already exist are returned as-is.
-    2. Otherwise, try each ``base_dir`` in order and return the first match.
-    3. If no candidate exists, return the original path unchanged (the
-       caller can decide whether to raise or use a sentinel).
-
-    将路径相对于一组基础目录进行解析。绝对路径和已存在的路径直接返回；
-    否则按顺序尝试每个 ``base_dir``，返回第一个匹配；无匹配时返回原始路径。
-    """
-    path = Path(value)
-    if path.is_absolute() or path.exists():
-        return path
-    for base_dir in base_dirs:
-        candidate = base_dir / path
-        if candidate.exists():
-            return candidate
-    return path
+# (``_clean``, ``_resolve_path`` are imported from abi._shared)
 
 
 # ── featureCounts parser / featureCounts 解析器 ──────────────────────────
@@ -565,20 +522,3 @@ def _parse_featurecounts(output_dir: Path, sample_id: str) -> List[Dict[str, Any
                     }
                 )
     return rows
-
-
-# ── String cleaning / 字符串清理 ────────────────────────────────────────
-
-
-def _clean(value: Any) -> Optional[str]:
-    """Strip whitespace from a value; return None for empty/whitespace-only.
-
-    Used throughout the sample-sheet parser to normalize cell values.
-
-    去除值的空白字符；对于空值或仅包含空白字符的值返回 None。
-    在整个样本表解析器中用于规范化单元格值。
-    """
-    if value is None:
-        return None
-    value = str(value).strip()
-    return value or None

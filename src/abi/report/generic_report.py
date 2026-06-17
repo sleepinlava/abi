@@ -29,7 +29,7 @@ from html import escape
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
-__all__ = ["write_generic_report", "write_full_report"]
+__all__ = ["write_generic_report", "write_full_report", "write_plugin_report"]
 
 
 def write_generic_report(
@@ -207,9 +207,7 @@ def write_full_report(
     paths: Dict[str, Path] = {}
 
     # ── Generic report (Markdown + HTML + JSON) ──
-    generic = write_generic_report(
-        plan, result_dir, table_summary=table_summary, title=title
-    )
+    generic = write_generic_report(plan, result_dir, table_summary=table_summary, title=title)
     paths.update(generic)
 
     # ── Full HTML report (overwrites the simpler one) ──
@@ -252,3 +250,77 @@ def write_full_report(
         paths["resource_manifest"] = manifest_path
 
     return paths
+
+
+def write_plugin_report(
+    plugin: Any,
+    plan: Any,
+    result_dir: str | Path,
+    *,
+    render_figures: bool = True,
+) -> Dict[str, Path]:
+    """Convenience wrapper that implements the standard plugin ``write_report()``.
+
+    Every inline plugin (rnaseq_expression, wgs_bacteria, amplicon_16s,
+    metatranscriptomics) follows the same pattern.  This function
+    centralises it so plugins only need a one-liner::
+
+        def write_report(self, plan, result_dir):
+            return write_plugin_report(self, plan, result_dir)
+
+    # What it does / 做了什么
+    1. Summarises standard tables via ``StandardTableManager``.
+    2. Loads ``citation_registry.yaml`` and ``limitations.yaml`` from
+       the plugin root (if they exist).
+    3. Renders figures via ``FigureEngine`` (if *render_figures* and a
+       ``figure_specs.yaml`` exists).
+    4. Calls ``write_full_report()`` with methods, resource manifest,
+       and the stashed config (``plugin._last_config``).
+    """
+    from abi.figures import FigureEngine
+    from abi.report.citations import load_citations
+    from abi.report.limitations import load_limitations
+    from abi.tables import StandardTableManager
+
+    # ── Table summary ──
+    tm = StandardTableManager(plugin.table_schemas())
+    summary = tm.summarize(Path(result_dir) / "tables")
+
+    # ── Citations & limitations ──
+    root = plugin.root
+    cit_path = root / "citation_registry.yaml"
+    lim_path = root / "limitations.yaml"
+    citations = load_citations(cit_path) if cit_path.exists() else []
+    limitations = load_limitations(lim_path) if lim_path.exists() else []
+
+    # ── Figures (best-effort) ──
+    rendered_figures: Optional[Dict[str, Path]] = None
+    if render_figures:
+        fig_specs_path = root / "figure_specs.yaml"
+        if fig_specs_path.exists():
+            try:
+                engine = FigureEngine(
+                    plugin.table_schemas(),
+                    Path(result_dir) / "tables",
+                    Path(result_dir) / "figures",
+                )
+                engine.load_specs(fig_specs_path)
+                rendered_figures = engine.render_all()
+            except Exception:  # noqa: S110
+                pass
+
+    # ── Stashed config (for resource manifest) ──
+    config = getattr(plugin, "_last_config", None)
+
+    return write_full_report(
+        plan,
+        result_dir,
+        table_summary=summary,
+        title=plugin.report_title,
+        rendered_figures=rendered_figures,
+        citations=citations,
+        limitations=limitations,
+        config=config,
+        methods=True,
+        resource_manifest=True,
+    )

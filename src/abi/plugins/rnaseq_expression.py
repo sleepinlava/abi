@@ -34,17 +34,13 @@ simple and auditable.
 from __future__ import annotations
 
 import csv
-import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
+from abi._shared import _clean, _parse_fastp, _parse_star, _resolve_path
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
-from abi.figures import FigureEngine
-from abi.report import write_full_report
-from abi.report.citations import load_citations
-from abi.report.limitations import load_limitations
+from abi.report import write_plugin_report
 from abi.schemas import ABIExecutionPlan, ABIPlanStep, ABISample, ABISampleContext
-from abi.tables import StandardTableManager
 from abi.timeouts import mapping_block
 from abi.tools import ToolRegistry
 
@@ -167,8 +163,10 @@ class RNASeqExpressionPlugin:
                     inputs={"read1": str(clean_read1), "read2": str(clean_read2)},
                     outputs={"output_dir": str(align_out), "bam": str(bam)},
                     params={
-                        "sample_id": sample.sample_id, "threads": threads,
-                        "mode": config["mode"], "genome_index": genome_index,
+                        "sample_id": sample.sample_id,
+                        "threads": threads,
+                        "mode": config["mode"],
+                        "genome_index": genome_index,
                         "output_prefix": str(align_out / f"{sample.sample_id}."),
                     },
                 )
@@ -276,45 +274,7 @@ class RNASeqExpressionPlugin:
     # ── Report generation ────────────────────────────────────────────────
 
     def write_report(self, plan: Any, result_dir: str | Path) -> Dict[str, Path]:
-        table_manager = StandardTableManager(self.table_schemas())
-        summary = table_manager.summarize(Path(result_dir) / "tables")
-
-        # Load plugin-specific report configuration
-        root = self.root
-        cit_path = root / "citation_registry.yaml"
-        lim_path = root / "limitations.yaml"
-        citations = load_citations(cit_path) if cit_path.exists() else []
-        limitations = load_limitations(lim_path) if lim_path.exists() else []
-
-        # Render figures from standard tables via FigureEngine
-        rendered_figures: Optional[Dict[str, Path]] = None
-        try:
-            engine = FigureEngine(
-                self.table_schemas(),
-                Path(result_dir) / "tables",
-                Path(result_dir) / "figures",
-            )
-            engine.load_specs(root / "figure_specs.yaml")
-            rendered_figures = engine.render_all()
-        except Exception:
-            # Figures are best-effort — report still succeeds without them.
-            pass
-
-        # Use stashed config if available for resource manifest generation
-        config = getattr(self, "_last_config", None)
-
-        return write_full_report(
-            plan,
-            result_dir,
-            table_summary=summary,
-            title=self.report_title,
-            rendered_figures=rendered_figures,
-            citations=citations,
-            limitations=limitations,
-            config=config,
-            methods=True,
-            resource_manifest=True,
-        )
+        return write_plugin_report(self, plan, result_dir)
 
     # ── Validation ───────────────────────────────────────────────────────
 
@@ -400,36 +360,6 @@ def _resolve_config_paths(config: Dict[str, Any]) -> None:
         input_config["sample_sheet"] = str(_resolve_path(sample_sheet, base_dirs=[PROJECT_ROOT]))
 
 
-def _resolve_path(value: str | Path, *, base_dirs: Iterable[Path]) -> Path:
-    """Resolve *value* against *base_dirs*, rejecting paths that escape.
-
-    Mirrors the path-traversal guard in the flagship plasmid plugin
-    (``metagenomic_plasmid/_engine/sample_sheet.py``).  Absolute paths and
-    paths that already exist are accepted only if they lie inside one of
-    the *base_dirs*.
-    """
-    path = Path(value)
-    # Absolute-or-existing fast path — but only if contained in a base dir.
-    if path.is_absolute() or path.exists():
-        for base_dir in base_dirs:
-            try:
-                path.resolve().relative_to(base_dir.resolve())
-                return path
-            except ValueError:
-                continue
-        # Fall through: could not validate containment; try base-relative lookup.
-    for base_dir in base_dirs:
-        candidate = (base_dir / path).resolve()
-        try:
-            candidate.relative_to(base_dir.resolve())
-        except ValueError:
-            # Path escapes the base directory — skip it.
-            continue
-        if candidate.exists():
-            return candidate
-    return path
-
-
 # ── featureCounts parser ─────────────────────────────────────────────────
 
 
@@ -448,14 +378,16 @@ def _parse_featurecounts(output_dir: Path, sample_id: str) -> List[Dict[str, Any
                 gene_id = row.get("Geneid")
                 if not gene_id:
                     continue
-                rows.append({
-                    "sample_id": sample_id,
-                    "gene_id": gene_id,
-                    "count": row.get(count_field, ""),
-                    "tpm": "",  # DESeq2 handles normalisation
-                    "tool": "featurecounts",
-                    "source_file": str(path),
-                })
+                rows.append(
+                    {
+                        "sample_id": sample_id,
+                        "gene_id": gene_id,
+                        "count": row.get(count_field, ""),
+                        "tpm": "",  # DESeq2 handles normalisation
+                        "tool": "featurecounts",
+                        "source_file": str(path),
+                    }
+                )
     return rows
 
 
@@ -473,99 +405,27 @@ def _parse_deseq2(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
                 gene_id = row.get("gene_id") or row.get("Geneid") or row.get("")
                 if not gene_id:
                     continue
-                rows.append({
-                    "gene_id": gene_id,
-                    "base_mean": row.get("baseMean", ""),
-                    "log2_fold_change": row.get("log2FoldChange", ""),
-                    "lfc_se": row.get("lfcSE", ""),
-                    "stat": row.get("stat", ""),
-                    "pvalue": row.get("pvalue", ""),
-                    "padj": row.get("padj", ""),
-                    "comparison": row.get("comparison", ""),
-                    "tool": "deseq2",
-                    "source_file": str(path),
-                })
+                rows.append(
+                    {
+                        "gene_id": gene_id,
+                        "base_mean": row.get("baseMean", ""),
+                        "log2_fold_change": row.get("log2FoldChange", ""),
+                        "lfc_se": row.get("lfcSE", ""),
+                        "stat": row.get("stat", ""),
+                        "pvalue": row.get("pvalue", ""),
+                        "padj": row.get("padj", ""),
+                        "comparison": row.get("comparison", ""),
+                        "tool": "deseq2",
+                        "source_file": str(path),
+                    }
+                )
     return rows
 
 
 # ── fastp parser ─────────────────────────────────────────────────────────
 
 
-def _parse_fastp(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
-    """Parse fastp JSON output → qc_summary rows.
-
-    Reads the fastp JSON report, extracts ``summary.before_filtering`` and
-    ``summary.after_filtering`` blocks, and flattens each metric into a row.
-    Mirrors the flagship plugin's ``parse_fastp`` in
-    ``metagenomic_plasmid/_engine/parsers.py``.
-    """
-    rows: List[Dict[str, Any]] = []
-    for path in sorted(output_dir.glob("*.json")):
-        try:
-            with path.open("r", encoding="utf-8") as handle:
-                data = json.load(handle)
-        except (json.JSONDecodeError, OSError):
-            continue
-        if not isinstance(data, dict):
-            continue
-        summary = data.get("summary", {})
-        if not isinstance(summary, dict):
-            continue
-        before = summary.get("before_filtering", {})
-        after = summary.get("after_filtering", {})
-        for prefix, block in [
-            ("before_filtering", before),
-            ("after_filtering", after),
-        ]:
-            if not isinstance(block, dict):
-                continue
-            for metric, value in block.items():
-                rows.append({
-                    "sample_id": sample_id,
-                    "tool": "fastp",
-                    "metric": f"{prefix}.{metric}",
-                    "value": value,
-                    "unit": "",
-                    "source_file": str(path),
-                })
-    return rows
-
-
 # ── STAR parser ──────────────────────────────────────────────────────────
-
-
-def _parse_star(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
-    """Parse STAR ``Log.final.out`` → alignment_summary rows.
-
-    STAR writes a pipe-delimited key-value log.  Each line is split on ``|``
-    and both sides are stripped.  All metrics are emitted as rows.
-    """
-    rows: List[Dict[str, Any]] = []
-    for path in sorted(output_dir.glob("*Log.final.out")):
-        try:
-            with path.open("r", encoding="utf-8") as handle:
-                for line in handle:
-                    line = line.strip()
-                    if not line or "|" not in line:
-                        continue
-                    parts = line.split("|", 1)
-                    if len(parts) != 2:
-                        continue
-                    metric = parts[0].strip()
-                    value = parts[1].strip()
-                    if not metric:
-                        continue
-                    rows.append({
-                        "sample_id": sample_id,
-                        "tool": "star",
-                        "metric": metric,
-                        "value": value,
-                        "unit": "",
-                        "source_file": str(path),
-                    })
-        except OSError:
-            continue
-    return rows
 
 
 # ── DESeq2 normalized expression parser ──────────────────────────────────
@@ -584,34 +444,26 @@ def _parse_deseq2_normalized(output_dir: Path, sample_id: str) -> List[Dict[str,
                 reader = csv.DictReader(handle, delimiter="\t")
                 if not reader.fieldnames or len(reader.fieldnames) < 2:
                     continue
-                sample_columns = [
-                    col for col in reader.fieldnames
-                    if col != "gene_id"
-                ]
+                sample_columns = [col for col in reader.fieldnames if col != "gene_id"]
                 for row in reader:
                     gene_id = row.get("gene_id")
                     if not gene_id:
                         continue
                     for scol in sample_columns:
                         val = row.get(scol, "")
-                        rows.append({
-                            "sample_id": scol,
-                            "gene_id": gene_id,
-                            "normalized_count": val,
-                            "normalization_method": "DESeq2_median_of_ratios",
-                            "tool": "deseq2",
-                            "source_file": str(path),
-                        })
+                        rows.append(
+                            {
+                                "sample_id": scol,
+                                "gene_id": gene_id,
+                                "normalized_count": val,
+                                "normalization_method": "DESeq2_median_of_ratios",
+                                "tool": "deseq2",
+                                "source_file": str(path),
+                            }
+                        )
         except (OSError, csv.Error):
             continue
     return rows
 
 
-# ── String cleaning ─────────────────────────────────────────────────────
-
-
-def _clean(value: Any) -> Optional[str]:
-    if value is None:
-        return None
-    value = str(value).strip()
-    return value or None
+# (``_clean``, ``_resolve_path``, ``_parse_fastp`` are imported from abi._shared)

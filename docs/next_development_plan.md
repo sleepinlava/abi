@@ -1,8 +1,24 @@
 # ABI Next Stage Development Plan & Technical Design
 
 > **Status**: Active (2026-06-18)
+> **Last updated**: 2026-06-18 — Phases 0-5 complete, Phase 6 deferred
 > **Canonical reference**: This document supersedes `docs/abi_final_development_plan.md` and `docs/demo_plan.md`.
-> **Related**: `docs/workflow_validation.md`, `docs/pipeline_biological_validity.md`, `docs/plugin_development_guide.md`
+> **Related**: `docs/workflow_validation.md`, `docs/pipeline_biological_validity.md`, `docs/plugin_development_guide.md`, `docs/hpc_development.md`
+
+## 0. Implementation Status (2026-06-18)
+
+| Phase | Plugin | Status | Tests | Parsers | Notes |
+|-------|--------|--------|-------|---------|-------|
+| 0 | metagenomic_plasmid | ✅ Stable | Full | Full (32 tools) | Flagship plugin |
+| 1 | Report + figures layer | ✅ Complete | 423 → 435 | N/A | Core capability |
+| 2 | rnaseq_expression | ✅ Complete | 21 tests | 4/4 tools | First new full pipeline |
+| 3 | wgs_bacteria | ✅ Complete | 17 tests | 5/5 tools | Second full pipeline |
+| 4 | amplicon_16s | ✅ Complete | 15 tests | 5/6 tools | Third full pipeline |
+| 5 | metatranscriptomics | ✅ Complete | 10 tests | 3/3 tools | Fourth full pipeline |
+| 6 | Benchmark datasets | ⏸️ Deferred | — | — | Requires real data |
+| 7 | Multi-plugin demos | ⏸️ Deferred | — | — | Depends on Phase 6 |
+
+**Total**: 435 tests, 0 lint errors, 5 functional plugins
 
 ## 1. Project Goals
 
@@ -10,14 +26,15 @@
 
 Upgrade ABI from "a control plane capable of driving plasmid analysis" to "a reusable agent-friendly bioinformatics workflow platform."
 
-Specifically, on top of the existing **metagenomic_plasmid** full plasmid analysis pipeline, complete the following four real bioinformatics analysis plugins:
+All five bioinformatics analysis plugins are now implemented:
 
-1. **rnaseq_expression**: bulk RNA-seq expression and differential analysis.
-2. **wgs_bacteria**: bacterial isolate WGS analysis.
-3. **amplicon_16s**: 16S/ITS amplicon microbiome analysis.
-4. **metatranscriptomics**: microbial community transcriptome functional activity analysis.
+1. **metagenomic_plasmid**: full plasmid detection/annotation/abundance pipeline (flagship).
+2. **rnaseq_expression**: bulk RNA-seq expression and differential analysis.
+3. **wgs_bacteria**: bacterial isolate WGS analysis.
+4. **amplicon_16s**: 16S/ITS amplicon microbiome analysis.
+5. **metatranscriptomics**: microbial community transcriptome functional activity analysis.
 
-Every plugin must support:
+Every plugin supports:
 
 ```bash
 abi plan

@@ -58,7 +58,8 @@ ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch
 ABI Core            schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
         │
-Plugins             metagenomic_plasmid/    metatranscriptomics/
+Plugins             metagenomic_plasmid/  rnaseq_expression/  wgs_bacteria/
+                    amplicon_16s/  metatranscriptomics/
         │
 Runtimes            local  │  Nextflow  │  HPC  │  cloud
 ```
@@ -75,11 +76,20 @@ Runtimes            local  │  Nextflow  │  HPC  │  cloud
 ```
 src/abi/
   agent/              ABIAgentInterface, JSON envelopes, agent context export
+  figures/            FigureEngine (7 renderers), FigureSpec — generic figure system
+  report/             write_full_report, write_plugin_report, write_methods,
+                      citations, limitations, html — generic report system
+  workflow/           ResourceManifest, workflow validation, figure_specs loading
   plugins/
     metagenomic_plasmid/   Self-contained package (engine in _engine/)
-    metatranscriptomics.py Native demo plugin (inline, no sub-package)
+    rnaseq_expression.py   Inline plugin (4 tools, DESeq2 R script bundled)
+    wgs_bacteria.py        Inline plugin (5 tools, SPAdes/Prokka parsers)
+    amplicon_16s.py        Inline plugin (6 tools, cutadapt/vsearch parsers)
+    metatranscriptomics.py Inline plugin (3 tools, shared parsers from _shared)
   autoplasm/          Backward-compatible re-export shim → metagenomic_plasmid/_engine/
-  _shared.py          Shared utilities: _read_tsv, _display_command, _plan_dict, _common_overrides (93 lines)
+  _shared.py          Shared utilities: _read_tsv, _display_command, _plan_dict,
+                      _common_overrides, _clean, _resolve_path,
+                      _parse_fastp, _parse_star (~260 lines)
   provenance.py       RunLogger, PipelineProgressRecorder, TSV writers (749 lines)
   tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1058 lines)
   schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
@@ -124,15 +134,31 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 - `planning_write`: `plan`, `dry_run`, `report`, `export_nextflow` — writes plans/provenance, no tool execution
 - `execution`: `run` — **requires `confirm_execution=true`**, writes provenance, executes real tools
 
-### The five plugins (v0.1.5, 2026-06-17)
+### The five plugins (v0.1.6, 2026-06-18)
+
+All five plugins now have complete parsers, report generation, tests, and example data.
 
 - **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (20 modules, 7,713 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 2,019 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard.
-- **`metatranscriptomics`**: 3-tool portability demo. 574 lines inline. fastp, STAR/HISAT2, featureCounts.
-- **`rnaseq_expression`**: 4-tool standard RNA-seq. 426 lines inline. fastp → STAR → featureCounts → DESeq2. Has `pipeline_dag.yaml` (4 nodes). Added 2026-06-17.
-- **`amplicon_16s`**: 6-tool microbial community analysis. 483 lines inline. cutadapt → vsearch (derep/denoise/taxonomy) → diversity. Has `pipeline_dag.yaml` (7 nodes). Added 2026-06-17.
-- **`wgs_bacteria`**: 5-tool bacterial isolate analysis. 255 lines inline. fastp → SPAdes → Prokka → MLST → AMRFinderPlus. Has `pipeline_dag.yaml` (5 nodes). Added 2026-06-17.
+- **`rnaseq_expression`**: 4-tool standard RNA-seq. fastp → STAR → featureCounts → DESeq2. All 4 parsers working. Has `pipeline_dag.yaml` (4 nodes). DESeq2 R script bundled.
+- **`wgs_bacteria`**: 5-tool bacterial isolate analysis. fastp → SPAdes → Prokka → MLST → AMRFinderPlus. All 5 parsers working (SPAdes N50/GC, Prokka GFF). Has `pipeline_dag.yaml` (5 nodes).
+- **`amplicon_16s`**: 6-tool microbial community analysis. cutadapt → vsearch (derep/denoise/taxonomy) → diversity. 5 of 6 tools have parsers. Has `pipeline_dag.yaml` (7 nodes).
+- **`metatranscriptomics`**: 3-tool demo. fastp, STAR/HISAT2, featureCounts. All 3 parsers working via shared imports from `abi._shared`.
 
-All plugins share the same `ABIAgentInterface` contract, tool contract format, and workflow declaration pattern. Each has a `pipeline_dag.yaml` for L1/L2/L3 DAG validation.
+All plugins share the same `ABIAgentInterface` contract, tool contract format, `write_plugin_report()` template, and workflow declaration pattern. Each has a `pipeline_dag.yaml` for L1/L2/L3 DAG validation.
+
+### Shared plugin utilities (`abi._shared`, v0.1.6)
+
+Three shared parser functions eliminate duplication across inline plugins:
+
+| Function | Used by | Purpose |
+| --- | --- | --- |
+| `_parse_fastp` | rnaseq_expression, wgs_bacteria, metatranscriptomics | fastp JSON → qc_summary |
+| `_parse_star` | rnaseq_expression, metatranscriptomics | STAR Log.final.out → alignment_summary |
+| `_clean`, `_resolve_path` | All 4 inline plugins | String cleaning, safe path resolution |
+
+### Report template (`abi.report.write_plugin_report`)
+
+All 4 inline plugins delegate `write_report()` to `write_plugin_report(self, plan, result_dir)` which handles: table summarization, citation/limitation loading, FigureEngine rendering, methods generation, and resource manifest creation.
 
 ### DAG inference with L1/L2/L3 (added 2026-06-17)
 
@@ -170,6 +196,17 @@ Do not claim that a workflow is biologically validated from dry-run alone or
 from individual tool papers alone. Use `docs/workflow_validation.md` to assess
 the gap between the current constrained control layer and a fully validated,
 literature-backed, reproducible scientific workflow.
+
+## Key documentation
+
+| Document | Purpose |
+| --- | --- |
+| `docs/next_development_plan.md` | Full 15-section development plan + implementation status |
+| `docs/plugin_report_figure_spec.md` | Report/figure system reference for plugin authors |
+| `docs/rnaseq_expression_workflow.md` | RNA-seq workflow reference |
+| `docs/hpc_development.md` | HPC deployment guide (SLURM, Nextflow, databases, benchmarks) |
+| `docs/workflow_validation.md` | Biological validation methodology |
+| `docs/plugin_development_guide.md` | How to add a new analysis type |
 
 ### Shared utilities (`_shared.py`)
 

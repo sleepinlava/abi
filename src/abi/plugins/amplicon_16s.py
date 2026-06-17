@@ -31,12 +31,10 @@ import csv
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
+from abi._shared import _clean, _resolve_path
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
-from abi.report import write_full_report
-from abi.report.citations import load_citations
-from abi.report.limitations import load_limitations
+from abi.report import write_plugin_report
 from abi.schemas import ABIExecutionPlan, ABIPlanStep, ABISample, ABISampleContext
-from abi.tables import StandardTableManager
 from abi.timeouts import mapping_block
 from abi.tools import ToolRegistry
 
@@ -78,6 +76,7 @@ class Amplicon16SPlugin:
         config = deep_merge(config, compact_overrides(overrides))
         _resolve_config_paths(config)
         self._validate_config(config)
+        self._last_config = config
         return config
 
     # ── Sample context ───────────────────────────────────────────────────
@@ -130,11 +129,18 @@ class Amplicon16SPlugin:
                     step_name="primer_trimming",
                     tool_id="cutadapt",
                     category="qc",
-                    inputs={"read1": sample.read1, "read2": sample.read2,
-                            "forward_primer": forward_primer, "reverse_primer": reverse_primer},
+                    inputs={
+                        "read1": sample.read1,
+                        "read2": sample.read2,
+                        "forward_primer": forward_primer,
+                        "reverse_primer": reverse_primer,
+                    },
                     outputs={"output_dir": str(trim_out)},
-                    params={"sample_id": sample.sample_id, "threads": threads,
-                            "mode": config["mode"]},
+                    params={
+                        "sample_id": sample.sample_id,
+                        "threads": threads,
+                        "mode": config["mode"],
+                    },
                 )
             )
 
@@ -259,6 +265,12 @@ class Amplicon16SPlugin:
         output_dir: str | Path,
         sample_id: str,
     ) -> Mapping[str, List[Dict[str, Any]]]:
+        if tool_id == "cutadapt":
+            return {"primer_trim_summary": _parse_cutadapt(Path(output_dir), sample_id)}
+        if tool_id == "vsearch_derep":
+            return {"denoising_stats": _parse_vsearch_derep(Path(output_dir), sample_id)}
+        if tool_id == "vsearch_denoise":
+            return {"denoising_stats": _parse_vsearch_denoise(Path(output_dir), sample_id)}
         if tool_id == "vsearch_taxonomy":
             return {"taxonomy": _parse_sintax(Path(output_dir), sample_id)}
         if tool_id == "diversity_metrics":
@@ -271,21 +283,7 @@ class Amplicon16SPlugin:
     # ── Report generation ────────────────────────────────────────────────
 
     def write_report(self, plan: Any, result_dir: str | Path) -> Dict[str, Path]:
-        table_manager = StandardTableManager(self.table_schemas())
-        summary = table_manager.summarize(Path(result_dir) / "tables")
-
-        root = self.root
-        citations = load_citations(root / "citation_registry.yaml") if (root / "citation_registry.yaml").exists() else []
-        limitations = load_limitations(root / "limitations.yaml") if (root / "limitations.yaml").exists() else []
-
-        return write_full_report(
-            plan,
-            result_dir,
-            table_summary=summary,
-            title=self.report_title,
-            citations=citations,
-            limitations=limitations,
-        )
+        return write_plugin_report(self, plan, result_dir)
 
     # ── Validation ───────────────────────────────────────────────────────
 
@@ -371,34 +369,156 @@ def _resolve_config_paths(config: Dict[str, Any]) -> None:
         input_config["sample_sheet"] = str(_resolve_path(sample_sheet, base_dirs=[PROJECT_ROOT]))
 
 
-def _resolve_path(value: str | Path, *, base_dirs: Iterable[Path]) -> Path:
-    """Resolve *value* against *base_dirs*, rejecting paths that escape.
+# (``_clean``, ``_resolve_path`` are imported from abi._shared)
 
-    Mirrors the path-traversal guard in the flagship plasmid plugin
-    (``metagenomic_plasmid/_engine/sample_sheet.py``).  Absolute paths and
-    paths that already exist are accepted only if they lie inside one of
-    the *base_dirs*.
+
+def _count_fastq_records(path: Path) -> int:
+    """Count the number of FASTQ records in a (possibly gzipped) file."""
+    count = 0
+    try:
+        opener = open
+        if path.suffix == ".gz":
+            import gzip
+
+            opener = gzip.open  # type: ignore[assignment]
+        with opener(path, "rt", encoding="utf-8", errors="replace") as handle:  # type: ignore[operator]
+            for line in handle:
+                if line.startswith("@"):
+                    count += 1
+    except (OSError, EOFError):
+        return 0
+    return count
+
+
+# ── cutadapt parser ─────────────────────────────────────────────────────
+
+
+def _parse_cutadapt(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
+    """Parse cutadapt log output → primer_trim_summary rows.
+
+    Reads cutadapt's log/report file and extracts trimming statistics.
+    Falls back to counting trimmed FASTQ records if no log is present.
     """
-    path = Path(value)
-    # Absolute-or-existing fast path — but only if contained in a base dir.
-    if path.is_absolute() or path.exists():
-        for base_dir in base_dirs:
-            try:
-                path.resolve().relative_to(base_dir.resolve())
-                return path
-            except ValueError:
-                continue
-        # Fall through: could not validate containment; try base-relative lookup.
-    for base_dir in base_dirs:
-        candidate = (base_dir / path).resolve()
-        try:
-            candidate.relative_to(base_dir.resolve())
-        except ValueError:
-            # Path escapes the base directory — skip it.
-            continue
-        if candidate.exists():
-            return candidate
-    return path
+    rows: List[Dict[str, Any]] = []
+    # Try parsing a cutadapt log/report file first
+    for path in sorted(output_dir.glob("*cutadapt*.log")):
+        stats: Dict[str, int] = {}
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if ":" in line:
+                    key, _, val = line.partition(":")
+                    key = key.strip().lower().replace(" ", "_")
+                    try:
+                        stats[key] = int(val.strip().replace(",", ""))
+                    except ValueError:
+                        continue
+        if stats:
+            # Match cutadapt log keys with substring containment
+            def _get(*substrings: str) -> int:
+                for k, v in stats.items():
+                    if all(s in k for s in substrings):
+                        return v
+                return 0
+
+            rows.append(
+                {
+                    "sample_id": sample_id,
+                    "total_reads": _get("total", "read", "pair") or _get("total", "read"),
+                    "reads_trimmed": _get("read", "adapter") or _get("trimmed"),
+                    "reads_too_short": _get("too_short"),
+                    "reads_written": _get("written", "pass") or _get("written"),
+                    "tool": "cutadapt",
+                    "source_file": str(path),
+                }
+            )
+    # Fallback: count trimmed FASTQ records
+    if not rows:
+        total = 0
+        for path in sorted(output_dir.glob("*trimmed*.fastq*")):
+            total += _count_fastq_records(path)
+        if total > 0:
+            rows.append(
+                {
+                    "sample_id": sample_id,
+                    "total_reads": total,
+                    "reads_trimmed": total,
+                    "reads_too_short": 0,
+                    "reads_written": total,
+                    "tool": "cutadapt",
+                    "source_file": str(output_dir),
+                }
+            )
+    return rows
+
+
+# ── vsearch derep parser ────────────────────────────────────────────────
+
+
+def _parse_vsearch_derep(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
+    """Parse vsearch derep output → denoising_stats rows.
+
+    Counts unique sequences from the dereplicated FASTA to determine how
+    many reads collapsed into unique sequences.
+    """
+    rows: List[Dict[str, Any]] = []
+    seq_count = 0
+    total_size = 0
+    for path in sorted(output_dir.glob("derep.fasta")):
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith(">"):
+                    seq_count += 1
+                    # vsearch annotates with ;size=N
+                    if "size=" in line:
+                        size_part = line.split("size=")[-1].split(";")[0]
+                        try:
+                            total_size += int(size_part)
+                        except ValueError:
+                            total_size += 1
+                    else:
+                        total_size += 1
+    if seq_count > 0:
+        rows.append(
+            {
+                "sample_id": sample_id,
+                "stage": "dereplication",
+                "input_reads": total_size,
+                "output_reads": seq_count,
+                "tool": "vsearch",
+                "source_file": str(output_dir),
+            }
+        )
+    return rows
+
+
+# ── vsearch denoise parser ───────────────────────────────────────────────
+
+
+def _parse_vsearch_denoise(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
+    """Parse vsearch UNOISE3 output → denoising_stats rows.
+
+    Counts ASVs from the denoised FASTA.
+    """
+    rows: List[Dict[str, Any]] = []
+    asv_count = 0
+    for path in sorted(output_dir.glob("asvs.fasta")):
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith(">"):
+                    asv_count += 1
+    if asv_count > 0:
+        rows.append(
+            {
+                "sample_id": sample_id,
+                "stage": "denoising",
+                "input_reads": 0,
+                "output_reads": asv_count,
+                "tool": "vsearch",
+                "source_file": str(output_dir),
+            }
+        )
+    return rows
 
 
 # ── SINTAX taxonomy parser ──────────────────────────────────────────────
@@ -437,19 +557,21 @@ def _parse_sintax(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
                         rank_map["genus"] = name
                     elif prefix == "s":
                         rank_map["species"] = name
-                rows.append({
-                    "asv_id": asv_id,
-                    "kingdom": rank_map.get("kingdom", ""),
-                    "phylum": rank_map.get("phylum", ""),
-                    "class": rank_map.get("class", ""),
-                    "order": rank_map.get("order", ""),
-                    "family": rank_map.get("family", ""),
-                    "genus": rank_map.get("genus", ""),
-                    "species": rank_map.get("species", ""),
-                    "confidence": conf.strip("()") if conf else "",
-                    "tool": "vsearch_sintax",
-                    "source_file": str(path),
-                })
+                rows.append(
+                    {
+                        "asv_id": asv_id,
+                        "kingdom": rank_map.get("kingdom", ""),
+                        "phylum": rank_map.get("phylum", ""),
+                        "class": rank_map.get("class", ""),
+                        "order": rank_map.get("order", ""),
+                        "family": rank_map.get("family", ""),
+                        "genus": rank_map.get("genus", ""),
+                        "species": rank_map.get("species", ""),
+                        "confidence": conf.strip("()") if conf else "",
+                        "tool": "vsearch_sintax",
+                        "source_file": str(path),
+                    }
+                )
     return rows
 
 
@@ -464,16 +586,20 @@ def _parse_alpha_diversity(output_dir: Path) -> List[Dict[str, Any]]:
             if not reader.fieldnames:
                 continue
             for row in reader:
-                rows.append({
-                    "sample_id": row.get("sample_id", ""),
-                    "observed_features": row.get("observed_features", row.get("observed_otus", "")),
-                    "shannon_entropy": row.get("shannon", row.get("shannon_entropy", "")),
-                    "simpson_index": row.get("simpson", ""),
-                    "faith_pd": row.get("faith_pd", ""),
-                    "chao1": row.get("chao1", ""),
-                    "tool": "diversity_metrics",
-                    "source_file": str(path),
-                })
+                rows.append(
+                    {
+                        "sample_id": row.get("sample_id", ""),
+                        "observed_features": row.get(
+                            "observed_features", row.get("observed_otus", "")
+                        ),
+                        "shannon_entropy": row.get("shannon", row.get("shannon_entropy", "")),
+                        "simpson_index": row.get("simpson", ""),
+                        "faith_pd": row.get("faith_pd", ""),
+                        "chao1": row.get("chao1", ""),
+                        "tool": "diversity_metrics",
+                        "source_file": str(path),
+                    }
+                )
     return rows
 
 
@@ -490,23 +616,15 @@ def _parse_beta_diversity(output_dir: Path) -> List[Dict[str, Any]]:
                 sample_b = row.get("sample_b", row.get("sample2", ""))
                 if not sample_a or not sample_b:
                     continue
-                rows.append({
-                    "comparison": f"{sample_a}_vs_{sample_b}",
-                    "distance_metric": metric,
-                    "sample_a": sample_a,
-                    "sample_b": sample_b,
-                    "distance": row.get("distance", ""),
-                    "tool": "diversity_metrics",
-                    "source_file": str(path),
-                })
+                rows.append(
+                    {
+                        "comparison": f"{sample_a}_vs_{sample_b}",
+                        "distance_metric": metric,
+                        "sample_a": sample_a,
+                        "sample_b": sample_b,
+                        "distance": row.get("distance", ""),
+                        "tool": "diversity_metrics",
+                        "source_file": str(path),
+                    }
+                )
     return rows
-
-
-# ── String cleaning ─────────────────────────────────────────────────────
-
-
-def _clean(value: Any) -> Optional[str]:
-    if value is None:
-        return None
-    value = str(value).strip()
-    return value or None

@@ -60,10 +60,12 @@ def test_pipeline_dag_exists():
 _TEST_SS = "/tmp/abi_test_ss.tsv"
 _FIXTURES = Path("tests/fixtures/tool_outputs")
 
+
 def test_build_plan_structure(tmp_path):
     plugin = get_plugin("rnaseq_expression")
-    cfg = plugin.load_config(overrides={"outdir": str(tmp_path / "results"),
-                                        "input": {"sample_sheet": _TEST_SS}})
+    cfg = plugin.load_config(
+        overrides={"outdir": str(tmp_path / "results"), "input": {"sample_sheet": _TEST_SS}}
+    )
     plan = plugin.build_plan(cfg, check_files=False)
     assert plan.analysis_type == "rnaseq_expression"
     assert len(plan.steps) >= 4  # at least 4 steps for 1 sample (fastp+star+featurecounts+deseq2)
@@ -74,8 +76,9 @@ def test_build_plan_structure(tmp_path):
 def test_deseq2_step_is_last(tmp_path):
     """DESeq2 runs after all per-sample steps and aggregates across samples."""
     plugin = get_plugin("rnaseq_expression")
-    cfg = plugin.load_config(overrides={"outdir": str(tmp_path / "results"),
-                                        "input": {"sample_sheet": _TEST_SS}})
+    cfg = plugin.load_config(
+        overrides={"outdir": str(tmp_path / "results"), "input": {"sample_sheet": _TEST_SS}}
+    )
     plan = plugin.build_plan(cfg, check_files=False)
     last_step = plan.steps[-1]
     assert last_step.tool_id == "deseq2"
@@ -84,6 +87,7 @@ def test_deseq2_step_is_last(tmp_path):
 
 def test_workflow_spec_loads():
     from abi.contracts import load_workflow_spec
+
     ws = load_workflow_spec("plugins/rnaseq_expression")
     assert ws is not None
     assert len(ws.steps) == 4
@@ -100,8 +104,9 @@ def test_dag_cross_validation(tmp_path):
     from abi.dag import infer_dag
 
     plugin = get_plugin("rnaseq_expression")
-    cfg = plugin.load_config(overrides={"outdir": str(tmp_path / "results"),
-                                        "input": {"sample_sheet": _TEST_SS}})
+    cfg = plugin.load_config(
+        overrides={"outdir": str(tmp_path / "results"), "input": {"sample_sheet": _TEST_SS}}
+    )
     plan = plugin.build_plan(cfg, check_files=False)
 
     ws = load_workflow_spec("plugins/rnaseq_expression")
@@ -194,9 +199,13 @@ def test_write_report_with_figures(tmp_path):
     )
     # Stash config for resource manifest
     plugin._last_config = {
-        "project_name": "test", "mode": "dry_run", "threads": 4,
-        "outdir": str(tmp_path / "results"), "log_dir": str(tmp_path / "logs"),
-        "input": {"sample_sheet": str(sample_sheet)}, "resources": {},
+        "project_name": "test",
+        "mode": "dry_run",
+        "threads": 4,
+        "outdir": str(tmp_path / "results"),
+        "log_dir": str(tmp_path / "logs"),
+        "input": {"sample_sheet": str(sample_sheet)},
+        "resources": {},
     }
     # Build a minimal plan (check_files=False skips file existence check)
     plan = plugin.build_plan(plugin._last_config, check_files=False)
@@ -222,8 +231,13 @@ def test_figure_specs_valid():
     assert len(specs) == 7  # 6 original + ma_plot
     spec_ids = {s.id for s in specs}
     assert spec_ids == {
-        "qc_read_counts", "mapping_rate", "pca_expression",
-        "volcano_deg", "top_deg_heatmap", "enrichment_dotplot", "ma_plot",
+        "qc_read_counts",
+        "mapping_rate",
+        "pca_expression",
+        "volcano_deg",
+        "top_deg_heatmap",
+        "enrichment_dotplot",
+        "ma_plot",
     }
     required = [s for s in specs if s.required]
     assert len(required) == 3  # qc_read_counts, mapping_rate, volcano_deg

@@ -1,4 +1,19 @@
 tables:
+  primer_trim_summary:
+    - sample_id
+    - total_reads
+    - reads_trimmed
+    - reads_too_short
+    - reads_written
+    - tool
+    - source_file
+  denoising_stats:
+    - sample_id
+    - stage
+    - input_reads
+    - output_reads
+    - tool
+    - source_file
   asv_table:
     - asv_id
     - sample_id

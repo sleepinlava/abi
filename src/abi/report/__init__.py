@@ -21,13 +21,14 @@ The report module has two layers:
 Plugins call ``abi.report.write_full_report()`` as their final step; the
 individual formatters are available for plugins that need more control.
 """
+
 from abi.report.citations import (
     CitationRegistry,
     format_citations_html,
     format_citations_markdown,
     load_citations,
 )
-from abi.report.generic_report import write_full_report, write_generic_report
+from abi.report.generic_report import write_full_report, write_generic_report, write_plugin_report
 from abi.report.html import write_html_report
 from abi.report.limitations import (
     format_limitations_html,
@@ -48,4 +49,5 @@ __all__ = [
     "write_generic_report",
     "write_html_report",
     "write_methods",
+    "write_plugin_report",
 ]
