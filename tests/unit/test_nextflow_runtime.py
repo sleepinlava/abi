@@ -1,11 +1,13 @@
 from abi.dag import infer_dag
 from abi.exporters import NextflowExporter
 from abi.plugins import get_plugin
+from abi.runtimes.hpc import _safe_name
 from abi.runtimes.nextflow import (
     _command_rows,
     _remote_scheduler_jobs,
     _trace_by_process_name,
 )
+from abi.tools import ResourceSpec
 
 
 def test_trace_rows_are_indexed_by_process_and_tag():
@@ -82,3 +84,38 @@ def test_nextflow_command_rows_include_remote_scheduler_job_id(tmp_path):
 
     assert rows_by_step["RNA1_alignment_star"]["remote_scheduler_job_id"] == "12345.cluster"
     assert rows_by_step["RNA1_qc_fastp"]["remote_scheduler_job_id"] == ""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HPC Runtime tests (Phase 3)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestHpcRuntime:
+    """Unit tests for HpcRuntime script generation and parsing."""
+
+    def test_safe_name_sanitizes(self):
+        assert _safe_name("RNA1_alignment_star") == "RNA1_alignment_star"
+        assert " " not in _safe_name("step with spaces")
+        assert len(_safe_name("a" * 100)) <= 50
+
+    def test_resource_to_slurm_directives_in_hpc_context(self):
+        spec = ResourceSpec(cpu=8, memory="16GB", walltime="04:00:00")
+        dirs = spec.to_slurm_directives()
+        assert "#SBATCH --cpus-per-task=8" in dirs
+        assert "#SBATCH --mem=16G" in dirs
+        assert "#SBATCH --time=04:00:00" in dirs
+
+    def test_resource_to_pbs_directives_in_hpc_context(self):
+        spec = ResourceSpec(cpu=16, memory="32GB", walltime="08:00:00")
+        dirs = spec.to_pbs_directives()
+        assert any("#PBS -l nodes=1:ppn=16" in d for d in dirs)
+        assert any("mem=32g" in d.lower() for d in dirs)
+
+    def test_hpc_runtime_imports(self):
+        """HpcRuntime is importable and follows the ABIRuntime protocol."""
+        from abi.runtimes import HpcRuntime
+
+        assert hasattr(HpcRuntime, "check")
+        assert hasattr(HpcRuntime, "dry_run")
+        assert hasattr(HpcRuntime, "run")

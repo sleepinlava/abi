@@ -48,3 +48,8 @@ failure_handling:
     hint: "Check sample sheet read1/read2 paths."
   tool_not_found:
     hint: "Install cutadapt in the amplicon environment: conda install -c bioconda cutadapt"
+
+resources:
+  cpu: 4
+  memory: "4GB"
+  walltime: "01:00:00"

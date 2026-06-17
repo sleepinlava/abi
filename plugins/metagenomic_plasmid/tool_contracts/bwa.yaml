@@ -42,3 +42,8 @@ failure_handling:
     hint: Install bwa in the autoplasm-abundance environment.
   nonzero_exit:
     hint: Inspect BWA stderr log in provenance/step_logs.
+
+resources:
+  cpu: 4
+  memory: "4GB"
+  walltime: "01:00:00"

@@ -1,0 +1,7 @@
+# ABI Resource Profile: hpc_standard
+# 通用 HPC 生产环境 — 中等资源分配
+# General HPC production — moderate resource allocation.
+
+cpu: 8
+memory: "16GB"
+walltime: "04:00:00"

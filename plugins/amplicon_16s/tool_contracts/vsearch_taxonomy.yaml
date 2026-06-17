@@ -32,3 +32,8 @@ failure_handling:
     hint: "ASV FASTA or taxonomy database not found. Verify vsearch_denoise completed and taxonomy_db is configured."
   tool_not_found:
     hint: "vsearch not found. Install: conda install -c bioconda vsearch"
+
+resources:
+  cpu: 8
+  memory: "32GB"
+  walltime: "04:00:00"

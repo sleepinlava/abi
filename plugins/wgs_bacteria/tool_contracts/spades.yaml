@@ -39,3 +39,8 @@ failure_handling:
     hint: "Cleaned FASTQ files not found. Verify fastp completed successfully."
   tool_not_found:
     hint: "SPAdes not found. Install: conda install -c bioconda spades"
+
+resources:
+  cpu: 16
+  memory: "64GB"
+  walltime: "08:00:00"

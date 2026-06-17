@@ -32,3 +32,8 @@ failure_handling:
     hint: "ASV FASTA not found. Verify vsearch_denoise completed successfully."
   tool_not_found:
     hint: "vsearch not found. Install: conda install -c bioconda vsearch"
+
+resources:
+  cpu: 4
+  memory: "4GB"
+  walltime: "01:00:00"

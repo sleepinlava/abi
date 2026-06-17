@@ -39,3 +39,8 @@ failure_handling:
     hint: "ASV table not found. Verify vsearch_denoise or vsearch_otu completed successfully."
   tool_not_found:
     hint: "Python diversity script not found. Ensure DIVERSITY_SCRIPT_NOT_CONFIGURED is replaced with a real script path."
+
+resources:
+  cpu: 4
+  memory: "8GB"
+  walltime: "01:00:00"

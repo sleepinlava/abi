@@ -66,9 +66,11 @@ _logger = logging.getLogger("abi.tools")
 
 __all__ = [
     "GenericCommandSkill",
+    "ResourceSpec",
     "RunResult",
     "ToolRegistry",
     "ToolSkill",
+    "resolve_resources",
 ]
 
 # Template fields that are allowed to be empty without causing validation errors.
@@ -93,6 +95,384 @@ RESOURCE_FIELDS = {
     "annotation_gtf",
     "abricate_db",
 }
+
+
+# ── ResourceSpec ───────────────────────────────────────────────────────
+# Compute resource request for a single tool invocation.  Resolved from
+# multiple layers: tool contract → resource profile → user config → CLI overrides.
+# / 单个工具调用的计算资源请求，由多个层级解析得出。
+
+
+@dataclass
+class ResourceSpec:
+    """Compute resource request for a tool invocation.
+
+    Stored as human-readable strings (``"8GB"``, ``"04:00:00"``) and
+    rendered to scheduler-specific formats via ``to_nextflow_directives()``
+    and ``to_slurm_directives()``.
+
+    # Resolution precedence / 解析优先级
+    Tool contract (authoritative default) < resource profile < user config
+    defaults < per-tool user config override < CLI flag.
+    """
+
+    cpu: int = 1
+    memory: str = "4GB"
+    walltime: str = "01:00:00"
+    accelerator: str | None = None
+    disk: str | None = None
+
+    # ── Factory ───────────────────────────────────────────────────────
+
+    @classmethod
+    def from_metadata(cls, metadata: Mapping[str, Any]) -> "ResourceSpec":
+        """Extract resource spec from tool contract or registry metadata.
+
+        Looks for a ``resources`` key in the metadata dict; returns defaults
+        for any field not present. / 从 YAML 元数据中提取资源规格。
+        """
+        resources = metadata.get("resources")
+        if not isinstance(resources, Mapping):
+            return cls()
+        return cls(
+            cpu=int(resources.get("cpu", 1)),
+            memory=str(resources.get("memory", "4GB")),
+            walltime=str(resources.get("walltime", "01:00:00")),
+            accelerator=str(resources["accelerator"]) if resources.get("accelerator") else None,
+            disk=str(resources["disk"]) if resources.get("disk") else None,
+        )
+
+    @classmethod
+    def from_profile(cls, profile: Mapping[str, Any]) -> "ResourceSpec":
+        """Build from a resource profile dict (e.g. ``hpc_large.yaml``).
+
+        Profile values that are absent or None fall back to the dataclass defaults.
+        / 从资源 profile 构建，缺失字段使用默认值。
+        """
+        return cls(
+            cpu=int(profile.get("cpu", 1)),
+            memory=str(profile.get("memory", "4GB")),
+            walltime=str(profile.get("walltime", "01:00:00")),
+            accelerator=str(profile["accelerator"]) if profile.get("accelerator") else None,
+            disk=str(profile["disk"]) if profile.get("disk") else None,
+        )
+
+    # ── Merging ───────────────────────────────────────────────────────
+
+    def merge(self, overrides: "ResourceSpec | None") -> "ResourceSpec":
+        """Return a new spec with non-default fields from *overrides* applied.
+
+        Only fields where *overrides* differs from the hardcoded defaults are
+        copied — this avoids overwriting intentional values with accidental
+        defaults. / 只复制 overrides 中与硬编码默认值不同的字段。
+        """
+        if overrides is None:
+            return self
+        defaults = ResourceSpec()
+        return ResourceSpec(
+            cpu=overrides.cpu if overrides.cpu != defaults.cpu else self.cpu,
+            memory=overrides.memory if overrides.memory != defaults.memory else self.memory,
+            walltime=(
+                overrides.walltime if overrides.walltime != defaults.walltime else self.walltime
+            ),
+            accelerator=(
+                overrides.accelerator if overrides.accelerator != defaults.accelerator
+                else self.accelerator
+            ),
+            disk=overrides.disk if overrides.disk != defaults.disk else self.disk,
+        )
+
+    # ── Scheduler rendering ───────────────────────────────────────────
+
+    def to_nextflow_directives(self) -> list[str]:
+        """Render as Nextflow process directives.
+
+        Example: ``["cpus 8", "memory '16.GB'", "time '04:00:00'"]``
+        """
+        lines = [f"cpus {self.cpu}"]
+        lines.append(f"memory '{_memory_to_nextflow(self.memory)}'")
+        lines.append(f"time '{self.walltime}'")
+        if self.disk:
+            lines.append(f"disk '{_disk_to_nextflow(self.disk)}'")
+        if self.accelerator:
+            lines.append(f"accelerator {self.accelerator}")
+        return lines
+
+    def to_slurm_directives(self) -> list[str]:
+        """Render as ``#SBATCH`` directives.
+
+        Example:
+        ``["#SBATCH --cpus-per-task=8", "#SBATCH --mem=16G", "#SBATCH --time=04:00:00"]``
+        """
+        lines = [f"#SBATCH --cpus-per-task={self.cpu}"]
+        lines.append(f"#SBATCH --mem={_memory_to_slurm(self.memory)}")
+        lines.append(f"#SBATCH --time={self.walltime}")
+        if self.accelerator:
+            lines.append(f"#SBATCH --gres={self.accelerator}")
+        return lines
+
+    def to_pbs_directives(self) -> list[str]:
+        """Render as ``#PBS`` directives.
+
+        Example:
+        ``["#PBS -l nodes=1:ppn=8", "#PBS -l mem=16gb", "#PBS -l walltime=04:00:00"]``
+        """
+        lines = [f"#PBS -l nodes=1:ppn={self.cpu}"]
+        lines.append(f"#PBS -l mem={_memory_to_pbs(self.memory)}")
+        lines.append(f"#PBS -l walltime={self.walltime}")
+        return lines
+
+
+# ── Memory formatting helpers ─────────────────────────────────────────
+# Convert human-readable memory strings to scheduler-specific formats.
+
+
+def _memory_to_nextflow(memory: str) -> str:
+    """Convert ``"16GB"`` → ``"16.GB"`` for Nextflow process directives."""
+    import re
+
+    m = re.match(r"(\d+)\s*(GB|MB|TB|G|M|T)", memory.upper().replace(" ", ""))
+    if not m:
+        return memory
+    value, unit = m.group(1), m.group(2)
+    if unit in ("G", "GB"):
+        return f"{value}.GB"
+    if unit in ("M", "MB"):
+        return f"{value}.MB"
+    if unit in ("T", "TB"):
+        return f"{value}.TB"
+    return memory
+
+
+def _memory_to_slurm(memory: str) -> str:
+    """Convert ``"16GB"`` → ``"16G"`` for ``#SBATCH --mem``."""
+    import re
+
+    m = re.match(r"(\d+)\s*(GB|MB|TB|G|M|T)", memory.upper().replace(" ", ""))
+    if not m:
+        return memory
+    value, unit = m.group(1), m.group(2)
+    if unit in ("G", "GB"):
+        return f"{value}G"
+    if unit in ("M", "MB"):
+        return f"{value}M"
+    if unit in ("T", "TB"):
+        return f"{value}T"
+    return memory
+
+
+def _memory_to_pbs(memory: str) -> str:
+    """Convert ``"16GB"`` → ``"16gb"`` for ``#PBS -l mem``."""
+    return _memory_to_slurm(memory).lower()
+
+
+def _disk_to_nextflow(disk: str) -> str:
+    """Convert ``"50GB"`` → ``"50.GB"`` for Nextflow ``disk`` directive."""
+    return _memory_to_nextflow(disk)
+
+
+# ── Resource resolution engine ─────────────────────────────────────────
+
+
+def resolve_resources(
+    tool_id: str,
+    tool_metadata: Mapping[str, Any],
+    *,
+    config: Mapping[str, Any] | None = None,
+    cli_overrides: ResourceSpec | None = None,
+    resource_profile: str | None = None,
+    resource_profiles_dir: str | Path | None = None,
+) -> ResourceSpec:
+    """Resolve compute resources through the layered override chain.
+
+    Resolution order (most specific wins): / 解析顺序（最具体的优先）
+    1. Hardcoded defaults (cpu=1, memory="4GB", walltime="01:00:00")
+    2. Tool contract ``resources:`` block (authoritative per-tool default)
+    3. Resource profile YAML (if ``resource_profile`` is specified)
+    4. User config ``execution.resources.defaults``
+    5. User config ``execution.resources.tool_overrides.<tool_id>``
+    6. CLI overrides (``--cpu``, ``--memory``, ``--walltime``, etc.)
+
+    Returns a resolved ``ResourceSpec`` ready for scheduler rendering.
+    """
+    # Layer 1: hardcoded defaults / 硬编码默认值
+    spec = ResourceSpec()
+
+    # Layer 2: tool contract (authoritative per-tool base) / 工具合同
+    tool_resources = ResourceSpec.from_metadata(tool_metadata)
+    spec = spec.merge(tool_resources)
+
+    # Layer 3: resource profile (named preset) / 资源 profile
+    if resource_profile:
+        profile_data = _load_resource_profile(resource_profile, resource_profiles_dir)
+        if profile_data:
+            spec = spec.merge(ResourceSpec.from_profile(profile_data))
+
+    # Layer 4-5: user config overrides / 用户配置覆盖
+    if config:
+        exec_cfg = config.get("execution", {})
+        if isinstance(exec_cfg, Mapping):
+            resources_cfg = exec_cfg.get("resources", {})
+            if isinstance(resources_cfg, Mapping):
+                # Layer 4: global defaults / 全局默认
+                defaults = resources_cfg.get("defaults")
+                if isinstance(defaults, Mapping):
+                    spec = spec.merge(ResourceSpec.from_profile(defaults))
+                # Layer 5: per-tool override / 单工具覆盖
+                overrides = resources_cfg.get("tool_overrides", {})
+                if isinstance(overrides, Mapping):
+                    tool_override = overrides.get(tool_id)
+                    if isinstance(tool_override, Mapping):
+                        spec = spec.merge(ResourceSpec.from_profile(tool_override))
+
+    # Layer 6: CLI overrides (highest priority) / CLI 覆盖（最高优先级）
+    if cli_overrides:
+        spec = spec.merge(cli_overrides)
+
+    return spec
+
+
+def _load_resource_profile(
+    name: str,
+    profiles_dir: str | Path | None = None,
+) -> Mapping[str, Any] | None:
+    """Load a named resource profile YAML file.
+
+    Searches: / 搜索路径
+    1. ``profiles_dir/<name>.yaml`` (if provided)
+    2. ``PROJECT_ROOT/config/resource_profiles/<name>.yaml``
+    """
+    from abi.config import PROJECT_ROOT, load_yaml
+
+    candidates = []
+    if profiles_dir:
+        candidates.append(Path(profiles_dir) / f"{name}.yaml")
+    candidates.append(PROJECT_ROOT / "config" / "resource_profiles" / f"{name}.yaml")
+    for candidate in candidates:
+        if candidate.exists():
+            return load_yaml(str(candidate))
+    return None
+
+
+# ── Container image resolution ─────────────────────────────────────────
+
+
+def resolve_container_image(
+    tool_id: str,
+    tool_metadata: Mapping[str, Any],
+    *,
+    config: Mapping[str, Any] | None = None,
+    cli_image: str | None = None,
+) -> str | None:
+    """Resolve container image through the layered override chain.
+
+    1. CLI ``--container-image`` (per-invocation override)
+    2. ``execution.container.tool_images.<tool_id>`` (per-tool in config)
+    3. ``execution.container.default_image`` (global in config)
+    4. Tool contract ``execution.container_image`` (authoritative default)
+    5. Tool registry ``container_image`` (flat metadata)
+    6. None (use conda env)
+    """
+    # Layer 1: tool metadata (registry flat or contract nested)
+    img = tool_metadata.get("container_image")
+    if not img:
+        exec_block = tool_metadata.get("execution", {})
+        if isinstance(exec_block, Mapping):
+            img = exec_block.get("container_image")
+    result = str(img) if img else None
+
+    # Layer 2-3: user config
+    if config:
+        exec_cfg = config.get("execution", {})
+        if isinstance(exec_cfg, Mapping):
+            container_cfg = exec_cfg.get("container", {})
+            if isinstance(container_cfg, Mapping):
+                # Layer 2: global default image
+                default_img = container_cfg.get("default_image")
+                if default_img:
+                    result = str(default_img)
+                # Layer 3: per-tool override
+                tool_images = container_cfg.get("tool_images", {})
+                if isinstance(tool_images, Mapping):
+                    tool_img = tool_images.get(tool_id)
+                    if tool_img:
+                        result = str(tool_img)
+
+    # Layer 4: CLI override (highest priority)
+    if cli_image:
+        result = cli_image
+
+    return result
+
+
+def _resolve_container_runtime(config: Mapping[str, Any] | None = None) -> str:
+    """Resolve the container runtime engine from env or config.
+
+    Checks ``ABI_CONTAINER_RUNTIME`` env var, then config
+    ``execution.container.runtime``, then auto-detects from PATH.
+    Returns one of ``"docker"``, ``"singularity"``, ``"podman"``, ``"apptainer"``.
+    / 从环境变量或配置解析容器运行时引擎。
+    """
+    import os as _os
+
+    # Env var (highest priority) / 环境变量（最高优先级）
+    env_runtime = _os.environ.get("ABI_CONTAINER_RUNTIME")
+    if env_runtime:
+        return env_runtime.strip().lower()
+
+    # Config / 配置
+    if config:
+        exec_cfg = config.get("execution", {})
+        if isinstance(exec_cfg, Mapping):
+            container_cfg = exec_cfg.get("container", {})
+            if isinstance(container_cfg, Mapping):
+                runtime = container_cfg.get("runtime")
+                if runtime:
+                    return str(runtime).strip().lower()
+
+    # Auto-detect / 自动检测
+    for candidate in ("docker", "podman", "singularity", "apptainer"):
+        if shutil.which(candidate):
+            return candidate
+    return "docker"  # fallback
+
+
+def _wrap_container_command(
+    command: list[str],
+    *,
+    image: str,
+    work_dir: str | None = None,
+    runtime: str = "docker",
+    cpu: int | None = None,
+    memory: str | None = None,
+) -> list[str]:
+    """Wrap a command list for container execution.
+
+    Docker/Podman:
+      ``docker run --rm --cpus=<N> -m <M> -v <wd>:<wd> -w <wd> <image> <cmd>``
+    Singularity/Apptainer:
+      ``singularity exec --bind <wd> --pwd <wd> <image> <cmd>``
+    """
+    cwd = work_dir or str(Path.cwd())
+    if runtime in ("singularity", "apptainer"):
+        cmd = [runtime, "exec", "--bind", f"{cwd}:{cwd}", "--pwd", cwd]
+        if cpu:
+            cmd.extend(["--cpus", str(cpu)])
+        if memory:
+            cmd.extend(["--memory", memory])
+        cmd.append(image)
+        cmd.extend(command)
+        return cmd
+    else:
+        # Docker / Podman
+        cmd = [runtime, "run", "--rm"]
+        if cpu:
+            cmd.extend(["--cpus", str(cpu)])
+        if memory:
+            cmd.extend(["--memory", memory])
+        cmd.extend(["-v", f"{cwd}:{cwd}", "-w", cwd, image])
+        cmd.extend(command)
+        return cmd
 
 
 # ── RunResult ──────────────────────────────────────────────────────────
@@ -396,6 +776,29 @@ class GenericCommandSkill(ToolSkill):
         if template:
             return str(template)
         return f"{self.executable} --input {{input}} --output {{output_dir}} --threads {{threads}}"
+
+    @property
+    def resources(self) -> "ResourceSpec":
+        """Compute resource request for this tool from its YAML metadata."""
+        return ResourceSpec.from_metadata(self.metadata)
+
+    @property
+    def container_image(self) -> str | None:
+        """Container image for this tool (e.g ``docker://biocontainers/fastp:v0.23``).
+
+        Read from metadata key ``container_image`` (flat registry) or
+        ``execution.container_image`` (tool contract). Returns None if not set.
+        / 读取容器镜像，未设置返回 None。
+        """
+        img = self.metadata.get("container_image")
+        if img:
+            return str(img)
+        execution = self.metadata.get("execution", {})
+        if isinstance(execution, Mapping):
+            img = execution.get("container_image")
+            if img:
+                return str(img)
+        return None
 
     @property
     def mamba_root(self) -> Path:

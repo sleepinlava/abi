@@ -27,3 +27,8 @@ failure_handling:
     hint: "Install coverm in the autoplasm-abundance environment."
   parse_failed:
     hint: "Check CoverM TSV output."
+
+resources:
+  cpu: 8
+  memory: "16GB"
+  walltime: "02:00:00"

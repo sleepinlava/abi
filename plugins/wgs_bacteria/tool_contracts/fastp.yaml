@@ -53,3 +53,8 @@ failure_handling:
     hint: "Install fastp in the abi-qc environment."
   nonzero_exit:
     hint: "Read provenance/step_logs/{step_id}.stderr.log."
+
+resources:
+  cpu: 4
+  memory: "4GB"
+  walltime: "01:00:00"

@@ -29,3 +29,8 @@ failure_handling:
     hint: "Install megahit in the autoplasm-assembly environment."
   nonzero_exit:
     hint: "Inspect the MEGAHIT stderr log and assembly output directory."
+
+resources:
+  cpu: 16
+  memory: "64GB"
+  walltime: "08:00:00"

@@ -27,3 +27,8 @@ failure_handling:
     hint: "Configure the MetaPhlAn database directory."
   tool_not_found:
     hint: "Install metaphlan in the autoplasm-stats environment."
+
+resources:
+  cpu: 8
+  memory: "32GB"
+  walltime: "04:00:00"

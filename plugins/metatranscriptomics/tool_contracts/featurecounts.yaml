@@ -40,3 +40,8 @@ failure_handling:
     hint: "Install featureCounts in the abi-stats environment."
   parse_failed:
     hint: "Check the featureCounts output format before normalizing gene_expression.tsv."
+
+resources:
+  cpu: 4
+  memory: "8GB"
+  walltime: "02:00:00"

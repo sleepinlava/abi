@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 from abi.contracts.lint import (
     lint_assertion_syntax,
     lint_dag,
+    lint_resource_blocks,
     lint_tool_contracts,
     run_contract_lint,
 )
@@ -335,3 +336,75 @@ class TestRunContractLint:
         }
         result = run_contract_lint(dag)
         assert result["error_count"] >= 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Resource block lint tests (Phase 1)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestLintResourceBlocks:
+    """lint_resource_blocks warns when resources blocks are missing/invalid."""
+
+    def test_missing_resources_warns(self):
+        contracts = {
+            "fastp": {
+                "tool_id": "fastp",
+                "name": "fastp",
+                "category": "qc",
+                "purpose": "trim",
+                "execution": {"env_name": "e", "executable": "f", "command_template": "f"},
+            }
+        }
+        findings = lint_resource_blocks(contracts)
+        assert len(findings) == 1
+        assert findings[0].severity == "warning"
+        assert "missing 'resources'" in findings[0].detail
+
+    def test_valid_resources_no_findings(self):
+        contracts = {
+            "fastp": {
+                "tool_id": "fastp",
+                "name": "fastp",
+                "resources": {"cpu": 4, "memory": "4GB", "walltime": "01:00:00"},
+            }
+        }
+        findings = lint_resource_blocks(contracts)
+        assert len(findings) == 0
+
+    def test_invalid_cpu_is_error(self):
+        contracts = {
+            "bad": {
+                "tool_id": "bad",
+                "resources": {"cpu": 0, "memory": "4GB", "walltime": "01:00:00"},
+            }
+        }
+        findings = lint_resource_blocks(contracts)
+        assert any(f.severity == "error" for f in findings)
+
+    def test_empty_walltime_warns(self):
+        contracts = {
+            "bad": {
+                "tool_id": "bad",
+                "resources": {"cpu": 4, "memory": "4GB", "walltime": ""},
+            }
+        }
+        findings = lint_resource_blocks(contracts)
+        assert any("walltime" in f.detail for f in findings)
+
+    def test_run_contract_lint_includes_resource_findings(self):
+        contracts = {
+            "fastp": {
+                "tool_id": "fastp",
+                "name": "f",
+                "category": "qc",
+                "purpose": "trim",
+                "execution": {"env_name": "e", "executable": "f", "command_template": "f"},
+            }
+        }
+        dag = {"nodes": []}
+        result = run_contract_lint(dag, contracts=contracts, registry_tool_ids={"fastp"})
+        resource_warnings = [
+            f for f in result["findings"] if f["check"] == "missing_resources"
+        ]
+        assert len(resource_warnings) >= 1

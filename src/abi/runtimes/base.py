@@ -20,6 +20,25 @@ class RuntimeOptions:
     executor: str | None = None
     resume: bool = False
     timeout_seconds: float | None = None
+    # Resource overrides (shared across all engines) / 资源覆盖（所有引擎共享）
+    resource_profile: str | None = None
+    cpu_override: int | None = None
+    memory_override: str | None = None
+    walltime_override: str | None = None
+    accelerator_override: str | None = None
+    # Container overrides (shared across all engines) / 容器覆盖（所有引擎共享）
+    container_image: str | None = None
+    container_runtime: str | None = None
+    # HPC scheduler options / HPC 调度器选项
+    scheduler: str | None = None
+    partition: str | None = None
+    account: str | None = None
+    qos: str | None = None
+    job_name: str | None = None
+    array_size: int | None = None
+    mail_type: str | None = None
+    mail_user: str | None = None
+    hpc_strategy: str | None = None
 
 
 @dataclass

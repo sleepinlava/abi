@@ -1,0 +1,7 @@
+# ABI Resource Profile: dev_small
+# 本地开发和测试使用 — 最小资源分配
+# For local development and CI testing.
+
+cpu: 1
+memory: "2GB"
+walltime: "00:30:00"

@@ -28,3 +28,8 @@ failure_handling:
     hint: "Check plasmid_contigs and paired read paths."
   tool_not_found:
     hint: "Install bowtie2 in the autoplasm-abundance environment."
+
+resources:
+  cpu: 8
+  memory: "16GB"
+  walltime: "02:00:00"

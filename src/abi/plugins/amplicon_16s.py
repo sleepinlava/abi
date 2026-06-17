@@ -581,50 +581,57 @@ def _parse_sintax(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
 def _parse_alpha_diversity(output_dir: Path) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     for path in sorted(output_dir.glob("alpha*.tsv")):
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            reader = csv.DictReader(handle, delimiter="\t")
-            if not reader.fieldnames:
-                continue
-            for row in reader:
-                rows.append(
-                    {
-                        "sample_id": row.get("sample_id", ""),
-                        "observed_features": row.get(
-                            "observed_features", row.get("observed_otus", "")
-                        ),
-                        "shannon_entropy": row.get("shannon", row.get("shannon_entropy", "")),
-                        "simpson_index": row.get("simpson", ""),
-                        "faith_pd": row.get("faith_pd", ""),
-                        "chao1": row.get("chao1", ""),
-                        "tool": "diversity_metrics",
-                        "source_file": str(path),
-                    }
-                )
+        try:
+            with path.open("r", encoding="utf-8", newline="") as handle:
+                reader = csv.DictReader(handle, delimiter="\t")
+                if not reader.fieldnames:
+                    continue
+                for row in reader:
+                    rows.append(
+                        {
+                            "sample_id": row.get("sample_id", ""),
+                            "observed_features": row.get(
+                                "observed_features", row.get("observed_otus", "")
+                            ),
+                            "shannon_entropy": row.get("shannon", row.get("shannon_entropy", "")),
+                            "simpson_index": row.get("simpson", ""),
+                            "faith_pd": row.get("faith_pd", ""),
+                            "chao1": row.get("chao1", ""),
+                            "tool": "diversity_metrics",
+                            "source_file": str(path),
+                        }
+                    )
+        except (OSError, csv.Error):
+            continue
     return rows
 
 
 def _parse_beta_diversity(output_dir: Path) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-    for path in sorted(output_dir.glob("beta*.tsv") + output_dir.glob("*distance*.tsv")):
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            reader = csv.DictReader(handle, delimiter="\t")
-            if not reader.fieldnames:
-                continue
-            metric = path.stem
-            for row in reader:
-                sample_a = row.get("sample_a", row.get("sample1", ""))
-                sample_b = row.get("sample_b", row.get("sample2", ""))
-                if not sample_a or not sample_b:
+    paths = list(output_dir.glob("beta*.tsv")) + list(output_dir.glob("*distance*.tsv"))
+    for path in sorted(paths):
+        try:
+            with path.open("r", encoding="utf-8", newline="") as handle:
+                reader = csv.DictReader(handle, delimiter="\t")
+                if not reader.fieldnames:
                     continue
-                rows.append(
-                    {
-                        "comparison": f"{sample_a}_vs_{sample_b}",
-                        "distance_metric": metric,
-                        "sample_a": sample_a,
-                        "sample_b": sample_b,
-                        "distance": row.get("distance", ""),
-                        "tool": "diversity_metrics",
-                        "source_file": str(path),
-                    }
-                )
+                metric = path.stem
+                for row in reader:
+                    sample_a = row.get("sample_a", row.get("sample1", ""))
+                    sample_b = row.get("sample_b", row.get("sample2", ""))
+                    if not sample_a or not sample_b:
+                        continue
+                    rows.append(
+                        {
+                            "comparison": f"{sample_a}_vs_{sample_b}",
+                            "distance_metric": metric,
+                            "sample_a": sample_a,
+                            "sample_b": sample_b,
+                            "distance": row.get("distance", ""),
+                            "tool": "diversity_metrics",
+                            "source_file": str(path),
+                        }
+                    )
+        except (OSError, csv.Error):
+            continue
     return rows

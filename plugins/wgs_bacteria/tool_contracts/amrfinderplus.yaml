@@ -37,3 +37,8 @@ failure_handling:
     hint: "Prokka protein FASTA or GFF not found. Verify Prokka completed successfully."
   tool_not_found:
     hint: "AMRFinderPlus not found. Install: conda install -c bioconda ncbi-amrfinderplus"
+
+resources:
+  cpu: 4
+  memory: "8GB"
+  walltime: "02:00:00"

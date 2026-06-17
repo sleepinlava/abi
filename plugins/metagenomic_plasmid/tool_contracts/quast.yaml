@@ -24,3 +24,8 @@ failure_handling:
     hint: "Check that the assembly step wrote the expected FASTA."
   tool_not_found:
     hint: "Install metaquast.py in the autoplasm-assembly environment."
+
+resources:
+  cpu: 4
+  memory: "4GB"
+  walltime: "01:00:00"

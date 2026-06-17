@@ -44,3 +44,8 @@ failure_handling:
     hint: "Rscript or DESeq2 package not available. Ensure R is installed and DESeq2 is installed (BiocManager::install('DESeq2'))."
   execution_error:
     hint: "DESeq2 execution failed. Check that sample_metadata groups match count_matrix columns and there are at least 2 replicates per group."
+
+resources:
+  cpu: 1
+  memory: "8GB"
+  walltime: "01:00:00"

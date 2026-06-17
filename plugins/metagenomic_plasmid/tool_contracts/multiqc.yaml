@@ -23,3 +23,8 @@ failure_handling:
     hint: "Run read QC before MultiQC aggregation."
   tool_not_found:
     hint: "Install multiqc in the autoplasm-qc environment."
+
+resources:
+  cpu: 4
+  memory: "4GB"
+  walltime: "01:00:00"

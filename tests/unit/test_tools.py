@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 import pytest
 
 from abi.errors import MissingTemplateParamError
-from abi.tools import SafeFormatDict
+from abi.tools import ResourceSpec, SafeFormatDict, resolve_resources
 
 
 class TestSafeFormatDictLenient:
@@ -115,3 +115,170 @@ class TestSafeFormatDictToolName:
         with pytest.raises(MissingTemplateParamError) as excinfo:
             _ = d["missing"]
         assert "unknown" in str(excinfo.value)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ResourceSpec tests (Phase 1)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestResourceSpec:
+    """Unit tests for ResourceSpec dataclass."""
+
+    def test_defaults(self):
+        spec = ResourceSpec()
+        assert spec.cpu == 1
+        assert spec.memory == "4GB"
+        assert spec.walltime == "01:00:00"
+        assert spec.accelerator is None
+        assert spec.disk is None
+
+    def test_from_metadata_extracts_resources(self):
+        metadata = {
+            "id": "spades",
+            "resources": {"cpu": 16, "memory": "64GB", "walltime": "08:00:00"},
+        }
+        spec = ResourceSpec.from_metadata(metadata)
+        assert spec.cpu == 16
+        assert spec.memory == "64GB"
+        assert spec.walltime == "08:00:00"
+
+    def test_from_metadata_without_resources_returns_defaults(self):
+        spec = ResourceSpec.from_metadata({"id": "fastp"})
+        assert spec.cpu == 1
+        assert spec.memory == "4GB"
+
+    def test_from_metadata_partial_uses_defaults(self):
+        spec = ResourceSpec.from_metadata({"resources": {"cpu": 8}})
+        assert spec.cpu == 8
+        assert spec.memory == "4GB"  # default
+        assert spec.walltime == "01:00:00"  # default
+
+    def test_from_profile(self):
+        profile = {"cpu": 32, "memory": "128GB"}
+        spec = ResourceSpec.from_profile(profile)
+        assert spec.cpu == 32
+        assert spec.memory == "128GB"
+        assert spec.walltime == "01:00:00"  # default
+
+    def test_merge_applies_non_default_overrides(self):
+        base = ResourceSpec(cpu=8, memory="16GB", walltime="02:00:00")
+        overrides = ResourceSpec(cpu=32)  # only cpu set, others default
+        merged = base.merge(overrides)
+        assert merged.cpu == 32  # overridden
+        assert merged.memory == "16GB"  # preserved
+        assert merged.walltime == "02:00:00"  # preserved
+
+    def test_merge_with_none_returns_self(self):
+        spec = ResourceSpec(cpu=8)
+        result = spec.merge(None)
+        assert result.cpu == 8
+
+
+class TestResourceSpecDirectives:
+    """Scheduler-specific directive rendering."""
+
+    def test_to_nextflow_directives(self):
+        spec = ResourceSpec(cpu=8, memory="16GB", walltime="04:00:00")
+        dirs = spec.to_nextflow_directives()
+        assert "cpus 8" in dirs
+        assert "memory '16.GB'" in dirs
+        assert "time '04:00:00'" in dirs
+
+    def test_to_nextflow_with_disk(self):
+        spec = ResourceSpec(cpu=4, memory="8GB", walltime="01:00:00", disk="50GB")
+        dirs = spec.to_nextflow_directives()
+        assert "disk '50.GB'" in dirs
+
+    def test_to_slurm_directives(self):
+        spec = ResourceSpec(cpu=16, memory="64GB", walltime="08:00:00")
+        dirs = spec.to_slurm_directives()
+        assert "#SBATCH --cpus-per-task=16" in dirs
+        assert "#SBATCH --mem=64G" in dirs
+        assert "#SBATCH --time=08:00:00" in dirs
+
+    def test_to_pbs_directives(self):
+        spec = ResourceSpec(cpu=8, memory="32GB", walltime="04:00:00")
+        dirs = spec.to_pbs_directives()
+        assert "#PBS -l nodes=1:ppn=8" in dirs
+        assert "#PBS -l mem=32g" in dirs
+        assert "#PBS -l walltime=04:00:00" in dirs
+
+    @pytest.mark.parametrize(
+        "memory_in,nextflow_out,slurm_out",
+        [
+            ("8GB", "8.GB", "8G"),
+            ("16MB", "16.MB", "16M"),
+            ("2TB", "2.TB", "2T"),
+            ("4G", "4.GB", "4G"),
+            ("32gb", "32.GB", "32G"),
+        ],
+    )
+    def test_memory_format_variants(self, memory_in, nextflow_out, slurm_out):
+        spec = ResourceSpec(cpu=4, memory=memory_in)
+        nf = "\n".join(spec.to_nextflow_directives())
+        assert f"memory '{nextflow_out}'" in nf
+        slurm = "\n".join(spec.to_slurm_directives())
+        assert f"--mem={slurm_out}" in slurm
+
+
+class TestResolveResources:
+    """Layered resource resolution."""
+
+    def test_hardcoded_defaults_when_nothing_provided(self):
+        spec = resolve_resources("fastp", {})
+        assert spec.cpu == 1
+        assert spec.memory == "4GB"
+
+    def test_cli_overrides_have_highest_priority(self):
+        cli = ResourceSpec(cpu=64)
+        spec = resolve_resources(
+            "spades",
+            {"resources": {"cpu": 8}},
+            cli_overrides=cli,
+        )
+        assert spec.cpu == 64  # CLI wins
+
+    def test_tool_contract_overrides_defaults(self):
+        spec = resolve_resources(
+            "spades",
+            {"resources": {"cpu": 16, "memory": "64GB"}},
+        )
+        assert spec.cpu == 16
+        assert spec.memory == "64GB"
+
+    def test_config_defaults_override_contract(self):
+        spec = resolve_resources(
+            "spades",
+            {"resources": {"cpu": 8, "memory": "8GB"}},
+            config={"execution": {"resources": {"defaults": {"cpu": 12}}}},
+        )
+        assert spec.cpu == 12  # config overrides contract
+        assert spec.memory == "8GB"  # contract preserved
+
+    def test_config_tool_override_has_higher_priority(self):
+        spec = resolve_resources(
+            "spades",
+            {"resources": {"cpu": 8}},
+            config={
+                "execution": {
+                    "resources": {
+                        "defaults": {"cpu": 12},
+                        "tool_overrides": {"spades": {"cpu": 32}},
+                    }
+                }
+            },
+        )
+        assert spec.cpu == 32  # per-tool override wins
+
+    def test_unknown_tool_id_uses_defaults(self):
+        spec = resolve_resources("nonexistent", {})
+        assert spec.cpu == 1
+
+    def test_resource_profile_loads_from_disk(self):
+        """dev_small profile should be loadable."""
+        spec = resolve_resources(
+            "fastp", {}, resource_profile="dev_small"
+        )
+        assert spec.cpu == 1  # dev_small profile
+        assert spec.memory == "2GB"

@@ -54,20 +54,38 @@ class LintFinding:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+def _normalize_dag_nodes(dag_spec: Mapping[str, Any]) -> List[Dict[str, Any]]:
+    """Normalize DAG nodes from either list or dict format.
+
+    Both ``[{"id": "A", ...}, {"id": "B", ...}]`` (list format) and
+    ``{"A": {...}, "B": {...}}`` (dict/mapping format) are supported.
+    Dict-format nodes have their key injected as the ``id`` field.
+    """
+    nodes_raw = dag_spec.get("nodes", [])
+    if isinstance(nodes_raw, Mapping):
+        return [
+            {"id": str(key), **({} if not isinstance(val, Mapping) else dict(val))}
+            for key, val in nodes_raw.items()
+        ]
+    if isinstance(nodes_raw, list):
+        return [dict(n) for n in nodes_raw if isinstance(n, Mapping)]
+    return []
+
+
 def lint_dag(dag_spec: Mapping[str, Any]) -> List[LintFinding]:
     """Check a pipeline DAG for structural issues.
 
     Args:
         dag_spec: The parsed ``pipeline_dag.yaml`` content.  Expected to have
-            a ``nodes`` key containing a list of node dicts, each with at least
-            ``id`` and optionally ``depends_on``.
+            a ``nodes`` key containing a list of node dicts or a mapping of
+            node-id → node-dict.
 
     Returns:
         List of ``LintFinding`` — empty if the DAG is clean.
     """
     findings: List[LintFinding] = []
 
-    nodes: List[Dict[str, Any]] = list(dag_spec.get("nodes", []))
+    nodes: List[Dict[str, Any]] = _normalize_dag_nodes(dag_spec)
     if not nodes:
         findings.append(
             LintFinding(
@@ -316,7 +334,7 @@ def lint_assertion_syntax(
     errors before runtime.
     """
     findings: List[LintFinding] = []
-    nodes = dag_spec.get("nodes", [])
+    nodes = _normalize_dag_nodes(dag_spec)
     for node in nodes:
         nid = str(node.get("id", ""))
         assertions = node.get("assertions", [])
@@ -420,6 +438,52 @@ def lint_tool_contracts(
     return findings
 
 
+def lint_resource_blocks(
+    contracts: Dict[str, Dict[str, Any]],
+) -> List[LintFinding]:
+    """Check tool contracts for ``resources:`` blocks (warning-level).
+
+    A missing resources block is a warning, not an error — it is optional
+    for backward compatibility but recommended for HPC/Nextflow export.
+    / 缺少 resources 块是警告而非错误——对向后兼容性可选，但推荐用于 HPC/Nextflow。
+    """
+    findings: List[LintFinding] = []
+    for tool_id, contract in sorted(contracts.items()):
+        resources = contract.get("resources")
+        if not isinstance(resources, Mapping):
+            findings.append(
+                LintFinding(
+                    severity="warning",
+                    check="missing_resources",
+                    detail=f"Tool {tool_id!r}: missing 'resources' block — recommended for HPC",
+                    location=tool_id,
+                )
+            )
+            continue
+        cpu = resources.get("cpu")
+        if cpu is not None and (not isinstance(cpu, int) or cpu < 1):
+            findings.append(
+                LintFinding(
+                    severity="error",
+                    check="invalid_resources",
+                    detail=f"Tool {tool_id!r}: resources.cpu must be positive integer, got {cpu!r}",
+                    location=tool_id,
+                )
+            )
+        for field in ("memory", "walltime"):
+            val = resources.get(field)
+            if val is not None and (not isinstance(val, str) or not val.strip()):
+                findings.append(
+                    LintFinding(
+                        severity="warning",
+                        check="empty_resources",
+                        detail=f"Tool {tool_id!r}: resources.{field} is empty",
+                        location=tool_id,
+                    )
+                )
+    return findings
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Orchestrator
 # ═══════════════════════════════════════════════════════════════════════════
@@ -452,6 +516,7 @@ def run_contract_lint(
     # Contract checks
     if contracts is not None:
         all_findings.extend(lint_tool_contracts(contracts, registry_tool_ids))
+        all_findings.extend(lint_resource_blocks(contracts))
 
     error_count = sum(1 for f in all_findings if f.severity == "error")
     warning_count = sum(1 for f in all_findings if f.severity == "warning")

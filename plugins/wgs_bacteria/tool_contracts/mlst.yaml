@@ -32,3 +32,8 @@ failure_handling:
     hint: "Assembly FASTA not found. Verify SPAdes completed successfully."
   tool_not_found:
     hint: "mlst not found. Install: conda install -c bioconda mlst"
+
+resources:
+  cpu: 4
+  memory: "8GB"
+  walltime: "02:00:00"

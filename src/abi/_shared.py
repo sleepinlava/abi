@@ -93,6 +93,13 @@ def _common_overrides(
     sample_sheet: Optional[Union[str, Path]] = None,
     dry_run: Optional[bool] = None,
     progress: Optional[bool] = None,
+    resource_profile: Optional[str] = None,
+    cpu_override: Optional[int] = None,
+    memory_override: Optional[str] = None,
+    walltime_override: Optional[str] = None,
+    accelerator_override: Optional[str] = None,
+    container_image: Optional[str] = None,
+    container_runtime: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build a compact overrides dict from common CLI flags.
 
@@ -111,6 +118,34 @@ def _common_overrides(
         overrides["input"] = {"sample_sheet": str(sample_sheet)}
     if progress is not None:
         overrides["execution"] = {"progress": progress}
+    # Resource overrides flow into execution.resources in config
+    resource_overrides: Dict[str, Any] = {}
+    if resource_profile:
+        resource_overrides["resource_profile"] = resource_profile
+    if cpu_override is not None:
+        resource_overrides["cpu"] = cpu_override
+    if memory_override:
+        resource_overrides["memory"] = memory_override
+    if walltime_override:
+        resource_overrides["walltime"] = walltime_override
+    if accelerator_override:
+        resource_overrides["accelerator"] = accelerator_override
+    if resource_overrides:
+        overrides["execution"] = {
+            **overrides.get("execution", {}),
+            "resources": resource_overrides,
+        }
+    # Container overrides
+    if container_image or container_runtime:
+        container_overrides: Dict[str, Any] = {}
+        if container_image:
+            container_overrides["default_image"] = container_image
+        if container_runtime:
+            container_overrides["runtime"] = container_runtime
+        overrides["execution"] = {
+            **overrides.get("execution", {}),
+            "container": container_overrides,
+        }
     return compact_overrides(overrides)
 
 

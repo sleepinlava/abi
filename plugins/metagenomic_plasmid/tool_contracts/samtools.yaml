@@ -21,3 +21,8 @@ failure_handling:
     hint: "Check bowtie2/minimap2 alignment output."
   tool_not_found:
     hint: "Install samtools in the autoplasm-abundance environment."
+
+resources:
+  cpu: 8
+  memory: "16GB"
+  walltime: "02:00:00"

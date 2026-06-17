@@ -31,3 +31,8 @@ failure_handling:
     hint: "Dereplicated FASTA not found. Verify vsearch_derep completed successfully."
   tool_not_found:
     hint: "vsearch not found. Install: conda install -c bioconda vsearch"
+
+resources:
+  cpu: 4
+  memory: "8GB"
+  walltime: "02:00:00"

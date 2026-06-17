@@ -24,3 +24,8 @@ failure_handling:
     hint: Run plan or dry-run before report generation.
   nonzero_exit:
     hint: Check report inputs under tables/ and provenance/.
+
+resources:
+  cpu: 1
+  memory: "2GB"
+  walltime: "00:30:00"

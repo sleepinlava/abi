@@ -29,3 +29,8 @@ failure_handling:
     hint: "Check assembly FASTA path."
   parse_failed:
     hint: "Check geNomad plasmid summary TSV output."
+
+resources:
+  cpu: 8
+  memory: "16GB"
+  walltime: "04:00:00"

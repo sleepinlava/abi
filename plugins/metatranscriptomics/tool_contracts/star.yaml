@@ -42,3 +42,8 @@ failure_handling:
     hint: "Install STAR in the abi-stats environment."
   nonzero_exit:
     hint: "Inspect the STAR stderr log under provenance/step_logs."
+
+resources:
+  cpu: 8
+  memory: "32GB"
+  walltime: "04:00:00"

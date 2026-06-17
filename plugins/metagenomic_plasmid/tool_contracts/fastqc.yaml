@@ -28,3 +28,8 @@ failure_handling:
     hint: "Install fastqc in the autoplasm-qc environment."
   parse_failed:
     hint: "Check the FastQC output directory layout."
+
+resources:
+  cpu: 4
+  memory: "4GB"
+  walltime: "01:00:00"

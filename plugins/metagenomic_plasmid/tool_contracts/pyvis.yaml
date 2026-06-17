@@ -32,3 +32,8 @@ failure_handling:
     hint: Install pyvis in the autoplasm-visualization environment.
   nonzero_exit:
     hint: Inspect Python stderr log in provenance/step_logs.
+
+resources:
+  cpu: 2
+  memory: "4GB"
+  walltime: "00:30:00"

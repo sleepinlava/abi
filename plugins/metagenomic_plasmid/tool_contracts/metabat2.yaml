@@ -38,3 +38,8 @@ failure_handling:
     hint: Install metabat2 in the autoplasm-stats environment.
   nonzero_exit:
     hint: Inspect MetaBAT2 stderr log in provenance/step_logs.
+
+resources:
+  cpu: 4
+  memory: "4GB"
+  walltime: "01:00:00"

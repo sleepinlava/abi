@@ -1,0 +1,7 @@
+# ABI Resource Profile: hpc_large
+# 大规模 HPC 计算 — 高资源分配（组装、大型宏基因组）
+# Large-scale HPC — high resource allocation (assembly, large metagenomics).
+
+cpu: 32
+memory: "128GB"
+walltime: "24:00:00"

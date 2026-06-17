@@ -36,3 +36,8 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
+
+resources:
+  cpu: 4
+  memory: "8GB"
+  walltime: "02:00:00"

@@ -34,3 +34,8 @@ failure_handling:
     hint: Install porechop in the autoplasm-qc environment.
   nonzero_exit:
     hint: Inspect Porechop stderr log in provenance/step_logs.
+
+resources:
+  cpu: 4
+  memory: "4GB"
+  walltime: "01:00:00"

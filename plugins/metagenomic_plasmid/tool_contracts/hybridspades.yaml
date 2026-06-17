@@ -39,3 +39,8 @@ failure_handling:
     hint: Install spades in the autoplasm-assembly environment.
   nonzero_exit:
     hint: Inspect SPAdes log in provenance/step_logs.
+
+resources:
+  cpu: 16
+  memory: "64GB"
+  walltime: "08:00:00"

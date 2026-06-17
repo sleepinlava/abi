@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from abi._shared import _parse_fastp, _resolve_path
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
@@ -41,7 +41,7 @@ class WGSBacteriaPlugin:
     def root(self) -> Path:
         return PLUGIN_ROOT / self.plugin_id
 
-    def load_config(self, config_path=None, *, profile=None, overrides=None):
+    def load_config(self, config_path=None, *, profile=None, overrides=None) -> Dict[str, Any]:
         del profile
         config = load_yaml(self.root / "config_default.yaml")
         if config_path:
@@ -52,14 +52,18 @@ class WGSBacteriaPlugin:
         self._last_config = config
         return config
 
-    def build_sample_context(self, config, *, check_files=True):
+    def build_sample_context(
+        self, config: Mapping[str, Any], *, check_files: bool = True
+    ) -> ABISampleContext:
         input_config = config.get("input", {})
         sample_sheet = input_config.get("sample_sheet")
         if not sample_sheet:
             raise ValueError("wgs_bacteria requires input.sample_sheet")
         return _parse_sample_sheet(sample_sheet, check_files=check_files)
 
-    def build_plan(self, config, *, check_files=True):
+    def build_plan(
+        self, config: Mapping[str, Any], *, check_files: bool = True
+    ) -> ABIExecutionPlan:
         context = self.build_sample_context(config, check_files=check_files)
         outdir = Path(str(config["outdir"]))
         threads = int(config["threads"])
@@ -186,14 +190,16 @@ class WGSBacteriaPlugin:
             provenance_dir=str(outdir / "provenance"),
         )
 
-    def registry(self):
+    def registry(self) -> ToolRegistry:
         return ToolRegistry.from_path(self.root / "tool_registry.yaml")
 
-    def table_schemas(self):
+    def table_schemas(self) -> Mapping[str, Any]:
         data = load_yaml(self.root / "standard_tables.yaml")
         return data.get("tables", {})
 
-    def parse_outputs(self, tool_id, output_dir, sample_id):
+    def parse_outputs(
+        self, tool_id: str, output_dir: Path, sample_id: str
+    ) -> Mapping[str, List[Dict[str, Any]]]:
         if tool_id == "fastp":
             return {"qc_summary": _parse_fastp(Path(output_dir), sample_id)}
         if tool_id == "spades":
@@ -206,10 +212,10 @@ class WGSBacteriaPlugin:
             return {"amr_profile": _parse_amrfinderplus(Path(output_dir), sample_id)}
         return {}
 
-    def write_report(self, plan, result_dir):
+    def write_report(self, plan: Any, result_dir: Path) -> Dict[str, Path]:
         return write_plugin_report(self, plan, result_dir)
 
-    def _validate_config(self, config):
+    def _validate_config(self, config: Mapping[str, Any]) -> None:
         required = ["project_name", "mode", "threads", "outdir", "log_dir", "input"]
         missing = [k for k in required if k not in config]
         if missing:
@@ -220,7 +226,7 @@ class WGSBacteriaPlugin:
 # These are near-identical across inline plugins. In production, import from abi._shared.
 
 
-def _parse_sample_sheet(path, *, check_files):
+def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleContext:
     ss = _resolve_path(path, base_dirs=[PROJECT_ROOT])
     if not ss.exists():
         raise ValueError(f"Sample sheet does not exist: {ss}")
@@ -271,7 +277,7 @@ def _parse_sample_sheet(path, *, check_files):
     )
 
 
-def _resolve_config_paths(config):
+def _resolve_config_paths(config: Dict[str, Any]) -> None:
     ic = config.get("input", {})
     if isinstance(ic, dict) and ic.get("sample_sheet"):
         ic["sample_sheet"] = str(_resolve_path(ic["sample_sheet"], base_dirs=[PROJECT_ROOT]))
@@ -280,7 +286,7 @@ def _resolve_config_paths(config):
 # (``_clean``, ``_resolve_path`` are imported from abi._shared)
 
 
-def _parse_mlst(output_dir, sample_id):
+def _parse_mlst(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
     rows = []
     for path in sorted(output_dir.glob("mlst*.tsv")):
         with path.open() as h:
@@ -302,7 +308,7 @@ def _parse_mlst(output_dir, sample_id):
     return rows
 
 
-def _parse_amrfinderplus(output_dir, sample_id):
+def _parse_amrfinderplus(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
     rows = []
     for path in sorted(output_dir.glob("amr*.tsv")):
         with path.open() as h:

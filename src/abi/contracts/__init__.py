@@ -49,9 +49,29 @@ TOOL_CONTRACT_SCHEMA: Dict[str, Any] = {
         "when_to_use": {"type": "array", "items": {"type": "string"}},
         "inputs": {"type": "object"},
         "outputs": {"type": "object"},
-        "execution": {"type": "object"},
+        "execution": {
+            "type": "object",
+            "properties": {
+                "env_name": {"type": "string"},
+                "executable": {"type": "string"},
+                "command_template": {"type": "string"},
+                "network": {"type": "boolean"},
+                "writes_output": {"type": "boolean"},
+                "container_image": {"type": "string"},
+            },
+        },
         "normalization": {"type": "object"},
         "failure_handling": {"type": "object"},
+        "resources": {
+            "type": "object",
+            "properties": {
+                "cpu": {"type": "integer", "minimum": 1},
+                "memory": {"type": "string"},
+                "walltime": {"type": "string"},
+                "accelerator": {"type": "string"},
+                "disk": {"type": "string"},
+            },
+        },
     },
 }
 
@@ -173,6 +193,46 @@ def validate_tool_contract(contract: Mapping[str, Any], *, path: str | Path | No
     for code, handling in failure_handling.items():
         handling_mapping = _require_mapping(handling, f"{label}: failure_handling.{code}")
         _require_non_empty_string(handling_mapping.get("hint"), f"{label}: {code}.hint")
+    if "resources" in contract:
+        _validate_resources_block(contract["resources"], label)
+
+
+def _validate_resources_block(resources: Any, label: str) -> None:
+    """Validate the optional ``resources:`` block in a tool contract.
+
+    Checks that cpu, memory, walltime have reasonable types/values.
+    Missing resources blocks are allowed (backward compat) — this only
+    validates when the block is present. / 仅验证存在的 resources 块。
+    """
+    resources = _require_mapping(resources, f"{label}: resources")
+    cpu = resources.get("cpu")
+    if cpu is not None:
+        if not isinstance(cpu, int) or cpu < 1:
+            raise ContractValidationError(
+                f"{label}: resources.cpu must be a positive integer, got {cpu!r}"
+            )
+    memory = resources.get("memory")
+    if memory is not None:
+        if not isinstance(memory, str) or not memory.strip():
+            raise ContractValidationError(
+                f"{label}: resources.memory must be a non-empty string, got {memory!r}"
+            )
+    walltime = resources.get("walltime")
+    if walltime is not None:
+        if not isinstance(walltime, str) or not walltime.strip():
+            raise ContractValidationError(
+                f"{label}: resources.walltime must be a non-empty string, got {walltime!r}"
+            )
+    accelerator = resources.get("accelerator")
+    if accelerator is not None and not isinstance(accelerator, str):
+        raise ContractValidationError(
+            f"{label}: resources.accelerator must be a string, got {accelerator!r}"
+        )
+    disk = resources.get("disk")
+    if disk is not None and not isinstance(disk, str):
+        raise ContractValidationError(
+            f"{label}: resources.disk must be a string, got {disk!r}"
+        )
 
 
 def validate_plugin_contract_files(plugin: Any) -> None:

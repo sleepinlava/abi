@@ -44,3 +44,8 @@ failure_handling:
     hint: "Install hisat2 in the abi-stats environment."
   nonzero_exit:
     hint: "Inspect the HISAT2 stderr log under provenance/step_logs."
+
+resources:
+  cpu: 8
+  memory: "32GB"
+  walltime: "04:00:00"

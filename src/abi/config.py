@@ -80,3 +80,54 @@ def compact_overrides(overrides: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
         else:
             compacted[key] = value
     return compacted
+
+
+def load_resource_profile(name: str) -> Dict[str, Any]:
+    """Load a named resource profile from ``config/resource_profiles/``.
+
+    Profiles are pre-defined resource presets (e.g. ``dev_small``,
+    ``hpc_standard``, ``hpc_large``) that users can select via
+    ``--resource-profile`` or ``ABI_RESOURCE_PROFILE``.
+
+    Returns the profile data dict, or an empty dict if not found.
+    / 返回 profile 数据字典，未找到则返回空字典。
+    """
+    profile_path = PROJECT_ROOT / "config" / "resource_profiles" / f"{name}.yaml"
+    try:
+        return load_yaml(str(profile_path))
+    except ABIConfigError:
+        return {}
+
+
+def env_resource_overrides() -> Dict[str, Any]:
+    """Build resource overrides from ``ABI_*`` environment variables.
+
+    Reads ``ABI_DEFAULT_CPU``, ``ABI_DEFAULT_MEMORY``, ``ABI_DEFAULT_WALLTIME``,
+    ``ABI_ACCELERATOR``, and ``ABI_RESOURCE_PROFILE`` from the environment.
+    Returns a dict suitable for merging into resource configs.
+    / 从环境变量构建资源覆盖字典。
+    """
+    overrides: Dict[str, Any] = {}
+    cpu = os.environ.get("ABI_DEFAULT_CPU")
+    if cpu:
+        try:
+            overrides["cpu"] = int(cpu)
+        except ValueError:
+            pass
+    memory = os.environ.get("ABI_DEFAULT_MEMORY")
+    if memory:
+        overrides["memory"] = memory
+    walltime = os.environ.get("ABI_DEFAULT_WALLTIME")
+    if walltime:
+        overrides["walltime"] = walltime
+    accelerator = os.environ.get("ABI_ACCELERATOR")
+    if accelerator:
+        overrides["accelerator"] = accelerator
+    # Container overrides
+    container_image = os.environ.get("ABI_CONTAINER_IMAGE")
+    if container_image:
+        overrides["container_image"] = container_image
+    container_runtime = os.environ.get("ABI_CONTAINER_RUNTIME")
+    if container_runtime:
+        overrides["container_runtime"] = container_runtime
+    return overrides

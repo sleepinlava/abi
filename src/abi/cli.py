@@ -405,6 +405,30 @@ def dry_run_command(
         "--output-json",
         help="Emit the agent JSON envelope.",
     ),
+    resource_profile: Optional[str] = typer.Option(
+    None, "--resource-profile",
+    help="Resource profile preset (dev_small, hpc_standard, hpc_large).",
+),
+    cpu_override: Optional[int] = typer.Option(
+        None, "--cpu", help="CPU cores for all steps.",
+    ),
+    memory_override: Optional[str] = typer.Option(
+        None, "--memory", help="Memory per step (e.g. 16GB).",
+    ),
+    walltime_override: Optional[str] = typer.Option(
+        None, "--walltime", help="Walltime per step (e.g. 04:00:00).",
+    ),
+    accelerator_override: Optional[str] = typer.Option(
+        None, "--accelerator", help="GPU/accelerator (e.g. gpu:v100:1).",
+    ),
+    container_image: Optional[str] = typer.Option(
+        None, "--container-image",
+        help="Container image for all steps.",
+    ),
+    container_runtime: Optional[str] = typer.Option(
+        None, "--container-runtime",
+        help="Container runtime: docker, singularity, podman, apptainer.",
+    ),
 ) -> None:
     """Run a plugin dry-run and write ABI provenance artifacts.
 
@@ -449,6 +473,11 @@ def dry_run_command(
                 sample_sheet=sample_sheet,
                 dry_run=True,
                 progress=progress,
+                resource_profile=resource_profile,
+                cpu_override=cpu_override,
+                memory_override=memory_override,
+                walltime_override=walltime_override,
+                accelerator_override=accelerator_override,
             )
             | {"mock_tools": True},  # Force mock tools / 强制 mock 工具以确保不执行真实计算
         )
@@ -758,6 +787,30 @@ def run_command(
         "--output-json",
         help="Emit the agent JSON envelope.",
     ),
+    resource_profile: Optional[str] = typer.Option(
+    None, "--resource-profile",
+    help="Resource profile preset (dev_small, hpc_standard, hpc_large).",
+),
+    cpu_override: Optional[int] = typer.Option(
+        None, "--cpu", help="CPU cores for all steps.",
+    ),
+    memory_override: Optional[str] = typer.Option(
+        None, "--memory", help="Memory per step (e.g. 16GB).",
+    ),
+    walltime_override: Optional[str] = typer.Option(
+        None, "--walltime", help="Walltime per step (e.g. 04:00:00).",
+    ),
+    accelerator_override: Optional[str] = typer.Option(
+        None, "--accelerator", help="GPU/accelerator (e.g. gpu:v100:1).",
+    ),
+    container_image: Optional[str] = typer.Option(
+        None, "--container-image",
+        help="Container image for all steps.",
+    ),
+    container_runtime: Optional[str] = typer.Option(
+        None, "--container-runtime",
+        help="Container runtime: docker, singularity, podman, apptainer.",
+    ),
 ) -> None:
     """Run an ABI execution plan through a selected runtime backend.
 
@@ -860,6 +913,13 @@ def run_command(
             mamba_root=mamba_root,
             smoke=smoke,
             check_files=check_files,
+            resource_profile=resource_profile,
+            cpu_override=cpu_override,
+            memory_override=memory_override,
+            walltime_override=walltime_override,
+            accelerator_override=accelerator_override,
+            container_image=container_image,
+            container_runtime=container_runtime,
         )
         typer.echo(json.dumps({key: str(value) for key, value in result.outputs.items()}, indent=2))
     except Exception as exc:
@@ -1853,6 +1913,13 @@ def _run_with_runtime(
     mamba_root: Optional[Path],
     smoke: bool,
     check_files: bool,
+    resource_profile: Optional[str] = None,
+    cpu_override: Optional[int] = None,
+    memory_override: Optional[str] = None,
+    walltime_override: Optional[str] = None,
+    accelerator_override: Optional[str] = None,
+    container_image: Optional[str] = None,
+    container_runtime: Optional[str] = None,
 ) -> Any:
     """Resolve config, build plan, select runtime, and execute.
 
@@ -1865,8 +1932,8 @@ def _run_with_runtime(
     验证引擎类型，应用覆盖项，构建计划，实例化适当的运行时并执行。
     """
     runtime_engine = engine.lower().strip()
-    if runtime_engine not in {"local", "nextflow"}:
-        raise ABIError(f"Unsupported runtime engine: {engine}. Expected local or nextflow.")
+    if runtime_engine not in {"local", "nextflow", "hpc"}:
+        raise ABIError(f"Unsupported runtime engine: {engine}. Expected local, nextflow, or hpc.")
 
     overrides = _common_overrides(
         mode=mode,
@@ -1874,6 +1941,13 @@ def _run_with_runtime(
         outdir=outdir,
         log_dir=log_dir,
         sample_sheet=sample_sheet,
+        resource_profile=resource_profile,
+        cpu_override=cpu_override,
+        memory_override=memory_override,
+        walltime_override=walltime_override,
+        accelerator_override=accelerator_override,
+        container_image=container_image,
+        container_runtime=container_runtime,
     )
     # For local smoke runs, force mock tools to avoid requiring real installations.
     # 对于本地 smoke 运行，强制使用 mock 工具以避免需要真实安装。
@@ -1894,10 +1968,21 @@ def _run_with_runtime(
         profile=nextflow_profile,
         executor=executor,
         resume=resume,
+        resource_profile=resource_profile,
+        cpu_override=cpu_override,
+        memory_override=memory_override,
+        walltime_override=walltime_override,
+        accelerator_override=accelerator_override,
+        container_image=container_image,
+        container_runtime=container_runtime,
     )
     runtime: Any
     if runtime_engine == "local":
         runtime = LocalRuntime(plugin, options=options)
+    elif runtime_engine == "hpc":
+        from abi.runtimes import HpcRuntime
+
+        runtime = HpcRuntime(plugin, options=options)
     else:
         runtime = NextflowRuntime(plugin, options=options)
     return runtime.run(plan, cfg)

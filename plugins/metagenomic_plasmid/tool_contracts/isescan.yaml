@@ -23,3 +23,8 @@ failure_handling:
     hint: "Check plasmid_contigs FASTA path."
   tool_not_found:
     hint: "Install isescan.py in the autoplasm-annotation environment."
+
+resources:
+  cpu: 8
+  memory: "16GB"
+  walltime: "04:00:00"

@@ -28,3 +28,8 @@ failure_handling:
     hint: "Merged FASTQ/FASTA file not found. Verify that primer trimming completed successfully."
   tool_not_found:
     hint: "vsearch not found. Install: conda install -c bioconda vsearch"
+
+resources:
+  cpu: 4
+  memory: "4GB"
+  walltime: "01:00:00"

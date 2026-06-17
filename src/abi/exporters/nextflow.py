@@ -11,7 +11,7 @@ from typing import Any, Dict, Mapping
 from abi.config import PROJECT_ROOT
 from abi.dag import ABIDAG, StepBinding, infer_dag
 from abi.errors import ToolError
-from abi.tools import ToolRegistry
+from abi.tools import ToolRegistry, _disk_to_nextflow, _memory_to_nextflow
 
 
 class NextflowExporter:
@@ -186,11 +186,16 @@ class NextflowExporter:
             f"echo {shlex.quote(marker)}",
         ]
         script = "\n".join(f"    {line}" for line in script_lines if line)
+        # Resource and container directives / 资源和容器指令
+        resource_dirs = self._resource_directive_lines(binding, registry)
+        container_dir = self._container_directive_line(binding, registry)
+        if container_dir:
+            resource_dirs.append(container_dir)
         return f"""process {process_name} {{
     tag {_groovy_literal(str(getattr(step, "step_id", process_name)))}
     cpus params.threads
     errorStrategy 'terminate'
-
+{chr(10).join(resource_dirs)}
     input:
     val abi_trigger
 
@@ -202,6 +207,58 @@ class NextflowExporter:
 {script}
     '''
 }}"""
+
+    def _resource_directive_lines(
+        self,
+        binding: StepBinding,
+        registry: ToolRegistry,
+    ) -> list[str]:
+        """Render Nextflow process directive lines for resource requests.
+
+        Reads the tool's ``resources:`` block from its tool contract and
+        converts to Nextflow directives (``memory``, ``time``, ``disk``,
+        ``accelerator``). Falls back gracefully when resources are absent.
+        / 从工具合同读取 resources 块并转为 Nextflow 指令。
+        """
+        from abi.tools import ResourceSpec
+
+        step = binding.step
+        tool_id = getattr(step, "tool_id", "")
+        meta = registry.get(tool_id) if tool_id else {}
+        spec = ResourceSpec.from_metadata(meta)
+
+        # Only emit non-default values / 只输出非默认值
+        lines: list[str] = []
+        defaults = ResourceSpec()
+        if spec.memory != defaults.memory:
+            lines.append(f"    memory '{_memory_to_nextflow(spec.memory)}'")
+        if spec.walltime != defaults.walltime:
+            lines.append(f"    time '{spec.walltime}'")
+        if spec.disk and spec.disk != defaults.disk:
+            lines.append(f"    disk '{_disk_to_nextflow(spec.disk)}'")
+        if spec.accelerator:
+            lines.append(f"    accelerator {spec.accelerator}")
+        return lines
+
+    def _container_directive_line(
+        self,
+        binding: StepBinding,
+        registry: ToolRegistry,
+    ) -> str | None:
+        """Render Nextflow ``container`` directive if a container image is set.
+
+        Checks the tool's registry metadata for a ``container_image`` field.
+        / 如果设置了容器镜像，渲染 Nextflow container 指令。
+        """
+        from abi.tools import resolve_container_image
+
+        step = binding.step
+        tool_id = getattr(step, "tool_id", "")
+        meta = registry.get(tool_id) if tool_id else {}
+        image = resolve_container_image(tool_id, meta)
+        if image:
+            return f"    container '{image}'"
+        return None
 
     def _workflow_block(self, dag: ABIDAG) -> str:
         if not dag.topological_order:

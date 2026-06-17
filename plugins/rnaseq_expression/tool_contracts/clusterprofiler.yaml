@@ -43,3 +43,8 @@ failure_handling:
     hint: "Install R and clusterProfiler: BiocManager::install('clusterProfiler')."
   execution_error:
     hint: "Check that the organism database (org_db) is installed and valid."
+
+resources:
+  cpu: 4
+  memory: "8GB"
+  walltime: "02:00:00"

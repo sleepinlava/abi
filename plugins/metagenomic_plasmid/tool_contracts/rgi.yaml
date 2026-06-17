@@ -36,3 +36,8 @@ failure_handling:
     hint: Install rgi in the autoplasm-annotation environment.
   nonzero_exit:
     hint: Inspect RGI stderr log in provenance/step_logs.
+
+resources:
+  cpu: 8
+  memory: "16GB"
+  walltime: "04:00:00"
