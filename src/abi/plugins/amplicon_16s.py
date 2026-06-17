@@ -32,7 +32,9 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
-from abi.report import write_generic_report
+from abi.report import write_full_report
+from abi.report.citations import load_citations
+from abi.report.limitations import load_limitations
 from abi.schemas import ABIExecutionPlan, ABIPlanStep, ABISample, ABISampleContext
 from abi.tables import StandardTableManager
 from abi.timeouts import mapping_block
@@ -270,11 +272,19 @@ class Amplicon16SPlugin:
 
     def write_report(self, plan: Any, result_dir: str | Path) -> Dict[str, Path]:
         table_manager = StandardTableManager(self.table_schemas())
-        return write_generic_report(
+        summary = table_manager.summarize(Path(result_dir) / "tables")
+
+        root = self.root
+        citations = load_citations(root / "citation_registry.yaml") if (root / "citation_registry.yaml").exists() else []
+        limitations = load_limitations(root / "limitations.yaml") if (root / "limitations.yaml").exists() else []
+
+        return write_full_report(
             plan,
             result_dir,
-            table_summary=table_manager.summarize(Path(result_dir) / "tables"),
+            table_summary=summary,
             title=self.report_title,
+            citations=citations,
+            limitations=limitations,
         )
 
     # ── Validation ───────────────────────────────────────────────────────

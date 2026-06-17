@@ -1,0 +1,85 @@
+# Figure specifications for the rnaseq_expression plugin.
+# See: docs/next_development_plan.md §6.2
+#
+# Note: qc_summary and alignment_summary use a key-value schema
+# (metric/value columns).  Bar charts render metric names on the x-axis
+# and values on the y-axis — one bar per metric per sample.
+#
+# normalized_expression uses long format (sample_id, gene_id,
+# normalized_count).  PCA and heatmap renderers need matrix-format data;
+# these figures are marked optional until a table-pivoting layer is added.
+
+figures:
+  - id: qc_read_counts
+    type: bar
+    source_table: qc_summary
+    x: metric
+    y: value
+    title: "QC Metrics"
+    xlabel: "Metric"
+    ylabel: "Value"
+    sort_by: value
+    ascending: false
+    required: true
+
+  - id: mapping_rate
+    type: bar
+    source_table: alignment_summary
+    x: metric
+    y: value
+    title: "Alignment Metrics"
+    xlabel: "Metric"
+    ylabel: "Value"
+    sort_by: value
+    ascending: false
+    required: true
+
+  - id: pca_expression
+    type: pca
+    source_table: normalized_expression
+    label: gene_id
+    color: sample_id
+    title: "PCA of Normalized Expression"
+    top_n: 20
+    required: false
+
+  - id: volcano_deg
+    type: volcano
+    source_table: differential_expression
+    x: log2_fold_change
+    y: padj
+    label: gene_id
+    title: "Differential Expression Volcano Plot"
+    xlabel: "log2(Fold Change)"
+    ylabel: "-log10(adjusted p-value)"
+    top_n: 30
+    required: true
+
+  - id: top_deg_heatmap
+    type: heatmap
+    source_table: normalized_expression
+    x: gene_id
+    title: "Top Differentially Expressed Genes"
+    colormap: "RdBu_r"
+    top_n: 50
+    required: false
+
+  - id: enrichment_dotplot
+    type: scatter
+    source_table: enrichment_results
+    x: term
+    y: enrichment_score
+    color: category
+    title: "Pathway Enrichment Results"
+    required: false
+
+  - id: ma_plot
+    type: scatter
+    source_table: differential_expression
+    x: base_mean
+    y: log2_fold_change
+    label: gene_id
+    title: "MA Plot: Mean Expression vs Log2 Fold Change"
+    xlabel: "Mean of normalized counts"
+    ylabel: "log2(Fold Change)"
+    required: false

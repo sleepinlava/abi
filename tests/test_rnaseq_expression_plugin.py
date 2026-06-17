@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from abi.plugins import get_plugin, list_plugins
 from abi.testing import assert_plugin_contract
 
@@ -27,6 +26,8 @@ def test_table_schemas():
     assert "differential_expression" in schemas
     assert "qc_summary" in schemas
     assert "alignment_summary" in schemas
+    assert "normalized_expression" in schemas
+    assert "enrichment_results" in schemas
 
 
 def test_registry():
@@ -57,6 +58,7 @@ def test_pipeline_dag_exists():
 
 
 _TEST_SS = "/tmp/abi_test_ss.tsv"
+_FIXTURES = Path("tests/fixtures/tool_outputs")
 
 def test_build_plan_structure(tmp_path):
     plugin = get_plugin("rnaseq_expression")
@@ -110,3 +112,118 @@ def test_dag_cross_validation(tmp_path):
     step_ids = [str(s.step_id) for s in plan.steps]
     assert len(step_ids) == len(set(step_ids)), "all step_ids must be unique"
     assert len(dag.bindings) == len(plan.steps)
+
+
+# ── Parser tests ──────────────────────────────────────────────────────────
+
+
+def test_parse_fastp():
+    """fastp JSON output → qc_summary rows with before/after filtering metrics."""
+    plugin = get_plugin("rnaseq_expression")
+    result = plugin.parse_outputs("fastp", _FIXTURES / "fastp", "S1")
+    rows = result["qc_summary"]
+    assert len(rows) >= 4  # at least 4 metrics (2 blocks × 2+ metrics each)
+    assert all(r["tool"] == "fastp" for r in rows)
+    assert all(r["sample_id"] == "S1" for r in rows)
+    metrics = {r["metric"] for r in rows}
+    assert "before_filtering.total_reads" in metrics
+    assert "after_filtering.total_reads" in metrics
+    assert "before_filtering.q30_rate" in metrics
+    assert "after_filtering.q30_rate" in metrics
+
+
+def test_parse_star():
+    """STAR Log.final.out → alignment_summary rows with key metrics."""
+    plugin = get_plugin("rnaseq_expression")
+    result = plugin.parse_outputs("star", _FIXTURES / "star", "S1")
+    rows = result["alignment_summary"]
+    assert len(rows) >= 10  # STAR log has many metrics
+    assert all(r["tool"] == "star" for r in rows)
+    assert all(r["sample_id"] == "S1" for r in rows)
+    metrics = {r["metric"] for r in rows}
+    assert "Uniquely mapped reads %" in metrics
+    assert "Number of input reads" in metrics
+
+
+def test_parse_deseq2_normalized():
+    """DESeq2 R script produces normalized_expression.tsv → long-format rows."""
+    plugin = get_plugin("rnaseq_expression")
+    result = plugin.parse_outputs("deseq2", _FIXTURES / "deseq2", "S1")
+    # DESeq2 parser returns two tables
+    assert "differential_expression" in result
+    assert "normalized_expression" in result
+    de_rows = result["differential_expression"]
+    assert len(de_rows) == 3
+    assert de_rows[0]["gene_id"] == "ENSG000001"
+    norm_rows = result["normalized_expression"]
+    # 3 genes × 4 samples = 12 rows
+    assert len(norm_rows) == 12
+    assert all(r["normalization_method"] == "DESeq2_median_of_ratios" for r in norm_rows)
+    assert all(r["tool"] == "deseq2" for r in norm_rows)
+
+
+def test_unknown_tool_returns_empty():
+    """Unrecognized tool_id → empty dict (graceful no-op)."""
+    plugin = get_plugin("rnaseq_expression")
+    result = plugin.parse_outputs("nonexistent", Path("/tmp"), "S1")
+    assert result == {}
+
+
+# ── Report test ───────────────────────────────────────────────────────────
+
+
+def test_write_report_with_figures(tmp_path):
+    """write_report() produces report.html, methods.md even without real data."""
+    from abi.tables import StandardTableManager
+
+    plugin = get_plugin("rnaseq_expression")
+    tables_dir = tmp_path / "tables"
+    tables_dir.mkdir()
+    # Create empty standard tables with headers
+    tm = StandardTableManager(plugin.table_schemas())
+    tm.ensure_tables(tables_dir)
+    # Create provenance dir (resource manifest needs it)
+    (tables_dir.parent / "provenance").mkdir()
+    # Write a minimal sample sheet so build_plan works
+    sample_sheet = tmp_path / "sample_sheet.tsv"
+    sample_sheet.write_text(
+        "sample_id\tgroup\tcondition\tplatform\tread1\tread2\n"
+        "S1\ttreatment\ttreated\trna_seq\t/tmp/a.fastq.gz\t/tmp/b.fastq.gz\n"
+        "S2\tcontrol\tuntreated\trna_seq\t/tmp/c.fastq.gz\t/tmp/d.fastq.gz\n",
+        encoding="utf-8",
+    )
+    # Stash config for resource manifest
+    plugin._last_config = {
+        "project_name": "test", "mode": "dry_run", "threads": 4,
+        "outdir": str(tmp_path / "results"), "log_dir": str(tmp_path / "logs"),
+        "input": {"sample_sheet": str(sample_sheet)}, "resources": {},
+    }
+    # Build a minimal plan (check_files=False skips file existence check)
+    plan = plugin.build_plan(plugin._last_config, check_files=False)
+    paths = plugin.write_report(plan, tables_dir.parent)
+    report_html = paths["report_html"]
+    assert report_html.exists()
+    content = report_html.read_text(encoding="utf-8")
+    assert "RNA-seq" in content
+    methods_path = paths["methods"]
+    assert methods_path.exists()
+
+
+# ── Figure spec validation ────────────────────────────────────────────────
+
+
+def test_figure_specs_valid():
+    """All figure specs reference declared standard tables and columns."""
+    from abi.workflow.figure_specs import load_figure_specs
+
+    plugin = get_plugin("rnaseq_expression")
+    schemas = plugin.table_schemas()
+    specs = load_figure_specs(plugin.root / "figure_specs.yaml", table_schemas=schemas)
+    assert len(specs) == 7  # 6 original + ma_plot
+    spec_ids = {s.id for s in specs}
+    assert spec_ids == {
+        "qc_read_counts", "mapping_rate", "pca_expression",
+        "volcano_deg", "top_deg_heatmap", "enrichment_dotplot", "ma_plot",
+    }
+    required = [s for s in specs if s.required]
+    assert len(required) == 3  # qc_read_counts, mapping_rate, volcano_deg

@@ -1,0 +1,5 @@
+# Program:featureCounts v2.0.3; Command:featureCounts -T 4 -a annotations.gtf -o S1.featureCounts.txt S1.bam
+Geneid	Chr	Start	End	Strand	Length	S1.bam
+ENSG000001	chr1	100	500	+	401	150
+ENSG000002	chr1	600	1200	+	601	320
+ENSG000003	chr2	200	800	-	601	85

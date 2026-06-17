@@ -1,0 +1,11 @@
+# Known limitations for the rnaseq_expression plugin.
+# See: docs/next_development_plan.md §6.2
+
+limitations:
+  - "RNA-seq measures steady-state transcript abundance, which does not always correlate with protein expression levels."
+  - "Alignment rates depend on reference genome completeness and annotation quality; unannotated genes or novel transcripts are missed by featureCounts."
+  - "DESeq2 normalisation assumes most genes are not differentially expressed; severe global shifts in expression violate this assumption."
+  - "Differential expression p-values are not corrected for unmeasured confounders (batch effects, sample processing variation) unless explicitly modeled."
+  - "Lowly expressed genes (mean count < 10) have inflated false discovery rates even after multiple testing correction."
+  - "Enrichment analysis is database-dependent (GO, KEGG); pathways absent from the reference database cannot be detected."
+  - "Reference genome version, annotation version, and alignment index version all affect results; these are recorded in the resource manifest."

@@ -1,0 +1,43 @@
+# Citation registry for wgs_bacteria plugin.
+# See: docs/next_development_plan.md §6.3
+
+citations:
+  - tool: fastp
+    stage: qc
+    citation: "Chen et al. 2018, Bioinformatics, doi:10.1093/bioinformatics/bty560"
+
+  - tool: spades
+    stage: assembly
+    citation: "Prjibelski et al. 2020, Current Protocols in Bioinformatics, doi:10.1002/cpbi.102"
+
+  - tool: unicycler
+    stage: assembly
+    citation: "Wick et al. 2017, PLoS Computational Biology, doi:10.1371/journal.pcbi.1005595"
+
+  - tool: quast
+    stage: assembly_qc
+    citation: "Gurevich et al. 2013, Bioinformatics, doi:10.1093/bioinformatics/btt086"
+
+  - tool: prokka
+    stage: annotation
+    citation: "Seemann T. 2014, Bioinformatics, doi:10.1093/bioinformatics/btu153"
+
+  - tool: bakta
+    stage: annotation
+    citation: "Schwengers et al. 2021, Microbial Genomics, doi:10.1099/mgen.0.000685"
+
+  - tool: mlst
+    stage: mlst
+    citation: "Jolley & Maiden 2010, BMC Bioinformatics, doi:10.1186/1471-2105-11-595 (BIGSdb); Seemann T, mlst (https://github.com/tseemann/mlst)"
+
+  - tool: amrfinderplus
+    stage: amr
+    citation: "Feldgarden et al. 2021, Scientific Reports, doi:10.1038/s41598-021-91456-0"
+
+  - tool: abricate
+    stage: amr
+    citation: "Seemann T, ABRicate (https://github.com/tseemann/abricate)"
+
+  - tool: plasmidfinder
+    stage: plasmid_typing
+    citation: "Carattoli et al. 2014, Antimicrobial Agents and Chemotherapy, doi:10.1128/AAC.02412-14"

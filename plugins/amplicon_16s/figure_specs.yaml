@@ -1,0 +1,58 @@
+# Figure specifications for the amplicon_16s plugin.
+# See: docs/next_development_plan.md §6.4
+
+figures:
+  - id: read_retention
+    type: bar
+    source_table: denoising_stats
+    x: sample_id
+    y: nonchimera_reads
+    title: "Read Retention Across Pipeline Stages"
+    xlabel: "Sample"
+    ylabel: "Reads"
+    required: true
+
+  - id: taxonomy_barplot_phylum
+    type: stacked_bar
+    source_table: taxonomy
+    x: sample_id
+    title: "Taxonomic Composition at Phylum Level"
+    colormap: "tab20"
+    required: true
+
+  - id: alpha_diversity_boxplot
+    type: boxplot
+    source_table: alpha_diversity
+    x: group
+    y: shannon_entropy
+    title: "Alpha Diversity (Shannon) by Group"
+    xlabel: "Group"
+    ylabel: "Shannon Entropy"
+    required: true
+
+  - id: beta_diversity_pcoa
+    type: pca
+    source_table: beta_diversity
+    label: sample_id
+    color: group
+    title: "PCoA of Beta Diversity"
+    required: true
+
+  - id: top_taxa_heatmap
+    type: heatmap
+    source_table: asv_table
+    x: sample_id
+    title: "Top Taxa Abundance Heatmap"
+    colormap: "viridis"
+    top_n: 50
+    required: false
+
+  - id: asv_prevalence
+    type: scatter
+    source_table: asv_table
+    x: asv_id
+    y: prevalence
+    title: "ASV Prevalence Across Samples"
+    xlabel: "ASV"
+    ylabel: "Prevalence"
+    required: false

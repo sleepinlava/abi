@@ -1,0 +1,12 @@
+# Known limitations for the amplicon_16s plugin.
+# See: docs/next_development_plan.md §6.4
+
+limitations:
+  - "16S/ITS amplicon sequencing measures relative abundance, not absolute bacterial load or viable cell count."
+  - "Primer choice (e.g., V3-V4 vs V4-V5) strongly influences taxonomic profiles; results are biased toward taxa with good primer binding."
+  - "Taxonomic assignment depends on the reference database version (SILVA, GTDB, Greengenes); organisms absent from the database cannot be identified."
+  - "Amplicon sequence variants (ASVs) at 100% identity may still merge ecologically distinct strains; 16S resolution is intrinsically limited."
+  - "Low-abundance taxa (<0.1% relative abundance) have high technical variability and should be interpreted with caution."
+  - "Differential abundance analysis (ANCOM, ALDEx2) is exploratory; results do not prove biological causation."
+  - "Alpha and beta diversity metrics are sensitive to sequencing depth; rarefaction or normalization choices affect results."
+  - "Chimera removal relies on abundance-based heuristics; low-abundance chimeras may escape filtering."

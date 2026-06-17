@@ -1,0 +1,11 @@
+# Known limitations for the metatranscriptomics plugin.
+# See: docs/next_development_plan.md §6.5
+
+limitations:
+  - "RNA abundance does not equal protein activity; post-transcriptional regulation, protein turnover, and post-translational modification all modulate the proteome independently of transcript levels."
+  - "Relative expression levels are affected by sequencing depth, rRNA removal efficiency, and database version; results are valid only for the specific experimental conditions and database versions recorded in the resource manifest."
+  - "Incomplete host RNA removal contaminates functional profiles with host transcripts; host contamination rate is reported but residual host reads may still confound low-abundance pathway detection."
+  - "HUMAnN stratified results (taxon-contributed pathway abundances) depend on the accuracy of both taxonomic profiling (MetaPhlAn) and functional assignment; misclassification at either step propagates to stratified outputs."
+  - "Reference databases (MetaPhlAn marker genes, UniRef, MetaCyc) are biased toward well-characterized organisms and pathways; novel or poorly studied microbial functions may be absent."
+  - "Do not equate relative pathway expression with absolute functional activity; enzyme kinetics, substrate availability, and cellular context all determine actual metabolic flux."
+  - "Metatranscriptomic data captures a snapshot of community transcriptional activity at sampling time; temporal dynamics, circadian rhythms, and transient responses are not captured in a single sample."

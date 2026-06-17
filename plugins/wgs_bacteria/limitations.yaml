@@ -1,0 +1,11 @@
+# Known limitations for the wgs_bacteria plugin.
+# See: docs/next_development_plan.md §6.3
+
+limitations:
+  - "Short-read assembly (SPAdes) may fragment genomes with extensive repetitive elements (e.g., transposases, IS elements); long-read sequencing improves assembly contiguity."
+  - "AMR gene presence does not guarantee phenotypic resistance; expression, copy number, and regulatory mutations affect resistance phenotype."
+  - "MLST typing is scheme-dependent; isolates may have novel allelic profiles not in the reference database (indicated as 'unknown' or 'nearest match')."
+  - "Plasmid replicon detection via PlasmidFinder is limited to known replicon types; novel or divergent plasmid types may be missed."
+  - "Annotation (Prokka/Bakta) transfers annotations from reference databases; gene names and functions are computational predictions, not experimental validations."
+  - "This pipeline is designed for bacterial isolate WGS (single genome per sample), not metagenomic mixtures."
+  - "Database versions (AMRFinder DB, PubMLST, PlasmidFinder DB) are recorded in the resource manifest and affect results."

@@ -27,9 +27,9 @@ from __future__ import annotations
 import json
 from html import escape
 from pathlib import Path
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, List, Mapping, Optional
 
-__all__ = ["write_generic_report"]
+__all__ = ["write_generic_report", "write_full_report"]
 
 
 def write_generic_report(
@@ -158,3 +158,97 @@ def write_generic_report(
         encoding="utf-8",
     )
     return {"report": markdown, "report_html": html}
+
+
+def write_full_report(
+    plan: Any,
+    result_dir: str | Path,
+    *,
+    table_summary: Mapping[str, Mapping[str, Any]],
+    title: str = "ABI Report",
+    rendered_figures: Optional[Dict[str, Path]] = None,
+    citations: Optional[List[Dict[str, str]]] = None,
+    limitations: Optional[List[str]] = None,
+    config: Optional[Mapping[str, Any]] = None,
+    methods: bool = True,
+    resource_manifest: bool = True,
+) -> Dict[str, Path]:
+    """Write a complete ABI report with all sections.
+
+    This is the **recommended** function for plugins to call.  It produces
+    a full report suite in ``report/``:
+    - ``report.md`` — Executive summary with table overview.
+    - ``report.html`` — Full styled HTML report with figures, methods,
+      limitations, and citations embedded.
+    - ``methods.md`` — Standalone methods section for publication.
+    - ``report_summary.json`` — Machine-readable summary.
+    - ``resource_manifest.json`` (in ``provenance/``) — Resource inventory.
+
+    # Parameters / 参数
+    - **plan**: Execution plan (duck-typed: needs ``.to_dict()`` or be dict-like).
+    - **result_dir**: Pipeline output directory (must contain ``tables/`` and
+      ``provenance/`` subdirectories).
+    - **table_summary**: Dict from ``StandardTableManager.summarize()``.
+    - **title**: Report title (defaults to plugin's ``report_title``).
+    - **rendered_figures**: ``{spec_id: path}`` from ``FigureEngine.render_all()``.
+    - **citations**: List of citation dicts with ``tool``, ``stage``, ``citation`` keys.
+    - **limitations**: List of limitation strings.
+    - **config**: Plugin config dict (used for resource manifest generation).
+    - **methods**: If True, generate ``methods.md``.
+    - **resource_manifest**: If True, generate ``resource_manifest.json``.
+
+    # Returns / 返回
+    Dict mapping section name → Path to generated file.
+    """
+    from abi.report.html import write_html_report
+    from abi.report.methods import write_methods
+
+    root = Path(result_dir)
+    paths: Dict[str, Path] = {}
+
+    # ── Generic report (Markdown + HTML + JSON) ──
+    generic = write_generic_report(
+        plan, result_dir, table_summary=table_summary, title=title
+    )
+    paths.update(generic)
+
+    # ── Full HTML report (overwrites the simpler one) ──
+    methods_md = None
+    if methods:
+        methods_path = write_methods(
+            result_dir,
+            plan=plan,
+            citations=citations,
+            limitations=limitations,
+            title=f"{title} — Methods",
+        )
+        paths["methods"] = methods_path
+        methods_md = methods_path.read_text(encoding="utf-8")
+
+    html_path = write_html_report(
+        result_dir,
+        plan=plan,
+        table_summary=table_summary,
+        rendered_figures=rendered_figures,
+        methods_md=methods_md,
+        limitations_yaml=limitations,
+        citations=citations,
+        title=title,
+    )
+    paths["report_html"] = html_path
+
+    # ── Resource manifest ──
+    if resource_manifest and config:
+        from abi.workflow.manifest import write_resource_manifest
+
+        plan_data = plan.to_dict() if hasattr(plan, "to_dict") else dict(plan)
+        analysis_type = str(plan_data.get("analysis_type", "unknown"))
+        manifest_path = write_resource_manifest(
+            root / "provenance",
+            analysis_type=analysis_type,
+            config=config,
+            checksum=True,
+        )
+        paths["resource_manifest"] = manifest_path
+
+    return paths

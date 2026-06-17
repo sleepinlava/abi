@@ -1,0 +1,51 @@
+# Figure specifications for the wgs_bacteria plugin.
+# See: docs/next_development_plan.md §6.3
+
+figures:
+  - id: assembly_qc
+    type: bar
+    source_table: assembly_qc
+    x: sample_id
+    y: n50
+    title: "Assembly N50 and Contig Count"
+    xlabel: "Sample"
+    ylabel: "N50 (bp)"
+    required: true
+
+  - id: genome_gc_scatter
+    type: scatter
+    source_table: assembly_qc
+    x: genome_size
+    y: gc_content
+    title: "Genome Size vs GC Content"
+    xlabel: "Genome Size (bp)"
+    ylabel: "GC Content (%)"
+    required: false
+
+  - id: amr_heatmap
+    type: heatmap
+    source_table: amr_genes
+    x: sample_id
+    title: "AMR Gene Detection Heatmap"
+    colormap: "Reds"
+    top_n: 50
+    required: true
+
+  - id: amr_drug_class
+    type: bar
+    source_table: amr_genes
+    x: drug_class
+    y: gene_count
+    title: "AMR Genes by Drug Class"
+    xlabel: "Drug Class"
+    ylabel: "Gene Count"
+    sort_by: gene_count
+    ascending: false
+    required: false
+
+  - id: annotation_composition
+    type: stacked_bar
+    source_table: annotation_summary
+    x: sample_id
+    title: "Genome Annotation Composition"
+    required: false

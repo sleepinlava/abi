@@ -1,0 +1,71 @@
+# Figure specifications for the metagenomic_plasmid plugin.
+# Each figure is rendered from a standard table by the ABI figure engine.
+# See: docs/next_development_plan.md §6.1
+
+figures:
+  # ── QC ──
+  - id: qc_read_retention
+    type: bar
+    source_table: qc_summary
+    x: sample_id
+    y: reads_after_filtering
+    title: "Reads Retained After QC"
+    xlabel: "Sample"
+    ylabel: "Reads"
+    required: false
+
+  # ── Assembly ──
+  - id: assembly_n50
+    type: bar
+    source_table: assembly_qc
+    x: sample_id
+    y: n50
+    title: "Assembly N50 per Sample"
+    xlabel: "Sample"
+    ylabel: "N50 (bp)"
+    sort_by: n50
+    ascending: false
+    required: false
+
+  # ── Plasmid detection ──
+  - id: plasmid_length_distribution
+    type: bar
+    source_table: plasmid_calls
+    x: contig_id
+    y: contig_length
+    title: "Plasmid Contig Length Distribution"
+    xlabel: "Contig"
+    ylabel: "Length (bp)"
+    sort_by: contig_length
+    ascending: false
+    required: false
+
+  - id: plasmid_score_distribution
+    type: scatter
+    source_table: plasmid_calls
+    x: contig_length
+    y: plasmid_score
+    title: "Plasmid Score vs Contig Length"
+    xlabel: "Contig Length (bp)"
+    ylabel: "Plasmid Score"
+    required: false
+
+  # ── AMR ──
+  - id: amr_heatmap
+    type: heatmap
+    source_table: amr_genes
+    x: sample_id
+    title: "AMR Gene Presence Heatmap"
+    colormap: "Reds"
+    top_n: 50
+    required: false
+
+  # ── Plasmid abundance ──
+  - id: plasmid_abundance_heatmap
+    type: heatmap
+    source_table: plasmid_abundance
+    x: plasmid_id
+    title: "Plasmid Abundance Heatmap"
+    colormap: "viridis"
+    top_n: 50
+    required: false

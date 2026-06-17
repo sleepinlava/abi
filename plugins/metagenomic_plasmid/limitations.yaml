@@ -1,0 +1,15 @@
+# Known limitations for the metagenomic_plasmid plugin.
+# These are rendered into every report to prevent over-interpretation.
+# See: docs/next_development_plan.md §6.1
+
+limitations:
+  - "Plasmid detection via geNomad uses a score threshold (default 0.7); low-score contigs may be missed or incorrectly classified."
+  - "Assembly from metagenomic short reads can produce chimeric contigs that confound plasmid length estimates."
+  - "AMR gene presence does not guarantee phenotypic resistance; expression level, copy number, and host background all influence resistance phenotype."
+  - "Plasmid abundance estimates via CoverM depend on read mapping rates and contig coverage evenness; highly repetitive plasmid sequences may inflate abundance."
+  - "Host prediction from metagenomic data is correlative and should be validated with culture-based or Hi-C experiments before publication claims."
+  - "Taxonomic profiling (MetaPhlAn, Kraken2) is database-dependent; organisms absent from the reference database cannot be detected."
+  - "Mobile element detection (ISEScan, IntegronFinder) has false-positive rates that increase in low-complexity or repeat-rich regions."
+  - "This pipeline does not distinguish between chromosomal and plasmid-borne copies of identical genes (e.g., AMR genes present in both locations)."
+  - "Database versions (geNomad DB, Bakta DB, AMRFinder DB, Kraken2 DB) are recorded in the resource manifest but change over time; results are valid only for the versions listed."
+  - "Dry-run results prove only structural validity (planning, command rendering, provenance); biological conclusions require real tool outputs with validated inputs."

@@ -1,0 +1,35 @@
+# Citation registry for amplicon_16s plugin.
+# See: docs/next_development_plan.md §6.4
+
+citations:
+  - tool: cutadapt
+    stage: primer_trimming
+    citation: "Martin M. 2011, EMBnet.journal, doi:10.14806/ej.17.1.200"
+
+  - tool: dada2
+    stage: denoising
+    citation: "Callahan et al. 2016, Nature Methods, doi:10.1038/nmeth.3869"
+
+  - tool: qiime2
+    stage: microbiome
+    citation: "Bolyen et al. 2019, Nature Biotechnology, doi:10.1038/s41587-019-0209-9"
+
+  - tool: silva
+    stage: taxonomy
+    citation: "Quast et al. 2013, Nucleic Acids Research, doi:10.1093/nar/gks1219 (SILVA)"
+
+  - tool: gtdb
+    stage: taxonomy
+    citation: "Parks et al. 2022, Nucleic Acids Research, doi:10.1093/nar/gkab776 (GTDB)"
+
+  - tool: mafft
+    stage: phylogeny
+    citation: "Katoh & Standley 2013, Molecular Biology and Evolution, doi:10.1093/molbev/mst010"
+
+  - tool: fasttree
+    stage: phylogeny
+    citation: "Price et al. 2010, PLoS ONE, doi:10.1371/journal.pone.0009490"
+
+  - tool: ancom
+    stage: differential_abundance
+    citation: "Mandal et al. 2015, Microbial Ecology in Health and Disease, doi:10.3402/mehd.v26.27663"

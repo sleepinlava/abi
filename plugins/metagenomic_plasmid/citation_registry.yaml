@@ -1,0 +1,76 @@
+# Citation registry for metagenomic_plasmid plugin.
+# Each entry documents the literature backing a tool or pipeline stage.
+# See: docs/next_development_plan.md §6.1
+
+citations:
+  - tool: fastp
+    stage: qc
+    citation: "Chen et al. 2018, Bioinformatics, doi:10.1093/bioinformatics/bty560"
+
+  - tool: fastqc
+    stage: qc
+    citation: "Andrews S. 2010, FastQC: a quality control tool for high throughput sequence data."
+
+  - tool: multiqc
+    stage: qc
+    citation: "Ewels et al. 2016, Bioinformatics, doi:10.1093/bioinformatics/btw354"
+
+  - tool: megahit
+    stage: assembly
+    citation: "Li et al. 2015, Bioinformatics, doi:10.1093/bioinformatics/btv033"
+
+  - tool: metaspades
+    stage: assembly
+    citation: "Nurk et al. 2017, Genome Research, doi:10.1101/gr.213959.116"
+
+  - tool: quast
+    stage: assembly_qc
+    citation: "Gurevich et al. 2013, Bioinformatics, doi:10.1093/bioinformatics/btt086"
+
+  - tool: genomad
+    stage: plasmid_detection
+    citation: "Camargo et al. 2023, Nature Biotechnology, doi:10.1038/s41587-023-01953-y"
+
+  - tool: metaphlan
+    stage: taxonomy
+    citation: "Blanco-Miguez et al. 2023, Nature Biotechnology, doi:10.1038/s41587-023-01688-w — MetaPhlAn 4"
+
+  - tool: bakta
+    stage: annotation
+    citation: "Schwengers et al. 2021, Microbial Genomics, doi:10.1099/mgen.0.000685"
+
+  - tool: prokka
+    stage: annotation
+    citation: "Seemann T. 2014, Bioinformatics, doi:10.1093/bioinformatics/btu153"
+
+  - tool: amrfinderplus
+    stage: amr
+    citation: "Feldgarden et al. 2021, Scientific Reports, doi:10.1038/s41598-021-91456-0"
+
+  - tool: abricate
+    stage: amr
+    citation: "Seemann T, ABRicate (https://github.com/tseemann/abricate)"
+
+  - tool: coverm
+    stage: abundance
+    citation: "CoverM (https://github.com/wwood/CoverM) — cited via Aroney et al. 2025, Nature Methods, doi:10.1038/s41592-024-02547-1 (Aviary tool suite)"
+
+  - tool: bowtie2
+    stage: alignment
+    citation: "Langmead & Salzberg 2012, Nature Methods, doi:10.1038/nmeth.1923"
+
+  - tool: samtools
+    stage: alignment
+    citation: "Danecek et al. 2021, GigaScience, doi:10.1093/gigascience/giab008"
+
+  - tool: isescan
+    stage: mobile_elements
+    citation: "Xie & Tang 2017, Bioinformatics, doi:10.1093/bioinformatics/btx437"
+
+  - tool: integronfinder
+    stage: mobile_elements
+    citation: "Neron et al. 2022, Nucleic Acids Research, doi:10.1093/nar/gkac453"
+
+  - tool: fastspar
+    stage: statistics
+    citation: "Watts et al. 2019, Bioinformatics, doi:10.1093/bioinformatics/bty936"

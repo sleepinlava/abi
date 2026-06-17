@@ -1,0 +1,4 @@
+gene_id	baseMean	log2FoldChange	lfcSE	stat	pvalue	padj	comparison
+ENSG000001	150.5	2.35	0.42	5.595238095238095	2.1e-08	4.2e-06	treatment_vs_control
+ENSG000002	320.0	-1.20	0.35	-3.4285714285714284	6.0e-04	0.024	treatment_vs_control
+ENSG000003	85.0	0.15	0.30	0.50	0.617	0.950	treatment_vs_control

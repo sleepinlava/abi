@@ -1,0 +1,31 @@
+# Citation registry for metatranscriptomics plugin.
+# See: docs/next_development_plan.md §6.5
+
+citations:
+  - tool: fastp
+    stage: qc
+    citation: "Chen et al. 2018, Bioinformatics, doi:10.1093/bioinformatics/bty560"
+
+  - tool: sortmerna
+    stage: rrna_removal
+    citation: "Kopylova et al. 2012, Bioinformatics, doi:10.1093/bioinformatics/bts611"
+
+  - tool: bowtie2
+    stage: host_removal
+    citation: "Langmead & Salzberg 2012, Nature Methods, doi:10.1038/nmeth.1923"
+
+  - tool: metaphlan
+    stage: taxonomy
+    citation: "Blanco-Miguez et al. 2023, Nature Biotechnology, doi:10.1038/s41587-023-01688-w — MetaPhlAn 4"
+
+  - tool: humann
+    stage: functional_profiling
+    citation: "Beghini et al. 2021, eLife, doi:10.7554/eLife.65088 — HUMAnN 3"
+
+  - tool: kraken2
+    stage: taxonomy
+    citation: "Wood et al. 2019, Genome Biology, doi:10.1186/s13059-019-1891-0"
+
+  - tool: eggnog
+    stage: functional_profiling
+    citation: "Cantalapiedra et al. 2021, Molecular Biology and Evolution, doi:10.1093/molbev/msab293 — eggNOG-mapper v2"

@@ -1,0 +1,31 @@
+# Citation registry for rnaseq_expression plugin.
+# See: docs/next_development_plan.md §6.2
+
+citations:
+  - tool: fastp
+    stage: qc
+    citation: "Chen et al. 2018, Bioinformatics, doi:10.1093/bioinformatics/bty560"
+
+  - tool: star
+    stage: alignment
+    citation: "Dobin et al. 2013, Bioinformatics, doi:10.1093/bioinformatics/bts635"
+
+  - tool: hisat2
+    stage: alignment
+    citation: "Kim et al. 2019, Nature Biotechnology, doi:10.1038/s41587-019-0201-4"
+
+  - tool: featurecounts
+    stage: quantification
+    citation: "Liao et al. 2014, Bioinformatics, doi:10.1093/bioinformatics/btt656"
+
+  - tool: deseq2
+    stage: differential_expression
+    citation: "Love et al. 2014, Genome Biology, doi:10.1186/s13059-014-0550-8"
+
+  - tool: salmon
+    stage: quantification
+    citation: "Patro et al. 2017, Nature Methods, doi:10.1038/nmeth.4197"
+
+  - tool: edger
+    stage: differential_expression
+    citation: "Robinson et al. 2010, Bioinformatics, doi:10.1093/bioinformatics/btp616"

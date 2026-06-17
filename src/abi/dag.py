@@ -20,10 +20,10 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional
-from abi.contracts import WorkflowSpec
+from typing import Any, Dict, Iterable, List, Mapping
 
 from abi.config import PROJECT_ROOT
+from abi.contracts import WorkflowSpec
 from abi.schemas import ABIError
 
 logger = logging.getLogger(__name__)
