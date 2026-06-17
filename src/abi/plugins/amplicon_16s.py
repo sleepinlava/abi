@@ -362,11 +362,30 @@ def _resolve_config_paths(config: Dict[str, Any]) -> None:
 
 
 def _resolve_path(value: str | Path, *, base_dirs: Iterable[Path]) -> Path:
+    """Resolve *value* against *base_dirs*, rejecting paths that escape.
+
+    Mirrors the path-traversal guard in the flagship plasmid plugin
+    (``metagenomic_plasmid/_engine/sample_sheet.py``).  Absolute paths and
+    paths that already exist are accepted only if they lie inside one of
+    the *base_dirs*.
+    """
     path = Path(value)
+    # Absolute-or-existing fast path — but only if contained in a base dir.
     if path.is_absolute() or path.exists():
-        return path
+        for base_dir in base_dirs:
+            try:
+                path.resolve().relative_to(base_dir.resolve())
+                return path
+            except ValueError:
+                continue
+        # Fall through: could not validate containment; try base-relative lookup.
     for base_dir in base_dirs:
-        candidate = base_dir / path
+        candidate = (base_dir / path).resolve()
+        try:
+            candidate.relative_to(base_dir.resolve())
+        except ValueError:
+            # Path escapes the base directory — skip it.
+            continue
         if candidate.exists():
             return candidate
     return path

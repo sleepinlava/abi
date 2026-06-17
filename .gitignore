@@ -86,11 +86,22 @@ Testing/
 # Demo execution artifacts
 data/e_coli_demo/
 results/e_coli_demo/
-smoke_test
+smoke_test/
 
-# docs
+# Benchmark results (generated)
+bench/results/
+bench/Bench_1/bench/results/
+metrics.tsv
+
+# Historical planning docs (auto-generated, not for repo)
 Rebuild.md
 Development_Status.md
 Engineering_Roadmap.md
 demo_plan.md
 autoplasm_DAG.md
+docs/experiments/abi_final_development_plan.md
+docs/experiments/abi_final_development_plan_zh.md
+
+# Claude Code project files
+.claude/
+!.claude/settings.json

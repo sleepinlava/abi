@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import List
 
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
 from abi.report import write_generic_report
@@ -78,7 +78,11 @@ class WGSBacteriaPlugin:
                 step_id=f"{sample.sample_id}_qc_fastp", sample_id=sample.sample_id,
                 step_name="read_qc", tool_id="fastp", category="qc",
                 inputs={"read1": sample.read1, "read2": sample.read2},
-                outputs={"output_dir": str(qc_out), "clean_read1": str(cr1), "clean_read2": str(cr2)},
+                outputs={
+                    "output_dir": str(qc_out),
+                    "clean_read1": str(cr1),
+                    "clean_read2": str(cr2),
+                },
                 params={"sample_id": sample.sample_id, "threads": threads, "mode": config["mode"]},
             ))
 
@@ -174,7 +178,10 @@ def _parse_sample_sheet(path, *, check_files):
             raise ValueError(f"Sample sheet is empty: {ss}")
         required = {"sample_id", "read1", "read2"}
         if required - set(r.fieldnames):
-            raise ValueError(f"Sample sheet missing columns: {sorted(required - set(r.fieldnames))}")
+            raise ValueError(
+                f"Sample sheet missing columns: "
+                f"{sorted(required - set(r.fieldnames))}"
+            )
         samples = []
         for i, row in enumerate(r, start=2):
             sid = str(row.get("sample_id", "")).strip()
@@ -189,6 +196,15 @@ def _parse_sample_sheet(path, *, check_files):
                                      read1=r1, read2=r2,
                                      condition=str(row.get("condition", "")).strip() or None))
     groups = {s.group for s in samples if s.group}
+    if check_files:
+        missing_files = []
+        for sample in samples:
+            for field in ("read1", "read2"):
+                value = getattr(sample, field)
+                if value and not Path(str(value)).exists():
+                    missing_files.append(f"{sample.sample_id}:{field}={value}")
+        if missing_files:
+            raise ValueError("Input files do not exist: " + "; ".join(missing_files))
     return ABISampleContext(samples=samples, multi_sample=len(samples) > 1,
                             has_groups=len(groups) >= 2,
                             enable_sample_analysis=len(samples) > 1,
@@ -202,11 +218,30 @@ def _resolve_config_paths(config):
 
 
 def _resolve_path(value, *, base_dirs):
+    """Resolve *value* against *base_dirs*, rejecting paths that escape.
+
+    Mirrors the path-traversal guard in the flagship plasmid plugin
+    (``metagenomic_plasmid/_engine/sample_sheet.py``).  Absolute paths and
+    paths that already exist are accepted only if they lie inside one of
+    the *base_dirs*.
+    """
     p = Path(value)
+    # Absolute-or-existing fast path — but only if contained in a base dir.
     if p.is_absolute() or p.exists():
-        return p
+        for bd in base_dirs:
+            try:
+                p.resolve().relative_to(bd.resolve())
+                return p
+            except ValueError:
+                continue
+        # Fall through: could not validate containment; try base-relative lookup.
     for bd in base_dirs:
-        c = bd / p
+        c = (bd / p).resolve()
+        try:
+            c.relative_to(bd.resolve())
+        except ValueError:
+            # Path escapes the base directory — skip it.
+            continue
         if c.exists():
             return c
     return p
@@ -253,3 +288,11 @@ def _parse_amrfinderplus(output_dir, sample_id):
                     "source_file": str(path),
                 })
     return rows
+
+
+def _clean(value):
+    """Strip whitespace and return None for empty strings."""
+    if value is None:
+        return None
+    value = str(value).strip()
+    return value or None
