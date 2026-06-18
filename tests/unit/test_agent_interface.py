@@ -52,7 +52,7 @@ def test_agent_interface_reports_invalid_json_file(tmp_path):
     result_dir.mkdir()
     (result_dir / "execution_plan.json").write_text("{bad json\n", encoding="utf-8")
 
-    payload = json.loads(ABIAgentInterface().report(result_dir=result_dir))
+    payload = json.loads(ABIAgentInterface(verbose_errors=True).report(result_dir=result_dir))
 
     assert payload["status"] == "error"
     assert payload["error_code"] == "parse_failed"

@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.3.0] - 2026-06-18
+
+### Added
+
+- **Plan summarization**: `abi plan` now returns a `summary` field with pipeline
+  stages, key tools, and platforms. Agents no longer need to read the full
+  `execution_plan.json` (saves 78-95% tokens on plan output).
+- **`abi query` CLI**: Lightweight metadata query interface (~50ms) for
+  pipeline stages, tools, platforms, and step-level inputs/outputs/resources.
+  No config loading required — reads `pipeline_dag.yaml` and tool registry only.
+- **Benchmark data**: `expected_assertions.yaml` + `config.yaml` for all 5
+  plugins under `data/benchmarks/<plugin>/`. wgs_bacteria and metatranscriptomics
+  added to complete 5/5 plugin benchmark coverage.
+- **Benchmark smoke tests**: Value-level assertion validation for wgs_bacteria
+  and metatranscriptomics (upgraded from file-existence-only checks).
+- **Conda environments**: Created `wgs`, `abi-qc`, `abi-stats` environments
+  (prokka, mlst, STAR, hisat2, subread) for local benchmark execution.
+- **`ABIAgentInterface(verbose_errors=False)`**: Error envelopes now omit
+  `error_type` by default; agents receive only `error_code` + `diagnostic_hints`
+  for recovery. Full details available with `verbose_errors=True`.
+
+### Changed
+
+- **Dry-run envelope**: Removed `written_files` list; agents use `abi inspect`
+  on demand instead of receiving auto-generated file lists.
+- **Error envelope**: `error_envelope()` now accepts `verbose` parameter;
+  `error_type` field only included when `verbose=True`.
+- **`@runtime_checkable`**: Added to `ABIPlugin` protocol for `isinstance` checks.
+
+### Bench v0.5 (sibling repo)
+
+- 5 new real execution tasks: T31 (plasmid), T32 (rnaseq), T33 (amplicon),
+  T34 (wgs), T35 (metatranscriptomics).
+- New scoring checks: `check_pipeline_completed`, `check_assertions_validated`,
+  `check_discrepancy_analyzed`, `check_provenance_quality`.
+- Benchmark fixtures for all 5 plugins with `real_tool_execution: true`.
+
 ## [1.2.0] - 2026-06-18
 
 ### Added

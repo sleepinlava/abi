@@ -578,6 +578,61 @@ def inspect_command(
         _fail(exc)
 
 
+@app.command("query")
+def query_command(
+    analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
+    what: str = typer.Option(
+        ..., "--what",
+        help="What to query: stages, tools, platforms, resources, inputs, outputs.",
+    ),
+    step: Optional[str] = typer.Option(
+        None, "--step",
+        help="Pipeline node ID (required for resources/inputs/outputs).",
+    ),
+    output_json: bool = typer.Option(
+        False,
+        "--output-json",
+        help="Emit the agent JSON envelope.",
+    ),
+) -> None:
+    """Lightweight metadata query — no plan construction, no config loading.
+
+    Reads the plugin's ``pipeline_dag.yaml`` and tool registry to answer
+    structural questions about the pipeline. Much faster and cheaper than
+    ``plan`` (~50ms vs ~300ms) — suitable for agent reasoning loops.
+
+    Examples::
+
+        abi query --type rnaseq_expression --what stages
+        abi query --type metagenomic_plasmid --what tools
+        abi query --type rnaseq_expression --step qc_fastp --what resources
+
+    轻量级元数据查询 — 不构建执行计划，不加载配置。
+    仅读取 pipeline_dag.yaml 和工具注册表，比 plan 快 (~50ms vs ~300ms)。
+    """
+    if output_json:
+        _emit_agent_json(
+            ABIAgentInterface().query(
+                analysis_type=analysis_type,
+                what=what,
+                step=step,
+            )
+        )
+        return
+    try:
+        payload = json.loads(ABIAgentInterface().query(
+            analysis_type=analysis_type, what=what, step=step,
+        ))
+        if payload.get("status") == "error":
+            typer.echo(json.dumps(payload, indent=2), err=True)
+            raise typer.Exit(1)
+        typer.echo(json.dumps(payload.get("result", payload), indent=2))
+    except typer.Exit:
+        raise
+    except Exception as exc:
+        _fail(exc)
+
+
 @app.command("report")
 def report_command(
     result_dir: Path = typer.Option(..., "--result-dir", help="ABI result directory."),

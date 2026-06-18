@@ -35,8 +35,11 @@ def test_golden_trace_replays_agent_lifecycle(trace_name: str, tmp_path: Path) -
         if payload["status"] == "error":
             assert payload["error_code"]
             assert payload["diagnostic_hints"]
-        if tool in {"abi_plan", "abi_dry_run", "abi_report"}:
+        if tool in {"abi_plan", "abi_report"}:
             assert payload["result"]["written_files"]
+        if tool == "abi_dry_run":
+            # dry_run no longer includes written_files (agents use inspect)
+            assert "outdir" in payload["result"]
         if tool == "abi_run":
             assert payload["status"] == "confirmation_required"
 

@@ -58,7 +58,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, Union
+
+import yaml
 
 from abi._shared import _common_overrides, _plan_dict, _read_tsv
 from abi.agent.context import build_agent_context, render_doctor_agent
@@ -92,6 +94,17 @@ class ABIAgentInterface:
 
     # 每个公共方法都返回统一 JSON 信封, 包含 status / command / result 或 error。
     """
+
+    def __init__(self, verbose_errors: bool = False) -> None:
+        """Initialize the agent interface.
+
+        Args:
+            verbose_errors: if True, error envelopes include ``error_type``
+                            (Python exception class name) for debugging.
+                            Default False — agents only need error_code +
+                            diagnostic_hints for automated recovery.
+        """
+        self.verbose_errors = verbose_errors
 
     # ------------------------------------------------------------------
     # Public lifecycle methods / 公共生命周期方法
@@ -424,6 +437,39 @@ class ABIAgentInterface:
         """
         return self._call("doctor_agent", self._doctor_agent, analysis_type=analysis_type)
 
+    def query(
+        self,
+        *,
+        analysis_type: str,
+        what: str,
+        step: Optional[str] = None,
+    ) -> str:
+        """Lightweight metadata query — no plan construction, no config loading.
+
+        Unlike ``plan()`` which resolves config and builds a full execution plan,
+        ``query()`` only reads the plugin's ``pipeline_dag.yaml`` and tool
+        registry — cheap (~50ms) and suitable for quick lookups during agent
+        reasoning loops.
+
+        Query targets (``--what``):
+            ``stages``     — ordered pipeline stages (from DAG categories)
+            ``tools``      — all tools grouped by category
+            ``platforms``  — supported sequencing platforms
+            ``resources``  — inputs + outputs for a specific ``--step``
+            ``inputs``     — only inputs for a specific ``--step``
+            ``outputs``    — only outputs for a specific ``--step``
+
+        # 轻量级元数据查询 — 不构建执行计划，不加载配置。
+        # 仅读取 pipeline_dag.yaml 和工具注册表，~50ms，适合 agent 推理循环中的快速查询。
+        """
+        return self._call(
+            "query",
+            self._query,
+            analysis_type=analysis_type,
+            what=what,
+            step=step,
+        )
+
     def abi_validate_result(
         self,
         *,
@@ -570,6 +616,7 @@ class ABIAgentInterface:
                     error_code=error_code,
                     diagnostic_hints=hints,
                     extra=extra,
+                    verbose=self.verbose_errors,
                 )
             )
         # Promote handler-returned confirmation_required to a first-class envelope.
@@ -648,10 +695,12 @@ class ABIAgentInterface:
             json.dumps(plan_data, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
+        steps = getattr(plan, "steps", [])
         return {
             "analysis_type": analysis_type,
             "plan_path": plan_path,
-            "steps": len(getattr(plan, "steps", [])),
+            "steps": len(steps),
+            "summary": _build_plan_summary(plan, analysis_type),
             "written_files": [plan_path],
             "plan": plan_data,
         }
@@ -713,7 +762,6 @@ class ABIAgentInterface:
             "analysis_type": analysis_type,
             "outdir": cfg.get("outdir"),
             "outputs": output_files,
-            "written_files": _path_values(output_files),
         }
 
     def _inspect(self, *, result_dir: Union[str, Path]) -> Dict[str, Any]:
@@ -940,6 +988,57 @@ class ABIAgentInterface:
         plugin = get_plugin(analysis_type)
         return {"analysis_type": analysis_type, "text": render_doctor_agent(plugin)}
 
+    def _query(
+        self,
+        *,
+        analysis_type: str,
+        what: str,
+        step: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Handle lightweight metadata queries against plugin DAG and registry.
+
+        Reads ``pipeline_dag.yaml`` (if present) and the tool registry to answer
+        structural questions about the pipeline without constructing a full plan.
+        """
+        from abi.config import PLUGIN_ROOT
+
+        plugin = get_plugin(analysis_type)
+
+        # ── Load pipeline DAG (optional — not all plugins have one) ──────────
+        dag_path = PLUGIN_ROOT / analysis_type / "pipeline_dag.yaml"
+        dag: Optional[Dict[str, Any]] = None
+        if dag_path.is_file():
+            dag = yaml.safe_load(dag_path.read_text(encoding="utf-8")) or {}
+
+        # ── Load tool registry ──────────────────────────────────────────────
+        registry = plugin.registry()
+        tools: List[Dict[str, Any]] = registry.list_tools()
+
+        # ── Dispatch by query target ────────────────────────────────────────
+        what_lower = what.strip().lower()
+
+        if what_lower == "stages":
+            return _query_stages(dag, tools, analysis_type)
+
+        if what_lower == "tools":
+            return _query_tools(dag, tools)
+
+        if what_lower == "platforms":
+            return _query_platforms(dag)
+
+        if what_lower in ("resources", "inputs", "outputs"):
+            if not step:
+                raise ValueError(
+                    f"--step is required for --what {what}. "
+                    f"Use --step <node_id> to specify which pipeline node to query."
+                )
+            return _query_step(dag, tools, step, what_lower)
+
+        raise ValueError(
+            f"Unknown query target: {what!r}. "
+            f"Valid targets: stages, tools, platforms, resources, inputs, outputs."
+        )
+
     def _build_plan(
         self,
         *,
@@ -1001,3 +1100,161 @@ def _path_values(outputs: Mapping[str, Any]) -> list[Any]:
     # 用于构建 written_files 列表, agent 无需自行过滤 None 占位符。
     """
     return [value for value in outputs.values() if value is not None]
+
+
+def _build_plan_summary(plan: Any, analysis_type: str) -> Dict[str, Any]:
+    """Extract a lightweight pipeline summary for agent consumption.
+
+    Instead of requiring agents to read the full ``execution_plan.json``
+    (which can be 5,000+ tokens for complex pipelines), this produces a
+    compact summary with stages, key tools, and platforms — enough for
+    an LLM to understand the workflow shape without reading the file.
+
+    Design decisions:
+    - ``stages`` are derived from ``PlanStep.category``, which every plugin
+      sets when building its plan. Order follows first appearance.
+    - ``key_tools`` picks the first tool in each stage, giving a
+      representative tool per pipeline phase.
+    - ``platforms`` are aggregated from the plan's sample inputs.
+
+    # 从执行计划中提取轻量级流水线摘要供智能体消费。
+    # 智能体无需读取完整的 execution_plan.json（复杂流水线可能 5,000+ tokens），
+    # 此摘要提供 stages/key_tools/platforms，足以让 LLM 理解工作流结构。
+    """
+    steps = getattr(plan, "steps", []) or []
+
+    # Unique categories in first-appearance order.
+    seen: set = set()
+    stages: list = []
+    key_tools: list = []
+    for step in steps:
+        cat = (getattr(step, "category", "") or "").strip()
+        if cat and cat not in seen:
+            seen.add(cat)
+            stages.append(cat)
+            key_tools.append(getattr(step, "tool_id", ""))
+
+    # Platforms from sample inputs.
+    samples = getattr(plan, "samples", []) or []
+    platforms: list = list(dict.fromkeys(
+        getattr(s, "platform", "generic") for s in samples
+    ))
+
+    return {
+        "pipeline": analysis_type,
+        "stages": stages,
+        "key_tools": key_tools,
+        "platforms": platforms,
+    }
+
+
+# ------------------------------------------------------------------
+# Query helpers — used by _query() for lightweight metadata lookups
+# ------------------------------------------------------------------
+
+
+def _query_stages(
+    dag: Optional[Dict[str, Any]],
+    tools: List[Dict[str, Any]],
+    analysis_type: str,
+) -> Dict[str, Any]:
+    """Extract ordered pipeline stages from the DAG or tool registry.
+
+    Prefers DAG ``nodes`` (each node has a ``category`` field). Falls back
+    to deduplicating ``category`` from tool registry entries.
+    """
+    nodes = (dag or {}).get("nodes", {})
+    if nodes:
+        seen: set = set()
+        stages: list = []
+        for _node_id, node in nodes.items():
+            cat = str(node.get("category", "")).strip()
+            if cat and cat not in seen:
+                seen.add(cat)
+                stages.append(cat)
+        return {
+            "pipeline": analysis_type,
+            "stages": stages,
+            "stage_count": len(stages),
+        }
+
+    # Fallback: derive stages from tool registry categories.
+    seen = set()
+    stages = []
+    for tool in tools:
+        cat = str(tool.get("category", "")).strip()
+        if cat and cat not in seen:
+            seen.add(cat)
+            stages.append(cat)
+    return {
+        "pipeline": analysis_type,
+        "stages": stages,
+        "stage_count": len(stages),
+    }
+
+
+def _query_tools(
+    dag: Optional[Dict[str, Any]],
+    tools: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Return all tools grouped by category."""
+    nodes = (dag or {}).get("nodes", {})
+    if nodes:
+        # DAG-based: map node_id → tool metadata
+        result_tools: list = []
+        for node_id, node in nodes.items():
+            result_tools.append({
+                "step_id": node_id,
+                "tool_id": node.get("tool_id", node_id),
+                "category": node.get("category", ""),
+                "optional": node.get("optional", False),
+                "depends_on": node.get("depends_on", []),
+            })
+        return {"tools": result_tools, "tool_count": len(result_tools)}
+
+    # Fallback: from tool registry
+    result_tools = [
+        {
+            "tool_id": t.get("id", ""),
+            "category": t.get("category", ""),
+            "description": t.get("description", ""),
+        }
+        for t in tools
+    ]
+    return {"tools": result_tools, "tool_count": len(result_tools)}
+
+
+def _query_platforms(dag: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Return supported platforms from the DAG."""
+    platforms = (dag or {}).get("platforms", [])
+    return {"platforms": list(platforms) if platforms else []}
+
+
+def _query_step(
+    dag: Optional[Dict[str, Any]],
+    tools: List[Dict[str, Any]],
+    step: str,
+    what: str,
+) -> Dict[str, Any]:
+    """Return inputs/outputs/resources for a specific pipeline node."""
+    nodes = (dag or {}).get("nodes", {})
+    if step in nodes:
+        node = nodes[step]
+        result: Dict[str, Any] = {"step_id": step, "tool_id": node.get("tool_id", step)}
+        if what in ("inputs", "resources"):
+            result["inputs"] = node.get("inputs", {})
+        if what in ("outputs", "resources"):
+            result["outputs"] = node.get("outputs", {})
+        return result
+
+    # Fallback: search tool registry for matching tool_id
+    for tool in tools:
+        if tool.get("id") == step:
+            result = {"step_id": step, "tool_id": step}
+            if what in ("inputs", "resources"):
+                result["inputs"] = tool.get("inputs", {})
+            if what in ("outputs", "resources"):
+                result["outputs"] = tool.get("outputs", {})
+            return result
+
+    raise ValueError(f"Step {step!r} not found in pipeline DAG or tool registry.")

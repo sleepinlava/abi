@@ -103,35 +103,49 @@ def error_envelope(
     error_code: str,
     diagnostic_hints: Sequence[Mapping[str, Any]],
     extra: Optional[Mapping[str, Any]] = None,
+    verbose: bool = False,
 ) -> Dict[str, Any]:
     """Build an error envelope with structured diagnostics.
 
+    By default, error envelopes are **minimal**: they include only
+    ``error_code`` (machine-readable), ``error`` (human-readable), and
+    ``diagnostic_hints`` (actionable recovery suggestions). This keeps
+    token consumption low for agents that only need to classify and
+    recover from errors.
+
+    When ``verbose=True`` (e.g. ``--debug`` mode), the envelope also
+    includes ``error_type`` (Python exception class name) for
+    human debugging.
+
     Args:
         command:          the ABI method name that failed.
-        error:            human-readable error message.
+        error:            human-readable error message (no traceback).
         error_type:       Python exception class name (e.g. ``"ValueError"``).
+                          Only included when ``verbose=True``.
         error_code:       stable machine-readable code from ``ERROR_CODES``
                           (e.g. ``"missing_input"``, ``"tool_not_found"``).
         diagnostic_hints: list of ``DiagnosticHint`` dicts with severity, code,
                           message, and ``suggested_next_action``.
         extra:            optional additional context (e.g. available plugin
                           IDs when ``unknown_analysis_type`` is raised).
+        verbose:          if True, include ``error_type`` for debugging.
 
     Returns:
         ``{"status": "error", "command": <command>, "error_code": <code>, ...}``
 
     # 构建错误信封, 包含结构化诊断信息。
-    # error_code 来自 ERROR_CODES 稳定分类; diagnostic_hints 提供可操作的恢复建议。
-    # extra 可携带附加上下文 (如 unknown_analysis_type 时提供可用插件列表)。
+    # 默认返回最小信息 (error_code + error + diagnostic_hints), agent 不需要
+    # 解析 Python traceback 或异常类名。verbose=True 时附加 error_type 用于调试。
     """
     payload: Dict[str, Any] = {
         "status": "error",
         "command": command,
         "error_code": error_code,
         "error": error,
-        "error_type": error_type,
         "diagnostic_hints": to_jsonable(diagnostic_hints),
     }
+    if verbose:
+        payload["error_type"] = error_type
     if extra:
         payload.update(to_jsonable(extra))
     return payload

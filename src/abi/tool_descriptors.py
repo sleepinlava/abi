@@ -281,6 +281,8 @@ TOOL_ALIASES: Dict[str, str] = {
     "doctor_agent": "doctor_agent",
     "doctor-agent": "doctor_agent",
     "abi_doctor_agent": "doctor_agent",
+    "query": "query",
+    "abi_query": "query",
     "validate_result": "abi_validate_result",
     "validate-result": "abi_validate_result",
     "abi_validate_result": "abi_validate_result",
