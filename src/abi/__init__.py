@@ -39,7 +39,7 @@ __all__ = [
     "list_plugins_summary",
 ]
 
-__version__ = "1.3.0"
+__version__ = "1.3.2"
 
 
 def get_agent_guide() -> str:

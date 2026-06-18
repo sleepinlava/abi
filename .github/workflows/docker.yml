@@ -4,90 +4,195 @@ on:
   workflow_dispatch:
     inputs:
       plugin:
-        description: "Plugin to build (all, amplicon, rnaseq, wgs, metatranscriptomics)"
-        default: "amplicon"
+        description: "Plugin to build"
+        type: choice
+        options:
+          - all
+          - amplicon
+          - rnaseq
+          - wgs
+          - metatranscriptomics
+          - plasmid
+        default: "all"
         required: false
-        type: string
       push:
         description: "Push to GHCR after building"
+        type: boolean
         default: false
         required: false
+      push_to_dockerhub:
+        description: "Also push to Docker Hub (requires DOCKERHUB_TOKEN secret)"
         type: boolean
+        default: false
+        required: false
   push:
     tags:
       - "v*"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "docker/**"
+      - "envs/**"
+      - "src/**"
+      - "pyproject.toml"
+      - ".github/workflows/docker.yml"
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Filter: skip manual-only (plasmid) on automatic triggers;
+    # on workflow_dispatch, respect the plugin input
+    if: |
+      (github.event_name != 'workflow_dispatch' && matrix.manual-only != true) ||
+      (github.event_name == 'workflow_dispatch' && (inputs.plugin == 'all' || inputs.plugin == matrix.plugin))
     permissions:
       contents: read
-      packages: write      # Required for GHCR push
+      packages: write       # GHCR push
+      attestations: write   # provenance + SBOM
+      id-token: write       # keyless signing
     strategy:
       fail-fast: false
       matrix:
         include:
           - plugin: amplicon
             dockerfile: docker/Dockerfile.amplicon
-            tag: abi-amplicon
+            image-name: abi-amplicon
           - plugin: rnaseq
             dockerfile: docker/Dockerfile.rnaseq
-            tag: abi-rnaseq
+            image-name: abi-rnaseq
           - plugin: wgs
             dockerfile: docker/Dockerfile.wgs
-            tag: abi-wgs
+            image-name: abi-wgs
           - plugin: metatranscriptomics
             dockerfile: docker/Dockerfile.metatranscriptomics
-            tag: abi-metatranscriptomics
-          # metagenomic_plasmid excluded from CI matrix — too large (~15 GB)
-          # Build manually: docker build -f docker/Dockerfile.metagenomic_plasmid -t abi-plasmid .
+            image-name: abi-metatranscriptomics
+          # metagenomic_plasmid is ~15 GB — manual-only, excluded from automatic CI
+          - plugin: plasmid
+            dockerfile: docker/Dockerfile.metagenomic_plasmid
+            image-name: abi-plasmid
+            manual-only: true
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image (${{ matrix.plugin }})
-        uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          tags: ${{ matrix.tag }}:latest
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          driver-opts: |
+            image=moby/buildkit:latest
 
-      - name: Smoke-test (${{ matrix.plugin }})
+      # ── Determine push behaviour ──────────────────────────────────
+      - name: Determine push flags
+        id: flags
         run: |
-          docker run --rm ${{ matrix.tag }}:latest list-types
-          echo "=== Image ${{ matrix.tag }} smoke-test OK ==="
+          PUSH=false
+          PUSH_TO_DH=false
 
+          # Tag push → always push to GHCR
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            PUSH=true
+          # Manual dispatch with push checkbox
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.push }}" == "true" ]]; then
+            PUSH=true
+            if [[ "${{ inputs.push_to_dockerhub }}" == "true" ]]; then
+              PUSH_TO_DH=true
+            fi
+          fi
+
+          echo "push=${PUSH}" >> $GITHUB_OUTPUT
+          echo "push_to_dh=${PUSH_TO_DH}" >> $GITHUB_OUTPUT
+
+      # ── Registry logins ───────────────────────────────────────────
       - name: Login to GitHub Container Registry
-        if: |
-          startsWith(github.ref, 'refs/tags/v') ||
-          (github.event_name == 'workflow_dispatch' && inputs.push == true)
+        if: steps.flags.outputs.push == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push to GHCR
-        if: |
-          startsWith(github.ref, 'refs/tags/v') ||
-          (github.event_name == 'workflow_dispatch' && inputs.push == true)
+      - name: Login to Docker Hub
+        if: steps.flags.outputs.push_to_dh == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # ── Tag / label generation ────────────────────────────────────
+      - name: Docker metadata (GHCR)
+        id: meta-ghcr
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image-name }}
+          tags: |
+            type=raw,value=latest,enable=${{ steps.flags.outputs.push == 'true' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=ref,event=tag
+          labels: |
+            org.opencontainers.image.title=ABI ${{ matrix.plugin }}
+            org.opencontainers.image.description=ABI bioinformatics plugin: ${{ matrix.plugin }}
+            org.opencontainers.image.vendor=sleepinlava
+
+      - name: Docker metadata (Docker Hub)
+        id: meta-dh
+        if: steps.flags.outputs.push_to_dh == 'true'
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.image-name }}
+          tags: |
+            type=raw,value=latest,enable=${{ steps.flags.outputs.push == 'true' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=ref,event=tag
+
+      # ── Merge GHCR + Docker Hub tags / labels ─────────────────────
+      - name: Merge image tags
+        id: meta
         run: |
-          set -e
-          IMAGE_ID="ghcr.io/${{ github.repository_owner }}/${{ matrix.tag }}"
-          # GHCR requires lowercase image names
-          IMAGE_ID=$(echo "$IMAGE_ID" | tr '[:upper:]' '[:lower:]')
-          echo "Pushing to $IMAGE_ID"
-          docker tag ${{ matrix.tag }}:latest "${IMAGE_ID}:latest"
-          docker push "${IMAGE_ID}:latest"
-          # Tag with version if triggered by tag push
-          if [ -n "${{ github.ref_name }}" ]; then
-            docker tag ${{ matrix.tag }}:latest "${IMAGE_ID}:${{ github.ref_name }}"
-            docker push "${IMAGE_ID}:${{ github.ref_name }}"
+          TAGS="${{ steps.meta-ghcr.outputs.tags }}"
+          LABELS="${{ steps.meta-ghcr.outputs.labels }}"
+          if [ -n "${{ steps.meta-dh.outputs.tags }}" ]; then
+            TAGS="${TAGS}"$'\n'"${{ steps.meta-dh.outputs.tags }}"
           fi
-          echo "=== Push complete: ${IMAGE_ID} ==="
+          echo 'tags<<EOF_TAGS' >> $GITHUB_OUTPUT
+          echo "$TAGS" >> $GITHUB_OUTPUT
+          echo 'EOF_TAGS' >> $GITHUB_OUTPUT
+          echo 'labels<<EOF_LABELS' >> $GITHUB_OUTPUT
+          echo "$LABELS" >> $GITHUB_OUTPUT
+          echo 'EOF_LABELS' >> $GITHUB_OUTPUT
+
+      # ── Build & push ──────────────────────────────────────────────
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ steps.flags.outputs.push == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          push: ${{ steps.flags.outputs.push }}
+          load: ${{ steps.flags.outputs.push == 'false' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+
+      # ── Smoke-test (local image, when not pushing) ────────────────
+      - name: Smoke-test (local)
+        if: steps.flags.outputs.push == 'false'
+        run: |
+          docker run --rm ${{ matrix.image-name }}:latest list-types
+          echo "=== Image ${{ matrix.image-name }} local smoke-test OK ==="
+
+      # ── Smoke-test (pulled image, when pushing) ───────────────────
+      - name: Smoke-test (pushed image)
+        if: steps.flags.outputs.push == 'true'
+        run: |
+          IMAGE_REF="ghcr.io/${{ github.repository_owner }}/${{ matrix.image-name }}:latest"
+          IMAGE_REF=$(echo "$IMAGE_REF" | tr '[:upper:]' '[:lower:]')
+          docker pull "$IMAGE_REF"
+          docker run --rm "$IMAGE_REF" list-types
+          echo "=== Image ${{ matrix.image-name }} push smoke-test OK ==="
