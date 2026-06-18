@@ -28,7 +28,7 @@ Module                    Purpose
 ``abi.provenance``        ``RunLogger``, TSV provenance writers
 ``abi.diagnostics``       Error taxonomy + ``classify_exception()``
 ``abi.interfaces``        ``ABIPlugin``, ``ABIDryRunPlugin`` protocol classes
-``abi.sciplot``           Scientific figure compiler — FigureSpec → Validate → Render → Export → Lint → Provenance (v1.3.3)
+``abi.sciplot``           Figure compiler (Pydantic schema, 8 plot types, PDF/SVG/PNG/TIFF)
 ``abi.openai_contracts``   OpenAI function-calling tool descriptors
 ``abi.mcp``               Optional MCP stdio server for Claude Desktop / Claude Code
 ========================  ======================================================

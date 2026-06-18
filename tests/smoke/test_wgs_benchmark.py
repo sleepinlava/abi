@@ -88,9 +88,7 @@ def test_wgs_benchmark_assertions(tmp_path: Path) -> None:
             _found_reads = True
             break
     if not _found_reads:
-        pytest.skip(
-            "No read files found for benchmark samples"
-        )
+        pytest.skip("No read files found for benchmark samples")
 
     config_path.write_text(
         yaml.dump(
