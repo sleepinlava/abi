@@ -144,3 +144,17 @@ warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
 disable_error_code = ["import-untyped", "no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "abi.sciplot.adapters"
+disable_error_code = ["call-arg", "arg-type"]
+
+[[tool.mypy.overrides]]
+module = "abi.sciplot.schema.*"
+# Pydantic Field(default_factory=<submodel>) — mypy cannot see through
+# FieldInfo to infer that the submodel is constructed lazily.
+disable_error_code = ["call-arg"]
+
+[[tool.mypy.overrides]]
+module = "abi.sciplot.tests.*"
+disable_error_code = ["call-arg", "arg-type"]

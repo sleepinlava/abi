@@ -145,7 +145,7 @@ class ExportSpec(BaseModel):
     output_dir: Path = Field(..., description="Directory for output files.")
     basename: str = Field(..., description="Base filename (without extension).")
     formats: list[Literal["pdf", "svg", "png", "tiff"]] = Field(
-        default_factory=lambda: ["pdf", "svg", "png"],
+        default=["pdf", "svg", "png"],
         description="Output formats to generate.",
     )
     transparent: bool = Field(False, description="Use transparent background for raster formats.")
@@ -200,16 +200,24 @@ class FigureSpec(BaseModel):
 
     data: DataSpec = Field(..., description="Input data specification.")
     mapping: MappingSpec = Field(
-        default_factory=MappingSpec, description="Column-to-aesthetic mapping."
+        default_factory=lambda: MappingSpec(),
+        description="Column-to-aesthetic mapping.",
     )
     statistics: Optional[StatSpec] = Field(
         None, description="Statistical test metadata (required for significance markers)."
     )
-    style: StyleSpec = Field(default_factory=StyleSpec, description="Visual style configuration.")
-    labels: LabelSpec = Field(default_factory=LabelSpec, description="Figure text labels.")
+    style: StyleSpec = Field(
+        default_factory=lambda: StyleSpec(),
+        description="Visual style configuration.",
+    )
+    labels: LabelSpec = Field(
+        default_factory=lambda: LabelSpec(),
+        description="Figure text labels.",
+    )
     export: ExportSpec = Field(..., description="Output configuration.")
     provenance: ProvenanceSpec = Field(
-        default_factory=ProvenanceSpec, description="Reproducibility metadata."
+        default_factory=lambda: ProvenanceSpec(),
+        description="Reproducibility metadata.",
     )
 
     # ── Validators / 验证器 ─────────────────────────────────────────────

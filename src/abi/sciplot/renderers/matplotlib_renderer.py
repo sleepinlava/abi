@@ -187,10 +187,10 @@ class MatplotlibRenderer(BaseRenderer):
         from abi.sciplot.lint import lint_figure as run_lint
 
         lint_report = run_lint(spec, output_files, provenance_path)
-        for e in lint_report.errors:
-            errors.append(f"[{e.rule}] {e.message}")
-        for w in lint_report.warnings:
-            warnings.append(f"[{w.rule}] {w.message}")
+        for le in lint_report.errors:
+            errors.append(f"[{le.rule}] {le.message}")
+        for lw in lint_report.warnings:
+            warnings.append(f"[{lw.rule}] {lw.message}")
 
         # Write lint report
         lint_path = output_dir / f"{spec.export.basename}.lint.json"

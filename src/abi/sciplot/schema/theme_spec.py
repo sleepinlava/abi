@@ -83,12 +83,12 @@ class ThemeSpec(BaseModel):
     """
 
     theme_name: str = Field(..., description="Unique theme identifier.")
-    figure: FigureDims = Field(default_factory=FigureDims)
-    font: FontSpec = Field(default_factory=FontSpec)
-    axes: AxesSpec = Field(default_factory=AxesSpec)
-    lines: LinesSpec = Field(default_factory=LinesSpec)
-    legend: LegendSpec = Field(default_factory=LegendSpec)
-    export: ExportThemeSpec = Field(default_factory=ExportThemeSpec)
+    figure: FigureDims = Field(default_factory=lambda: FigureDims())
+    font: FontSpec = Field(default_factory=lambda: FontSpec())
+    axes: AxesSpec = Field(default_factory=lambda: AxesSpec())
+    lines: LinesSpec = Field(default_factory=lambda: LinesSpec())
+    legend: LegendSpec = Field(default_factory=lambda: LegendSpec())
+    export: ExportThemeSpec = Field(default_factory=lambda: ExportThemeSpec())
 
     # ── Factory methods / 工厂方法 ──────────────────────────────────────
 
