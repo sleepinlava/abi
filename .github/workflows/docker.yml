@@ -40,11 +40,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Filter: skip manual-only (plasmid) on automatic triggers;
-    # on workflow_dispatch, respect the plugin input
-    if: |
-      (github.event_name != 'workflow_dispatch' && matrix.manual-only != true) ||
-      (github.event_name == 'workflow_dispatch' && (inputs.plugin == 'all' || inputs.plugin == matrix.plugin))
     permissions:
       contents: read
       packages: write       # GHCR push
@@ -70,12 +65,23 @@ jobs:
           - plugin: plasmid
             dockerfile: docker/Dockerfile.metagenomic_plasmid
             image-name: abi-plasmid
-            manual-only: true
 
     steps:
       - uses: actions/checkout@v4
 
+      # ── Gate: filter matrix entries ───────────────────────────────
+      # Step-level `if` CAN access `matrix.*` (unlike job-level `if`).
+      # On automatic events: skip plasmid (manual-only, ~15 GB).
+      # On workflow_dispatch: only build the requested plugin(s).
+      - name: Gate
+        id: gate
+        if: |
+          (github.event_name != 'workflow_dispatch' && matrix.plugin != 'plasmid') ||
+          (github.event_name == 'workflow_dispatch' && (inputs.plugin == 'all' || inputs.plugin == matrix.plugin))
+        run: echo "Building ${{ matrix.plugin }}"
+
       - name: Set up Docker Buildx
+        if: steps.gate.outcome == 'success'
         uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
@@ -83,6 +89,7 @@ jobs:
 
       # ── Determine push behaviour ──────────────────────────────────
       - name: Determine push flags
+        if: steps.gate.outcome == 'success'
         id: flags
         run: |
           PUSH=false
@@ -104,7 +111,7 @@ jobs:
 
       # ── Registry logins ───────────────────────────────────────────
       - name: Login to GitHub Container Registry
-        if: steps.flags.outputs.push == 'true'
+        if: steps.gate.outcome == 'success' && steps.flags.outputs.push == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -112,7 +119,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Docker Hub
-        if: steps.flags.outputs.push_to_dh == 'true'
+        if: steps.gate.outcome == 'success' && steps.flags.outputs.push_to_dh == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
@@ -121,6 +128,7 @@ jobs:
       # ── Tag / label generation ────────────────────────────────────
       - name: Docker metadata (GHCR)
         id: meta-ghcr
+        if: steps.gate.outcome == 'success'
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image-name }}
@@ -137,7 +145,7 @@ jobs:
 
       - name: Docker metadata (Docker Hub)
         id: meta-dh
-        if: steps.flags.outputs.push_to_dh == 'true'
+        if: steps.gate.outcome == 'success' && steps.flags.outputs.push_to_dh == 'true'
         uses: docker/metadata-action@v5
         with:
           images: ${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.image-name }}
@@ -151,6 +159,7 @@ jobs:
       # ── Merge GHCR + Docker Hub tags / labels ─────────────────────
       - name: Merge image tags
         id: meta
+        if: steps.gate.outcome == 'success'
         run: |
           TAGS="${{ steps.meta-ghcr.outputs.tags }}"
           LABELS="${{ steps.meta-ghcr.outputs.labels }}"
@@ -166,6 +175,7 @@ jobs:
 
       # ── Build & push ──────────────────────────────────────────────
       - name: Build and push Docker image
+        if: steps.gate.outcome == 'success'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -182,14 +192,14 @@ jobs:
 
       # ── Smoke-test (local image, when not pushing) ────────────────
       - name: Smoke-test (local)
-        if: steps.flags.outputs.push == 'false'
+        if: steps.gate.outcome == 'success' && steps.flags.outputs.push == 'false'
         run: |
           docker run --rm ${{ matrix.image-name }}:latest list-types
           echo "=== Image ${{ matrix.image-name }} local smoke-test OK ==="
 
-      # ── Smoke-test (pulled image, when pushing) ───────────────────
+      # ── Smoke-test (pushed image, when pushing) ───────────────────
       - name: Smoke-test (pushed image)
-        if: steps.flags.outputs.push == 'true'
+        if: steps.gate.outcome == 'success' && steps.flags.outputs.push == 'true'
         run: |
           IMAGE_REF="ghcr.io/${{ github.repository_owner }}/${{ matrix.image-name }}:latest"
           IMAGE_REF=$(echo "$IMAGE_REF" | tr '[:upper:]' '[:lower:]')
