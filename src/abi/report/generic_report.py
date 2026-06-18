@@ -252,12 +252,92 @@ def write_full_report(
     return paths
 
 
+def _render_figures_via_sciplot(
+    plugin: Any,
+    specs_path: Path,
+    tables_dir: Path,
+    figures_dir: Path,
+) -> Dict[str, Path]:
+    """Render figures using abi_sciplot — PDF+SVG+PNG+provenance+lint.
+
+    Loads legacy-format ``figure_specs.yaml``, adapts each spec to the
+    new abi_sciplot FigureSpec, and renders through MatplotlibRenderer.
+    Returns ``{spec_id: png_path}`` for HTML report embedding.
+    """
+    from abi.config import load_yaml
+    from abi.sciplot.adapters import adapt_spec
+    from abi.sciplot.api import render_figure
+
+    data = load_yaml(specs_path)
+    old_specs: list[dict] = data.get("figures", [])
+    if not old_specs:
+        return {}
+
+    plugin_name = getattr(plugin, "report_title", None) or plugin.__class__.__name__
+    abi_version = getattr(plugin, "abi_version", None)
+
+    rendered: Dict[str, Path] = {}
+    for old in old_specs:
+        spec_id = old.get("id", "")
+        if not spec_id:
+            continue
+
+        # Skip optional figures whose source table doesn't exist
+        source_table = old.get("source_table", "")
+        if not old.get("required", True):
+            table_path = tables_dir / f"{source_table}.tsv"
+            if not table_path.exists():
+                continue
+
+        try:
+            spec = adapt_spec(
+                old,
+                tables_dir,
+                figures_dir,
+                plugin_name=plugin_name,
+                abi_version=abi_version,
+            )
+            result = render_figure(spec)
+            # Find the PNG output for HTML embedding
+            png_files = [p for p in result.output_files if p.suffix == ".png"]
+            if png_files:
+                rendered[spec_id] = png_files[0]
+        except Exception:
+            # Best-effort: skip figures that fail to render
+            pass
+
+    return rendered
+
+
+def _render_figures_via_legacy(
+    plugin: Any,
+    specs_path: Path,
+    tables_dir: Path,
+    figures_dir: Path,
+) -> Dict[str, Path]:
+    """Render figures using the legacy FigureEngine (PNG only).
+
+    Kept for backward compatibility.  Use ``_render_figures_via_sciplot``
+    for new code.
+    """
+    from abi.figures import FigureEngine
+
+    engine = FigureEngine(
+        plugin.table_schemas(),
+        tables_dir,
+        figures_dir,
+    )
+    engine.load_specs(specs_path)
+    return engine.render_all()
+
+
 def write_plugin_report(
     plugin: Any,
     plan: Any,
     result_dir: str | Path,
     *,
     render_figures: bool = True,
+    use_sciplot: bool = True,
 ) -> Dict[str, Path]:
     """Convenience wrapper that implements the standard plugin ``write_report()``.
 
@@ -272,12 +352,17 @@ def write_plugin_report(
     1. Summarises standard tables via ``StandardTableManager``.
     2. Loads ``citation_registry.yaml`` and ``limitations.yaml`` from
        the plugin root (if they exist).
-    3. Renders figures via ``FigureEngine`` (if *render_figures* and a
-       ``figure_specs.yaml`` exists).
+    3. Renders figures via ``abi_sciplot`` (if *use_sciplot*) or legacy
+       ``FigureEngine`` (if *render_figures* and a ``figure_specs.yaml`` exists).
     4. Calls ``write_full_report()`` with methods, resource manifest,
        and the stashed config (``plugin._last_config``).
+
+    .. versionchanged:: 1.3.3
+       Added *use_sciplot* flag (default True). When True, renders figures
+       through ``abi.sciplot`` with PDF+SVG+PNG export, provenance, and lint.
     """
-    from abi.figures import FigureEngine
+    from pathlib import Path
+
     from abi.report.citations import load_citations
     from abi.report.limitations import load_limitations
     from abi.tables import StandardTableManager
@@ -293,19 +378,26 @@ def write_plugin_report(
     citations = load_citations(cit_path) if cit_path.exists() else []
     limitations = load_limitations(lim_path) if lim_path.exists() else []
 
-    # ── Figures (best-effort) ──
+    # ── Figures ──
     rendered_figures: Optional[Dict[str, Path]] = None
     if render_figures:
         fig_specs_path = root / "figure_specs.yaml"
         if fig_specs_path.exists():
             try:
-                engine = FigureEngine(
-                    plugin.table_schemas(),
-                    Path(result_dir) / "tables",
-                    Path(result_dir) / "figures",
-                )
-                engine.load_specs(fig_specs_path)
-                rendered_figures = engine.render_all()
+                if use_sciplot:
+                    rendered_figures = _render_figures_via_sciplot(
+                        plugin,
+                        fig_specs_path,
+                        Path(result_dir) / "tables",
+                        Path(result_dir) / "figures",
+                    )
+                else:
+                    rendered_figures = _render_figures_via_legacy(
+                        plugin,
+                        fig_specs_path,
+                        Path(result_dir) / "tables",
+                        Path(result_dir) / "figures",
+                    )
             except Exception:  # noqa: S110
                 pass
 

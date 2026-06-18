@@ -214,10 +214,15 @@ class MetagenomicPlasmidPlugin:
         reports are written under ``<result_dir>/report/``, and standard
         table summaries are also generated.
 
+        Figures are rendered via ``abi_sciplot`` (PDF+SVG+PNG+provenance+lint)
+        and embedded in the HTML report.
+
         为已完成的管道运行生成 Markdown 和 HTML 报告。如果 ``plan`` 以普通
         ``Mapping`` 形式传入（例如远程运行后从 JSON 反序列化），会先通过
         ``_plan_from_dict`` 转换为类型化的 ``ExecutionPlan``。Markdown 和 HTML
         报告均写入 ``<result_dir>/report/``，同时生成标准表格汇总。
+
+        图形通过 ``abi_sciplot`` 渲染（PDF+SVG+PNG+provenance+lint）并嵌入 HTML 报告。
         """
         # Reconstruct typed plan from JSON dict if needed / 如有需要，从 JSON 字典重建类型化计划
         if isinstance(plan, Mapping):
@@ -225,6 +230,11 @@ class MetagenomicPlasmidPlugin:
         root = Path(result_dir)
         tables_dir = root / "tables"
         provenance_dir = root / "provenance"
+        figures_dir = root / "figures"
+
+        # ── Render figures via abi_sciplot ──
+        rendered_figures = _render_plasmid_figures(self, tables_dir, figures_dir)
+
         report_path = write_markdown_report(
             plan,
             root / "report",
@@ -238,13 +248,68 @@ class MetagenomicPlasmidPlugin:
             tables_dir=tables_dir,
             provenance_dir=provenance_dir,
             dry_run=False,
+            rendered_figures=rendered_figures,
         )
         # Summarize standard tables for quick inspection / 汇总标准表格以便快速查看
         summarize_standard_tables(tables_dir)
         return {"report": report_path, "report_html": report_html_path}
 
 
-# ── Helper: JSON-dict → typed ExecutionPlan / JSON 字典 → 类型化 ExecutionPlan ──
+# ── Helpers / 辅助函数 ──────────────────────────────────────────────────────
+
+
+def _render_plasmid_figures(
+    plugin: Any,
+    tables_dir: Path,
+    figures_dir: Path,
+) -> Mapping[str, Path]:
+    """Render plasmid figures via abi_sciplot.
+
+    Loads ``figure_specs.yaml`` from the plugin root, adapts to abi_sciplot
+    FigureSpec format, and renders each figure.  Returns ``{spec_id: png_path}``
+    for HTML report embedding.
+    """
+    from abi.config import load_yaml
+    from abi.sciplot.adapters import adapt_spec
+    from abi.sciplot.api import render_figure
+
+    fig_specs_path = plugin.root / "figure_specs.yaml"
+    if not fig_specs_path.exists():
+        return {}
+
+    data = load_yaml(fig_specs_path)
+    old_specs: list[dict] = list(data.get("figures", []))
+    if not old_specs:
+        return {}
+
+    abi_version = getattr(plugin, "abi_version", None)
+    rendered: dict[str, Path] = {}
+    for old in old_specs:
+        spec_id = old.get("id", "")
+        if not spec_id:
+            continue
+
+        # Skip optional figures whose source table doesn't exist
+        source_table = old.get("source_table", "")
+        table_path = tables_dir / f"{source_table}.tsv"
+        if not table_path.exists():
+            continue
+
+        try:
+            spec = adapt_spec(
+                old,
+                tables_dir,
+                figures_dir,
+                plugin_name="metagenomic_plasmid",
+                abi_version=abi_version,
+            )
+            result = render_figure(spec)
+            png_files = [p for p in result.output_files if p.suffix == ".png"]
+            if png_files and not result.errors:
+                rendered[spec_id] = png_files[0]
+        except Exception:
+            pass
+    return rendered
 
 
 def _plan_from_dict(data: Mapping[str, Any]) -> ExecutionPlan:

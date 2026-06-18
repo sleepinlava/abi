@@ -50,6 +50,12 @@ abi export-tools --type metagenomic_plasmid --format gemini     # Google Gemini 
 abi contract-lint --type metagenomic_plasmid [--strict]  # Static DAG/contract validation
 abi setup-resources --type metagenomic_plasmid --confirm  # Resource setup (confirmation required)
 
+# Figure compiler (v1.3.3)
+abi-sciplot validate --spec figure.yaml   # Validate a FigureSpec
+abi-sciplot render --spec figure.yaml     # Render a figure (PDF+SVG+PNG+TIFF)
+abi-sciplot lint --spec figure.yaml       # Lint a rendered figure
+abi-sciplot list-plot-types               # List supported figure types
+
 # Job Service (default localhost, requires ABI_JOB_SECRET for remote binding)
 abi job-service --host 127.0.0.1 --port 18791 --workers 2
 ```
@@ -68,7 +74,7 @@ ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch / query
 ABI Core            schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
                     contracts│  dag         │  figures      │  dag_planner
-                    tsv_mapping
+                    tsv_mapping  │  sciplot
         │
 Plugins             metagenomic_plasmid/  rnaseq_expression/  wgs_bacteria/
                     amplicon_16s/  metatranscriptomics/
@@ -91,6 +97,7 @@ src/abi/
   figures/            FigureEngine (7 renderers), FigureSpec — generic figure system
   report/             write_full_report, write_plugin_report, write_methods,
                       citations, limitations, html — generic report system
+                      (write_plugin_report supports abi.sciplot via use_sciplot=True)
   workflow/           ResourceManifest, workflow validation, figure_specs loading
   plugins/
     metagenomic_plasmid/   Self-contained package (engine in _engine/), 67 tools
@@ -114,6 +121,10 @@ src/abi/
   tsv_mapping.py      Declarative TSV column mapper — YAML-driven output parsing
                       with 3 source types (tsv_mapping, json_mapping, key_value_log).
                       Replaces ~14 csv.DictReader → remap columns parser functions. (added 2026-06-18)
+  sciplot/            Publication-grade scientific figure compiler — FigureSpec →
+                      Validate → Render → Export → Lint → Provenance.
+                      Pydantic schema, 8 plot types, 3 themes, 11 lint rules,
+                      SHA256 provenance. (added 2026-06-19, v1.3.3)
   dag.py              DAG inference engine — L1 (literature) / L2 (path) / L3 (validation)
   contracts/          WorkflowSpec, step contract enforcement, checksum chaining, assertion eval
     __init__.py         WorkflowSpec, WorkflowStepSpec, load_workflow_spec, run_contract_lint
@@ -140,6 +151,7 @@ src/abi/
 | `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with L1 (literature) / L2 (path) / L3 (validation) |
 | `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation from `pipeline_dag.yaml`. Replaces all hand-written `build_plan()`; plasmid planner also migrated to UniversalDAG. (added 2026-06-18) |
 | `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML-driven TSV/JSON/log column mapping with 3 source types (tsv_mapping, json_mapping, key_value_log), replaces ~14 boilerplate parsers (added 2026-06-18) |
+| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure`, `load_spec` — scientific figure compiler (Pydantic schema, 8 plot types, PDF/SVG/PNG/TIFF, lint, provenance). (added 2026-06-19, v1.3.3) |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
 | `abi.testing` | `assert_plugin_contract` |
 
@@ -236,6 +248,7 @@ literature-backed, reproducible scientific workflow.
 | `docs/_base.py` | Shared Sphinx config for both language builds |
 | `docs/build_docs.sh` | One-command bilingual docs build |
 | `docs/en/next_development_plan.md` | Full 15-section development plan + implementation status |
+| `docs/en/abi_sciplot_design.md` | abi_sciplot figure compiler design doc — FigureSpec protocol, themes, lint, provenance |
 | `docs/en/plugin_report_figure_spec.md` | Report/figure system reference for plugin authors |
 | `docs/en/rnaseq_expression_workflow.md` | RNA-seq workflow reference |
 | `docs/en/hpc_development.md` | HPC deployment guide (SLURM, Nextflow, databases, benchmarks) |

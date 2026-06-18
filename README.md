@@ -82,6 +82,12 @@ abi-mcp
 # Install ABI agent skills into Claude Code (~/.claude/skills/abi/)
 abi install-skills
 
+# Scientific figure compiler (validate, render, lint, export)
+abi-sciplot validate --spec figure.yaml
+abi-sciplot render --spec figure.yaml
+abi-sciplot lint --spec figure.yaml
+abi-sciplot list-plot-types
+
 # Job Service with optional force-kill subprocess workers
 abi job-service --workers 2 --store jobs.json --subprocess-workers
 ```
@@ -137,7 +143,7 @@ ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch / query
 ABI Core            schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
                     contracts│  dag         │  figures      │  dag_planner
-                    tsv_mapping
+                    tsv_mapping  │  sciplot
         │
         v
 Plugins             amplicon_16s/  rnaseq_expression/  wgs_bacteria/
@@ -229,6 +235,7 @@ More details:
 - [ABI Spec v0.1](docs/abi_spec_v0.1.md)
 - [Development Plan](docs/next_development_plan.md)
 - [API Reference](docs/api.rst) — Sphinx auto-generated from docstrings
+- [abi_sciplot Design](docs/abi_sciplot_design.md) — Scientific figure compiler
 - [Plugin Development Guide](docs/plugin_development_guide.md)
 - [RNA-seq Workflow](docs/rnaseq_expression_workflow.md)
 - [Workflow Validation](docs/workflow_validation.md)
@@ -254,6 +261,7 @@ Plugin authors should depend on these public modules:
 | `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with L1 (literature) / L2 (path) / L3 (validation) layers |
 | `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation from `pipeline_dag.yaml`. Replaces all hand-written `build_plan()` boilerplate; used by all 5 plugins including plasmid. (v1.3.2) |
 | `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML-driven TSV/JSON/log parsing with 3 source types (tsv_mapping, json_mapping, key_value_log). Replaces ~14 boilerplate parser functions. (v1.3.2) |
+| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure` — publication-grade scientific figure compiler. Pydantic schema, 8 plot types, PDF/SVG/PNG/TIFF export, 3 themes, FigureLint, SHA256 provenance. (v1.3.3) |
 | `abi.tool_descriptors` | `ABI_AGENT_TOOLS`, `TOOL_ALIASES`, `export_openai_compatible`, `export_anthropic`, `export_gemini`, `PROVIDER_PROFILES` |
 | `abi.testing` | `assert_plugin_contract` |
 

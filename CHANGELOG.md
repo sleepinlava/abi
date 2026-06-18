@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.3.3] - 2026-06-19
+
+### Added
+
+- **`abi.sciplot`**: Publication-grade scientific figure compiler. Core protocol:
+  `FigureSpec → Validate → Render → Export → Lint → Provenance`.
+  Supports 8 figure types (barplot, boxplot_with_points, violin_with_box,
+  scatterplot, ordination_plot, stacked_barplot, heatmap, volcano_plot) with
+  PDF+SVG+PNG+TIFF export, 3 themes (abi_nature/abi_cell/abi_report),
+  perceptually uniform palettes (jet/rainbow blocked), 11 FigureLint rules,
+  and SHA256 provenance tracking.
+- **`abi-sciplot` CLI**: `validate`, `render`, `lint`, `list-plot-types` commands.
+- **Figure rendering in reports**: `write_plugin_report()` and plasmid
+  `write_report()` now render figures via `abi.sciplot` by default
+  (`use_sciplot=True`). Rendered figures are embedded in HTML reports.
+- **`generic_report.py`**: New `_render_figures_via_sciplot()` and
+  `_render_figures_via_legacy()` helpers with `use_sciplot` flag for
+  graceful fallback to the legacy FigureEngine.
+
+### Changed
+
+- **Dependencies**: Added `pydantic>=2.0`, `pandas>=1.5`, `numpy>=1.24` as core
+  dependencies for `abi.sciplot`.
+- **Plasmid figure specs**: Updated `plugins/metagenomic_plasmid/figure_specs.yaml`
+  to use key-value schema tables (qc_summary, assembly_summary, plasmid_predictions,
+  annotations, abundance) compatible with abi_sciplot FigureSpec format.
+- **`.gitignore`**: Added `.codex/` for Codex project files.
+- **`CLAUDE.md`**: Added `abi.sciplot/` module to source tree and architecture docs.
+
 ## [1.3.0] - 2026-06-18
 
 ### Added

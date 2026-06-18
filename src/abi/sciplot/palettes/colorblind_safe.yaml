@@ -1,0 +1,33 @@
+qualitative:
+  colorblind_safe_8:
+    type: "categorical"
+    max_categories: 8
+    colors:
+      - "#0072B2"
+      - "#E69F00"
+      - "#009E73"
+      - "#CC79A7"
+      - "#56B4E9"
+      - "#D55E00"
+      - "#F0E442"
+      - "#000000"
+    source: "Wong (2011) Nature Methods"
+
+sequential:
+  viridis:
+    type: "continuous"
+    source: "matplotlib"
+  magma:
+    type: "continuous"
+    source: "matplotlib"
+  batlow:
+    type: "continuous"
+    source: "scientific_colour_maps"
+
+diverging:
+  coolwarm:
+    type: "diverging"
+    source: "matplotlib"
+  vik:
+    type: "diverging"
+    source: "scientific_colour_maps"

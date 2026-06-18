@@ -1,0 +1,42 @@
+theme_name: "abi_cell"
+
+figure:
+  width_single_column_mm: 90
+  width_double_column_mm: 180
+  default_width_mm: 90
+  default_height_mm: 70
+  dpi: 300
+
+font:
+  family: "Arial"
+  fallback:
+    - "Helvetica"
+    - "DejaVu Sans"
+  base_size_pt: 8
+  title_size_pt: 10
+  label_size_pt: 8
+  tick_size_pt: 7
+  legend_size_pt: 7
+
+axes:
+  linewidth_pt: 0.6
+  show_top_spine: false
+  show_right_spine: false
+  grid: false
+
+lines:
+  linewidth_pt: 0.8
+  marker_size_pt: 3
+
+legend:
+  frame: false
+  location: "best"
+
+export:
+  raster_dpi: 300
+  vector_formats:
+    - "pdf"
+    - "svg"
+  raster_formats:
+    - "png"
+    - "tiff"

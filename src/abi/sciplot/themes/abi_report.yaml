@@ -1,0 +1,41 @@
+theme_name: "abi_report"
+
+figure:
+  width_single_column_mm: 120
+  width_double_column_mm: 240
+  default_width_mm: 120
+  default_height_mm: 90
+  dpi: 150
+
+font:
+  family: "Arial"
+  fallback:
+    - "Helvetica"
+    - "DejaVu Sans"
+  base_size_pt: 9
+  title_size_pt: 11
+  label_size_pt: 9
+  tick_size_pt: 8
+  legend_size_pt: 8
+
+axes:
+  linewidth_pt: 0.8
+  show_top_spine: false
+  show_right_spine: false
+  grid: false
+
+lines:
+  linewidth_pt: 1.0
+  marker_size_pt: 4
+
+legend:
+  frame: false
+  location: "best"
+
+export:
+  raster_dpi: 150
+  vector_formats:
+    - "pdf"
+    - "svg"
+  raster_formats:
+    - "png"

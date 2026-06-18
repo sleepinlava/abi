@@ -11,7 +11,7 @@ from pathlib import Path
 project = "ABI"
 copyright = "2026, BingkangGuo"
 author = "BingkangGuo"
-release = "1.3.0"
+release = "1.3.3"
 
 # -- Path setup -------------------------------------------------------------
 # _base.py lives in docs/; repo root is one level up

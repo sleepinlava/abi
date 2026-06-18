@@ -81,6 +81,12 @@ abi-mcp
 # 将 ABI agent skills 安装到 Claude Code（~/.claude/skills/abi/）
 abi install-skills
 
+# 科研图形编译器（验证、渲染、质检、导出）
+abi-sciplot validate --spec figure.yaml
+abi-sciplot render --spec figure.yaml
+abi-sciplot lint --spec figure.yaml
+abi-sciplot list-plot-types
+
 # 带 force-kill 子进程 worker 的 Job Service
 abi job-service --workers 2 --store jobs.json --subprocess-workers
 ```
@@ -136,7 +142,7 @@ ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch / query
 ABI 核心层          schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
                     contracts│  dag         │  figures      │  dag_planner
-                    tsv_mapping
+                    tsv_mapping  │  sciplot
         │
         v
 插件层              amplicon_16s/  rnaseq_expression/  wgs_bacteria/
@@ -225,6 +231,7 @@ python -m twine check dist/*
 - [ABI Spec v0.1](docs/abi_spec_v0.1.md)
 - [开发计划](docs/next_development_plan.md)
 - [API 参考](docs/api.rst) — Sphinx 自动从 docstring 生成
+- [abi_sciplot 设计文档](docs/abi_sciplot_design.md) — 科研图形编译器
 - [插件开发指南](docs/plugin_development_guide.md)
 - [RNA-seq 工作流](docs/rnaseq_expression_workflow.md)
 - [工作流验证](docs/workflow_validation.md)
@@ -250,6 +257,7 @@ python -m twine check dist/*
 | `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG 推断，支持 L1（文献）/ L2（路径）/ L3（验证）三层正确性模型 |
 | `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — 从 `pipeline_dag.yaml` 声明式生成执行计划（v1.3.2） |
 | `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML 驱动的 TSV 列映射，替换手写解析器样板代码（v1.3.2） |
+| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure` — 论文级科研图形编译器。Pydantic schema，8 种图形类型，PDF/SVG/PNG/TIFF 导出，3 套主题，FigureLint 质检，SHA256 溯源。（v1.3.3） |
 | `abi.tool_descriptors` | `ABI_AGENT_TOOLS`, `TOOL_ALIASES`, `export_openai_compatible`, `export_anthropic`, `export_gemini`, `PROVIDER_PROFILES` |
 | `abi.testing` | `assert_plugin_contract` |
 

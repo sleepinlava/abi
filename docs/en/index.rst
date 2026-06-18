@@ -164,6 +164,7 @@ All agent-facing commands support ``--output-json``.
 
    api
    abi_spec_v0.1
+   abi_sciplot_design
    openai_interface_standard
    workflow_validation
    hpc_development
@@ -183,6 +184,7 @@ Quick Links
 -----------
 
 - :doc:`api` — Full Python API reference (auto-generated)
+- :doc:`abi_sciplot_design` — Scientific figure compiler design
 - :doc:`development` — Local setup, source tree, SDK reference
 - :doc:`plugin_development_guide` — How to add a new analysis type
 - :doc:`workflow_validation` — Biological validation methodology

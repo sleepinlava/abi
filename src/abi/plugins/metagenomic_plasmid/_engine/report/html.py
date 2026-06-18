@@ -20,6 +20,7 @@ def write_html_report(
     tables_dir: str | Path | None = None,
     provenance_dir: str | Path | None = None,
     dry_run: bool = False,
+    rendered_figures: Mapping[str, Path] | None = None,
 ) -> Path:
     report_path = Path(report_dir)
     report_path.mkdir(parents=True, exist_ok=True)
@@ -57,6 +58,7 @@ def write_html_report(
 <ul>{items}</ul>
 <h2>Standard Tables</h2>
 {_table_summary_html(table_summary)}
+{_figures_html(rendered_figures, report_path)}
 <h2>Core Result Summary</h2>
 <ul>
 <li>Total contigs: {contig_summary["total_contigs"]}</li>
@@ -107,6 +109,46 @@ def _table_summary_html(table_summary: Mapping[str, Mapping[str, object]]) -> st
         "<table><thead><tr><th>Table</th><th>Rows</th><th>Path</th></tr></thead>"
         "<tbody>{}</tbody></table>"
     ).format("".join(rows))
+
+
+def _figures_html(
+    rendered_figures: Mapping[str, Path] | None,
+    report_dir: Path,
+) -> str:
+    """Generate HTML figure blocks from abi_sciplot rendered figures.
+
+    Each figure is embedded as an <img> with relative path to the report directory.
+    """
+    if not rendered_figures:
+        return ""
+    parts = ["<h2>Figures</h2>", "<section>"]
+    for spec_id, fig_path in sorted(rendered_figures.items()):
+        # Compute path relative to the result root (report_dir.parent) so
+        # ``../figures/<id>/<id>.png`` resolves correctly from
+        # ``<result_dir>/report/report.html``.
+        try:
+            rel = Path(fig_path).relative_to(report_dir.parent)
+        except ValueError:
+            rel = Path(fig_path)
+        parts.extend(
+            [
+                f'<figure id="fig-{escape(spec_id)}">',
+                f'<img src="../{escape(str(rel))}" alt="{escape(spec_id)}" loading="lazy">',
+                f"<figcaption>{escape(spec_id)}</figcaption>",
+                "</figure>",
+            ]
+        )
+    parts.append("</section>")
+    # Add CSS for figure styling
+    parts.append(
+        "<style>"
+        "figure { margin: 1.5rem 0; text-align: center; }"
+        "figure img { max-width: 100%; height: auto; border: 1px solid #ddd; "
+        "border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }"
+        "figcaption { margin-top: 0.5rem; font-size: 0.9rem; color: #555; }"
+        "</style>"
+    )
+    return "\n".join(parts)
 
 
 def _assembly_beta_html(plan: ExecutionPlan) -> str:

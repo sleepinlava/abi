@@ -153,7 +153,7 @@ Singularity.lock
 environment.lock.yml
 conda.lock
 
-# Claude Code project files
+# Claude Code project files && codex project files
 .claude/
 !.claude/settings.json
 !.claude/settings.local.json
@@ -161,3 +161,4 @@ conda.lock
 !.claude/skills/**
 docs/_build/
 .readthedocs-cache/
+.codex/

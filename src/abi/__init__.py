@@ -28,6 +28,7 @@ Module                    Purpose
 ``abi.provenance``        ``RunLogger``, TSV provenance writers
 ``abi.diagnostics``       Error taxonomy + ``classify_exception()``
 ``abi.interfaces``        ``ABIPlugin``, ``ABIDryRunPlugin`` protocol classes
+``abi.sciplot``           Scientific figure compiler — FigureSpec → Validate → Render → Export → Lint → Provenance (v1.3.3)
 ``abi.openai_contracts``   OpenAI function-calling tool descriptors
 ``abi.mcp``               Optional MCP stdio server for Claude Desktop / Claude Code
 ========================  ======================================================
@@ -39,7 +40,7 @@ __all__ = [
     "list_plugins_summary",
 ]
 
-__version__ = "1.3.2"
+__version__ = "1.3.3"
 
 
 def get_agent_guide() -> str:
