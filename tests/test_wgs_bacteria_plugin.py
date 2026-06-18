@@ -182,6 +182,27 @@ def test_parse_prokka():
     assert cds["ec_number"] == "2.7.7.7"
 
 
+def test_parse_amrfinderplus():
+    """AMRFinderPlus --plus TSV → amr_profile rows with all --plus columns."""
+    plugin = get_plugin("wgs_bacteria")
+    result = plugin.parse_outputs("amrfinderplus", _FIXTURES / "amrfinderplus", "S1")
+    rows = result["amr_profile"]
+    assert len(rows) == 5
+    assert all(r["tool"] == "amrfinderplus" for r in rows)
+    assert all(r["sample_id"] == "S1" for r in rows)
+    # Check AMR gene types are present
+    symbols = {r["gene_symbol"] for r in rows}
+    assert symbols >= {"tetA", "blaTEM-1", "sul2", "dfrA1", "mcr-1"}
+    # Check --plus columns are populated
+    tet = next(r for r in rows if r["gene_symbol"] == "tetA")
+    assert tet["scope"] == "core"
+    assert tet["element_subtype"] == "AMR:TETRACYCLINE"
+    assert tet["target_class"] == "TETRACYCLINE"
+    assert tet["method"] in ("BLASTP", "HMM")
+    assert float(tet["coverage_pct"]) >= 0.0
+    assert float(tet["identity_pct"]) >= 0.0
+
+
 def test_parse_outputs_unknown_tool():
     """Unrecognized tool_id → empty dict."""
     plugin = get_plugin("wgs_bacteria")

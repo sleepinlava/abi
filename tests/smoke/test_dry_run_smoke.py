@@ -137,8 +137,8 @@ def test_amplicon_16s_dry_run(tmp_path: Path) -> None:
     )
     plan = plugin.build_plan(config, check_files=False)
     # 1 sample × 5 per-sample steps (cutadapt, merge, derep, denoise, taxonomy)
-    # + 1 diversity (ALL) = 6
-    assert len(plan.steps) == 6
+    # + phylogeny + diversity = 7
+    assert len(plan.steps) == 7
     tool_ids = {s.tool_id for s in plan.steps}
     assert "vsearch_mergepairs" in tool_ids
     assert "vsearch_derep" in tool_ids

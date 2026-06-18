@@ -1,2 +1,6 @@
-Protein identifier	Contig id	Start	Stop	Strand	Gene symbol	Element type	Sequence name	% Identity to reference sequence	% Coverage of reference sequence
--	contig_1	100	900	+	tetA	AMR	tetracycline efflux protein	98.5	96.0
+Protein identifier	Contig id	Start	Stop	Strand	Gene symbol	Sequence name	Scope	Element type	Element subtype	Class	Subclass	Method	% Coverage of reference sequence	% Identity to reference sequence
+WP_000111222.1	contig_1	100	900	+	tetA	tetracycline efflux protein	core	AMR	AMR:TETRACYCLINE	TETRACYCLINE	TETRACYCLINE	BLASTP	100.00	98.50
+WP_000333444.1	contig_1	1200	2000	+	blaTEM-1	beta-lactamase TEM-1	core	AMR	AMR:BETA-LACTAM	BETA-LACTAM	PENICILLIN	BLASTP	100.00	99.80
+WP_000555666.1	contig_2	300	1100	-	sul2	sulfonamide resistance protein	core	AMR	AMR:SULFONAMIDE	SULFONAMIDE	SULFONAMIDE	BLASTP	99.50	97.20
+WP_000777888.1	contig_2	1500	2200	+	dfrA1	dihydrofolate reductase	core	AMR	AMR:TRIMETHOPRIM	TRIMETHOPRIM	TRIMETHOPRIM	BLASTP	100.00	95.30
+WP_000999000.1	contig_3	500	1300	+	mcr-1	phosphoethanolamine transferase	core	AMR	AMR:COLISTIN	COLISTIN	COLISTIN	BLASTP	100.00	100.00

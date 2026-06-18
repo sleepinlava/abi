@@ -111,17 +111,31 @@ nodes:
     assertions:
       - "output_dir.exists()"
 
+  # ── Phylogeny Tree ───────────────────────────────────────────────────
+  phylogeny:
+    tool_id: phylogeny_build
+    category: phylogeny
+    platforms: [illumina]
+    optional: false
+    depends_on: [denoise_unoise3]
+    inputs:
+      asv_fasta:  {type: file, format: fasta}
+    outputs:
+      phylogeny_tree:  {type: file, format: nwk, contract: {min_size: "10B"}}
+    assertions:
+      - "output_dir.exists()"
+
   # ── Diversity Metrics ───────────────────────────────────────────────
   diversity:
     tool_id: diversity_metrics
     category: diversity
     platforms: [illumina]
     optional: false
-    depends_on: [denoise_unoise3]
+    depends_on: [denoise_unoise3, phylogeny]
     inputs:
-      asv_table:        {type: file, format: tsv, source: denoise_unoise3.asv_fasta}
+      asv_table:        {type: file, format: tsv}
       diversity_script: {type: file, format: py}
-      phylogeny_tree:   {type: file, format: nwk}
+      phylogeny_tree:   {type: file, format: nwk, source: phylogeny.phylogeny_tree, optional: true}
     outputs:
       alpha_tsv:  {type: file, format: tsv}
       beta_tsv:   {type: file, format: tsv}

@@ -76,14 +76,16 @@ def test_build_plan_structure(tmp_path):
     )
     plan = plugin.build_plan(cfg, check_files=False)
     assert plan.analysis_type == "amplicon_16s"
-    # 1 sample → 4 per-sample steps + 1 cross-sample diversity
-    assert len(plan.steps) >= 5
+    # 1 sample → 5 per-sample steps + 2 cross-sample (phylogeny + diversity)
+    assert len(plan.steps) >= 7
     tool_ids = {s.tool_id for s in plan.steps}
     assert tool_ids >= {
         "cutadapt",
+        "vsearch_mergepairs",
         "vsearch_derep",
         "vsearch_denoise",
         "vsearch_taxonomy",
+        "phylogeny_build",
         "diversity_metrics",
     }
 
@@ -106,7 +108,7 @@ def test_workflow_spec_loads():
 
     ws = load_workflow_spec("plugins/amplicon_16s")
     assert ws is not None
-    assert len(ws.steps) == 6
+    assert len(ws.steps) == 7
     for s in ws.steps:
         assert s.citation is not None, f"step {s.id} missing citation"
 

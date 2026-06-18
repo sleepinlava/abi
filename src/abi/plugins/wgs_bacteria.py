@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 from abi._shared import _parse_fastp, _resolve_path
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
@@ -198,8 +198,8 @@ class WGSBacteriaPlugin:
         return data.get("tables", {})
 
     def parse_outputs(
-        self, tool_id: str, output_dir: Path, sample_id: str
-    ) -> Mapping[str, List[Dict[str, Any]]]:
+        self, tool_id: str, output_dir: str | Path, sample_id: str
+    ) -> Mapping[str, Iterable[Mapping[str, Any]]]:
         if tool_id == "fastp":
             return {"qc_summary": _parse_fastp(Path(output_dir), sample_id)}
         if tool_id == "spades":
@@ -212,7 +212,7 @@ class WGSBacteriaPlugin:
             return {"amr_profile": _parse_amrfinderplus(Path(output_dir), sample_id)}
         return {}
 
-    def write_report(self, plan: Any, result_dir: Path) -> Dict[str, Path]:
+    def write_report(self, plan: Any, result_dir: str | Path) -> Dict[str, Path]:
         return write_plugin_report(self, plan, result_dir)
 
     def _validate_config(self, config: Mapping[str, Any]) -> None:
@@ -310,7 +310,7 @@ def _parse_mlst(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
 
 def _parse_amrfinderplus(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
     rows = []
-    for path in sorted(output_dir.glob("amr*.tsv")):
+    for path in sorted(output_dir.glob("*amr*.tsv")):
         with path.open() as h:
             r = csv.DictReader(h, delimiter="\t")
             if not r.fieldnames:

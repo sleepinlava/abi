@@ -14,6 +14,7 @@ core_contracts:
   - vsearch_denoise
   - vsearch_otu
   - vsearch_taxonomy
+  - phylogeny_build
   - diversity_metrics
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -55,8 +56,15 @@ workflow:
       after: [denoise]
       optional: false
       citation: "Edgar 2016, bioRxiv, doi:10.1101/081257 (SINTAX)"
+    - id: phylogeny
+      tool: phylogeny_build
+      after: [denoise]
+      optional: false
+      citation: |
+        Katoh & Standley 2013, Mol Biol Evol, doi:10.1093/molbev/mst010 (MAFFT);
+        Price et al. 2010, PLoS ONE, doi:10.1371/journal.pone.0009490 (FastTree)
     - id: diversity
       tool: diversity_metrics
-      after: [denoise]
+      after: [denoise, phylogeny]
       optional: false
       citation: "scikit-bio: http://scikit-bio.org (no standalone paper)"

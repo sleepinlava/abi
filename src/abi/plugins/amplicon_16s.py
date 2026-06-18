@@ -114,8 +114,14 @@ class Amplicon16SPlugin:
         if not isinstance(resources, Mapping):
             resources = {}
         taxonomy_db = str(resources.get("taxonomy_db", "TAXONOMY_DB_NOT_CONFIGURED"))
-        diversity_script = str(resources.get("diversity_script", "DIVERSITY_SCRIPT_NOT_CONFIGURED"))
-        phylogeny_tree = str(resources.get("phylogeny_tree", "PHYLOGENY_TREE_NOT_CONFIGURED"))
+        # Resolve diversity script — prefer explicit config, fall back to bundled script
+        _scripts_dir = str(
+            Path(__file__).resolve().parent.parent.parent.parent / "scripts"
+        )
+        diversity_script = str(
+            resources.get("diversity_script")
+            or f"{_scripts_dir}/amplicon_diversity.py"
+        )
         do_otu = bool(mapping_block(config, "otu_clustering").get("enabled", False))
 
         steps: List[ABIPlanStep] = []
@@ -236,9 +242,35 @@ class Amplicon16SPlugin:
                 )
             )
 
-        # ── Step 7: Diversity metrics (all samples) ──
+        # ── Step 7: Phylogeny tree (all samples) ──
+        phylo_out = outdir / "05b_phylogeny"
+        phylo_tree = phylo_out / "phylogeny.nwk"
+        # Build a merged ASV FASTA from all per-sample ASV files
+        merged_asvs_fasta = phylo_out / "merged_asvs.fasta"
+
+        steps.append(
+            ABIPlanStep(
+                step_id="phylogeny_build",
+                sample_id="ALL",
+                step_name="phylogeny_build",
+                tool_id="phylogeny_build",
+                category="phylogeny",
+                inputs={
+                    "asv_fasta": str(merged_asvs_fasta),
+                    "threads": str(threads),
+                },
+                outputs={
+                    "output_dir": str(phylo_out),
+                    "phylogeny_tree": str(phylo_tree),
+                },
+                params={"mode": config["mode"]},
+            )
+        )
+
+        # ── Step 8: Diversity metrics (all samples) ──
         div_out = outdir / "06_diversity"
-        asv_table = outdir / "merged_asv_table.tsv"
+        denoise_dir = outdir / "04_denoise"
+        merge_dir = outdir / "02_merge"
         steps.append(
             ABIPlanStep(
                 step_id="diversity_metrics",
@@ -247,9 +279,10 @@ class Amplicon16SPlugin:
                 tool_id="diversity_metrics",
                 category="diversity",
                 inputs={
-                    "asv_table": str(asv_table),
                     "diversity_script": diversity_script,
-                    "phylogeny_tree": phylogeny_tree,
+                    "denoise_dir": str(denoise_dir),
+                    "merge_dir": str(merge_dir),
+                    "phylogeny_tree": str(phylo_tree),
                 },
                 outputs={"output_dir": str(div_out)},
                 params={"mode": config["mode"]},

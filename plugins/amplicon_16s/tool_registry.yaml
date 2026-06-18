@@ -66,5 +66,15 @@ tools:
     executable: python
     default_enabled: true
     required: true
-    command_template: "python {diversity_script} --asv-table {asv_table} --output-dir {output_dir} --tree {phylogeny_tree}"
-    inputs: [asv_table, diversity_script]
+    command_template: "python {diversity_script} --denoise-dir {denoise_dir} --merge-dir {merge_dir} --output-dir {output_dir} --tree {phylogeny_tree}"
+    inputs: [diversity_script, denoise_dir, merge_dir]
+
+  - id: phylogeny_build
+    name: Phylogeny Tree (MAFFT + FastTree)
+    category: phylogeny
+    env_name: amplicon
+    executable: bash
+    default_enabled: true
+    required: false
+    command_template: "mafft --auto --thread {threads} {asv_fasta} > {output_dir}/aligned.fasta && fasttree -nt {output_dir}/aligned.fasta > {output_dir}/phylogeny.nwk"
+    inputs: [asv_fasta]

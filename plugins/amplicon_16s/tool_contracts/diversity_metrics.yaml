@@ -2,23 +2,29 @@ abi_version: "0.1"
 tool_id: diversity_metrics
 name: Diversity Metrics
 category: diversity
-purpose: Compute alpha and beta diversity metrics from an ASV/OTU abundance table.
+purpose: Compute alpha and beta diversity metrics from per-sample ASV sequences and merged reads.
 when_to_use:
   - community_comparison
   - ecological_analysis
 inputs:
-  asv_table:
-    type: file
-    formats: [tsv]
-    required: true
   diversity_script:
     type: file
     formats: ["py"]
     required: true
+    description: "Path to amplicon_diversity.py"
+  denoise_dir:
+    type: directory
+    required: true
+    description: "04_denoise/ directory with per-sample asvs.fasta files"
+  merge_dir:
+    type: directory
+    required: true
+    description: "02_merge/ directory with per-sample merged FASTA files"
   phylogeny_tree:
     type: file
     formats: [nwk, tree]
     required: false
+    description: "Optional Newick tree for Faith's PD and UniFrac metrics"
 outputs:
   output_dir:
     type: directory
@@ -31,14 +37,14 @@ outputs:
 execution:
   env_name: amplicon
   executable: python
-  command_template: "python {diversity_script} --asv-table {asv_table} --output-dir {output_dir} --tree {phylogeny_tree}"
+  command_template: "python {diversity_script} --denoise-dir {denoise_dir} --merge-dir {merge_dir} --output-dir {output_dir} --tree {phylogeny_tree}"
   network: false
   writes_output: true
 failure_handling:
   missing_input:
-    hint: "ASV table not found. Verify vsearch_denoise or vsearch_otu completed successfully."
+    hint: "Denoise or merged reads directories not found. Verify vsearch_denoise and vsearch_mergepairs completed successfully."
   tool_not_found:
-    hint: "Python diversity script not found. Ensure DIVERSITY_SCRIPT_NOT_CONFIGURED is replaced with a real script path."
+    hint: "Python diversity script not found. Ensure the bundled scripts/amplicon_diversity.py is available."
 
 resources:
   cpu: 4
