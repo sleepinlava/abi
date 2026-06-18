@@ -1136,9 +1136,7 @@ def _build_plan_summary(plan: Any, analysis_type: str) -> Dict[str, Any]:
 
     # Platforms from sample inputs.
     samples = getattr(plan, "samples", []) or []
-    platforms: list = list(dict.fromkeys(
-        getattr(s, "platform", "generic") for s in samples
-    ))
+    platforms: list = list(dict.fromkeys(getattr(s, "platform", "generic") for s in samples))
 
     return {
         "pipeline": analysis_type,
@@ -1203,13 +1201,15 @@ def _query_tools(
         # DAG-based: map node_id → tool metadata
         result_tools: list = []
         for node_id, node in nodes.items():
-            result_tools.append({
-                "step_id": node_id,
-                "tool_id": node.get("tool_id", node_id),
-                "category": node.get("category", ""),
-                "optional": node.get("optional", False),
-                "depends_on": node.get("depends_on", []),
-            })
+            result_tools.append(
+                {
+                    "step_id": node_id,
+                    "tool_id": node.get("tool_id", node_id),
+                    "category": node.get("category", ""),
+                    "optional": node.get("optional", False),
+                    "depends_on": node.get("depends_on", []),
+                }
+            )
         return {"tools": result_tools, "tool_count": len(result_tools)}
 
     # Fallback: from tool registry

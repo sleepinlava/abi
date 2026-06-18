@@ -89,28 +89,41 @@ def test_metatranscriptomics_benchmark_assertions(tmp_path: Path) -> None:
     )
 
     config_path.write_text(
-        yaml.dump({
-            "project_name": "bench-meta",
-            "mode": "local",
-            "threads": 2,
-            "outdir": str(results_dir),
-            "log_dir": str(results_dir / "logs"),
-            "input": {"sample_sheet": str(sample_sheet)},
-            "alignment": {"tool": "star"},
-            "resources": {
-                "genome_index": str(star_index),
-                "annotation_gtf": str(gtf),
-            },
-        })
+        yaml.dump(
+            {
+                "project_name": "bench-meta",
+                "mode": "local",
+                "threads": 2,
+                "outdir": str(results_dir),
+                "log_dir": str(results_dir / "logs"),
+                "input": {"sample_sheet": str(sample_sheet)},
+                "alignment": {"tool": "star"},
+                "resources": {
+                    "genome_index": str(star_index),
+                    "annotation_gtf": str(gtf),
+                },
+            }
+        )
     )
 
     new_env = os.environ.copy()
     new_env["MAMBA_ROOT"] = os.path.expanduser("~/miniconda3")
 
     proc = subprocess.run(
-        ["abi", "run", "--type", "metatranscriptomics", "--confirm-execution",
-         "--config", str(config_path)],
-        capture_output=True, text=True, env=new_env, check=False, timeout=600,
+        [
+            "abi",
+            "run",
+            "--type",
+            "metatranscriptomics",
+            "--confirm-execution",
+            "--config",
+            str(config_path),
+        ],
+        capture_output=True,
+        text=True,
+        env=new_env,
+        check=False,
+        timeout=600,
     )
     assert proc.returncode in (0, 1), (
         f"Pipeline failed (exit {proc.returncode}):\nSTDERR: {proc.stderr[-800:]}"
@@ -150,9 +163,7 @@ def test_metatranscriptomics_benchmark_assertions(tmp_path: Path) -> None:
                         try:
                             pct = float(line_text.split("|")[-1].strip().rstrip("%"))
                             min_pct = align_assert["min_mapping_rate"] * 100
-                            assert pct >= min_pct, (
-                                f"Mapping rate {pct:.1f}% < {min_pct:.0f}%"
-                            )
+                            assert pct >= min_pct, f"Mapping rate {pct:.1f}% < {min_pct:.0f}%"
                         except (ValueError, IndexError):
                             pass
             break
@@ -167,7 +178,8 @@ def test_metatranscriptomics_benchmark_assertions(tmp_path: Path) -> None:
                 # featureCounts output: tab-separated with comment lines starting with #
                 content = count_files[0].read_text(encoding="utf-8")
                 data_lines = [
-                    line for line in content.splitlines()
+                    line
+                    for line in content.splitlines()
                     if line.strip() and not line.startswith("#")
                 ]
                 n_genes = len(data_lines) - 1  # minus header

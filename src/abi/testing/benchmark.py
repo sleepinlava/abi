@@ -267,9 +267,7 @@ def run_benchmark(
     """
     config_path = dataset_path / "config.yaml"
     if not config_path.exists():
-        raise FileNotFoundError(
-            f"Benchmark dataset missing config.yaml: {config_path}"
-        )
+        raise FileNotFoundError(f"Benchmark dataset missing config.yaml: {config_path}")
 
     expected = _load_expected(dataset_path)
     assertions = _parse_assertions(expected)
@@ -284,9 +282,11 @@ def run_benchmark(
         [
             "abi",
             "run",
-            "--type", plugin_id,
+            "--type",
+            plugin_id,
             "--confirm-execution",
-            "--config", str(config_path),
+            "--config",
+            str(config_path),
         ],
         capture_output=True,
         text=True,
@@ -367,16 +367,12 @@ def validate_against_expected(
 
         if len(ref_rows) != len(act_rows):
             failed += 1
-            messages.append(
-                f"ROW_COUNT: {rel} expected {len(ref_rows)}, got {len(act_rows)}"
-            )
+            messages.append(f"ROW_COUNT: {rel} expected {len(ref_rows)}, got {len(act_rows)}")
             continue
 
         # Check key columns match
         common_cols = (
-            set(ref_rows[0].keys()) & set(act_rows[0].keys())
-            if ref_rows and act_rows
-            else set()
+            set(ref_rows[0].keys()) & set(act_rows[0].keys()) if ref_rows and act_rows else set()
         )
         mismatches = 0
         for col in sorted(common_cols):

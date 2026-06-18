@@ -582,11 +582,13 @@ def inspect_command(
 def query_command(
     analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
     what: str = typer.Option(
-        ..., "--what",
+        ...,
+        "--what",
         help="What to query: stages, tools, platforms, resources, inputs, outputs.",
     ),
     step: Optional[str] = typer.Option(
-        None, "--step",
+        None,
+        "--step",
         help="Pipeline node ID (required for resources/inputs/outputs).",
     ),
     output_json: bool = typer.Option(
@@ -620,9 +622,13 @@ def query_command(
         )
         return
     try:
-        payload = json.loads(ABIAgentInterface().query(
-            analysis_type=analysis_type, what=what, step=step,
-        ))
+        payload = json.loads(
+            ABIAgentInterface().query(
+                analysis_type=analysis_type,
+                what=what,
+                step=step,
+            )
+        )
         if payload.get("status") == "error":
             typer.echo(json.dumps(payload, indent=2), err=True)
             raise typer.Exit(1)

@@ -88,9 +88,11 @@ def test_plasmid_benchmark_assertions(tmp_path: Path) -> None:
         [
             "abi",
             "run",
-            "--type", "metagenomic_plasmid",
+            "--type",
+            "metagenomic_plasmid",
             "--confirm-execution",
-            "--config", str(config_path),
+            "--config",
+            str(config_path),
         ],
         capture_output=True,
         text=True,

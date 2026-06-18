@@ -72,16 +72,18 @@ def test_wgs_benchmark_assertions(tmp_path: Path) -> None:
             sample_sheet.write_text(ss.read_text(encoding="utf-8"))
 
     config_path.write_text(
-        yaml.dump({
-            "project_name": "bench-wgs",
-            "mode": "local",
-            "threads": 2,
-            "outdir": str(results_dir),
-            "log_dir": str(results_dir / "logs"),
-            "input": {"sample_sheet": str(sample_sheet)},
-            "annotation": {"genus": "Escherichia", "species": "coli"},
-            "typing": {"mlst_scheme": "auto"},
-        })
+        yaml.dump(
+            {
+                "project_name": "bench-wgs",
+                "mode": "local",
+                "threads": 2,
+                "outdir": str(results_dir),
+                "log_dir": str(results_dir / "logs"),
+                "input": {"sample_sheet": str(sample_sheet)},
+                "annotation": {"genus": "Escherichia", "species": "coli"},
+                "typing": {"mlst_scheme": "auto"},
+            }
+        )
     )
 
     # PATH setup: ensure wgs conda env tools are found
@@ -92,9 +94,20 @@ def test_wgs_benchmark_assertions(tmp_path: Path) -> None:
     new_env["MAMBA_ROOT"] = os.path.expanduser("~/miniconda3")
 
     proc = subprocess.run(
-        ["abi", "run", "--type", "wgs_bacteria", "--confirm-execution",
-         "--config", str(config_path)],
-        capture_output=True, text=True, env=new_env, check=False, timeout=900,
+        [
+            "abi",
+            "run",
+            "--type",
+            "wgs_bacteria",
+            "--confirm-execution",
+            "--config",
+            str(config_path),
+        ],
+        capture_output=True,
+        text=True,
+        env=new_env,
+        check=False,
+        timeout=900,
     )
     assert proc.returncode in (0, 1), (
         f"Pipeline failed (exit {proc.returncode}):\nSTDERR: {proc.stderr[-800:]}"
