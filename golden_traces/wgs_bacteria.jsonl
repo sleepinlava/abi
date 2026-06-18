@@ -1,0 +1,9 @@
+{"tool":"abi_list_types","arguments":{},"expect_status":"success"}
+{"tool":"abi_plan","arguments":{"analysis_type":"wgs_bacteria","config_path":"examples/config_minimal.yaml","profile":"dry_run","outdir":"{tmpdir}/wgs_demo","log_dir":"{tmpdir}/log","check_files":true},"expect_status":"success"}
+{"tool":"abi_dry_run","arguments":{"analysis_type":"wgs_bacteria","config_path":"examples/config_minimal.yaml","profile":"dry_run","outdir":"{tmpdir}/wgs_demo","log_dir":"{tmpdir}/log","progress":false,"check_files":true},"expect_status":"success"}
+{"tool":"abi_inspect","arguments":{"result_dir":"{tmpdir}/wgs_demo"},"expect_status":"success"}
+{"tool":"abi_report","arguments":{"analysis_type":"wgs_bacteria","result_dir":"{tmpdir}/wgs_demo"},"expect_status":"success"}
+{"tool":"abi_validate_result","arguments":{"result_dir":"{tmpdir}/wgs_demo","allow_empty_tables":true},"expect_status":"success"}
+{"tool":"abi_export_agent_context","arguments":{"analysis_type":"wgs_bacteria"},"expect_status":"success"}
+{"tool":"abi_doctor_agent","arguments":{"analysis_type":"wgs_bacteria"},"expect_status":"success"}
+{"tool":"abi_run","arguments":{"analysis_type":"wgs_bacteria","config_path":"examples/config_minimal.yaml","profile":"dry_run","outdir":"{tmpdir}/wgs_demo_run","log_dir":"{tmpdir}/log","smoke":true},"expect_status":"confirmation_required"}
