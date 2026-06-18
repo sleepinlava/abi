@@ -60,7 +60,7 @@ jobs:
 
       - name: Smoke-test (${{ matrix.plugin }})
         run: |
-          docker run --rm ${{ matrix.tag }}:latest abi list-types
+          docker run --rm ${{ matrix.tag }}:latest list-types
           echo "=== Image ${{ matrix.tag }} smoke-test OK ==="
 
       - name: Login to GitHub Container Registry

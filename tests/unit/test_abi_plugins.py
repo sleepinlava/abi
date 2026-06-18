@@ -53,7 +53,13 @@ def test_metagenomic_plasmid_plugin_parses_standard_outputs():
 
 
 def test_builtin_plugins_satisfy_machine_contracts():
-    for plugin_id in ("metatranscriptomics", "metagenomic_plasmid"):
+    for plugin_id in (
+        "metatranscriptomics",
+        "metagenomic_plasmid",
+        "rnaseq_expression",
+        "wgs_bacteria",
+        "amplicon_16s",
+    ):
         assert_plugin_contract(get_plugin(plugin_id))
 
 

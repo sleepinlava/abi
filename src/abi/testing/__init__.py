@@ -31,34 +31,39 @@ def assert_plugin_contract(plugin: object) -> None:
     """Verify a plugin satisfies the ABIPlugin protocol contract.
 
     Checks that the plugin exposes all required methods and attributes
-    defined by the ABIPlugin / ABIDryRunPlugin / ABIInitializablePlugin
-    protocols.
+    defined by the ABIPlugin base protocol. ABIDryRunPlugin and
+    ABIInitializablePlugin are optional extensions — plugins are not
+    required to implement them.
 
     Raises:
-        AssertionError: If the plugin does not satisfy the contract.
+        AssertionError: If the plugin does not satisfy the base contract.
         TypeError: If *plugin* is not recognized as a plugin object.
     """
     from abi.interfaces import ABIDryRunPlugin, ABIInitializablePlugin, ABIPlugin
 
     errors: list[str] = []
 
-    # ── Core ABIPlugin ──
+    # ── Core ABIPlugin (required) ──────────────────────────────────────
     if not isinstance(plugin, ABIPlugin):
         errors.append("plugin does not implement ABIPlugin protocol")
 
-    # ── Dry-run (all current plugins support this) ──
+    if errors:
+        raise AssertionError(
+            f"Plugin contract validation failed ({len(errors)} issues):\n"
+            + "\n".join(f"  - {e}" for e in errors)
+        )
+
+    # ── Dry-run extension (optional) ───────────────────────────────────
     if isinstance(plugin, ABIDryRunPlugin):
-        for method in ("plan", "dry_run", "write_report", "inspect"):
+        for method in ("execute_dry_run",):
             if not hasattr(plugin, method):
                 errors.append(f"ABIDryRunPlugin missing method: {method}")
-    else:
-        errors.append("plugin does not implement ABIDryRunPlugin")
 
-    # ── Optional: initializable (tool installation / resource setup) ──
+    # ── Initializable extension (optional) ────────────────────────────
     if isinstance(plugin, ABIInitializablePlugin):
-        for method in ("check_installation", "setup_resources"):
-            if not hasattr(plugin, method):
-                errors.append(f"ABIInitializablePlugin missing method: {method}")
+        for attr in ("root",):
+            if not hasattr(plugin, attr):
+                errors.append(f"ABIInitializablePlugin missing attribute: {attr}")
 
     if errors:
         raise AssertionError(

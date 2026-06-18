@@ -237,6 +237,7 @@ class ABIPlugin(Protocol):
         ...
 
 
+@runtime_checkable
 class ABIDryRunPlugin(ABIPlugin, Protocol):
     """Plugin that supports dry-run execution.
 
@@ -278,6 +279,7 @@ class ABIDryRunPlugin(ABIPlugin, Protocol):
         ...
 
 
+@runtime_checkable
 class ABIInitializablePlugin(ABIPlugin, Protocol):
     """Plugin that needs a filesystem root before it can operate.
 
