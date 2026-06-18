@@ -6,6 +6,7 @@ channels:
 channel_priority: strict
 dependencies:
   - python=3.10
+  - pip
   - star>=2.7
   - hisat2>=2.2
   - subread>=2.0
