@@ -1,5 +1,64 @@
 # ABI Development Log
 
+## 2026-06-18 — Direction C: Docker Containerization
+
+### Overview
+
+Direction C created Docker images for all 5 plugins, with docker-compose
+orchestration and CI build workflow.
+
+### Conda Environment Gaps Filled
+
+4 environments lacked conda YAML files:
+
+| Env | Plugin | Packages |
+|-----|--------|----------|
+| `amplicon` | amplicon_16s | cutadapt, vsearch, mafft, fasttree, numpy, scipy, pandas, biopython |
+| `wgs` | wgs_bacteria | fastp, spades, prokka, mlst, ncbi-amrfinderplus |
+| `abi-qc` | metatranscriptomics | fastp |
+| `abi-stats` | metatranscriptomics | star, hisat2, subread |
+
+### Docker Images
+
+| Image | Plugin | Size (est.) | Tools |
+|-------|--------|:-----------:|-------|
+| `abi-amplicon` | amplicon_16s | ~1.5 GB | cutadapt, vsearch, mafft, fasttree |
+| `abi-rnaseq` | rnaseq_expression | ~2.5 GB | fastp, STAR, featureCounts, R, DESeq2 |
+| `abi-wgs` | wgs_bacteria | ~2.0 GB | fastp, SPAdes, Prokka, MLST, AMRFinderPlus |
+| `abi-metatranscriptomics` | metatranscriptomics | ~2.0 GB | fastp, STAR, HISAT2, featureCounts |
+| `abi-plasmid` | metagenomic_plasmid | ~15 GB | 60+ tools across 10 conda envs |
+
+### Files
+
+- **NEW** `envs/amplicon.yml`, `envs/wgs.yml`, `envs/abi-qc.yml`, `envs/abi-stats.yml`
+- **NEW** `docker/Dockerfile.amplicon` — miniforge3 + amplicon env + ABI
+- **NEW** `docker/Dockerfile.rnaseq` — miniforge3 + rnaseq env + BiocManager + ABI
+- **NEW** `docker/Dockerfile.wgs` — miniforge3 + wgs env + ABI
+- **NEW** `docker/Dockerfile.metatranscriptomics` — miniforge3 + qc + stats envs + ABI
+- **NEW** `docker/Dockerfile.metagenomic_plasmid` — miniforge3 + 10 conda envs + ABI
+- **NEW** `docker/docker-compose.yml` — all 5 images + job-service
+- **NEW** `.dockerignore` — exclude tests, docs build, caches from build context
+- **NEW** `.github/workflows/docker.yml` — build + smoke-test on tag push, push to GHCR
+
+### Usage
+
+```bash
+# Build one plugin
+docker build -f docker/Dockerfile.amplicon -t abi-amplicon .
+
+# Run dry-run inside container
+docker run --rm -v $(pwd):/data abi-amplicon abi plan --type amplicon_16s --outdir /data/results
+
+# Start all services
+docker compose -f docker/docker-compose.yml up -d
+```
+
+### Commits
+
+- `efa8d17` — feat: Direction C — Docker containerization for all 5 plugins
+
+---
+
 ## 2026-06-18 — Direction B: Engineering Infrastructure
 
 ### Overview

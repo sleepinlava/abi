@@ -1,7 +1,7 @@
 # ABI Next Stage Development Plan & Technical Design
 
 > **Status**: Active (2026-06-18)
-> **Last updated**: 2026-06-18 — Direction A + B complete, all plugins fully functional
+> **Last updated**: 2026-06-18 — Direction A + B + C complete, Docker images for all 5 plugins
 > **Canonical reference**: This document supersedes `docs/abi_final_development_plan.md` and `docs/demo_plan.md`.
 > **Related**: `docs/workflow_validation.md`, `docs/pipeline_biological_validity.md`, `docs/plugin_development_guide.md`, `docs/hpc_development.md`
 
@@ -38,6 +38,15 @@
 | B3 | pre-commit hook version updates | ✅ ruff v0.9.0, hooks v5.0.0, mypy v1.14.0 |
 | B4 | CI docs build + coverage XML | ✅ |
 | B5 | _parse_sample_sheet check_files fix | ✅ all 4 inline plugins return synthetic context |
+
+### Direction C: Docker Containerization (2026-06-18)
+
+| Task | Description | Status |
+|------|-------------|--------|
+| C1 | Missing conda env YAMLs (amplicon, wgs, abi-qc, abi-stats) | ✅ 4 new env YAMLs |
+| C2 | 5 plugin Dockerfiles (amplicon, rnaseq, wgs, metatx, plasmid) | ✅ docker/Dockerfile.* |
+| C3 | docker-compose.yml (all 5 images + job-service) | ✅ |
+| C4 | .dockerignore + CI Docker build workflow | ✅ .dockerignore + .github/workflows/docker.yml |
 
 ### Route C: Code Quality & Test Coverage (2026-06-18)
 
