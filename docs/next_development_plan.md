@@ -1,7 +1,7 @@
 # ABI Next Stage Development Plan & Technical Design
 
 > **Status**: Active (2026-06-18)
-> **Last updated**: 2026-06-18 — Phases 0-5 complete, Phase 6 deferred
+> **Last updated**: 2026-06-18 — Route C code quality phase + P0-2 amplicon fix complete
 > **Canonical reference**: This document supersedes `docs/abi_final_development_plan.md` and `docs/demo_plan.md`.
 > **Related**: `docs/workflow_validation.md`, `docs/pipeline_biological_validity.md`, `docs/plugin_development_guide.md`, `docs/hpc_development.md`
 
@@ -10,15 +10,36 @@
 | Phase | Plugin | Status | Tests | Parsers | Notes |
 |-------|--------|--------|-------|---------|-------|
 | 0 | metagenomic_plasmid | ✅ Stable | Full | Full (32 tools) | Flagship plugin |
-| 1 | Report + figures layer | ✅ Complete | 423 → 435 | N/A | Core capability |
-| 2 | rnaseq_expression | ✅ Complete | 21 tests | 4/4 tools | First new full pipeline |
+| 1 | Report + figures layer | ✅ Complete | 435+ | N/A | Core capability |
+| 2 | rnaseq_expression | ✅ Complete | 21 tests | 5/5 tools | +build_count_matrix tool |
 | 3 | wgs_bacteria | ✅ Complete | 17 tests | 5/5 tools | Second full pipeline |
-| 4 | amplicon_16s | ✅ Complete | 15 tests | 5/6 tools | Third full pipeline |
+| 4 | amplicon_16s | ✅ Complete | 15 tests | 6/6 tools | +vsearch_mergepairs tool |
 | 5 | metatranscriptomics | ✅ Complete | 10 tests | 3/3 tools | Fourth full pipeline |
 | 6 | Benchmark datasets | ⏸️ Deferred | — | — | Requires real data |
 | 7 | Multi-plugin demos | ⏸️ Deferred | — | — | Depends on Phase 6 |
 
-**Total**: 435 tests, 0 lint errors, 5 functional plugins
+**Total**: 617 tests (+90 from Route C), 0 mypy errors, 0 ruff errors, 5 functional plugins
+
+### Route C: Code Quality & Test Coverage (2026-06-18)
+
+| Task | Description | Status |
+|------|-------------|--------|
+| C1 | contract-lint crash fix | ✅ Already resolved |
+| C2 | mypy errors (5 → 0) | ✅ Clean across 138 source files |
+| C3 | wgs_bacteria.py type annotations | ✅ Already clean |
+| C4 | amplicon_16s I/O error handling | ✅ Already in place |
+| C5 | Test coverage (+90 tests) | ✅ workflow/validation 98%, provenance 98%, hpc 66% |
+| C6 | Test infrastructure improvements | ⬜ Pending |
+
+### P0-P2 Remediation (lightweight local IDE test)
+
+| Bug | Description | Status | Commit |
+|-----|-------------|--------|--------|
+| P0-1 | build_count_matrix tool + DESeq2 fixes | ✅ | 77aca65 |
+| P0-2 | amplicon_16s vsearch mergepairs step | ✅ | 0c0b912 |
+| P1-1 | DESeq2 installation automation | ⬜ | — |
+| P1-2 | amplicon small taxonomy DB | ⬜ | — |
+| P2 | Smoke tests with real tool execution | ⬜ | — |
 
 ## 1. Project Goals
 
