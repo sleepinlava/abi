@@ -326,7 +326,7 @@ class RNASeqExpressionPlugin:
 
 def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleContext:
     sample_sheet = _resolve_path(path, base_dirs=[PROJECT_ROOT])
-    if not sample_sheet.exists():
+    if check_files and not sample_sheet.exists():
         raise ValueError(f"Sample sheet does not exist: {sample_sheet}")
     with sample_sheet.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")

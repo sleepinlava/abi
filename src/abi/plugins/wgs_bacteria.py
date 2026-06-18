@@ -228,7 +228,7 @@ class WGSBacteriaPlugin:
 
 def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleContext:
     ss = _resolve_path(path, base_dirs=[PROJECT_ROOT])
-    if not ss.exists():
+    if check_files and not ss.exists():
         raise ValueError(f"Sample sheet does not exist: {ss}")
     with ss.open("r", encoding="utf-8", newline="") as h:
         r = csv.DictReader(h, delimiter="\t")
