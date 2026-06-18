@@ -27,7 +27,7 @@ COPY examples/ /app/examples/
 COPY golden_traces/ /app/golden_traces/
 
 # Install into abi-stats env (has the most Python deps)
-RUN /opt/conda/envs/abi-stats/bin/pip install --no-cache-dir -e /app/ && \
+RUN /opt/conda/envs/abi-stats/bin/pip install --no-cache-dir /app/ && \
     rm -rf /app/src /app/plugins /app/config /app/pyproject.toml \
     /app/data /app/envs /app/examples /app/golden_traces
 

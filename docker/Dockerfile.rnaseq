@@ -29,7 +29,7 @@ COPY envs/ /app/envs/
 COPY examples/ /app/examples/
 COPY golden_traces/ /app/golden_traces/
 
-RUN /opt/conda/envs/rnaseq/bin/pip install --no-cache-dir -e /app/ && \
+RUN /opt/conda/envs/rnaseq/bin/pip install --no-cache-dir /app/ && \
     rm -rf /app/src /app/plugins /app/config /app/pyproject.toml \
     /app/data /app/envs /app/examples /app/golden_traces
 
