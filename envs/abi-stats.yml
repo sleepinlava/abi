@@ -1,0 +1,11 @@
+name: abi-stats
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+channel_priority: strict
+dependencies:
+  - python=3.10
+  - star>=2.7
+  - hisat2>=2.2
+  - subread>=2.0

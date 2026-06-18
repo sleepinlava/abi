@@ -1,0 +1,33 @@
+# ── ABI amplicon_16s Docker image ────────────────────────────────────────
+# Build:  docker build -f docker/Dockerfile.amplicon -t abi-amplicon .
+# Run:    docker run --rm -v $(pwd):/data abi-amplicon abi plan --type amplicon_16s ...
+
+FROM condaforge/miniforge3:latest AS base
+
+# Install mamba for faster solves
+RUN conda install -y -n base -c conda-forge mamba && \
+    mamba clean -afy
+
+# ── amplicon conda environment ───────────────────────────────────────────
+COPY envs/amplicon.yml /tmp/envs/amplicon.yml
+RUN mamba env create -f /tmp/envs/amplicon.yml && \
+    mamba clean -afy && \
+    rm /tmp/envs/amplicon.yml
+
+# ── ABI package ──────────────────────────────────────────────────────────
+COPY pyproject.toml README.md /app/
+COPY src/ /app/src/
+COPY plugins/ /app/plugins/
+COPY config/ /app/config/
+COPY scripts/ /app/scripts/
+
+RUN /opt/conda/envs/amplicon/bin/pip install --no-cache-dir -e /app/ && \
+    rm -rf /app/src /app/plugins /app/config /app/pyproject.toml
+
+# ── Runtime ──────────────────────────────────────────────────────────────
+ENV PATH="/opt/conda/envs/amplicon/bin:$PATH"
+ENV ABI_ENV=amplicon
+
+WORKDIR /data
+ENTRYPOINT ["abi"]
+CMD ["list-types"]

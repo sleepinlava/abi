@@ -1,0 +1,14 @@
+name: wgs
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+channel_priority: strict
+dependencies:
+  - python=3.10
+  - fastp>=0.23
+  - spades>=3.15
+  - prokka>=1.14
+  - mlst>=2.0
+  - ncbi-amrfinderplus>=3.12
+  - pigz

@@ -1,0 +1,98 @@
+# ── ABI Docker Compose ────────────────────────────────────────────────────
+# Usage:
+#   docker compose -f docker/docker-compose.yml build   # build all images
+#   docker compose -f docker/docker-compose.yml up -d   # start job service
+#   docker compose -f docker/docker-compose.yml run amplicon abi plan ...
+#
+# Each plugin image contains:
+#   - The plugin's conda environment(s) + tool binaries
+#   - ABI core library (abi-agent)
+#   - Entry point: abi CLI
+
+version: "3.8"
+
+services:
+  # ── Plugin images ──────────────────────────────────────────────────────
+
+  amplicon:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.amplicon
+    image: abi-amplicon:latest
+    volumes:
+      - data:/data
+    working_dir: /data
+    entrypoint: ["abi"]
+    command: ["list-types"]
+
+  rnaseq:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.rnaseq
+    image: abi-rnaseq:latest
+    volumes:
+      - data:/data
+    working_dir: /data
+    entrypoint: ["abi"]
+    command: ["list-types"]
+
+  wgs:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.wgs
+    image: abi-wgs:latest
+    volumes:
+      - data:/data
+    working_dir: /data
+    entrypoint: ["abi"]
+    command: ["list-types"]
+
+  metatranscriptomics:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.metatranscriptomics
+    image: abi-metatranscriptomics:latest
+    volumes:
+      - data:/data
+    working_dir: /data
+    entrypoint: ["abi"]
+    command: ["list-types"]
+
+  plasmid:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.metagenomic_plasmid
+    image: abi-plasmid:latest
+    volumes:
+      - data:/data
+    working_dir: /data
+    entrypoint: ["abi"]
+    command: ["list-types"]
+
+  # ── Job Service ────────────────────────────────────────────────────────
+
+  job-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.amplicon  # any plugin image works
+    image: abi-amplicon:latest
+    volumes:
+      - data:/data
+      - /var/run/docker.sock:/var/run/docker.sock  # for subprocess workers
+    working_dir: /data
+    entrypoint: ["abi"]
+    command:
+      - "job-service"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "18791"
+      - "--workers"
+      - "2"
+    ports:
+      - "18791:18791"
+    environment:
+      - ABI_JOB_SECRET=${ABI_JOB_SECRET:-}
+
+volumes:
+  data:

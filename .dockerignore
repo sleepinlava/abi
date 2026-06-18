@@ -1,0 +1,19 @@
+# ABI Docker ignore — exclude files not needed in build context
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.git
+.gitignore
+*.egg-info
+docs/_build
+tests/
+Dockerfile*
+docker/
+.claude/
+baseline_comparison/
+demo_artifacts/
+golden_traces/
+examples/
+experiments/

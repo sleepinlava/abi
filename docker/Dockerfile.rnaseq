@@ -1,0 +1,37 @@
+# ── ABI rnaseq_expression Docker image ───────────────────────────────────
+# Build:  docker build -f docker/Dockerfile.rnaseq -t abi-rnaseq .
+# Run:    docker run --rm -v $(pwd):/data abi-rnaseq abi plan --type rnaseq_expression ...
+
+FROM condaforge/miniforge3:latest AS base
+
+RUN conda install -y -n base -c conda-forge mamba && \
+    mamba clean -afy
+
+# ── rnaseq conda environment ─────────────────────────────────────────────
+COPY envs/rnaseq.yml /tmp/envs/rnaseq.yml
+RUN mamba env create -f /tmp/envs/rnaseq.yml && \
+    mamba clean -afy && \
+    rm /tmp/envs/rnaseq.yml
+
+# ── Install DESeq2 + clusterProfiler via BiocManager ─────────────────────
+COPY scripts/install_deseq2.R /tmp/install_deseq2.R
+RUN /opt/conda/envs/rnaseq/bin/Rscript /tmp/install_deseq2.R && \
+    rm /tmp/install_deseq2.R
+
+# ── ABI package ──────────────────────────────────────────────────────────
+COPY pyproject.toml README.md /app/
+COPY src/ /app/src/
+COPY plugins/ /app/plugins/
+COPY config/ /app/config/
+COPY scripts/ /app/scripts/
+
+RUN /opt/conda/envs/rnaseq/bin/pip install --no-cache-dir -e /app/ && \
+    rm -rf /app/src /app/plugins /app/config /app/pyproject.toml
+
+# ── Runtime ──────────────────────────────────────────────────────────────
+ENV PATH="/opt/conda/envs/rnaseq/bin:$PATH"
+ENV ABI_ENV=rnaseq
+
+WORKDIR /data
+ENTRYPOINT ["abi"]
+CMD ["list-types"]

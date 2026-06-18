@@ -1,0 +1,66 @@
+# ── ABI metagenomic_plasmid Docker image (flagship, 67 tools) ───────────
+# Build:  docker build -f docker/Dockerfile.metagenomic_plasmid -t abi-plasmid .
+# Note:   This image installs 10+ conda environments and is large (~15-20 GB).
+#         For CI builds, use a separate cache layer per env.
+
+FROM condaforge/miniforge3:latest AS base
+
+RUN conda install -y -n base -c conda-forge mamba && \
+    mamba clean -afy
+
+# ── Core environments (installed first for layer caching) ────────────────
+# Each COPY + mamba create pair is a cacheable layer
+
+COPY envs/base.yml /tmp/envs/base.yml
+RUN mamba env create -f /tmp/envs/base.yml && rm /tmp/envs/base.yml
+
+COPY envs/qc.yml /tmp/envs/qc.yml
+RUN mamba env create -f /tmp/envs/qc.yml && rm /tmp/envs/qc.yml
+
+COPY envs/assembly.yml /tmp/envs/assembly.yml
+RUN mamba env create -f /tmp/envs/assembly.yml && rm /tmp/envs/assembly.yml
+
+COPY envs/annotation.yml /tmp/envs/annotation.yml
+RUN mamba env create -f /tmp/envs/annotation.yml && rm /tmp/envs/annotation.yml
+
+COPY envs/abundance.yml /tmp/envs/abundance.yml
+RUN mamba env create -f /tmp/envs/abundance.yml && rm /tmp/envs/abundance.yml
+
+# ── Specialized environments ─────────────────────────────────────────────
+COPY envs/plasmid_detect.yml /tmp/envs/plasmid_detect.yml
+RUN mamba env create -f /tmp/envs/plasmid_detect.yml && rm /tmp/envs/plasmid_detect.yml
+
+COPY envs/plasmid_binning.yml /tmp/envs/plasmid_binning.yml
+RUN mamba env create -f /tmp/envs/plasmid_binning.yml && rm /tmp/envs/plasmid_binning.yml
+
+COPY envs/stats.yml /tmp/envs/stats.yml
+RUN mamba env create -f /tmp/envs/stats.yml && rm /tmp/envs/stats.yml
+
+COPY envs/visualization.yml /tmp/envs/visualization.yml
+RUN mamba env create -f /tmp/envs/visualization.yml && rm /tmp/envs/visualization.yml
+
+COPY envs/integronfinder.yml /tmp/envs/integronfinder.yml
+RUN mamba env create -f /tmp/envs/integronfinder.yml && rm /tmp/envs/integronfinder.yml
+
+# ── Cleanup ──────────────────────────────────────────────────────────────
+RUN mamba clean -afy
+
+# ── ABI package ──────────────────────────────────────────────────────────
+COPY pyproject.toml README.md /app/
+COPY src/ /app/src/
+COPY plugins/ /app/plugins/
+COPY config/ /app/config/
+COPY scripts/ /app/scripts/
+COPY data/ /app/data/
+
+RUN /opt/conda/envs/autoplasm-base/bin/pip install --no-cache-dir -e /app/ && \
+    rm -rf /app/src /app/plugins /app/config /app/pyproject.toml
+
+# ── Runtime ──────────────────────────────────────────────────────────────
+# Make the base env the default (has the most Python deps + autoplasm CLI)
+ENV PATH="/opt/conda/envs/autoplasm-base/bin:$PATH"
+ENV ABI_ENV=autoplasm-base
+
+WORKDIR /data
+ENTRYPOINT ["abi"]
+CMD ["list-types"]

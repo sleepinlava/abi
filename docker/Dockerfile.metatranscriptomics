@@ -1,0 +1,35 @@
+# ── ABI metatranscriptomics Docker image ─────────────────────────────────
+# Build:  docker build -f docker/Dockerfile.metatranscriptomics -t abi-meta .
+# Run:    docker run --rm -v $(pwd):/data abi-meta abi plan --type metatranscriptomics ...
+
+FROM condaforge/miniforge3:latest AS base
+
+RUN conda install -y -n base -c conda-forge mamba && \
+    mamba clean -afy
+
+# ── Conda environments (qc + stats) ──────────────────────────────────────
+COPY envs/abi-qc.yml /tmp/envs/abi-qc.yml
+COPY envs/abi-stats.yml /tmp/envs/abi-stats.yml
+RUN mamba env create -f /tmp/envs/abi-qc.yml && \
+    mamba env create -f /tmp/envs/abi-stats.yml && \
+    mamba clean -afy && \
+    rm /tmp/envs/abi-qc.yml /tmp/envs/abi-stats.yml
+
+# ── ABI package ──────────────────────────────────────────────────────────
+COPY pyproject.toml README.md /app/
+COPY src/ /app/src/
+COPY plugins/ /app/plugins/
+COPY config/ /app/config/
+COPY scripts/ /app/scripts/
+
+# Install into abi-stats env (has the most Python deps)
+RUN /opt/conda/envs/abi-stats/bin/pip install --no-cache-dir -e /app/ && \
+    rm -rf /app/src /app/plugins /app/config /app/pyproject.toml
+
+# ── Runtime ──────────────────────────────────────────────────────────────
+ENV PATH="/opt/conda/envs/abi-qc/bin:/opt/conda/envs/abi-stats/bin:$PATH"
+ENV ABI_ENV=abi-stats
+
+WORKDIR /data
+ENTRYPOINT ["abi"]
+CMD ["list-types"]

@@ -1,0 +1,32 @@
+# ── ABI wgs_bacteria Docker image ────────────────────────────────────────
+# Build:  docker build -f docker/Dockerfile.wgs -t abi-wgs .
+# Run:    docker run --rm -v $(pwd):/data abi-wgs abi plan --type wgs_bacteria ...
+
+FROM condaforge/miniforge3:latest AS base
+
+RUN conda install -y -n base -c conda-forge mamba && \
+    mamba clean -afy
+
+# ── wgs conda environment ────────────────────────────────────────────────
+COPY envs/wgs.yml /tmp/envs/wgs.yml
+RUN mamba env create -f /tmp/envs/wgs.yml && \
+    mamba clean -afy && \
+    rm /tmp/envs/wgs.yml
+
+# ── ABI package ──────────────────────────────────────────────────────────
+COPY pyproject.toml README.md /app/
+COPY src/ /app/src/
+COPY plugins/ /app/plugins/
+COPY config/ /app/config/
+COPY scripts/ /app/scripts/
+
+RUN /opt/conda/envs/wgs/bin/pip install --no-cache-dir -e /app/ && \
+    rm -rf /app/src /app/plugins /app/config /app/pyproject.toml
+
+# ── Runtime ──────────────────────────────────────────────────────────────
+ENV PATH="/opt/conda/envs/wgs/bin:$PATH"
+ENV ABI_ENV=wgs
+
+WORKDIR /data
+ENTRYPOINT ["abi"]
+CMD ["list-types"]
