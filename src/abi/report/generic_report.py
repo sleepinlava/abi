@@ -265,8 +265,14 @@ def _render_figures_via_sciplot(
     Returns ``{spec_id: png_path}`` for HTML report embedding.
     """
     from abi.config import load_yaml
-    from abi.sciplot.adapters import adapt_spec
-    from abi.sciplot.api import render_figure
+
+    # sciplot plot modules import matplotlib.axes at module level —
+    # bail out gracefully when matplotlib is not installed.
+    try:
+        from abi.sciplot.adapters import adapt_spec
+        from abi.sciplot.api import render_figure
+    except ImportError:
+        return {}
 
     data = load_yaml(specs_path)
     old_specs: list[dict] = data.get("figures", [])

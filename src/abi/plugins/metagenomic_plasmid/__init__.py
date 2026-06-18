@@ -270,8 +270,14 @@ def _render_plasmid_figures(
     for HTML report embedding.
     """
     from abi.config import load_yaml
-    from abi.sciplot.adapters import adapt_spec
-    from abi.sciplot.api import render_figure
+
+    # sciplot plot modules import matplotlib.axes at module level —
+    # bail out gracefully when matplotlib is not installed.
+    try:
+        from abi.sciplot.adapters import adapt_spec
+        from abi.sciplot.api import render_figure
+    except ImportError:
+        return {}
 
     fig_specs_path = plugin.root / "figure_specs.yaml"
     if not fig_specs_path.exists():
