@@ -1270,3 +1270,261 @@ First make report + figures + methods + resource_manifest into ABI core generic 
 ```
 
 Once this step is done, the next four plugins are just template extensions; without this step, the result will be four duplicate report systems.
+
+---
+
+# Direction E：ABI v1.3 Token优化 + v0.5 Benchmark真实执行
+
+> **Status**: Active (2026-06-18)
+> **Dependencies**: Direction A + B + C + D 基本完成
+> **Priority**: P0（token优化）+ P1（benchmark数据集）+ P2（真实执行任务）
+
+## E.0 核心洞察
+
+### E.0.1 性能分析结论（2026-06-18 实测）
+
+| 指标 | 测量值 | 评价 |
+|------|--------|------|
+| Python import | 228ms | 快 |
+| `abi list-types` | 276ms | 快 |
+| `abi plan` | 315ms | 快 |
+| `abi dry-run` | 361ms | 快 |
+| Agent 上下文（plasmid） | ~2,500 bytes | 极轻量 |
+| Agent 工具数 | 9 个（插件无关） | 稳定 |
+| 单任务 token 消耗（3-tool） | ~3,300 | 正常 |
+| 单任务 token 消耗（84-tool） | ~8,500 | 可优化 |
+
+**ABI 架构对 agent 是合理的**。不慢、不臃肿。但 token 消耗有优化空间——特别是 plan 输出（84-step plasmid plan ~5,000+ tokens）。
+
+### E.0.2 Token 浪费分析
+
+```
+消耗来源                        tokens    占比    可优化
+──────────────────────────────────────────────────────────
+系统 prompt（工具定义，一次性）    1,845     56%    ❌ 必要
+Agent 推理（所有回合）             800-1200  30%    ❌ LLM 固有
+abi plan（读 execution_plan.json）869      26%    ✅ 摘要化可省 78%
+abi dry-run（信封）               197       6%    ✅ 精简可省 50%
+abi inspect                      503      15%    ⚠️ 中等
+abi report                       38        1%    ❌ 已很小
+```
+
+### E.0.3 优化目标
+
+| 优化 | 代码量 | 节省 tokens |
+|------|--------|------------|
+| plan 输出摘要化 | ~30 行 | -78%（plasmid plan） |
+| 错误响应去 traceback | ~20 行 | -80%（错误场景） |
+| abi query 接口 | ~80 行 | -90%（轻量查询） |
+| dry-run 信封精简 | ~20 行 | -50% |
+| **合计** | **~150 行** | **单任务 -45~78%** |
+
+---
+
+## E.1 Phase 1：ABI Token 优化（Week 1 Day 1-3）
+
+### E.1.1 Plan 输出摘要化
+
+**文件**：`src/abi/agent/envelopes.py`
+
+ABI 的 `build_plan_envelope()` 当前只返回 `{"plan": "<path>", "steps": N}`。Agent 必须再读 `execution_plan.json`（plasmid: ~5,000+ tokens）才能理解 workflow。
+
+优化：envelope 注入摘要，agent 不需要读文件。
+
+```json
+{
+  "plan": "/tmp/plan/execution_plan.json",
+  "steps": 84,
+  "summary": {
+    "pipeline": "metagenomic_plasmid",
+    "stages": ["qc", "assembly", "gene_prediction", "plasmid_detection", "annotation", "abundance"],
+    "key_tools": ["fastp", "megahit", "prodigal", "genomad", "bakta", "coverm"],
+    "platforms": ["illumina", "ont", "pacbio_hifi", "hybrid", "assembly"]
+  }
+}
+```
+
+**实现**：DAG 在 plan 阶段已加载到内存，envelope 构建时提取 stage 分组。
+
+### E.1.2 错误响应去 traceback
+
+**文件**：`src/abi/agent/envelopes.py`
+
+当前错误信封包含完整 Python traceback。Agent 只需要：
+- `error_code`（机器可读，用于自动恢复）
+- `diagnostic_hints`（自然语言，用于推理）
+- `suggested_action`（下一步建议）
+
+traceback → `--debug` 模式保留。
+
+### E.1.3 新增 `abi query` 接口
+
+**文件**：`src/abi/cli.py`（~50 行）+ `src/abi/agent/interface.py`（~30 行）
+
+```bash
+abi query --type <plugin> --what stages|tools|platforms
+abi query --type <plugin> --step <id> --what resources|inputs|outputs
+```
+
+**设计原则**：不是替代 `abi plan`，而是提供轻量替代路径。Agent 在只需要查询元信息时不用跑完整 plan。底层复用已有的 DAG + tool_registry 加载。
+
+### E.1.4 Dry-run 信封精简
+
+移除 envelope 中自动列出的所有 provenance 文件列表。Agent 按需使用 `abi inspect` 查询。
+
+---
+
+## E.2 Phase 2：Benchmark 数据集补齐（Week 1 Day 4-5 + Week 2 Day 1）
+
+当前状态：2/5 插件有完整 benchmark 数据（amplicon + rnaseq）。
+
+### E.2.1 wgs_bacteria benchmark
+
+```
+data/benchmarks/wgs_bacteria/
+  expected_assertions.yaml    # qc/assembly/annotation/mlst/amr 值级断言
+  config.yaml                 # 可执行配置（小规模合成数据）
+```
+
+使用合成细菌基因组 + paired-end reads，验证 contig 数、N50、MLST 检出。
+
+### E.2.2 metatranscriptomics benchmark
+
+```
+data/benchmarks/metatranscriptomics/
+  expected_assertions.yaml    # qc/alignment/expression 值级断言
+  config.yaml                 # 可执行配置
+```
+
+复用 rnaseq 的合成数据生成逻辑。
+
+### E.2.3 metagenomic_plasmid benchmark 完善
+
+```
+data/benchmarks/metagenomic_plasmid/
+  expected_assertions.yaml    # 已有 ✅
+  config.yaml                 # 新增：指向 plasmid_refseq_smoke 数据
+```
+
+使用 3 个 RefSeq 质粒 + 染色体 negative control。
+
+---
+
+## E.3 Phase 3：Bench v0.5 — 真实执行任务（Week 2 Day 2-5）
+
+### E.3.1 新任务 T31-T35
+
+| 任务 | 插件 | 分值 | 核心评分 |
+|------|------|------|---------|
+| T31 | metagenomic_plasmid | 15 | pipeline_completed(3) + assertions_validated(6) + discrepancy_analyzed(4) + provenance(2) |
+| T32 | rnaseq_expression | 15 | 同上 |
+| T33 | amplicon_16s | 15 | 同上 |
+| T34 | wgs_bacteria | 15 | 同上 |
+| T35 | metatranscriptomics | 15 | 同上 |
+
+**关键变化**：`allowed_actions.real_tool_execution: true`。评分从"文件存在"升级到"值正确"。
+
+### E.3.2 新 fixture
+
+```
+bench/fixtures/plasmid_benchmark/     # → ABI data/benchmarks/metagenomic_plasmid/
+bench/fixtures/rnaseq_benchmark/      # → ABI data/benchmarks/rnaseq_expression/
+bench/fixtures/amplicon_benchmark/    # → ABI data/benchmarks/amplicon_16s/
+bench/fixtures/wgs_benchmark/         # → ABI data/benchmarks/wgs_bacteria/
+bench/fixtures/metatranscriptomics_benchmark/  # → ABI data/benchmarks/metatranscriptomics/
+```
+
+### E.3.3 新增检查项
+
+```yaml
+# rubric.yaml 新增
+pipeline_completed:     {function: check_pipeline_completed, points: 3}
+assertions_validated:   {function: check_assertions_validated, points: 6}
+discrepancy_analyzed:   {function: check_discrepancy_analyzed, points: 4}
+```
+
+### E.3.4 BENCHMARK_SPEC + run_group.py
+
+```python
+REAL_EXEC_TASKS = ["T31", "T32", "T33", "T34", "T35"]
+FULL_V0_5_TASKS = FULL_V0_4_TASKS + REAL_EXEC_TASKS  # 30 → 35 tasks
+```
+
+---
+
+## E.4 Phase 4：集成测试 + 发布（Week 3）
+
+### E.4.1 验证步骤
+
+```bash
+# Token 优化验证
+abi plan --type metagenomic_plasmid --outdir /tmp/test | \
+  python3 -c "import sys,json; d=json.load(sys.stdin); assert 'summary' in d"
+
+# Benchmark 验证（需真实 conda 环境）
+pytest tests/smoke/test_wgs_benchmark.py -v -m requires_tools
+pytest tests/smoke/test_metatranscriptomics_benchmark.py -v -m requires_tools
+
+# Bench 模拟模式
+python bench/harness/run_group.py --group G3 --tasks real_exec \
+  --replicates 1 --agent-mode simulated
+```
+
+### E.4.2 发布
+
+```
+ABI v1.3.0: token优化 + benchmark数据集 + abi query
+Bench v0.5.0: 真实执行任务 + 5插件benchmark覆盖
+```
+
+---
+
+## E.5 工具栈总结
+
+全部 Python 3.10+，不引入新语言：
+
+| 阶段 | 工具 | 新增依赖 |
+|------|------|---------|
+| Token优化 | Python（envelopes.py + cli.py） | 无 |
+| Benchmark数据 | Python + BioPython | `biopython` |
+| 真实执行 | Python + subprocess | 无 |
+| 测试 | pytest | 无 |
+
+---
+
+## E.6 时间线
+
+```
+Week 1 Day 1-3:  Phase 1 Token优化（~150行）
+Week 1 Day 4-5:  Phase 2.1-2.2 (wgs + metatranscriptomics benchmark)
+Week 2 Day 1:     Phase 2.3 (plasmid benchmark完善) + 验证
+Week 2 Day 2-4:   Phase 3.1-3.3 (T31-T35 + fixtures + checks)
+Week 2 Day 5:     Phase 3.4 (BENCHMARK_SPEC + run_group.py)
+Week 3 Day 1-2:   Phase 4.1 (集成测试)
+Week 3 Day 3:     Phase 4.2 (发布)
+```
+
+---
+
+## E.7 验收标准
+
+**Phase 1**：
+- [ ] `abi plan` 返回 `summary` 字段，agent 不需要读文件即可理解 workflow
+- [ ] `abi query` 可查询 stages/tools/platforms/resources/inputs/outputs
+- [ ] 错误响应不含 traceback，包含 diagnostic_hints + suggested_action
+- [ ] plasmid plan token 消耗从 ~5,000 降到 ~250
+
+**Phase 2**：
+- [ ] 5/5 插件有 `data/benchmarks/<plugin>/expected_assertions.yaml`
+- [ ] 5/5 插件有 `data/benchmarks/<plugin>/config.yaml`
+- [ ] 在真实 conda 环境下 benchmark tests 全部通过
+
+**Phase 3**：
+- [ ] T31-T35 在 simulated 模式下满分
+- [ ] T31-T35 在至少一个真实 LLM 下通过
+- [ ] 评分包含值级验证（非仅文件存在）
+
+**Phase 4**：
+- [ ] `abi --version` → 1.3.0
+- [ ] Bench BENCHMARK_SPEC → version 0.5.0
+- [ ] 两个仓库 git tag 已推送
