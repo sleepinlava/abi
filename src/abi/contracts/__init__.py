@@ -5,7 +5,7 @@ from __future__ import annotations
 import string
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Dict, Iterable, Mapping
 
 from abi.config import load_yaml
 
@@ -324,6 +324,8 @@ def _validate_workflow_section(
         tool = step.get("tool")
         _require_non_empty_string(sid, f"{label}.steps[{idx}].id")
         _require_non_empty_string(tool, f"{label}.steps[{idx}].tool")
+        assert isinstance(sid, str)  # guaranteed by _require_non_empty_string
+        assert isinstance(tool, str)
         if sid in step_ids:
             raise ContractValidationError(f"{label}: duplicate step id {sid!r}")
         step_ids.add(sid)

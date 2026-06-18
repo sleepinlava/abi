@@ -107,6 +107,8 @@ def load_citations(
     """
     if isinstance(source, (list, tuple)):
         return CitationRegistry(source).all
+    if not isinstance(source, (str, Path)):
+        return CitationRegistry(list(source)).all
     return CitationRegistry.from_yaml(source).all
 
 

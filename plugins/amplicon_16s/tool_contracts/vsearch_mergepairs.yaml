@@ -1,0 +1,46 @@
+abi_version: "0.1"
+tool_id: vsearch_mergepairs
+name: vsearch merge pairs
+category: preprocessing
+purpose: Merge paired-end amplicon reads into full-length sequences before dereplication.
+when_to_use:
+  - paired_end_amplicon
+  - read_merging_required
+inputs:
+  read1:
+    type: file
+    formats: [fastq.gz]
+    required: true
+  read2:
+    type: file
+    formats: [fastq.gz]
+    required: true
+  sample_id:
+    type: string
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+    default: 4
+outputs:
+  output_dir:
+    type: directory
+  merged_fasta:
+    type: file
+    format: fasta
+execution:
+  env_name: amplicon
+  executable: vsearch
+  command_template: "vsearch --fastq_mergepairs {read1} --reverse {read2} --fastqout {output_dir}/{sample_id}_merged.fastq --fastaout {output_dir}/{sample_id}_merged.fasta --threads {threads}"
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: "Trimmed FASTQ files not found. Verify that primer trimming completed successfully."
+  tool_not_found:
+    hint: "vsearch not found. Install: conda install -c bioconda vsearch"
+
+resources:
+  cpu: 4
+  memory: "4GB"
+  walltime: "01:00:00"

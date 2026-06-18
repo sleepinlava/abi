@@ -44,7 +44,10 @@ def load_limitations(
     """
     if isinstance(source, (list, tuple)):
         return [str(item) for item in source]
-    path = Path(source)
+    if isinstance(source, Path):
+        path = source
+    else:
+        path = Path(str(source))
     if not path.exists():
         return []
     from abi.config import load_yaml

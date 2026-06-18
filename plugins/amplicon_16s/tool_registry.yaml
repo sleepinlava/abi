@@ -9,6 +9,16 @@ tools:
     command_template: "cutadapt -g {forward_primer} -G {reverse_primer} -o {output_dir}/{sample_id}_R1.trimmed.fastq.gz -p {output_dir}/{sample_id}_R2.trimmed.fastq.gz {read1} {read2} --cores {threads} --minimum-length 50"
     inputs: [read1, read2, forward_primer, reverse_primer]
 
+  - id: vsearch_mergepairs
+    name: vsearch merge pairs
+    category: preprocessing
+    env_name: amplicon
+    executable: vsearch
+    default_enabled: true
+    required: true
+    command_template: "vsearch --fastq_mergepairs {read1} --reverse {read2} --fastqout {output_dir}/{sample_id}_merged.fastq --fastaout {output_dir}/{sample_id}_merged.fasta --threads {threads}"
+    inputs: [read1, read2]
+
   - id: vsearch_derep
     name: vsearch dereplicate
     category: preprocessing

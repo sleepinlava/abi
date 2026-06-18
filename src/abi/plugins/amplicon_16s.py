@@ -5,12 +5,13 @@ Purpose / 目的
 Microbial community profiling pipeline demonstrating ABI portability
 to the most widely used bioinformatics analysis type:
 
-    cutadapt → vsearch derep → vsearch UNOISE3 → SINTAX taxonomy → diversity
-    (primer)    (dereplicate)   (ASV denoise)     (classification)   (metrics)
+    cutadapt → vsearch merge → vsearch derep → UNOISE3 → SINTAX → diversity
+    (primer)    (merge pairs)   (dereplicate)   (ASV)     (taxonomy) (metrics)
 
 Tool chain / 工具链
 ~~~~~~~~~~~~~~~~~~~
 - **cutadapt**: primer/adapter removal (Martin 2011)
+- **vsearch --fastq_mergepairs**: merge paired-end reads into full-length sequences
 - **vsearch --derep_fulllength**: dereplicate with abundance annotation
 - **vsearch --cluster_unoise**: UNOISE3 denoising into ASVs (Edgar 2016)
 - **vsearch --cluster_size**: optional OTU clustering at 97% identity
@@ -42,9 +43,9 @@ from abi.tools import ToolRegistry
 class Amplicon16SPlugin:
     """ABI plugin for 16S rRNA amplicon community analysis.
 
-    Implements the ``ABIPlugin`` interface with a 6-tool chain:
-    cutadapt → vsearch derep → UNOISE3 denoise → SINTAX taxonomy
-    → (optional OTU clustering) → diversity metrics.
+    Implements the ``ABIPlugin`` interface with a 7-tool chain:
+    cutadapt → vsearch merge → vsearch derep → UNOISE3 denoise
+    → SINTAX taxonomy → (optional OTU clustering) → diversity metrics.
     """
 
     plugin_id = "amplicon_16s"
@@ -144,9 +145,36 @@ class Amplicon16SPlugin:
                 )
             )
 
-            # ── Step 2: Dereplicate (vsearch) ──
-            derep_out = outdir / "02_derep" / sample.sample_id
-            merged = trim_out / f"{sample.sample_id}_merged.fasta"
+            # ── Step 2: Merge paired reads (vsearch) ──
+            merge_out = outdir / "02_merge" / sample.sample_id
+            trimmed_read1 = trim_out / f"{sample.sample_id}_R1.trimmed.fastq.gz"
+            trimmed_read2 = trim_out / f"{sample.sample_id}_R2.trimmed.fastq.gz"
+            merged_fasta = merge_out / f"{sample.sample_id}_merged.fasta"
+            steps.append(
+                ABIPlanStep(
+                    step_id=f"{sample.sample_id}_merge_vsearch",
+                    sample_id=sample.sample_id,
+                    step_name="merge_pairs",
+                    tool_id="vsearch_mergepairs",
+                    category="preprocessing",
+                    inputs={
+                        "read1": str(trimmed_read1),
+                        "read2": str(trimmed_read2),
+                    },
+                    outputs={
+                        "output_dir": str(merge_out),
+                        "merged_fasta": str(merged_fasta),
+                    },
+                    params={
+                        "sample_id": sample.sample_id,
+                        "threads": threads,
+                        "mode": config["mode"],
+                    },
+                )
+            )
+
+            # ── Step 3: Dereplicate (vsearch) ──
+            derep_out = outdir / "03_derep" / sample.sample_id
             steps.append(
                 ABIPlanStep(
                     step_id=f"{sample.sample_id}_derep_vsearch",
@@ -154,14 +182,14 @@ class Amplicon16SPlugin:
                     step_name="dereplicate",
                     tool_id="vsearch_derep",
                     category="preprocessing",
-                    inputs={"merged_fasta": str(merged)},
+                    inputs={"merged_fasta": str(merged_fasta)},
                     outputs={"output_dir": str(derep_out)},
                     params={"sample_id": sample.sample_id, "mode": config["mode"]},
                 )
             )
 
-            # ── Step 3: Denoise UNOISE3 (vsearch) ──
-            denoise_out = outdir / "03_denoise" / sample.sample_id
+            # ── Step 4: Denoise UNOISE3 (vsearch) ──
+            denoise_out = outdir / "04_denoise" / sample.sample_id
             derep_fasta = derep_out / "derep.fasta"
             asv_fasta = denoise_out / "asvs.fasta"
             steps.append(
@@ -177,9 +205,9 @@ class Amplicon16SPlugin:
                 )
             )
 
-            # ── Step 4 (optional): OTU clustering ──
+            # ── Step 5 (optional): OTU clustering ──
             if do_otu:
-                otu_out = outdir / "03b_otu" / sample.sample_id
+                otu_out = outdir / "04b_otu" / sample.sample_id
                 steps.append(
                     ABIPlanStep(
                         step_id=f"{sample.sample_id}_otu_cluster",
@@ -193,8 +221,8 @@ class Amplicon16SPlugin:
                     )
                 )
 
-            # ── Step 5: SINTAX taxonomy (vsearch) ──
-            tax_out = outdir / "04_taxonomy" / sample.sample_id
+            # ── Step 6: SINTAX taxonomy (vsearch) ──
+            tax_out = outdir / "05_taxonomy" / sample.sample_id
             steps.append(
                 ABIPlanStep(
                     step_id=f"{sample.sample_id}_taxonomy_sintax",
@@ -208,8 +236,8 @@ class Amplicon16SPlugin:
                 )
             )
 
-        # ── Step 6: Diversity metrics (all samples) ──
-        div_out = outdir / "05_diversity"
+        # ── Step 7: Diversity metrics (all samples) ──
+        div_out = outdir / "06_diversity"
         asv_table = outdir / "merged_asv_table.tsv"
         steps.append(
             ABIPlanStep(
@@ -267,6 +295,8 @@ class Amplicon16SPlugin:
     ) -> Mapping[str, List[Dict[str, Any]]]:
         if tool_id == "cutadapt":
             return {"primer_trim_summary": _parse_cutadapt(Path(output_dir), sample_id)}
+        if tool_id == "vsearch_mergepairs":
+            return {"merge_stats": _parse_vsearch_merge(Path(output_dir), sample_id)}
         if tool_id == "vsearch_derep":
             return {"denoising_stats": _parse_vsearch_derep(Path(output_dir), sample_id)}
         if tool_id == "vsearch_denoise":
@@ -449,6 +479,34 @@ def _parse_cutadapt(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
                     "source_file": str(output_dir),
                 }
             )
+    return rows
+
+
+# ── vsearch merge parser ─────────────────────────────────────────────────
+
+
+def _parse_vsearch_merge(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
+    """Parse vsearch merge output → merge_stats rows.
+
+    Counts merged reads from the FASTA output to determine merge success rate.
+    """
+    rows: List[Dict[str, Any]] = []
+    merged_count = 0
+    for path in sorted(output_dir.glob("*_merged.fasta")):
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith(">"):
+                    merged_count += 1
+    if merged_count > 0:
+        rows.append(
+            {
+                "sample_id": sample_id,
+                "merged_reads": merged_count,
+                "tool": "vsearch",
+                "stage": "merge_pairs",
+                "source_file": str(output_dir),
+            }
+        )
     return rows
 
 

@@ -38,15 +38,30 @@ nodes:
     assertions:
       - "output_dir.exists()"
 
+  # ── Merge Paired Reads ──────────────────────────────────────────────
+  merge_vsearch:
+    tool_id: vsearch_mergepairs
+    category: preprocessing
+    platforms: [illumina]
+    optional: false
+    depends_on: [trim_cutadapt]
+    inputs:
+      read1:  {type: file, format: fastq.gz, source: trim_cutadapt.trimmed_read1}
+      read2:  {type: file, format: fastq.gz, source: trim_cutadapt.trimmed_read2}
+    outputs:
+      merged_fasta:  {type: file, format: fasta, contract: {min_size: "100B"}}
+    assertions:
+      - "output_dir.exists()"
+
   # ── Dereplicate ─────────────────────────────────────────────────────
   derep_vsearch:
     tool_id: vsearch_derep
     category: preprocessing
     platforms: [illumina]
     optional: false
-    depends_on: [trim_cutadapt]
+    depends_on: [merge_vsearch]
     inputs:
-      merged_fasta:  {type: file, format: fasta, source: trim_cutadapt.trimmed_read1}
+      merged_fasta:  {type: file, format: fasta, source: merge_vsearch.merged_fasta}
     outputs:
       derep_fasta:  {type: file, format: fasta, contract: {min_size: "100B"}}
     assertions:

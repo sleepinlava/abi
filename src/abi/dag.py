@@ -164,18 +164,18 @@ def infer_dag(
     bindings: List[StepBinding] = []
     for step in step_list:
         step_id = str(step.step_id)
-        consumed: Dict[str, str] = {}
+        consumed_paths: Dict[str, str] = {}
         for key, value in getattr(step, "inputs", {}).items():
             normalized = _normalize_path(value, root)
             if normalized:
-                consumed[str(key)] = normalized
+                consumed_paths[str(key)] = normalized
         bindings.append(
             StepBinding(
                 step=step,
                 process_name=process_name(step_id),
                 dependencies=merged_edges.get(step_id, []),
                 produced_paths=produced_by_step.get(step_id, {}),
-                consumed_paths=consumed,
+                consumed_paths=consumed_paths,
             )
         )
 

@@ -311,7 +311,10 @@ def write_consensus_table(
             weighted_score = sum(
                 resolved_weights.get(tool, 1.0) for tool in support_tools
             )
-            total_weight = sum(resolved_weights.values()) if resolved_weights else float(total_tools)
+            total_weight = (
+                sum(resolved_weights.values()) if resolved_weights
+                else float(total_tools)
+            )
             final_call = weighted_score >= (total_weight / 2.0)
         else:
             final_call = _consensus_call(strategy, support_count, total_tools)
@@ -344,7 +347,10 @@ def write_consensus_table(
             "warnings": warnings,
         }
         if weighted_score is not None:
-            total_weight = sum(resolved_weights.values()) if resolved_weights else float(total_tools)
+            total_weight = (
+                sum(resolved_weights.values()) if resolved_weights
+                else float(total_tools)
+            )
             row_data["weighted_score"] = round(weighted_score, 3)
             row_data["weight_threshold"] = round(total_weight / 2.0, 3)
             row_data["tool_weights"] = ",".join(
