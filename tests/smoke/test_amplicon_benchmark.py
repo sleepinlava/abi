@@ -49,6 +49,7 @@ def _load_expected() -> dict:
 
 @pytest.mark.smoke
 @pytest.mark.requires_tools
+@requires_amplicon_tools
 def test_amplicon_benchmark_assertions(tmp_path: Path) -> None:
     """Run amplicon_16s pipeline and validate outputs against benchmark assertions."""
     from tests.smoke.test_amplicon_smoke import _amplicon_bin, _generate_16s_reads

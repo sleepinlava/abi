@@ -49,10 +49,12 @@ nf_work/
 job_store.json
 jobs.json
 
-# Ignore user data by default, but keep curated small examples.
+# Ignore user data by default, but keep curated small examples + benchmarks.
 data/*
 !data/examples/
 !data/examples/**
+!data/benchmarks/
+!data/benchmarks/**
 
 # Large sequencing or archive inputs should not be committed by default.
 *.bam

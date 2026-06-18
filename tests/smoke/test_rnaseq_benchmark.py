@@ -50,6 +50,7 @@ def _load_expected() -> dict:
 
 @pytest.mark.smoke
 @pytest.mark.requires_tools
+@requires_rnaseq_tools
 def test_rnaseq_benchmark_assertions(tmp_path: Path) -> None:
     """Run rnaseq_expression pipeline and validate outputs against benchmark assertions."""
     from abi.config import PROJECT_ROOT
