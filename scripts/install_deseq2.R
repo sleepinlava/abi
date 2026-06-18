@@ -37,13 +37,6 @@ if (!requireNamespace("DESeq2", quietly = TRUE)) {
   cat("Library paths:", paste(.libPaths(), collapse = ", "), "\n")
 }
 
-# ── Ensure BiocManager is available ─────────────────────────────────────────
-if (!requireNamespace("BiocManager", quietly = TRUE)) {
-  install.packages("BiocManager", lib = target_lib,
-                   repos = "https://cran.r-project.org", quiet = FALSE)
-  loadNamespace("BiocManager")
-}
-
 # ── Optional companion packages (best-effort, non-fatal) ────────────────────
 optional_pkgs <- c(
   "clusterProfiler",   # GO/KEGG enrichment
@@ -57,16 +50,33 @@ optional_pkgs <- c(
 cat(sprintf("Installing %d optional companion packages...\n", length(optional_pkgs)))
 failed <- c()
 
-for (pkg in optional_pkgs) {
-  cat(sprintf("  %-25s ...", pkg))
+# ── Ensure BiocManager is available ─────────────────────────────────────────
+biocmanager_available <- requireNamespace("BiocManager", quietly = TRUE)
+if (!biocmanager_available) {
   tryCatch({
-    BiocManager::install(pkg, update = FALSE, ask = FALSE,
-                         quiet = FALSE, force = FALSE)
-    cat(" OK\n")
+    install.packages("BiocManager", lib = target_lib,
+                     repos = "https://cran.r-project.org", quiet = FALSE)
   }, error = function(e) {
-    cat(sprintf(" SKIPPED (%s)\n", conditionMessage(e)))
-    failed <<- c(failed, pkg)
+    cat(sprintf("WARNING: failed to install BiocManager (%s)\n", conditionMessage(e)))
   })
+  biocmanager_available <- requireNamespace("BiocManager", quietly = TRUE)
+}
+
+if (!biocmanager_available) {
+  cat("WARNING: BiocManager is unavailable; skipping optional companion package installation.\n")
+  failed <- optional_pkgs
+} else {
+  for (pkg in optional_pkgs) {
+    cat(sprintf("  %-25s ...", pkg))
+    tryCatch({
+      BiocManager::install(pkg, update = FALSE, ask = FALSE,
+                           quiet = FALSE, force = FALSE)
+      cat(" OK\n")
+    }, error = function(e) {
+      cat(sprintf(" SKIPPED (%s)\n", conditionMessage(e)))
+      failed <<- c(failed, pkg)
+    })
+  }
 }
 
 # ── Summary ─────────────────────────────────────────────────────────────────
