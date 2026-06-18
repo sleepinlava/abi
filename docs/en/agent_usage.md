@@ -51,11 +51,12 @@ for p in abi.list_plugins_summary():
 
 1. `abi_list_types` — discover installed analysis plugins
 2. `abi_export_agent_context` or `abi_doctor_agent` — get operating context
-3. `abi_plan` — build execution plan
-4. `abi_dry_run` — validate commands and provenance (no real tools)
-5. `abi_inspect` — check provenance for failures
-6. `abi_run` — execute **only after explicit user approval**
-7. `abi_report` — regenerate reports from standard tables and provenance
+3. `abi_query` — lightweight metadata query (stages, tools, platforms, step I/O)
+4. `abi_plan` — build execution plan (includes `summary` field — no need to read `execution_plan.json`)
+5. `abi_dry_run` — validate commands and provenance (no real tools)
+6. `abi_inspect` — check provenance for failures
+7. `abi_run` — execute **only after explicit user approval**
+8. `abi_report` — regenerate reports from standard tables and provenance
 
 ## Transport Methods
 
@@ -63,6 +64,7 @@ for p in abi.list_plugins_summary():
 
 ```bash
 abi list-types --output-json
+abi query --type metatranscriptomics --what stages --output-json
 abi plan --type metatranscriptomics --outdir results/rnaseq_demo --output-json
 abi dry-run --type metatranscriptomics --outdir results/rnaseq_demo --output-json
 abi inspect --result-dir results/rnaseq_demo --output-json
@@ -112,9 +114,13 @@ abi-mcp  # start stdio server, registers all ABI tools as MCP tools
 ```python
 from abi.agent import ABIAgentInterface
 
+# Default: compact error envelopes (no error_type for token efficiency)
 agent = ABIAgentInterface()
 result = agent.list_types()
 plan_json = agent.plan(analysis_type="metatranscriptomics", outdir="results/")
+
+# For debugging: include error_type in error envelopes
+agent_debug = ABIAgentInterface(verbose_errors=True)
 ```
 
 ## JSON Envelope Contract
@@ -159,6 +165,27 @@ Do not claim that a dry-run proves biological validity. Dry-run validates
 planning and command rendering. Scientific claims require real tool outputs,
 configured databases, version/resource manifests, and benchmark acceptance
 checks.
+
+## Plan Summarization
+
+`abi plan` envelopes now include a `summary` field with pipeline stages, key tools,
+and platforms. Agents can understand the workflow structure without reading the full
+`execution_plan.json` — saving 78-95% tokens on plan output for complex pipelines.
+
+For lightweight metadata queries without plan overhead, use `abi query`:
+
+```bash
+# Pipeline-level metadata
+abi query --type metagenomic_plasmid --what stages
+abi query --type metagenomic_plasmid --what tools
+abi query --type metagenomic_plasmid --what platforms
+
+# Step-level I/O detail
+abi query --type metagenomic_plasmid --step qc_fastp --what inputs
+abi query --type metagenomic_plasmid --step qc_fastp --what outputs
+```
+
+All `abi query` commands support `--output-json` for agent consumption.
 
 ## Golden Traces
 

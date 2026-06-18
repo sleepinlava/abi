@@ -1,7 +1,7 @@
 # ABI Next Stage Development Plan & Technical Design
 
 > **Status**: Active (2026-06-18)
-> **Last updated**: 2026-06-18 — Direction A + B + C complete, Docker images for all 5 plugins
+> **Last updated**: 2026-06-18 — Direction E complete, ABI v1.3.0 + Bench v0.5 released
 > **Canonical reference**: This document supersedes `docs/abi_final_development_plan.md` and `docs/demo_plan.md`.
 > **Related**: `docs/workflow_validation.md`, `docs/pipeline_biological_validity.md`, `docs/plugin_development_guide.md`, `docs/hpc_development.md`
 
@@ -15,10 +15,33 @@
 | 3 | wgs_bacteria | ✅ Complete | 17 tests | 5/5 tools | AMRFinderPlus parser fixed |
 | 4 | amplicon_16s | ✅ Complete | 15 tests | 7/7 tools | +merge, +phylogeny, +diversity script |
 | 5 | metatranscriptomics | ✅ Complete | 10 tests | 3/3 tools | Fourth full pipeline |
-| 6 | Benchmark datasets | ⏸️ Deferred | — | — | Requires real data |
-| 7 | Multi-plugin demos | ⏸️ Deferred | — | — | Depends on Phase 6 |
+| 6 | Benchmark datasets | ✅ Complete | 4 smoke tests | — | 5/5 plugins, value-level validation |
+| 7 | Multi-plugin demos | ⏸️ Deferred | — | — | Depends on real input data |
 
-**Total**: 650 tests (+24 from Direction A), 0 mypy errors, 0 ruff errors, 5 functional plugins
+**Total**: 543 tests, 0 mypy errors, 0 ruff errors, 5 functional plugins, all with `pipeline_dag.yaml`
+
+### Direction D: Benchmark Datasets + End-to-End Tests (2026-06-18)
+
+| Task | Description | Status |
+|------|-------------|--------|
+| D1 | Benchmark expected_assertions.yaml + config.yaml for amplicon_16s | ✅ |
+| D2 | Benchmark expected_assertions.yaml + config.yaml for rnaseq_expression | ✅ |
+| D3 | Benchmark expected_assertions.yaml + config.yaml for metagenomic_plasmid | ✅ |
+| D4 | Value-level smoke tests for rnaseq and amplicon | ✅ |
+
+### Direction E: Token Optimization + Benchmark Completion + Real Execution (2026-06-18)
+
+| Task | Description | Status |
+|------|-------------|--------|
+| E1 | Plan summarization (78-95% token savings) | ✅ |
+| E2 | `abi query` lightweight metadata command | ✅ |
+| E3 | Error envelope sans traceback (verbose mode) | ✅ |
+| E4 | Dry-run envelope reduction | ✅ |
+| E5 | wgs_bacteria + metatranscriptomics benchmark data | ✅ 5/5 plugins |
+| E6 | Value-level smoke tests for wgs + metatranscriptomics | ✅ |
+| E7 | Bench v0.5 T31-T35 real execution tasks | ✅ |
+| E8 | Bench v0.5 scoring checks + fixtures | ✅ |
+| E9 | Integration test + v1.3.0 release | ✅ |
 
 ### Direction A: Amplicon Diversity + Phylogeny + AMRFinderPlus (2026-06-18)
 

@@ -9,7 +9,6 @@ Skip with: pytest -m "not requires_tools"
 
 from __future__ import annotations
 
-import csv
 import os
 import subprocess
 from pathlib import Path
@@ -137,7 +136,8 @@ def test_plasmid_benchmark_assertions(tmp_path: Path) -> None:
     if plasmid_dir.exists():
         report_files = list(plasmid_dir.rglob("*plasmid*.tsv"))
         report_files += list(plasmid_dir.rglob("*summary*.tsv"))
-        assert len(report_files) > 0 or not expected["plasmid_detection"]["plasmid_report_exists"], (
+        has_report = len(report_files) > 0
+        assert has_report or not expected["plasmid_detection"]["plasmid_report_exists"], (
             "Plasmid detection report missing"
         )
 

@@ -14,6 +14,7 @@
 - `export_agent_context`
 - `doctor_agent`
 - `dispatch`
+- `query`
 
 Every public method returns a JSON string with a uniform envelope.
 
@@ -41,7 +42,7 @@ Confirmation gate:
 }
 ```
 
-Error:
+Error (compact, default):
 
 ```json
 {
@@ -52,6 +53,10 @@ Error:
   "diagnostic_hints": []
 }
 ```
+
+By default `error_type` is omitted from error envelopes to save tokens.
+Pass `verbose_errors=True` to `ABIAgentInterface` or use `--debug` on the
+CLI to include the full `error_type` field for debugging.
 
 ## Permissions
 
@@ -125,6 +130,43 @@ Each plugin must provide:
 
 `abi.testing.assert_plugin_contract()` validates runtime Python interfaces and
 machine-readable plugin assets.
+
+## Plan Summary
+
+`plan` envelopes include a `summary` field so agents understand workflow
+structure without reading the full `execution_plan.json` (which can reach
+5,000+ tokens for complex pipelines like metagenomic_plasmid with 84 nodes).
+
+```json
+{
+  "status": "success",
+  "command": "plan",
+  "result": {
+    "plan": "/tmp/plan/execution_plan.json",
+    "steps": 84,
+    "summary": {
+      "pipeline": "metagenomic_plasmid",
+      "stages": ["qc", "assembly", "plasmid_detection", "annotation", "abundance"],
+      "key_tools": ["fastp", "megahit", "genomad", "bakta", "coverm"],
+      "platforms": ["illumina", "nanopore"]
+    }
+  }
+}
+```
+
+## Query Interface
+
+`abi query` provides lightweight metadata access (~50ms) by reading
+`pipeline_dag.yaml` and tool registry directly — no config loading or plan
+building required.
+
+```bash
+abi query --type <plugin> --what stages|tools|platforms
+abi query --type <plugin> --step <id> --what inputs|outputs|resources
+```
+
+This is NOT a replacement for `abi plan` — it is a fast path for agents
+that only need metadata (available tools, pipeline structure, step I/O).
 
 ## Step Contracts and Reproducibility
 

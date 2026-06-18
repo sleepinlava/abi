@@ -47,11 +47,12 @@ for p in abi.list_plugins_summary():
 
 1. `abi_list_types` — 发现已安装的分析插件
 2. `abi_export_agent_context` 或 `abi_doctor_agent` — 获取操作上下文
-3. `abi_plan` — 构建执行计划
-4. `abi_dry_run` — 验证命令和溯源（不执行真实工具）
-5. `abi_inspect` — 检查溯源中的失败项
-6. `abi_run` — **仅在用户明确批准后**执行
-7. `abi_report` — 从标准表和溯源重新生成报告
+3. `abi_query` — 轻量级元数据查询（阶段、工具、平台、步骤 I/O）
+4. `abi_plan` — 构建执行计划（包含 `summary` 字段 — 无需读取 `execution_plan.json`）
+5. `abi_dry_run` — 验证命令和溯源（不执行真实工具）
+6. `abi_inspect` — 检查溯源中的失败项
+7. `abi_run` — **仅在用户明确批准后**执行
+8. `abi_report` — 从标准表和溯源重新生成报告
 
 ## 传输方式
 
@@ -59,6 +60,7 @@ for p in abi.list_plugins_summary():
 
 ```bash
 abi list-types --output-json
+abi query --type metatranscriptomics --what stages --output-json
 abi plan --type metatranscriptomics --outdir results/rnaseq_demo --output-json
 abi dry-run --type metatranscriptomics --outdir results/rnaseq_demo --output-json
 abi inspect --result-dir results/rnaseq_demo --output-json
@@ -107,9 +109,13 @@ abi-mcp  # 启动 stdio 服务器，将所有 ABI 工具注册为 MCP 工具
 ```python
 from abi.agent import ABIAgentInterface
 
+# 默认：紧凑错误信封（不含 error_type，节省 token）
 agent = ABIAgentInterface()
 result = agent.list_types()
 plan_json = agent.plan(analysis_type="metatranscriptomics", outdir="results/")
+
+# 调试模式：错误信封包含 error_type
+agent_debug = ABIAgentInterface(verbose_errors=True)
 ```
 
 ## JSON 信封合约
@@ -146,6 +152,25 @@ plan_json = agent.plan(analysis_type="metatranscriptomics", outdir="results/")
 7. 工作流路线和解释限制对照 `docs/workflow_validation_zh.md` 进行检查。
 
 不要声称 dry-run 能证明生物学有效性。Dry-run 验证的是规划和命令渲染。科学声明需要真实工具输出、已配置的数据库、版本/资源清单以及基准验收检查。
+
+## Plan 摘要化
+
+`abi plan` 信封现在包含 `summary` 字段（流水线阶段、关键工具、平台）。Agent 无需读取完整 `execution_plan.json` 即可理解工作流结构 — 复杂流水线 plan 输出可节省 78-95% token。
+
+如需无需完整 plan 开销的轻量级元数据查询，使用 `abi query`：
+
+```bash
+# 流水线级元数据
+abi query --type metagenomic_plasmid --what stages
+abi query --type metagenomic_plasmid --what tools
+abi query --type metagenomic_plasmid --what platforms
+
+# 步骤级 I/O 详情
+abi query --type metagenomic_plasmid --step qc_fastp --what inputs
+abi query --type metagenomic_plasmid --step qc_fastp --what outputs
+```
+
+所有 `abi query` 命令均支持 `--output-json` 供 Agent 使用。
 
 ## Golden Trace
 

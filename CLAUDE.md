@@ -26,11 +26,12 @@ python -m twine check dist/*
 
 # Smoke-test installed CLI
 abi list-types
+abi query --type metagenomic_plasmid --what stages
 abi dry-run --type metatranscriptomics --outdir /tmp/abi-smoke
 autoplasm --help
 
 # Documentation build
-sphinx-build -b html docs/ docs/_build/
+bash docs/build_docs.sh
 
 # Docker build
 docker build -f docker/Dockerfile.amplicon -t abi-amplicon .
@@ -39,6 +40,8 @@ docker compose -f docker/docker-compose.yml build
 # Agent integration
 abi-mcp                          # start MCP stdio server for Claude Desktop / Claude Code
 abi install-skills               # install ABI skills into ~/.claude/skills/abi/
+abi query --type metagenomic_plasmid --what stages  # lightweight metadata query (~50ms)
+abi query --type metagenomic_plasmid --step qc_fastp --what inputs  # step-level I/O
 abi doctor-agent --type metagenomic_plasmid   # print per-plugin operating guide
 abi export-openai-tools --type metagenomic_plasmid --format responses  # OpenAI function descriptors
 abi export-tools --type metagenomic_plasmid --format openai --provider deepseek  # DeepSeek/Zhipu/Kimi/Qwen
@@ -58,17 +61,18 @@ ABI is a **Python library + CLI + Agent tool layer** for AI-driven bioinformatic
 ```
 Agent Platforms (Claude / ChatGPT / Cursor)
         │
-Transport Layer   CLI JSON  │  OpenAI Tools  │  MCP  │  HTTP Job API
+Transport Layer   CLI JSON  │  OpenAI Tools  │  MCP  │  HTTP Job API  │  Query
         │
-ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch
+ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch / query
         │
 ABI Core            schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
+                    contracts│  dag         │  figures      │  report
         │
 Plugins             metagenomic_plasmid/  rnaseq_expression/  wgs_bacteria/
                     amplicon_16s/  metatranscriptomics/
         │
-Runtimes            local  │  Nextflow  │  HPC  │  cloud
+Runtimes            local  │  Docker  │  Nextflow  │  HPC  │  cloud
 ```
 
 ### Design Principles
@@ -104,7 +108,9 @@ src/abi/
   tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1058 lines)
   schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
   executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement
-  contracts/          Step contract enforcement, checksum chaining, assertion evaluation
+  dag.py              DAG inference engine — L1 (literature) / L2 (path) / L3 (validation)
+  contracts/          WorkflowSpec, step contract enforcement, checksum chaining, assertion eval
+    __init__.py         WorkflowSpec, WorkflowStepSpec, load_workflow_spec, run_contract_lint
     step_contract.py    ContractViolation, validate_output_contract, evaluate_assertions
   permissions.py      read_only / planning_write / execution levels
   diagnostics.py      Error taxonomy + DiagnosticHint + classify_exception (400 lines)
@@ -140,13 +146,13 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 
 ### Permission model (3 tiers)
 
-- `read_only`: `list_types`, `inspect`, `validate_result` — no file writes, no tool execution
+- `read_only`: `list_types`, `inspect`, `validate_result`, `query` — no file writes, no tool execution
 - `planning_write`: `plan`, `dry_run`, `report`, `export_nextflow` — writes plans/provenance, no tool execution
 - `execution`: `run` — **requires `confirm_execution=true`**, writes provenance, executes real tools
 
-### The five plugins (v1.2.0, 2026-06-18)
+### The five plugins (v1.3.0, 2026-06-18)
 
-All five plugins have complete tool chains, parsers, report generation, tests, and Docker images.
+All five plugins have complete tool chains, parsers, report generation, tests, benchmark datasets, and Docker images.
 
 - **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (20 modules, 7,713 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 2,019 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments.
 - **`rnaseq_expression`**: 6-tool standard RNA-seq. fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. All 6 parsers working. Has `pipeline_dag.yaml` (6 nodes). DESeq2 R script bundled, automated conda+BiocManager install.
@@ -211,12 +217,16 @@ literature-backed, reproducible scientific workflow.
 
 | Document | Purpose |
 | --- | --- |
-| `docs/next_development_plan.md` | Full 15-section development plan + implementation status |
-| `docs/plugin_report_figure_spec.md` | Report/figure system reference for plugin authors |
-| `docs/rnaseq_expression_workflow.md` | RNA-seq workflow reference |
-| `docs/hpc_development.md` | HPC deployment guide (SLURM, Nextflow, databases, benchmarks) |
-| `docs/workflow_validation.md` | Biological validation methodology |
-| `docs/plugin_development_guide.md` | How to add a new analysis type |
+| `docs/en/` | English documentation (Sphinx source, 16 files) |
+| `docs/zh/` | Chinese documentation (Sphinx source, 9 files) |
+| `docs/_base.py` | Shared Sphinx config for both language builds |
+| `docs/build_docs.sh` | One-command bilingual docs build |
+| `docs/en/next_development_plan.md` | Full 15-section development plan + implementation status |
+| `docs/en/plugin_report_figure_spec.md` | Report/figure system reference for plugin authors |
+| `docs/en/rnaseq_expression_workflow.md` | RNA-seq workflow reference |
+| `docs/en/hpc_development.md` | HPC deployment guide (SLURM, Nextflow, databases, benchmarks) |
+| `docs/en/workflow_validation.md` | Biological validation methodology |
+| `docs/en/plugin_development_guide.md` | How to add a new analysis type |
 
 ### Shared utilities (`_shared.py`)
 

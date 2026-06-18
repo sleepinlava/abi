@@ -52,6 +52,8 @@ src/abi/
 | `abi.tools` | `ToolRegistry`、`ToolSkill`、`GenericCommandSkill`、`RunResult` |
 | `abi.provenance` | `RunLogger`、`PipelineProgressRecorder`、TSV 溯源写入器 |
 | `abi.contracts.step_contract` | `ContractViolationError`、`validate_output_contract`、`evaluate_assertions`、校验和链式追踪 |
+| `abi.contracts` | `WorkflowSpec`、`WorkflowStepSpec`、`load_workflow_spec` — L1/L2/L3 工作流验证 |
+| `abi.dag` | `infer_dag`、`ABIDAG`、`StepBinding` — DAG 推断，支持文献 + 路径 + 验证三层模型 |
 | `abi.errors` | `ABIError`、`ConfigError`、`SampleSheetError`、`ToolError` |
 | `abi.diagnostics` | 错误分类 + `DiagnosticHint` + `classify_exception` |
 | `abi.json_utils` | 带 `ABIJSONError` 的 JSON 文件/负载加载 |
@@ -129,6 +131,7 @@ pytest tests/ -v --tb=short
 | 命令 | 用途 |
 |---------|---------|
 | `abi list-types --output-json` | 发现已安装插件 |
+| `abi query --type <plugin> --what stages` | 轻量级流水线元数据查询（~50ms） |
 | `abi export-agent-context --type <plugin>` | 机器可读的操作上下文 |
 | `abi doctor-agent --type <plugin>` | 人类可读的操作指南 |
 | `abi install-skills` | 将 SKILL.md 文件安装到 `~/.claude/skills/abi/` |

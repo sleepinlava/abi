@@ -52,6 +52,12 @@ abi run --type metatranscriptomics --config config.yaml --sample-sheet samples.t
 abi inspect --result-dir results/
 abi report --result-dir results/ --type metatranscriptomics
 
+# Lightweight metadata query (~50ms, reads DAG + tool registry only)
+abi query --type metatranscriptomics --what stages
+abi query --type metatranscriptomics --what tools
+abi query --type metatranscriptomics --what platforms
+abi query --type metatranscriptomics --step qc_fastp --what inputs
+
 # Export agent/runtime interfaces
 abi export-nextflow --type metatranscriptomics --output workflow.nf
 abi export-openai-tools --type metatranscriptomics --format responses    # legacy compat
@@ -63,7 +69,7 @@ abi export-tools --type metatranscriptomics --format gemini              # Gemin
 abi export-agent-context --type metatranscriptomics --format json
 abi doctor-agent --type metatranscriptomics
 
-# Static contract / DAG validation
+# Static contract / DAG validation (L1 literature + L2 path + L3 validation)
 abi contract-lint --type metagenomic_plasmid
 abi contract-lint --type metagenomic_plasmid --strict
 
@@ -122,14 +128,15 @@ Images: `abi-amplicon` (~1.5 GB), `abi-rnaseq` (~2.5 GB), `abi-wgs` (~2.0 GB), `
 Agent Platforms (Claude / ChatGPT / Cursor / CI)
         │
         v
-Transport Layer   CLI JSON  │  OpenAI/Anthropic/Gemini Tools  │  MCP  │  HTTP Job API  │  Skills
+Transport Layer   CLI JSON  │  OpenAI/Anthropic/Gemini Tools  │  MCP  │  HTTP Job API  │  Skills  │  Query
         │
         v
-ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch
+ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch / query
         │
         v
 ABI Core            schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
+                    contracts│  dag         │  figures      │  report
         │
         v
 Plugins             amplicon_16s/  rnaseq_expression/  wgs_bacteria/
@@ -154,11 +161,17 @@ Runtimes            local  │  Docker  │  Nextflow  │  HPC  │  cloud
 
 - CLI JSON through `--output-json`
 - `abi dispatch --command <name> --arguments '<json>'` for headless subprocess dispatch
+- **`abi query`** for lightweight metadata queries (~50ms) — pipeline stages, tools,
+  platforms, and step-level I/O directly from DAG + tool registry, no plan required
 - **Multi-LLM descriptors** from `abi export-tools --format openai|anthropic|gemini [--provider ...]` covering 7+ providers
 - OpenAI-compatible descriptors from `abi export-openai-tools` (backward compat)
 - MCP stdio server via `abi-mcp` (or `python -m abi.mcp.server`) — auto-generated from SSOT
 - HTTP Job Service via `abi job-service` and `abi job submit/list/status/artifacts/cancel`
 - Skills via `abi install-skills` (copies bundled SKILL.md files to `~/.claude/skills/abi/`)
+
+**Plan summarization**: `abi plan` envelopes now include a `summary` field (pipeline stages,
+key tools, platforms) so agents understand the workflow structure without reading the full
+`execution_plan.json`. This saves 78-95% tokens on plan output for complex pipelines.
 
 Agents can also get operating instructions programmatically:
 
@@ -236,7 +249,8 @@ Plugin authors should depend on these public modules:
 | `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
 | `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV provenance writers |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError`, `MissingTemplateParamError` |
-| `abi.contracts` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, `save_checksums_atomic`, `run_contract_lint` |
+| `abi.contracts` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, `save_checksums_atomic`, `run_contract_lint`, `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec` |
+| `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with L1 (literature) / L2 (path) / L3 (validation) layers |
 | `abi.tool_descriptors` | `ABI_AGENT_TOOLS`, `TOOL_ALIASES`, `export_openai_compatible`, `export_anthropic`, `export_gemini`, `PROVIDER_PROFILES` |
 | `abi.testing` | `assert_plugin_contract` |
 

@@ -51,6 +51,12 @@ abi run --type metatranscriptomics --config config.yaml --sample-sheet samples.t
 abi inspect --result-dir results/
 abi report --result-dir results/ --type metatranscriptomics
 
+# 轻量级元数据查询（~50ms，仅读取 DAG + 工具注册表）
+abi query --type metatranscriptomics --what stages
+abi query --type metatranscriptomics --what tools
+abi query --type metatranscriptomics --what platforms
+abi query --type metatranscriptomics --step qc_fastp --what inputs
+
 # 导出 Agent/运行时接口
 abi export-nextflow --type metatranscriptomics --output workflow.nf
 abi export-openai-tools --type metatranscriptomics --format responses    # 向后兼容
@@ -62,7 +68,7 @@ abi export-tools --type metatranscriptomics --format gemini              # Gemin
 abi export-agent-context --type metatranscriptomics --format json
 abi doctor-agent --type metatranscriptomics
 
-# 静态合约 / DAG 验证
+# 静态合约 / DAG 验证（L1 文献 + L2 路径 + L3 验证三层模型）
 abi contract-lint --type metagenomic_plasmid
 abi contract-lint --type metagenomic_plasmid --strict
 
@@ -121,14 +127,15 @@ docker compose -f docker/docker-compose.yml up -d
 Agent 平台 (Claude / ChatGPT / Cursor / CI)
         │
         v
-传输层       CLI JSON  │  OpenAI/Anthropic/Gemini Tools  │  MCP  │  HTTP Job API  │  Skills
+传输层       CLI JSON  │  OpenAI/Anthropic/Gemini Tools  │  MCP  │  HTTP Job API  │  Skills  │  Query
         │
         v
-ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch
+ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch / query
         │
         v
 ABI 核心层          schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
+                    contracts│  dag         │  figures      │  report
         │
         v
 插件层              amplicon_16s/  rnaseq_expression/  wgs_bacteria/
@@ -153,11 +160,16 @@ ABI 核心层          schemas  │  provenance  │  permissions  │  diagnost
 
 - 通过 `--output-json` 输出的 CLI JSON
 - `abi dispatch --command <name> --arguments '<json>'` 无头子进程调度
+- **`abi query`** 轻量级元数据查询（~50ms）— 直接从 DAG + 工具注册表查询流水线阶段、工具、
+  平台和步骤级 I/O，无需完整 plan
 - **多 LLM 描述符** `abi export-tools --format openai|anthropic|gemini [--provider ...]` 覆盖 7+ 厂商
 - `abi export-openai-tools` 生成的 OpenAI 兼容工具描述符（向后兼容）
 - MCP stdio 服务 `abi-mcp`（或 `python -m abi.mcp.server`）— 从 SSOT 自动生成
 - HTTP Job Service：`abi job-service` 和 `abi job submit/list/status/artifacts/cancel`
 - Skills 安装 `abi install-skills`（将内置 SKILL.md 文件复制到 `~/.claude/skills/abi/`）
+
+**Plan 摘要化**：`abi plan` 信封现在包含 `summary` 字段（流水线阶段、关键工具、平台），
+Agent 无需读取完整 `execution_plan.json` 即可理解工作流结构。复杂流水线 plan 输出可节省 78-95% token。
 
 Agent 也可以通过 Python API 获取操作指南：
 
@@ -233,7 +245,8 @@ python -m twine check dist/*
 | `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
 | `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV 审计追踪写入器 |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError`, `MissingTemplateParamError` |
-| `abi.contracts` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, `save_checksums_atomic`, `run_contract_lint` |
+| `abi.contracts` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, `save_checksums_atomic`, `run_contract_lint`, `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec` |
+| `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG 推断，支持 L1（文献）/ L2（路径）/ L3（验证）三层正确性模型 |
 | `abi.tool_descriptors` | `ABI_AGENT_TOOLS`, `TOOL_ALIASES`, `export_openai_compatible`, `export_anthropic`, `export_gemini`, `PROVIDER_PROFILES` |
 | `abi.testing` | `assert_plugin_contract` |
 

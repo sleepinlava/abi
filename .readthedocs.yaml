@@ -1,5 +1,8 @@
 # Read the Docs configuration file
 # Docs: https://docs.readthedocs.io/en/stable/config-file/v2.html
+#
+# ABI builds bilingual documentation (English + Chinese) via a custom
+# build script.  See docs/build_docs.sh for details.
 
 version: 2
 
@@ -7,14 +10,9 @@ build:
   os: ubuntu-24.04
   tools:
     python: "3.12"
-
-sphinx:
-  configuration: docs/conf.py
-
-python:
-  install:
-    - method: pip
-      path: .
-      extra_requirements:
-        - docs
-        - report
+  commands:
+    - pip install -e ".[docs,report]"
+    - bash docs/build_docs.sh
+    # RTD expects output in $READTHEDOCS_OUTPUT/html
+    - mkdir -p "$READTHEDOCS_OUTPUT"
+    - cp -r docs/_build/* "$READTHEDOCS_OUTPUT/html/"

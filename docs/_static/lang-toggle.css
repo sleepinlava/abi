@@ -1,0 +1,57 @@
+/* ── Language toggle widget ──────────────────────────────────────────── */
+
+.lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  margin-left: 0.6rem;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--color-background-border);
+  border-radius: 6px;
+  background: var(--color-sidebar-background);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.lang-toggle a {
+  text-decoration: none;
+  color: var(--color-foreground-muted);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.lang-toggle a.active {
+  color: var(--color-brand-primary);
+  background: var(--color-admonition-background);
+  font-weight: 600;
+}
+
+.lang-toggle a:hover {
+  color: var(--color-brand-content);
+  background: var(--color-inline-code-background);
+}
+
+/* ── Announcement language switcher ─────────────────────────────────── */
+.announcement .lang-switch {
+  display: inline-flex;
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+}
+
+.announcement .lang-switch a {
+  color: inherit;
+  opacity: 0.75;
+  text-decoration: none;
+  font-weight: 400;
+}
+
+.announcement .lang-switch a:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.announcement .lang-switch a.current {
+  opacity: 1;
+  font-weight: 700;
+}

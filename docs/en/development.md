@@ -53,6 +53,8 @@ core modules for shared infrastructure.
 | `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
 | `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV provenance writers |
 | `abi.contracts.step_contract` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, checksum chaining |
+| `abi.contracts` | `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec` — L1/L2/L3 workflow validation |
+| `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with literature + path + validation layers |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
 | `abi.diagnostics` | Error taxonomy + `DiagnosticHint` + `classify_exception` |
 | `abi.json_utils` | JSON file/payload loading with `ABIJSONError` |
@@ -148,6 +150,7 @@ is passed.
 | Command | Purpose |
 |---------|---------|
 | `abi list-types --output-json` | Discover installed plugins |
+| `abi query --type <plugin> --what stages` | Lightweight pipeline metadata (~50ms) |
 | `abi export-agent-context --type <plugin>` | Machine-readable operating context |
 | `abi doctor-agent --type <plugin>` | Human-readable operating guide |
 | `abi install-skills` | Install SKILL.md files to `~/.claude/skills/abi/` |

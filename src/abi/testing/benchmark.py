@@ -18,7 +18,6 @@ Usage::
 from __future__ import annotations
 
 import csv
-import json
 import os
 import subprocess
 from dataclasses import dataclass, field
@@ -219,7 +218,11 @@ def _kv_to_assertion(step_id: str, key: str, value: Any) -> BenchmarkAssertion |
             description=f"{step_id}.{key} contains '{value}'",
         )
 
-    if isinstance(value, list) and len(value) == 2 and all(isinstance(v, (int, float)) for v in value):
+    if (
+        isinstance(value, list)
+        and len(value) == 2
+        and all(isinstance(v, (int, float)) for v in value)
+    ):
         return BenchmarkAssertion(
             step_id=step_id,
             table="",
@@ -370,7 +373,11 @@ def validate_against_expected(
             continue
 
         # Check key columns match
-        common_cols = set(ref_rows[0].keys()) & set(act_rows[0].keys()) if ref_rows and act_rows else set()
+        common_cols = (
+            set(ref_rows[0].keys()) & set(act_rows[0].keys())
+            if ref_rows and act_rows
+            else set()
+        )
         mismatches = 0
         for col in sorted(common_cols):
             for i, (rr, ar) in enumerate(zip(ref_rows, act_rows)):

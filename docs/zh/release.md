@@ -19,6 +19,8 @@ python -m twine check dist/*
 
 ```bash
 abi list-types
+abi query --type metagenomic_plasmid --what stages
+abi query --type rnaseq_expression --what tools
 autoplasm --help
 abi dry-run --type metagenomic_plasmid --config examples/config_minimal.yaml --profile dry_run
 abi doctor-agent --type metatranscriptomics

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ABI Documentation</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: #f8f9fb;
+    color: #1a1a2e;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh;
+  }
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    padding: 3rem 3.5rem;
+    max-width: 520px;
+    text-align: center;
+  }
+  .card img { width: 64px; height: 64px; margin-bottom: 0.5rem; }
+  .card h1 { font-size: 1.8rem; font-weight: 700; margin: 0.5rem 0 0.2rem; letter-spacing: -0.02em; }
+  .card p.sub { color: #5a6a7e; font-size: 1rem; margin-bottom: 2rem; }
+  .buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 0.85rem 2.2rem;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .btn-en {
+    background: #1e6fba; color: #fff;
+    box-shadow: 0 2px 8px rgba(30,111,186,0.25);
+  }
+  .btn-zh {
+    background: #fff; color: #1e6fba;
+    border: 2px solid #1e6fba;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(30,111,186,0.3); }
+  .links { margin-top: 2.5rem; font-size: 0.88rem; color: #8a9aa8; }
+  .links a { color: #1e6fba; text-decoration: none; margin: 0 0.6rem; }
+  .links a:hover { text-decoration: underline; }
+  .badges { margin-top: 1.5rem; }
+  .badges img { margin: 0 0.25rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <img src="_static/logo-light.png" alt="ABI logo" onerror="this.style.display='none'">
+  <h1>ABI Documentation</h1>
+  <p class="sub">Agent-Bioinformatics Interface</p>
+  <div class="buttons">
+    <a href="en/" class="btn btn-en">📖 English</a>
+    <a href="zh/" class="btn btn-zh">📖 中文</a>
+  </div>
+  <div class="badges">
+    <img src="https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=1e6fba" alt="PyPI">
+    <img src="https://img.shields.io/pypi/pyversions/abi-agent?style=flat-square" alt="Python">
+    <img src="https://img.shields.io/github/actions/workflow/status/sleepinlava/abi/ci.yml?branch=master&style=flat-square" alt="CI">
+  </div>
+  <div class="links">
+    <a href="https://github.com/sleepinlava/abi">GitHub</a>
+    <a href="https://pypi.org/project/abi-agent/">PyPI</a>
+  </div>
+</div>
+</body>
+</html>

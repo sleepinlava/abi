@@ -1,4 +1,8 @@
-"""Sphinx configuration for ABI (Agent-Bioinformatics Interface)."""
+"""Sphinx configuration for ABI (Agent-Bioinformatics Interface).
+
+This is the shared base config — language-specific overrides live in
+``en/conf.py`` and ``zh/conf.py``.  Do not build from this file directly.
+"""
 
 import sys
 from pathlib import Path
@@ -7,19 +11,21 @@ from pathlib import Path
 project = "ABI"
 copyright = "2026, BingkangGuo"
 author = "BingkangGuo"
-release = "1.2.0"
+release = "1.3.0"
 
 # -- Path setup -------------------------------------------------------------
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+# _base.py lives in docs/; repo root is one level up
+_repo_root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_repo_root / "src"))
 
 # -- General configuration --------------------------------------------------
 extensions = [
-    "sphinx.ext.autodoc",         # auto-document from docstrings
-    "sphinx.ext.autosummary",     # summary tables for modules/classes
-    "sphinx.ext.viewcode",        # link to source code
-    "sphinx.ext.intersphinx",     # link to external docs
-    "sphinx.ext.napoleon",        # Google/NumPy style docstrings
-    "myst_parser",                # Markdown support
+    "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.napoleon",
+    "myst_parser",
 ]
 
 autodoc_default_options = {
@@ -41,23 +47,19 @@ myst_enable_extensions = [
     "deflist",
 ]
 
-# -- HTML output ------------------------------------------------------------
+# -- HTML output (shared, with paths relative to sub-conf.py) ---------------
 html_theme = "furo"
+html_static_path = ["../_static"]
+html_css_files = ["custom.css", "lang-toggle.css"]
+html_js_files = ["lang-toggle.js"]
 
-html_static_path = ["_static"]
-
-html_theme_options = {
+# Build shared theme options as a plain dict — sub-configs deep-copy and
+# customise the announcement, title, etc.
+shared_html_theme_options = {
     # ── Logo ───────────────────────────────────────────────────────────
     "light_logo": "logo-light.png",
     "dark_logo": "logo-dark.png",
     "sidebar_hide_name": False,
-
-    # ── Announcement ───────────────────────────────────────────────────
-    "announcement": (
-        "<strong>ABI v1.2.0</strong> is the latest release. "
-        "See the <a href='https://github.com/sleepinlava/abi/releases'>"
-        "changelog</a>."
-    ),
 
     # ── Source repository ──────────────────────────────────────────────
     "top_of_page_button": "edit",
@@ -128,9 +130,6 @@ html_theme_options = {
     },
 }
 
-html_css_files = ["custom.css"]
-html_title = "ABI Documentation"
-
 # -- Source suffixes --------------------------------------------------------
 source_suffix = {
     ".rst": "restructuredtext",
@@ -140,5 +139,6 @@ source_suffix = {
 # -- Exclude patterns -------------------------------------------------------
 exclude_patterns = [
     "_build",
-    "*_zh.md",          # Chinese translations — read directly on GitHub
+    "en",
+    "zh",
 ]

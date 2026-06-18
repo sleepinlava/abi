@@ -108,7 +108,12 @@ Quick Start
    # Discover available plugins
    abi list-types
 
-   # Plan a workflow (no execution)
+   # Lightweight metadata query (~50ms, reads DAG + tool registry)
+   abi query --type metagenomic_plasmid --what stages
+   abi query --type metagenomic_plasmid --what tools
+   abi query --type metagenomic_plasmid --step qc_fastp --what inputs
+
+   # Plan a workflow (no execution) — includes summary for token-efficient AI agents
    abi plan --type amplicon_16s --sample-sheet samples.tsv --config config.yaml
 
    # Dry-run: validate inputs, write plan + table skeletons
