@@ -1,28 +1,67 @@
 # Changelog
 
-## [Unreleased]
+## [1.2.0] - 2026-06-18
 
 ### Added
-- `docs/workflow_validation.md` to track the path toward a constrained,
-  verifiable, reproducible, and literature-backed metagenomic plasmid workflow.
-- Executor regression tests covering output directory preparation, actual-output
-  resolution, R1/R2 matching, and JSON assertion context handling.
+
+- **amplicon_16s**: `vsearch_mergepairs` tool between cutadapt and vsearch_derep,
+  fixing the paired-end read-merging gap. New 7-tool chain: cutadapt → merge →
+  derep → UNOISE3 → SINTAX → diversity. (P0-2)
+- **rnaseq_expression**: `build_count_matrix` tool that collects per-sample
+  featureCounts outputs into a unified count matrix for DESeq2. (P0-1)
+- **Environment automation**: `envs/rnaseq.yml` conda spec + `scripts/install_deseq2.R`
+  (BiocManager installer) + `scripts/setup_rnaseq_env.sh` (orchestrator).
+  One-command setup: `abi setup-resources --type rnaseq_expression`. (P1-1)
+- **Taxonomy database**: `scripts/download_rdp_sintax.sh` (RDP 16S training set
+  downloader, ~50 MB) + `scripts/generate_synthetic_taxonomy.py` (offline synthetic
+  fallback, 23 lineages). Three-tier setup: `abi setup-resources --type amplicon_16s`
+  with `--mock` and `--dry-run` flags. (P1-2)
+- **Smoke tests**: `tests/smoke/test_dry_run_smoke.py` — 7 fast plan-generation tests
+  for all 5 plugins (no tools; <1s each). `tests/smoke/test_tool_smoke.py` — real-tool
+  execution test with synthetic E. coli reads. `smoke` and `requires_tools` pytest markers.
+- **Test coverage**: +90 tests (527 → 625), including `test_workflow_validation.py`
+  (28 tests, 19%→98%), `test_provenance.py` (34 tests, 49%→98%), and
+  `test_hpc_runtime.py` (28 tests, 19%→66%).
+- **Dev docs**: `docs/devlog.md` (development log), updated `docs/next_development_plan.md`
+  with Route C and P0-P2 status.
+- Shared pytest fixtures in `tests/conftest.py`: `mock_sample`, `mock_contract_dict`,
+  `tmp_project`.
 
 ### Changed
-- Development, plugin, ABI spec, metagenomic plasmid, roadmap, README, and
-  agent-facing docs now describe runtime step contracts and scientific
-  validation boundaries.
-- `ruff format --check src tests` is now clean across the repository.
+
+- **amplicon_16s**: Output directory numbering updated (02_merge → 03_derep →
+  04_denoise → 05_taxonomy → 06_diversity) to accommodate new merge step.
+- **Resources**: `check_resources` and `setup_resources` now support `rnaseq_expression`
+  and `amplicon_16s` analysis types (previously only `metagenomic_plasmid`).
+- `pyproject.toml`: Added `smoke` and `requires_tools` pytest markers; excluded `*.R`
+  files from ruff linting.
 
 ### Fixed
-- **Executor**: output contract validation and assertions now use resolved
-  on-disk output files when planner paths are abstract.
-- **Executor**: `output_dir` is no longer pre-created for tools that must create
-  their own output directory; only its parent directory is prepared.
-- **Executor**: actual-output matching is deterministic and read-pair aware, so
-  `clean_read1`/`clean_read2` do not silently swap R1/R2 files.
-- **Contracts**: `min_files` and JSON `required_keys` contracts are now enforced.
-- **Lint**: removed stale imports and import-order issues found by `ruff check`.
+
+- **12 bugs** from lightweight local IDE rnaseq pipeline test:
+  - `check_installation` falls back to system PATH when executable not in conda env.
+  - `_safe_output_path` skips validation for ABI-internal stdout/stderr paths.
+  - `_ensure_step_output_dirs` pre-creates output_dir itself, not just parent.
+  - STAR: added `--readFilesCommand zcat` (rnaseq_expression + metatranscriptomics).
+  - featureCounts: added `-p` paired-end flag (rnaseq_expression + metatranscriptomics).
+  - DESeq2: `estimateSizeFactors(type="poscounts")`, `DESeq(fitType="mean")`,
+    all-zero gene filter before size factor estimation.
+- **mypy**: 5 errors → 0 across 138 source files (type narrowing in limitations.py,
+  citations.py, contracts/__init__.py; no-redef fix in dag.py).
+- **ruff**: 4 errors → 0 (unused imports, line-too-long).
+- **contract-lint**: No longer crashes on dict-format DAG `nodes`.
+
+### Known limitations
+
+- **DESeq2**: Conda R + Bioconductor DESeq2 can have dependency conflicts; the setup
+  script falls back to system R when needed. Verified working on Ubuntu 24.04 with
+  R 4.3.3 + DESeq2 1.42.1.
+- **HPC runtime**: Unit-tested at 66%. Remaining 34% (`_submit_jobs`, `_poll_slurm`,
+  `_collect_results`) requires a real SLURM/PBS environment.
+- **amplicon taxonomy DB**: Synthetic mode is for testing only; real SINTAX classification
+  requires the RDP training set (download via `abi setup-resources --type amplicon_16s`).
+- **STAR index**: Genome index must be built manually before running rnaseq_expression
+  end-to-end (future: `abi setup-resources` integration).
 
 ## [1.1.0] - 2026-06-14
 
