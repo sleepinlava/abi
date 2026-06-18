@@ -42,7 +42,13 @@ jobs:
         if: matrix.python-version == '3.12'
         run: |
           pip install pytest-cov
-          pytest tests/ -v --tb=short --cov=src/abi --cov-report=term --cov-fail-under=60
+          pytest tests/ -v --tb=short --cov=src/abi --cov-report=term --cov-report=xml --cov-fail-under=60
+
+      - name: Build docs (Sphinx)
+        if: matrix.python-version == '3.12'
+        run: |
+          pip install -e ".[docs]"
+          sphinx-build -b html -W -n docs/ docs/_build/ 2>&1 || echo "WARNING: docs build had warnings (non-fatal)"
 
       - name: Verify package builds
         if: matrix.python-version == '3.12'

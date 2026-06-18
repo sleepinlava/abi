@@ -45,6 +45,11 @@ report = [
     "matplotlib",
     "plotly",
 ]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-rtd-theme>=2.0",
+    "myst-parser>=3.0",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
