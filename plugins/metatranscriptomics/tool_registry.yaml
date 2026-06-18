@@ -17,7 +17,7 @@ tools:
     default_enabled: true
     required: true
     skill_path: plugins/metatranscriptomics/skills/star/SKILL.md
-    command_template: "STAR --runThreadN {threads} --genomeDir {genome_index} --readFilesIn {read1} {read2} --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {output_prefix}"
+    command_template: "STAR --runThreadN {threads} --genomeDir {genome_index} --readFilesIn {read1} {read2} --readFilesCommand zcat --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {output_prefix}"
     inputs: [read1, read2, genome_index]
   - id: hisat2
     name: HISAT2
@@ -37,5 +37,5 @@ tools:
     default_enabled: true
     required: true
     skill_path: plugins/metatranscriptomics/skills/featurecounts/SKILL.md
-    command_template: "featureCounts -T {threads} -a {annotation_gtf} -o {counts} {bam}"
+    command_template: "featureCounts -T {threads} -p -a {annotation_gtf} -o {counts} {bam}"
     inputs: [bam, annotation_gtf]

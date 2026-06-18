@@ -16,7 +16,7 @@ tools:
     executable: STAR
     default_enabled: true
     required: true
-    command_template: "STAR --runThreadN {threads} --genomeDir {genome_index} --readFilesIn {read1} {read2} --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {output_prefix}"
+    command_template: "STAR --runThreadN {threads} --genomeDir {genome_index} --readFilesIn {read1} {read2} --readFilesCommand zcat --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {output_prefix}"
     inputs: [read1, read2, genome_index]
 
   - id: featurecounts
@@ -26,8 +26,18 @@ tools:
     executable: featureCounts
     default_enabled: true
     required: true
-    command_template: "featureCounts -T {threads} -a {annotation_gtf} -o {counts} {bam}"
+    command_template: "featureCounts -T {threads} -p -a {annotation_gtf} -o {counts} {bam}"
     inputs: [bam, annotation_gtf]
+
+  - id: build_count_matrix
+    name: Build Count Matrix
+    category: preprocessing
+    env_name: rnaseq
+    executable: python
+    default_enabled: true
+    required: true
+    command_template: "python {count_matrix_script} --expression-dir {expression_dir} --sample-sheet {sample_sheet} --output-dir {output_dir}"
+    inputs: [expression_dir, sample_sheet, count_matrix_script]
 
   - id: deseq2
     name: DESeq2

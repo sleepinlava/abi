@@ -24,7 +24,7 @@ outputs:
 execution:
   env_name: abi-stats
   executable: featureCounts
-  command_template: "featureCounts -T {threads} -a {annotation_gtf} -o {counts} {bam}"
+  command_template: "featureCounts -T {threads} -p -a {annotation_gtf} -o {counts} {bam}"
   network: false
   writes_output: true
 normalization:

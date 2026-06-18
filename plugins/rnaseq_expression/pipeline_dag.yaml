@@ -67,16 +67,33 @@ nodes:
     assertions:
       - "output_dir.exists()"
 
+  # ── Count Matrix Assembly ────────────────────────────────────────────
+  build_matrix:
+    tool_id: build_count_matrix
+    category: preprocessing
+    platforms: [illumina]
+    optional: false
+    depends_on: [quant_featurecounts]
+    inputs:
+      expression_dir:      {type: directory}
+      sample_sheet:        {type: file, format: tsv}
+      count_matrix_script: {type: file, format: py}
+    outputs:
+      count_matrix:     {type: file, format: tsv, contract: {min_size: "100B"}}
+      sample_metadata:  {type: file, format: tsv, contract: {min_size: "20B"}}
+    assertions:
+      - "output_dir.exists()"
+
   # ── Differential Expression ─────────────────────────────────────────
   de_deseq2:
     tool_id: deseq2
     category: differential_expression
     platforms: [illumina]
     optional: false
-    depends_on: [quant_featurecounts]
+    depends_on: [build_matrix]
     inputs:
-      count_matrix:     {type: file, format: tsv, source: quant_featurecounts.counts}
-      sample_metadata:  {type: file, format: tsv}
+      count_matrix:     {type: file, format: tsv, source: build_matrix.count_matrix}
+      sample_metadata:  {type: file, format: tsv, source: build_matrix.sample_metadata}
       deseq2_script:    {type: file, format: R}
     outputs:
       de_results:  {type: file, format: tsv, contract: {min_size: "100B"}}

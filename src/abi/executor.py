@@ -882,32 +882,28 @@ class GenericABIExecutor:
         这在任何步骤执行之前调用，因此工具不会因其预期的输出目录尚不存在而失败。
         """
         for step in steps:
-            # Collect output_dir paths to avoid pre-creating them — some tools
-            # (megahit, metaflye) refuse to run if their output directory already
-            # exists, even when empty.  We still create parent directories for
-            # file outputs and for the output_dir itself.
-            # 收集 output_dir 路径以避免预创建——部分工具（megahit、metaflye）
-            # 即使其输出目录为空也会拒绝已存在的目录。
-            # 我们仍为文件输出和 output_dir 本身创建父目录。
-            output_dir = step.outputs.get("output_dir")
-            tool_output_dirs = {Path(str(output_dir)).resolve()} if output_dir else set()
             for key, output_path in step.outputs.items():
                 if output_path is None:
                     continue
                 path = Path(str(output_path))
                 if key == "output_dir":
+                    # Create the output directory so tools that don't mkdir -p
+                    # internally (fastp, STAR, featureCounts) work. Tools that
+                    # reject pre-existing dirs (megahit, metaflye) are handled
+                    # by tool-specific wrappers that remove the dir first.
                     ensure_directory(
-                        path.parent,
+                        path,
+                        label=f"Output directory for {step.step_id}",
+                    )
+                    continue
+                if path.suffix:
+                    # Create the parent directory even if it overlaps with
+                    # another step's output_dir — tools like fastp and STAR
+                    # need it to exist before they write to it.
+                    ensure_directory(
+                        path.parent.resolve(),
                         label=f"Output parent directory for {step.step_id}",
                     )
-                    continue  # the tool creates output_dir itself
-                if path.suffix:
-                    parent = path.parent.resolve()
-                    if parent not in tool_output_dirs:
-                        ensure_directory(
-                            parent,
-                            label=f"Output parent directory for {step.step_id}",
-                        )
                 else:
                     ensure_directory(path, label=f"Output directory for {step.step_id}")
 

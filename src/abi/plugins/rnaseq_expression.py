@@ -193,11 +193,42 @@ class RNASeqExpressionPlugin:
                 )
             )
 
+        # ── Step 3B: Build count matrix ──
+        # Collects per-sample featureCounts outputs → unified count matrix
+        # + sample metadata.  Registered as a real tool so it runs between
+        # featureCounts and DESeq2 in the DAG.
+        matrix_out = outdir / "04_differential_expression"
+        count_matrix = matrix_out / "count_matrix.tsv"
+        metadata = matrix_out / "sample_metadata.tsv"
+        # Build count matrix: the expression_dir is the root of all
+        # per-sample featureCounts output subdirectories.
+        expression_dir = str(outdir / "03_expression")
+        sample_sheet_path = str(Path(str(config["input"]["sample_sheet"])).resolve())
+        steps.append(
+            ABIPlanStep(
+                step_id="build_count_matrix",
+                sample_id="ALL",
+                step_name="build_count_matrix",
+                tool_id="build_count_matrix",
+                category="preprocessing",
+                inputs={
+                    "expression_dir": expression_dir,
+                    "sample_sheet": sample_sheet_path,
+                    "count_matrix_script": str(
+                        self.root / "scripts" / "build_count_matrix.py"
+                    ),
+                },
+                outputs={
+                    "output_dir": str(matrix_out),
+                    "count_matrix": str(count_matrix),
+                    "sample_metadata": str(metadata),
+                },
+                params={"mode": config["mode"]},
+            )
+        )
+
         # ── Step 4: Differential expression (DESeq2) ──
-        de_out = outdir / "04_differential_expression"
-        de_results = de_out / "deseq2_results.tsv"
-        count_matrix = de_out / "count_matrix.tsv"
-        metadata = de_out / "sample_metadata.tsv"
+        de_results = matrix_out / "deseq2_results.tsv"
         steps.append(
             ABIPlanStep(
                 step_id="differential_expression_deseq2",
@@ -211,7 +242,7 @@ class RNASeqExpressionPlugin:
                     "deseq2_script": str(self.root / "scripts" / "run_deseq2.R"),
                 },
                 outputs={
-                    "output_dir": str(de_out),
+                    "output_dir": str(matrix_out),
                     "de_results": str(de_results),
                 },
                 params={

@@ -29,7 +29,7 @@ outputs:
 execution:
   env_name: abi-stats
   executable: STAR
-  command_template: "STAR --runThreadN {threads} --genomeDir {genome_index} --readFilesIn {read1} {read2} --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {output_prefix}"
+  command_template: "STAR --runThreadN {threads} --genomeDir {genome_index} --readFilesIn {read1} {read2} --readFilesCommand zcat --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {output_prefix}"
   network: false
   writes_output: true
 normalization:

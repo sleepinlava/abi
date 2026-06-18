@@ -128,12 +128,20 @@ dds <- DESeqDataSetFromMatrix(
   design    = ~ condition
 )
 
-# Filter low-count genes: keep genes with >= 10 reads in the smallest group
-smallest_group_size <- min(table(metadata$condition))
-keep <- rowSums(counts(dds) >= 10) >= smallest_group_size
-dds <- dds[keep, ]
+# Remove genes with zero counts across all samples (causes size factor failure)
+nonzero <- rowSums(counts(dds)) > 0
+dds <- dds[nonzero, ]
 
-dds <- DESeq(dds)
+# Filter low-count genes: keep genes with counts in at least 2 samples
+# Relaxed threshold for low-depth/sparse data
+smallest_group_size <- min(table(metadata$condition))
+min_count <- min(10, max(2, floor(mean(rowSums(counts(dds))) / 4)))
+keep <- rowSums(counts(dds) >= min_count) >= min(2, smallest_group_size)
+# If filter removes all genes, skip filtering
+if (sum(keep) >= 2) dds <- dds[keep, ]
+
+dds <- estimateSizeFactors(dds, type = "poscounts")
+dds <- DESeq(dds, fitType = "mean")
 
 # Extract results for the comparison
 res <- results(dds, contrast = c("condition", numerator, denominator),

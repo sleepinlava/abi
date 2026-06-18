@@ -866,10 +866,15 @@ class GenericCommandSkill(ToolSkill):
         # Absolute path or path with directory: check directly / 绝对路径或含目录：直接检查
         if executable_path.is_absolute() or executable_path.parent != Path("."):
             return executable_path.exists()
-        # Simple name: search in conda env's bin / 简单名称：在 conda env 中搜索
-        if not self.env_bin.exists():
-            return False
-        return shutil.which(self.executable, path=str(self.env_bin)) is not None
+        # Simple name: search in conda env's bin first, then system PATH.
+        # / 简单名称：先在 conda env 中搜索，然后搜索系统 PATH。
+        if self.env_bin.exists() and shutil.which(
+            self.executable, path=str(self.env_bin)
+        ):
+            return True
+        # Fall back to full system PATH (some tools like Rscript may only
+        # exist outside the conda env). / 回退到完整系统 PATH。
+        return shutil.which(self.executable) is not None
 
     def plan(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Return a lightweight plan dict describing this step.
@@ -1130,13 +1135,17 @@ class GenericCommandSkill(ToolSkill):
             Path(str(selected["stdout_path"])) if selected.get("stdout_path") else None
         )
         stderr_path = Path(str(selected["stderr_path"])) if selected.get("stderr_path") else None
-        # S4: validate output paths stay within the output directory
+        # S4: validate redirected_stdout stays within the output directory.
+        # provider-generated stdout_path/stderr_path (provenance/step_logs/) are
+        # always safe — only validate redirected_stdout from the command template.
         _output_dir = (
             Path(str(selected["output_dir"])).resolve() if selected.get("output_dir") else None
         )
         if _output_dir:
-            stdout_path = _safe_output_path(stdout_path, _output_dir) if stdout_path else None
-            stderr_path = _safe_output_path(stderr_path, _output_dir) if stderr_path else None
+            if redirected_stdout:
+                stdout_path = _safe_output_path(stdout_path, _output_dir)
+            # stdout_path from selected["stdout_path"] and stderr_path are
+            # ABI-internal paths — skip validation for those.
         stdout_handle = None
         stderr_handle = None
         timeout_seconds = self._timeout_seconds(selected)

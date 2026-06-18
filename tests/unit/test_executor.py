@@ -6,7 +6,9 @@ from types import SimpleNamespace
 from abi.executor import GenericABIExecutor, _build_assertion_context, _resolve_actual_outputs
 
 
-def test_ensure_step_output_dirs_does_not_precreate_tool_output_dir(tmp_path):
+def test_ensure_step_output_dirs_precreates_output_dir(tmp_path):
+    """After Route C fix: output_dir is now pre-created so tools like
+    fastp/STAR that don't mkdir -p internally work correctly."""
     output_dir = tmp_path / "nested" / "megahit"
     step = SimpleNamespace(
         step_id="S1_assembly_megahit",
@@ -19,7 +21,7 @@ def test_ensure_step_output_dirs_does_not_precreate_tool_output_dir(tmp_path):
     GenericABIExecutor._ensure_step_output_dirs([step])
 
     assert output_dir.parent.is_dir()
-    assert not output_dir.exists()
+    assert output_dir.is_dir()  # now pre-created
 
 
 def test_ensure_step_output_dirs_creates_file_output_parent(tmp_path):
