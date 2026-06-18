@@ -156,6 +156,8 @@ conda.lock
 # Claude Code project files
 .claude/
 !.claude/settings.json
-!.claude/settings.local.jsondocs/_build/
-.readthedocs-cache/
+!.claude/settings.local.json
+!.claude/skills/
+!.claude/skills/**
 docs/_build/
+.readthedocs-cache/
