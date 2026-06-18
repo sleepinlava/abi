@@ -188,6 +188,7 @@ def test_dependency_job_ids_empty() -> None:
     rt = HpcRuntime(mock.Mock())
     binding = mock.Mock(dependencies=[])
     from abi.dag import ABIDAG
+
     dag = ABIDAG(bindings=[], edges={}, roots=[], topological_order=[])
     assert rt._dependency_job_ids(binding, dag) == []
 
@@ -197,6 +198,7 @@ def test_dependency_job_ids_with_deps() -> None:
     rt = HpcRuntime(mock.Mock())
     binding = mock.Mock(dependencies=["S1_trim_cutadapt", "S1_merge_vsearch"])
     from abi.dag import ABIDAG
+
     dag = ABIDAG(bindings=[], edges={}, roots=[], topological_order=[])
     ids = rt._dependency_job_ids(binding, dag)
     assert len(ids) == 2

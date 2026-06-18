@@ -486,8 +486,8 @@ class PipelineExecutor:
     ) -> List[Dict[str, Any]]:
         plasmid_detection = mapping_block(config, "plasmid_detection")
         strategy = str(plasmid_detection.get("strategy", "single_tool"))
-        detection_tools = (
-            plasmid_detection.get("consensus_tools") or plasmid_detection.get("tools", [])
+        detection_tools = plasmid_detection.get("consensus_tools") or plasmid_detection.get(
+            "tools", []
         )
         tool_weights = None
         if strategy == "weighted_vote":

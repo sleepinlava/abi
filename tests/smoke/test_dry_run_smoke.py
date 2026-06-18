@@ -62,7 +62,9 @@ def test_rnaseq_expression_dry_run(tmp_path: Path) -> None:
 
     plugin = RNASeqExpressionPlugin()
     sample_sheet = tmp_path / "samples.tsv"
-    sample_sheet.write_text("sample_id\tread1\tread2\tcondition\nS1\t/tmp/R1.fq\t/tmp/R2.fq\ttreated\nS2\t/tmp/A.fq\t/tmp/B.fq\tuntreated\n")
+    sample_sheet.write_text(
+        "sample_id\tread1\tread2\tcondition\nS1\t/tmp/R1.fq\t/tmp/R2.fq\ttreated\nS2\t/tmp/A.fq\t/tmp/B.fq\tuntreated\n"
+    )
 
     config = plugin.load_config(
         overrides={
@@ -83,7 +85,9 @@ def test_rnaseq_expression_tool_ids(tmp_path: Path) -> None:
 
     plugin = RNASeqExpressionPlugin()
     sample_sheet = tmp_path / "samples.tsv"
-    sample_sheet.write_text("sample_id\tread1\tread2\tcondition\nS1\t/tmp/R1.fq\t/tmp/R2.fq\ttreated\n")
+    sample_sheet.write_text(
+        "sample_id\tread1\tread2\tcondition\nS1\t/tmp/R1.fq\t/tmp/R2.fq\ttreated\n"
+    )
 
     config = plugin.load_config(
         overrides={

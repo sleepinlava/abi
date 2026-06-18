@@ -84,9 +84,7 @@ def _generate_synthetic_data(tmp_path: Path, n_reads: int = 100) -> tuple[Path, 
 
     sample_sheet = tmp_path / "samples.tsv"
     sample_sheet.write_text(
-        f"sample_id\tread1\tread2\tcondition\n"
-        f"S1\t{r1}\t{r2}\ttreated\n"
-        f"S2\t{r1}\t{r2}\tuntreated\n"
+        f"sample_id\tread1\tread2\tcondition\nS1\t{r1}\t{r2}\ttreated\nS2\t{r1}\t{r2}\tuntreated\n"
     )
     return r1, r2, sample_sheet
 

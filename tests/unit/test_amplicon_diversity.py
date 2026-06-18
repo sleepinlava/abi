@@ -24,6 +24,7 @@ class TestShannon:
     def test_uniform_distribution(self):
         """Shannon entropy of 4 equal-abundance features = ln(4)."""
         import math
+
         assert _shannon([5, 5, 5, 5]) == pytest.approx(math.log(4), abs=1e-4)
 
     def test_single_species(self):
@@ -166,15 +167,24 @@ class TestDiversityScriptIntegration:
 
         # Run the script
         import subprocess
+
         result = subprocess.run(
             [
-                sys.executable, "-m", "amplicon_diversity",
-                "--denoise-dir", str(denoise_dir),
-                "--merge-dir", str(merge_dir),
-                "--output-dir", str(output_dir),
-                "--min-count", "1",
+                sys.executable,
+                "-m",
+                "amplicon_diversity",
+                "--denoise-dir",
+                str(denoise_dir),
+                "--merge-dir",
+                str(merge_dir),
+                "--output-dir",
+                str(output_dir),
+                "--min-count",
+                "1",
             ],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
             cwd=_SCRIPTS_DIR,
         )
         assert result.returncode == 0, f"Script failed: {result.stderr}"
@@ -186,6 +196,7 @@ class TestDiversityScriptIntegration:
 
         # Verify ASV table
         import csv
+
         with (output_dir / "merged_asv_table.tsv").open() as fh:
             reader = csv.DictReader(fh, delimiter="\t")
             rows = list(reader)

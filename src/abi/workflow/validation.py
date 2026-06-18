@@ -111,12 +111,12 @@ class WorkflowValidator:
         manifest_path = self.result_dir / "provenance" / "resource_manifest.json"
         if not manifest_path.exists():
             self._warnings.append(
-                "provenance/resource_manifest.json missing "
-                "(required for reproducibility claims)"
+                "provenance/resource_manifest.json missing (required for reproducibility claims)"
             )
             return
         try:
             import json
+
             data = json.loads(manifest_path.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
                 self._errors.append("resource_manifest.json is not a JSON object")

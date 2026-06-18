@@ -120,9 +120,7 @@ def infer_dag(
             output_map[normalized] = (step_id, str(key))
         produced_by_step[step_id] = produced
 
-    inferred_edges: Dict[str, List[str]] = {
-        str(step.step_id): [] for step in step_list
-    }
+    inferred_edges: Dict[str, List[str]] = {str(step.step_id): [] for step in step_list}
     previous_step_id = ""
     for step in step_list:
         step_id = str(step.step_id)
@@ -181,9 +179,7 @@ def infer_dag(
 
     order = _topological_order([str(s.step_id) for s in step_list], merged_edges)
     roots = [sid for sid in order if not merged_edges.get(sid)]
-    return ABIDAG(
-        bindings=bindings, edges=merged_edges, roots=roots, topological_order=order
-    )
+    return ABIDAG(bindings=bindings, edges=merged_edges, roots=roots, topological_order=order)
 
 
 def _resolve_declared_edges(
@@ -249,13 +245,9 @@ def _cross_validate_edges(
         only_inferred = inferred_deps - declared_deps
         parts: List[str] = [f"DAG mismatch for step {step_id!r}:"]
         if only_declared:
-            parts.append(
-                f"declared-but-not-inferred={sorted(only_declared)}"
-            )
+            parts.append(f"declared-but-not-inferred={sorted(only_declared)}")
         if only_inferred:
-            parts.append(
-                f"inferred-but-not-declared={sorted(only_inferred)}"
-            )
+            parts.append(f"inferred-but-not-declared={sorted(only_inferred)}")
         logger.warning(" ".join(parts))
 
 

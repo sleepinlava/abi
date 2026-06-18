@@ -115,12 +115,9 @@ class Amplicon16SPlugin:
             resources = {}
         taxonomy_db = str(resources.get("taxonomy_db", "TAXONOMY_DB_NOT_CONFIGURED"))
         # Resolve diversity script — prefer explicit config, fall back to bundled script
-        _scripts_dir = str(
-            Path(__file__).resolve().parent.parent.parent.parent / "scripts"
-        )
+        _scripts_dir = str(Path(__file__).resolve().parent.parent.parent.parent / "scripts")
         diversity_script = str(
-            resources.get("diversity_script")
-            or f"{_scripts_dir}/amplicon_diversity.py"
+            resources.get("diversity_script") or f"{_scripts_dir}/amplicon_diversity.py"
         )
         do_otu = bool(mapping_block(config, "otu_clustering").get("enabled", False))
 

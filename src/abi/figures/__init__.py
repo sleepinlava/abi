@@ -14,6 +14,7 @@ To add a new figure type:
 2. Add it to ``_RENDERERS`` in ``base.py``.
 3. Add the type name to ``VALID_FIGURE_TYPES``.
 """
+
 from abi.figures.base import (
     VALID_FIGURE_TYPES,
     FigureEngine,

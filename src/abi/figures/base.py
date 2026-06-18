@@ -124,9 +124,7 @@ class FigureSpec:
             kwargs["figsize"] = tuple(kwargs["figsize"])
         return cls(**kwargs)
 
-    def validate_against_schema(
-        self, table_schemas: Mapping[str, Iterable[str]]
-    ) -> Optional[str]:
+    def validate_against_schema(self, table_schemas: Mapping[str, Iterable[str]]) -> Optional[str]:
         """Return an error message if this spec references unknown tables/columns.
 
         Returns None if validation passes.
@@ -177,9 +175,7 @@ class FigureEngine:
         tables_dir: str | Path,
         figures_dir: str | Path,
     ) -> None:
-        self._table_schemas = {
-            name: list(cols) for name, cols in table_schemas.items()
-        }
+        self._table_schemas = {name: list(cols) for name, cols in table_schemas.items()}
         self._tables_dir = Path(tables_dir)
         self._figures_dir = Path(figures_dir)
         self._figures_dir.mkdir(parents=True, exist_ok=True)
@@ -332,8 +328,9 @@ def _render_bar(
     import numpy as np  # type: ignore[import-untyped]
 
     if spec.sort_by:
-        rows = sorted(rows, key=lambda r: _numeric(r.get(spec.sort_by, "0")),
-                      reverse=not spec.ascending)
+        rows = sorted(
+            rows, key=lambda r: _numeric(r.get(spec.sort_by, "0")), reverse=not spec.ascending
+        )
     labels = [r.get(spec.x, "") for r in rows]
     values = [_numeric(r.get(spec.y, "0")) for r in rows]
     x = np.arange(len(labels))
@@ -435,13 +432,11 @@ def _render_heatmap(
     if not numeric_cols:
         ax.text(0.5, 0.5, "No numeric columns for heatmap", transform=ax.transAxes, ha="center")
         return
-    matrix = np.array([
-        [_numeric(r.get(c, "0")) for c in numeric_cols] for r in rows
-    ])
+    matrix = np.array([[_numeric(r.get(c, "0")) for c in numeric_cols] for r in rows])
     if spec.top_n and matrix.shape[0] > spec.top_n:
         # Keep top N rows by sum
         row_sums = matrix.sum(axis=1)
-        top_idx = np.argsort(row_sums)[-spec.top_n:]
+        top_idx = np.argsort(row_sums)[-spec.top_n :]
         matrix = matrix[top_idx]
         row_ids = [row_ids[i] for i in top_idx]
     im = ax.imshow(matrix, aspect="auto", cmap=spec.colormap)
@@ -450,6 +445,7 @@ def _render_heatmap(
     ax.set_xticks(range(len(numeric_cols)))
     ax.set_xticklabels(numeric_cols, rotation=90, fontsize=6)
     from matplotlib.pyplot import colorbar  # type: ignore[import-untyped]
+
     colorbar(im, ax=ax, shrink=0.8)
 
 
@@ -489,9 +485,7 @@ def _render_stacked_bar(
     stack_cols = [k for k in rows[0] if k != spec.x]
     if not stack_cols:
         return
-    data = np.array([
-        [_numeric(r.get(c, "0")) for c in stack_cols] for r in rows
-    ])
+    data = np.array([[_numeric(r.get(c, "0")) for c in stack_cols] for r in rows])
     bottom = np.zeros(len(categories))
     cmap = _get_colormap(spec.colormap, len(stack_cols))
     for i, col in enumerate(stack_cols):
@@ -521,8 +515,11 @@ def _render_pca(
     numeric_cols = [k for k in rows[0] if k != label_col]
     if len(numeric_cols) < 2:
         ax.text(
-            0.5, 0.5, "Need ≥2 numeric columns for PCA plot",
-            transform=ax.transAxes, ha="center",
+            0.5,
+            0.5,
+            "Need ≥2 numeric columns for PCA plot",
+            transform=ax.transAxes,
+            ha="center",
         )
         return
     pc1 = [_numeric(r.get(numeric_cols[0], "0")) for r in rows]
@@ -582,6 +579,7 @@ def _get_colormap(name: str, n: int) -> Optional[List[Any]]:
     """Return a list of *n* RGBA colors from a named matplotlib colormap."""
     try:
         import matplotlib.pyplot as plt  # type: ignore[import-untyped]
+
         cmap = plt.get_cmap(name)
         return [cmap(i / max(n - 1, 1)) for i in range(n)]
     except (ImportError, ValueError):

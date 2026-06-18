@@ -505,8 +505,13 @@ def test_write_minimal_progress_artifacts_with_failures(tmp_path: Path) -> None:
         {"step_id": "S2_bad", "sample_id": "S2", "status": "failed"},
     ]
     result = write_minimal_progress_artifacts(
-        prov, plan, dry_run=False, parallel=False, workers=1,
-        status="partial_failure", command_rows=command_rows,
+        prov,
+        plan,
+        dry_run=False,
+        parallel=False,
+        workers=1,
+        status="partial_failure",
+        command_rows=command_rows,
     )
     snapshot = json.loads(result["snapshot"].read_text())
     assert snapshot["failed_step_count"] == 1
@@ -519,8 +524,13 @@ def test_write_minimal_progress_artifacts_empty_steps(tmp_path: Path) -> None:
     prov = tmp_path / "provenance"
     plan = _FakePlan([])
     result = write_minimal_progress_artifacts(
-        prov, plan, dry_run=True, parallel=False, workers=1,
-        status="success", command_rows=[],
+        prov,
+        plan,
+        dry_run=True,
+        parallel=False,
+        workers=1,
+        status="success",
+        command_rows=[],
     )
     snapshot = json.loads(result["snapshot"].read_text())
     assert snapshot["total_step_count"] == 0

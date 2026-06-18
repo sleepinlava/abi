@@ -404,7 +404,5 @@ class TestLintResourceBlocks:
         }
         dag = {"nodes": []}
         result = run_contract_lint(dag, contracts=contracts, registry_tool_ids={"fastp"})
-        resource_warnings = [
-            f for f in result["findings"] if f["check"] == "missing_resources"
-        ]
+        resource_warnings = [f for f in result["findings"] if f["check"] == "missing_resources"]
         assert len(resource_warnings) >= 1

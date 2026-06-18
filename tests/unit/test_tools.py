@@ -277,8 +277,6 @@ class TestResolveResources:
 
     def test_resource_profile_loads_from_disk(self):
         """dev_small profile should be loadable."""
-        spec = resolve_resources(
-            "fastp", {}, resource_profile="dev_small"
-        )
+        spec = resolve_resources("fastp", {}, resource_profile="dev_small")
         assert spec.cpu == 1  # dev_small profile
         assert spec.memory == "2GB"

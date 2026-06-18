@@ -226,9 +226,7 @@ def test_check_resource_manifest_resource_not_a_dict(tmp_path: Path) -> None:
     """Error when a resource entry is not an object."""
     prov = tmp_path / "provenance"
     prov.mkdir()
-    (prov / "resource_manifest.json").write_text(
-        json.dumps({"resources": ["not_an_object"]})
-    )
+    (prov / "resource_manifest.json").write_text(json.dumps({"resources": ["not_an_object"]}))
     v = WorkflowValidator(tmp_path)
     v.check_resource_manifest()
     assert any("not an object" in e for e in v.errors)

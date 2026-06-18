@@ -87,9 +87,7 @@ class HpcRuntime:
     def _scripts_dir(self, config: Mapping[str, Any]) -> Path:
         return Path(str(config.get("outdir", "."))) / "provenance" / "hpc_scripts"
 
-    def _generate_all_scripts(
-        self, plan: object, config: Mapping[str, Any]
-    ) -> list[Path]:
+    def _generate_all_scripts(self, plan: object, config: Mapping[str, Any]) -> list[Path]:
         """Generate one batch script per DAG step with RBAC/SBATCH directives."""
         dag = infer_dag(getattr(plan, "steps", []), sequential_fallback=True)
         registry = self.plugin.registry()
@@ -105,11 +103,20 @@ class HpcRuntime:
             tool_meta = registry.get(tool_id) if tool_id and registry.has(tool_id) else {}
             resources = self._resolve_step_resources(tool_id, tool_meta, config)
             container = resolve_container_image(
-                tool_id, tool_meta, config=config, cli_image=self.options.container_image,
+                tool_id,
+                tool_meta,
+                config=config,
+                cli_image=self.options.container_image,
             )
             script_path = scripts_dir / f"{_safe_name(step.step_id)}.sh"
             self._write_single_script(
-                script_path, step, binding, resources, container, config, dag,
+                script_path,
+                step,
+                binding,
+                resources,
+                container,
+                config,
+                dag,
             )
             result.append(script_path)
         return result
@@ -234,9 +241,7 @@ class HpcRuntime:
         lines: list[str] = []
         if container:
             container_runtime = self.options.container_runtime or "docker"
-            lines.append(
-                f"# Container: {container} (runtime: {container_runtime})"
-            )
+            lines.append(f"# Container: {container} (runtime: {container_runtime})")
         else:
             mamba_root = str(
                 self.options.mamba_root or config.get("mamba_root", str(PROJECT_ROOT / ".mamba"))
@@ -256,7 +261,9 @@ class HpcRuntime:
         for script in scripts:
             proc = subprocess.run(
                 [submit_cmd, str(script)],
-                capture_output=True, text=True, check=False,
+                capture_output=True,
+                text=True,
+                check=False,
             )
             job_id = self._parse_job_id(proc.stdout, scheduler)
             if job_id:
@@ -300,7 +307,10 @@ class HpcRuntime:
         try:
             proc = subprocess.run(
                 ["squeue", "--job", ",".join(job_ids), "-o", "%i %T", "--noheader"],
-                capture_output=True, text=True, check=False, timeout=15,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=15,
             )
             result: dict[str, str] = {}
             for line in proc.stdout.strip().splitlines():
@@ -317,7 +327,10 @@ class HpcRuntime:
             try:
                 proc = subprocess.run(
                     ["qstat", "-f", jid],
-                    capture_output=True, text=True, check=False, timeout=10,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=10,
                 )
                 for line in proc.stdout.splitlines():
                     if "job_state" in line.lower():

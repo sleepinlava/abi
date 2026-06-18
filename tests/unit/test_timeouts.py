@@ -51,28 +51,20 @@ class TestParseTimeoutSeconds:
 class TestTimeoutFromEnvOrValue:
     def test_env_var_takes_priority(self, monkeypatch):
         monkeypatch.setenv("ABI_TEST_TIMEOUT", "30")
-        result = timeout_from_env_or_value(
-            "ABI_TEST_TIMEOUT", 999.0, default=60.0
-        )
+        result = timeout_from_env_or_value("ABI_TEST_TIMEOUT", 999.0, default=60.0)
         assert result == 30.0
 
     def test_falls_back_to_value_when_env_not_set(self):
-        result = timeout_from_env_or_value(
-            "ABI_NONEXISTENT_XXXX", 45.0, default=60.0
-        )
+        result = timeout_from_env_or_value("ABI_NONEXISTENT_XXXX", 45.0, default=60.0)
         assert result == 45.0
 
     def test_falls_back_to_default_when_value_none(self):
-        result = timeout_from_env_or_value(
-            "ABI_NONEXISTENT_XXXX2", None, default=60.0
-        )
+        result = timeout_from_env_or_value("ABI_NONEXISTENT_XXXX2", None, default=60.0)
         assert result == 60.0
 
     def test_env_disabled_overrides_value(self, monkeypatch):
         monkeypatch.setenv("ABI_TEST_TIMEOUT2", "disabled")
-        result = timeout_from_env_or_value(
-            "ABI_TEST_TIMEOUT2", 300.0, default=60.0
-        )
+        result = timeout_from_env_or_value("ABI_TEST_TIMEOUT2", 300.0, default=60.0)
         assert result is None
 
 

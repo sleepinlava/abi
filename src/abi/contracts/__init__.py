@@ -230,9 +230,7 @@ def _validate_resources_block(resources: Any, label: str) -> None:
         )
     disk = resources.get("disk")
     if disk is not None and not isinstance(disk, str):
-        raise ContractValidationError(
-            f"{label}: resources.disk must be a string, got {disk!r}"
-        )
+        raise ContractValidationError(f"{label}: resources.disk must be a string, got {disk!r}")
 
 
 def validate_plugin_contract_files(plugin: Any) -> None:
@@ -341,14 +339,10 @@ def _validate_workflow_section(
                 )
         optional = step.get("optional", False)
         if not isinstance(optional, bool):
-            raise ContractValidationError(
-                f"{label}.steps[{idx}].optional must be a boolean"
-            )
+            raise ContractValidationError(f"{label}.steps[{idx}].optional must be a boolean")
         citation = step.get("citation")
         if citation is not None and not isinstance(citation, str):
-            raise ContractValidationError(
-                f"{label}.steps[{idx}].citation must be a string or null"
-            )
+            raise ContractValidationError(f"{label}.steps[{idx}].citation must be a string or null")
 
 
 def load_workflow_spec(plugin_root: str | Path) -> WorkflowSpec | None:

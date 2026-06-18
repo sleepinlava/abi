@@ -69,30 +69,26 @@ def write_html_report(
         "</head>",
         "<body>",
         f'<header><h1>{escape(title)}</h1><p class="subtitle">{project_name}</p></header>',
-        '<main>',
+        "<main>",
         # ── Executive summary ──
         "<section>",
         "<h2>Executive Summary</h2>",
         f"<p>Analysis type: <code>{analysis_type}</code></p>",
         f"<p>Planned steps: {len(steps)}</p>",
     ]
-    tool_names = [
-        escape(str(s.get("tool_id", "")))
-        for s in steps
-        if s.get("tool_id")
-    ]
-    html_parts.append(
-        f"<p>Tools used: {', '.join(tool_names) or 'none'}</p>"
+    tool_names = [escape(str(s.get("tool_id", ""))) for s in steps if s.get("tool_id")]
+    html_parts.append(f"<p>Tools used: {', '.join(tool_names) or 'none'}</p>")
+    html_parts.extend(
+        [
+            "</section>",
+            # ── Workflow overview ──
+            "<section>",
+            "<h2>Workflow Overview</h2>",
+            "<table>",
+            "<thead><tr><th>Step</th><th>Tool</th><th>Category</th><th>Sample</th></tr></thead>",
+            "<tbody>",
+        ]
     )
-    html_parts.extend([
-        "</section>",
-        # ── Workflow overview ──
-        "<section>",
-        "<h2>Workflow Overview</h2>",
-        "<table>",
-        "<thead><tr><th>Step</th><th>Tool</th><th>Category</th><th>Sample</th></tr></thead>",
-        "<tbody>",
-    ])
 
     for step in steps:
         sid = escape(str(step.get("step_id", "")))
@@ -100,21 +96,22 @@ def write_html_report(
         cat = escape(str(step.get("category", "")))
         sample = escape(str(step.get("sample_id", "")))
         html_parts.append(
-            f"<tr><td>{sid}</td><td><code>{tool}</code></td>"
-            f"<td>{cat}</td><td>{sample}</td></tr>"
+            f"<tr><td>{sid}</td><td><code>{tool}</code></td><td>{cat}</td><td>{sample}</td></tr>"
         )
 
-    html_parts.extend([
-        "</tbody>",
-        "</table>",
-        "</section>",
-        # ── Standard Tables ──
-        "<section>",
-        "<h2>Standard Tables</h2>",
-        "<table>",
-        "<thead><tr><th>Table</th><th>Rows</th><th>Path</th></tr></thead>",
-        "<tbody>",
-    ])
+    html_parts.extend(
+        [
+            "</tbody>",
+            "</table>",
+            "</section>",
+            # ── Standard Tables ──
+            "<section>",
+            "<h2>Standard Tables</h2>",
+            "<table>",
+            "<thead><tr><th>Table</th><th>Rows</th><th>Path</th></tr></thead>",
+            "<tbody>",
+        ]
+    )
 
     for table, meta in sorted(table_summary.items()):
         rows = str(meta.get("rows", 0))
@@ -124,90 +121,106 @@ def write_html_report(
             f"<td>{rows}</td><td><code>{path}</code></td></tr>"
         )
 
-    html_parts.extend([
-        "</tbody>",
-        "</table>",
-        "</section>",
-    ])
+    html_parts.extend(
+        [
+            "</tbody>",
+            "</table>",
+            "</section>",
+        ]
+    )
 
     # ── Figures ──
     if rendered_figures:
-        html_parts.extend([
-            "<section>",
-            "<h2>Figures</h2>",
-        ])
+        html_parts.extend(
+            [
+                "<section>",
+                "<h2>Figures</h2>",
+            ]
+        )
         for spec_id, fig_path in sorted(rendered_figures.items()):
             # Reference figures relative to the report directory
             try:
                 rel = Path(fig_path).relative_to(root)
             except ValueError:
                 rel = Path(fig_path)
-            html_parts.extend([
-                f'<figure id="fig-{escape(spec_id)}">',
-                f'<img src="../{escape(str(rel))}" alt="{escape(spec_id)}" loading="lazy">',
-                f"<figcaption>{escape(spec_id)}</figcaption>",
-                "</figure>",
-            ])
+            html_parts.extend(
+                [
+                    f'<figure id="fig-{escape(spec_id)}">',
+                    f'<img src="../{escape(str(rel))}" alt="{escape(spec_id)}" loading="lazy">',
+                    f"<figcaption>{escape(spec_id)}</figcaption>",
+                    "</figure>",
+                ]
+            )
         html_parts.append("</section>")
 
     # ── Methods ──
     if methods_md:
-        html_parts.extend([
-            "<section>",
-            "<h2>Methods</h2>",
-            f"<pre>{escape(methods_md)}</pre>",
-            "</section>",
-        ])
+        html_parts.extend(
+            [
+                "<section>",
+                "<h2>Methods</h2>",
+                f"<pre>{escape(methods_md)}</pre>",
+                "</section>",
+            ]
+        )
 
     # ── Limitations ──
     if limitations_yaml:
-        html_parts.extend([
-            "<section>",
-            "<h2>Known Limitations</h2>",
-            "<ol>",
-        ])
+        html_parts.extend(
+            [
+                "<section>",
+                "<h2>Known Limitations</h2>",
+                "<ol>",
+            ]
+        )
         for lim in limitations_yaml:
             html_parts.append(f"<li>{escape(str(lim))}</li>")
-        html_parts.extend([
-            "</ol>",
-            "</section>",
-        ])
+        html_parts.extend(
+            [
+                "</ol>",
+                "</section>",
+            ]
+        )
 
     # ── Citations ──
     if citations:
-        html_parts.extend([
-            "<section>",
-            "<h2>References</h2>",
-            "<ol>",
-        ])
+        html_parts.extend(
+            [
+                "<section>",
+                "<h2>References</h2>",
+                "<ol>",
+            ]
+        )
         for c in citations:
             tool = escape(str(c.get("tool", "")))
             stage = escape(str(c.get("stage", "")))
             citation = escape(str(c.get("citation", "")))
             if tool and stage:
-                html_parts.append(
-                    f"<li><strong>{tool}</strong> ({stage}): {citation}</li>"
-                )
+                html_parts.append(f"<li><strong>{tool}</strong> ({stage}): {citation}</li>")
             elif tool:
                 html_parts.append(f"<li><strong>{tool}</strong>: {citation}</li>")
             else:
                 html_parts.append(f"<li>{citation}</li>")
-        html_parts.extend([
-            "</ol>",
-            "</section>",
-        ])
+        html_parts.extend(
+            [
+                "</ol>",
+                "</section>",
+            ]
+        )
 
     # ── Footer ──
-    html_parts.extend([
-        "</main>",
-        "<footer>",
-        "<p>Generated by the ABI report engine. "
-        "Dry-run artifacts prove planning, command rendering, provenance, and "
-        "table contracts only; biological conclusions require real tool outputs.</p>",
-        "</footer>",
-        "</body>",
-        "</html>",
-    ])
+    html_parts.extend(
+        [
+            "</main>",
+            "<footer>",
+            "<p>Generated by the ABI report engine. "
+            "Dry-run artifacts prove planning, command rendering, provenance, and "
+            "table contracts only; biological conclusions require real tool outputs.</p>",
+            "</footer>",
+            "</body>",
+            "</html>",
+        ]
+    )
 
     output = report_dir / "report.html"
     output.write_text("\n".join(html_parts) + "\n", encoding="utf-8")

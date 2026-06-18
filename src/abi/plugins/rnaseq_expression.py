@@ -214,9 +214,7 @@ class RNASeqExpressionPlugin:
                 inputs={
                     "expression_dir": expression_dir,
                     "sample_sheet": sample_sheet_path,
-                    "count_matrix_script": str(
-                        self.root / "scripts" / "build_count_matrix.py"
-                    ),
+                    "count_matrix_script": str(self.root / "scripts" / "build_count_matrix.py"),
                 },
                 outputs={
                     "output_dir": str(matrix_out),

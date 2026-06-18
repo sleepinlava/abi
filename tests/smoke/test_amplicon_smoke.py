@@ -58,9 +58,10 @@ def _generate_16s_reads(
         template = ref_seq[len(_FWD_PRIMER) : -len(_REV_PRIMER)]
         template_len = len(template)
 
-        with gzip.open(r1_path, "wt", encoding="utf-8") as f1, gzip.open(
-            r2_path, "wt", encoding="utf-8"
-        ) as f2:
+        with (
+            gzip.open(r1_path, "wt", encoding="utf-8") as f1,
+            gzip.open(r2_path, "wt", encoding="utf-8") as f2,
+        ):
             for i in range(n_reads_per_sample):
                 # Random amplicon fragment
                 start = rng.randint(0, max(1, template_len - 300))
@@ -78,9 +79,9 @@ def _generate_16s_reads(
                 r2_seq = _mutate(r2_seq, rate=0.01, rng=rng)
 
                 qual = "I" * len(r1_seq)
-                f1.write(f"@{sample_id}_{i}\n{r1_seq}\n+\n{qual[:len(r1_seq)]}\n")
+                f1.write(f"@{sample_id}_{i}\n{r1_seq}\n+\n{qual[: len(r1_seq)]}\n")
                 qual2 = "I" * len(r2_seq)
-                f2.write(f"@{sample_id}_{i}\n{r2_seq}\n+\n{qual2[:len(r2_seq)]}\n")
+                f2.write(f"@{sample_id}_{i}\n{r2_seq}\n+\n{qual2[: len(r2_seq)]}\n")
 
         samples.append((sample_id, str(r1_path), str(r2_path)))
 
@@ -97,9 +98,23 @@ def _generate_16s_reads(
 
 def _revcomp(seq: str) -> str:
     """Reverse complement of a DNA sequence."""
-    comp = {"A": "T", "T": "A", "C": "G", "G": "C", "M": "K", "K": "M",
-            "R": "Y", "Y": "R", "W": "W", "S": "S", "V": "B", "B": "V",
-            "H": "D", "D": "H", "N": "N"}
+    comp = {
+        "A": "T",
+        "T": "A",
+        "C": "G",
+        "G": "C",
+        "M": "K",
+        "K": "M",
+        "R": "Y",
+        "Y": "R",
+        "W": "W",
+        "S": "S",
+        "V": "B",
+        "B": "V",
+        "H": "D",
+        "D": "H",
+        "N": "N",
+    }
     return "".join(comp.get(b, b) for b in reversed(seq))
 
 
@@ -122,6 +137,7 @@ def _amplicon_bin(tool: str) -> str | None:
     if os.path.isfile(path) and os.access(path, os.X_OK):
         return path
     import shutil
+
     return shutil.which(tool)
 
 
@@ -150,12 +166,15 @@ def test_amplicon_real_execution(tmp_path: Path) -> None:
 
     # 1. Generate synthetic taxonomy DB
     from abi.config import PROJECT_ROOT
+
     gen_script = PROJECT_ROOT / "scripts" / "generate_synthetic_taxonomy.py"
     tax_db = tmp_path / "taxonomy" / "synthetic_sintax.fa"
     tax_db.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["python", str(gen_script), "--output", str(tax_db), "--entries", "100"],
-        capture_output=True, text=True, check=False,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert tax_db.exists(), "Taxonomy DB generation failed"
 
@@ -189,28 +208,43 @@ def test_amplicon_real_execution(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     import yaml
 
-    config_path.write_text(yaml.dump({
-        "project_name": "smoke-amplicon",
-        "mode": "local",
-        "threads": 2,
-        "outdir": str(results_dir),
-        "log_dir": str(results_dir / "logs"),
-        "input": {"sample_sheet": str(sample_sheet)},
-        "resources": {"taxonomy_db": str(tax_db)},
-        "primers": {
-            "forward": "GTGCCAGCMGCCGCGGTAA",
-            "reverse": "GGACTACHVGGGTWTCTAAT",
-        },
-    }))
+    config_path.write_text(
+        yaml.dump(
+            {
+                "project_name": "smoke-amplicon",
+                "mode": "local",
+                "threads": 2,
+                "outdir": str(results_dir),
+                "log_dir": str(results_dir / "logs"),
+                "input": {"sample_sheet": str(sample_sheet)},
+                "resources": {"taxonomy_db": str(tax_db)},
+                "primers": {
+                    "forward": "GTGCCAGCMGCCGCGGTAA",
+                    "reverse": "GGACTACHVGGGTWTCTAAT",
+                },
+            }
+        )
+    )
 
     amplicon_bin = str(Path(_amplicon_bin("cutadapt")).parent)
     new_env = os.environ.copy()
     new_env["PATH"] = f"{amplicon_bin}:{new_env.get('PATH', '')}"
 
     proc = subprocess.run(
-        ["abi", "run", "--type", "amplicon_16s", "--confirm-execution",
-         "--config", str(config_path)],
-        capture_output=True, text=True, env=new_env, check=False, timeout=600,
+        [
+            "abi",
+            "run",
+            "--type",
+            "amplicon_16s",
+            "--confirm-execution",
+            "--config",
+            str(config_path),
+        ],
+        capture_output=True,
+        text=True,
+        env=new_env,
+        check=False,
+        timeout=600,
     )
     print(f"STDOUT: {proc.stdout[-500:]}")
     print(f"STDERR: {proc.stderr[-500:]}")

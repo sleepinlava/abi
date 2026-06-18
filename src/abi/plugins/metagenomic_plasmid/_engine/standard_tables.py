@@ -283,9 +283,9 @@ def write_consensus_table(
     # Normalise weights: fill defaults for unlisted tools
     resolved_weights: Dict[str, float] = {}
     if strategy == "weighted_vote" and tool_weights:
-        for tool_id in (configured_tools or sorted(
+        for tool_id in configured_tools or sorted(
             {row.get("tool", "") for row in consensus_source if row.get("tool")}
-        )):
+        ):
             resolved_weights[tool_id] = float(tool_weights.get(tool_id, 1.0))
 
     by_sample_contig: Dict[tuple[str, str], List[Mapping[str, str]]] = {}
@@ -308,12 +308,9 @@ def write_consensus_table(
         # ── Weighted-vote: compute weighted score ──
         weighted_score: float | None = None
         if strategy == "weighted_vote":
-            weighted_score = sum(
-                resolved_weights.get(tool, 1.0) for tool in support_tools
-            )
+            weighted_score = sum(resolved_weights.get(tool, 1.0) for tool in support_tools)
             total_weight = (
-                sum(resolved_weights.values()) if resolved_weights
-                else float(total_tools)
+                sum(resolved_weights.values()) if resolved_weights else float(total_tools)
             )
             final_call = weighted_score >= (total_weight / 2.0)
         else:
@@ -348,14 +345,12 @@ def write_consensus_table(
         }
         if weighted_score is not None:
             total_weight = (
-                sum(resolved_weights.values()) if resolved_weights
-                else float(total_tools)
+                sum(resolved_weights.values()) if resolved_weights else float(total_tools)
             )
             row_data["weighted_score"] = round(weighted_score, 3)
             row_data["weight_threshold"] = round(total_weight / 2.0, 3)
             row_data["tool_weights"] = ",".join(
-                f"{tool}:{resolved_weights.get(tool, 1.0):.2f}"
-                for tool in support_tools
+                f"{tool}:{resolved_weights.get(tool, 1.0):.2f}" for tool in support_tools
             )
         consensus_rows.append(row_data)
 

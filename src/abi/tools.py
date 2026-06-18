@@ -176,7 +176,8 @@ class ResourceSpec:
                 overrides.walltime if overrides.walltime != defaults.walltime else self.walltime
             ),
             accelerator=(
-                overrides.accelerator if overrides.accelerator != defaults.accelerator
+                overrides.accelerator
+                if overrides.accelerator != defaults.accelerator
                 else self.accelerator
             ),
             disk=overrides.disk if overrides.disk != defaults.disk else self.disk,
@@ -868,9 +869,7 @@ class GenericCommandSkill(ToolSkill):
             return executable_path.exists()
         # Simple name: search in conda env's bin first, then system PATH.
         # / 简单名称：先在 conda env 中搜索，然后搜索系统 PATH。
-        if self.env_bin.exists() and shutil.which(
-            self.executable, path=str(self.env_bin)
-        ):
+        if self.env_bin.exists() and shutil.which(self.executable, path=str(self.env_bin)):
             return True
         # Fall back to full system PATH (some tools like Rscript may only
         # exist outside the conda env). / 回退到完整系统 PATH。
@@ -1483,9 +1482,26 @@ def _looks_like_path(value: str) -> bool:
     if value.startswith("/") or value.startswith("./") or value.startswith("../"):
         return True
     path_exts = (
-        ".fq", ".fastq", ".fa", ".fasta", ".fna", ".bam", ".sam",
-        ".tsv", ".csv", ".json", ".yaml", ".yml", ".txt", ".gz",
-        ".bz2", ".nwk", ".tree", ".R", ".py", ".sh",
+        ".fq",
+        ".fastq",
+        ".fa",
+        ".fasta",
+        ".fna",
+        ".bam",
+        ".sam",
+        ".tsv",
+        ".csv",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".txt",
+        ".gz",
+        ".bz2",
+        ".nwk",
+        ".tree",
+        ".R",
+        ".py",
+        ".sh",
     )
     if any(value.endswith(ext) for ext in path_exts):
         return True

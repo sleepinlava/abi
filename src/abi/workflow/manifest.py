@@ -121,9 +121,9 @@ class ResourceManifest:
             if key in ("root",):
                 continue
             if isinstance(value, Mapping):
-                res_path = Path(str(value.get(
-                    "path", value.get("database", value.get("directory", ""))
-                )))
+                res_path = Path(
+                    str(value.get("path", value.get("database", value.get("directory", ""))))
+                )
                 self.add_resource(
                     id=str(key),
                     path=res_path,
@@ -182,10 +182,7 @@ class ResourceManifest:
 
     def missing_resources(self) -> List[str]:
         """Return IDs of resources whose paths do not exist."""
-        return [
-            r["id"] for r in self._resources
-            if not Path(r["path"]).exists()
-        ]
+        return [r["id"] for r in self._resources if not Path(r["path"]).exists()]
 
 
 # ── Convenience functions / 便捷函数 ─────────────────────────────────────

@@ -167,10 +167,7 @@ def _check_rnaseq_expression(
     import os
     import subprocess
 
-
-    rows = _check_generic_resources(
-        "rnaseq_expression", config, resource_ids=resource_ids
-    )
+    rows = _check_generic_resources("rnaseq_expression", config, resource_ids=resource_ids)
 
     # Check DESeq2 availability via Rscript
     deseq2_status = "not_installed"
@@ -180,11 +177,16 @@ def _check_rnaseq_expression(
     try:
         result = subprocess.run(
             [
-                rscript, "--no-save", "-e",
+                rscript,
+                "--no-save",
+                "-e",
                 'if (requireNamespace("DESeq2", quietly=TRUE)) '
                 'cat("OK:", as.character(packageVersion("DESeq2")))',
             ],
-            capture_output=True, text=True, check=False, timeout=30,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
         )
         if "OK:" in (result.stdout or ""):
             deseq2_status = "ok"
@@ -207,7 +209,8 @@ def _check_rnaseq_expression(
             "directory_file_count": 0,
             "directory_size_bytes": 0,
             "message": (
-                f"DESeq2 {deseq2_version} found." if deseq2_status == "ok"
+                f"DESeq2 {deseq2_version} found."
+                if deseq2_status == "ok"
                 else "DESeq2 is not installed. Run: abi setup-resources --type rnaseq_expression"
             ),
         }
@@ -240,9 +243,7 @@ def _setup_rnaseq_expression(
         )
 
     mamba_root = str(
-        config.get("mamba_root")
-        or os.environ.get("MAMBA_ROOT")
-        or str(PROJECT_ROOT / ".mamba")
+        config.get("mamba_root") or os.environ.get("MAMBA_ROOT") or str(PROJECT_ROOT / ".mamba")
     )
 
     cmd = ["bash", str(setup_script), "--mamba-root", mamba_root]
@@ -289,17 +290,12 @@ def _setup_rnaseq_expression(
             "ready_check": "deseq2_package_installed",
             "directory_file_count": 0,
             "directory_size_bytes": 0,
-            "message": (
-                f"DESeq2 installed: {deseq2_installed}. "
-                f"Env path: {rnaseq_env}. {message}"
-            ),
+            "message": (f"DESeq2 installed: {deseq2_installed}. Env path: {rnaseq_env}. {message}"),
         }
     )
 
     # Also run generic resource checks for genomes, annotations, etc.
-    generic_rows = _check_generic_resources(
-        "rnaseq_expression", config, resource_ids=resource_ids
-    )
+    generic_rows = _check_generic_resources("rnaseq_expression", config, resource_ids=resource_ids)
     for gr in generic_rows:
         if gr["resource_id"] != "rnaseq_environment":
             rows.append(gr)
@@ -313,14 +309,10 @@ def _check_amplicon_16s(
     resource_ids: Optional[Sequence[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Check amplicon_16s resources including taxonomy database."""
-    rows = _check_generic_resources(
-        "amplicon_16s", config, resource_ids=resource_ids
-    )
+    rows = _check_generic_resources("amplicon_16s", config, resource_ids=resource_ids)
 
     # Check taxonomy DB
-    taxonomy_db = config.get("resources", {}).get(
-        "taxonomy_db", "TAXONOMY_DB_NOT_CONFIGURED"
-    )
+    taxonomy_db = config.get("resources", {}).get("taxonomy_db", "TAXONOMY_DB_NOT_CONFIGURED")
     tax_path = Path(str(taxonomy_db))
     tax_status = "missing"
     tax_entries = 0
@@ -396,7 +388,9 @@ def _setup_amplicon_16s(
         if not dry_run:
             subprocess.run(
                 ["python", str(generate_script), "--output", str(tax_fasta), "--entries", "50"],
-                capture_output=True, text=True, check=False,
+                capture_output=True,
+                text=True,
+                check=False,
             )
         return [
             {
@@ -476,7 +470,15 @@ def _generate_synthetic_fallback(outdir: Path) -> None:
     generate_script = PROJECT_ROOT / "scripts" / "generate_synthetic_taxonomy.py"
     if generate_script.exists():
         subprocess.run(
-            ["python", str(generate_script), "--output", str(outdir / "synthetic_sintax.fa"),
-             "--entries", "100"],
-            capture_output=True, text=True, check=False,
+            [
+                "python",
+                str(generate_script),
+                "--output",
+                str(outdir / "synthetic_sintax.fa"),
+                "--entries",
+                "100",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
         )
