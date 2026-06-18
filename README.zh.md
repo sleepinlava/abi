@@ -12,6 +12,8 @@ Nextflow 导出/运行支持、DAG/合约静态分析，
 [![PyPI](https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=blue)](https://pypi.org/project/abi-agent/)
 [![Python](https://img.shields.io/pypi/pyversions/abi-agent?style=flat-square)](https://pypi.org/project/abi-agent/)
 [![CI](https://img.shields.io/github/actions/workflow/status/sleepinlava/abi/ci.yml?branch=master&style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-60%25%2B-brightgreen?style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-Sphinx-blue?style=flat-square)](https://sleepinlava.github.io/abi/)
 [![Status](https://img.shields.io/badge/status-alpha-orange?style=flat-square)](https://github.com/sleepinlava/abi)
 [![License](https://img.shields.io/pypi/l/abi-agent?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
 
@@ -81,16 +83,37 @@ abi job-service --workers 2 --store jobs.json --subprocess-workers
 
 ## 内置分析类型
 
-| 类型 | 实现 | 说明 |
+| 类型 | 工具数 | 说明 |
 | --- | --- | --- |
-| `metatranscriptomics` | 原生 ABI 插件 | fastp -> STAR/HISAT2 -> featureCounts 可移植性示例。 |
-| `metagenomic_plasmid` | 自包含插件包 | 从 AutoPlasm 迁移而来；引擎在 `plugins/metagenomic_plasmid/_engine/`。 |
+| `amplicon_16s` | 8 | 16S rRNA 微生物组：cutadapt → vsearch 合并/去冗余/去噪 → SINTAX 分类 → MAFFT+FastTree 系统发育 → alpha/beta 多样性 |
+| `rnaseq_expression` | 6 | 批量 RNA-seq：fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler |
+| `wgs_bacteria` | 5 | 细菌分离株 WGS：fastp → SPAdes → Prokka → MLST → AMRFinderPlus |
+| `metatranscriptomics` | 3 | 宏转录组：fastp → STAR/HISAT2 → featureCounts |
+| `metagenomic_plasmid` | 67 | 旗舰质粒分析：QC → 组装 → 质粒检测 → 注释 → 丰度 → 统计。10 个 conda 环境，84 节点 DAG。 |
 
 `autoplasm` CLI 保留以维持向后兼容：
 
 ```bash
 autoplasm dry-run --config examples/config_minimal.yaml --profile dry_run
 ```
+
+## Docker
+
+为全部 5 个插件提供预构建 Docker 镜像：
+
+```bash
+# 构建插件镜像
+docker build -f docker/Dockerfile.amplicon -t abi-amplicon .
+
+# 在容器内运行工作流
+docker run --rm -v $PWD:/data abi-amplicon \
+  abi plan --type amplicon_16s --outdir /data/results
+
+# 使用 Docker Compose 启动所有服务
+docker compose -f docker/docker-compose.yml up -d
+```
+
+镜像：`abi-amplicon` (~1.5 GB)、`abi-rnaseq` (~2.5 GB)、`abi-wgs` (~2.0 GB)、`abi-metatranscriptomics` (~2.0 GB)、`abi-plasmid` (~15 GB)。完整编排见 `docker/docker-compose.yml`。
 
 ## 架构
 
@@ -108,11 +131,11 @@ ABI 核心层          schemas  │  provenance  │  permissions  │  diagnost
                     tables   │  tools       │  executor     │  report
         │
         v
-插件层              metagenomic_plasmid/    metatranscriptomics/
-                    (自包含)                  (原生示例)
+插件层              amplicon_16s/  rnaseq_expression/  wgs_bacteria/
+                    metatranscriptomics/  metagenomic_plasmid/
         │
         v
-运行时后端          local  │  Nextflow  │  HPC  │  cloud
+运行时后端          local  │  Docker  │  Nextflow  │  HPC  │  cloud
 ```
 
 ### 设计原则
@@ -187,16 +210,16 @@ python -m twine check dist/*
 更多文档：
 
 - [ABI Spec v0.1](docs/abi_spec_v0.1.md)
-- [Agent 使用指南](docs/agent_usage.md)
-- [开发指南](docs/development.md)
+- [开发计划](docs/next_development_plan.md)
+- [API 参考](docs/api.rst) — Sphinx 自动从 docstring 生成
 - [插件开发指南](docs/plugin_development_guide.md)
-- [发展计划](docs/abi_final_development_plan.md)
-- [工作流验证计划](docs/workflow_validation.md)
-- [OpenAI 接口标准](docs/openai_interface_standard.md)
+- [RNA-seq 工作流](docs/rnaseq_expression_workflow.md)
+- [工作流验证](docs/workflow_validation.md)
+- [HPC 开发](docs/hpc_development.md)
+- [Agent 使用指南](docs/agent_usage.md)
 - [Job Service 指南](docs/job_service.md)
-- [实验计划](docs/experiments.md)
-- [宏基因组质粒插件](docs/metagenomic_plasmid.md)
 - [发布指南](docs/release.md)
+- [开发日志](docs/devlog.md)
 
 ## 公共 SDK
 

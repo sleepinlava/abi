@@ -84,16 +84,37 @@ All agent-facing commands support `--output-json`.
 
 ## Built-In Analysis Types
 
-| Type | Implementation | Notes |
+| Type | Tools | Description |
 | --- | --- | --- |
-| `metatranscriptomics` | Native ABI plugin | fastp -> STAR/HISAT2 -> featureCounts portability demo. |
-| `metagenomic_plasmid` | Self-contained plugin package | Migrated from AutoPlasm; engine under `plugins/metagenomic_plasmid/_engine/`. |
+| `amplicon_16s` | 8 | 16S rRNA microbiome: cutadapt → vsearch merge/derep/denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta) |
+| `rnaseq_expression` | 6 | Bulk RNA-seq: fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler |
+| `wgs_bacteria` | 5 | Bacterial isolate WGS: fastp → SPAdes → Prokka → MLST → AMRFinderPlus |
+| `metatranscriptomics` | 3 | Metatranscriptomics: fastp → STAR/HISAT2 → featureCounts |
+| `metagenomic_plasmid` | 67 | Flagship plasmid analysis: QC → assembly → plasmid detection → annotation → abundance → statistics. 10 conda envs, 84-node DAG. |
 
 The `autoplasm` CLI is preserved for backward compatibility:
 
 ```bash
 autoplasm dry-run --config examples/config_minimal.yaml --profile dry_run
 ```
+
+## Docker
+
+Pre-built Docker images for all 5 plugins:
+
+```bash
+# Build a plugin image
+docker build -f docker/Dockerfile.amplicon -t abi-amplicon .
+
+# Run a workflow inside the container
+docker run --rm -v $PWD:/data abi-amplicon \
+  abi plan --type amplicon_16s --outdir /data/results
+
+# Start all services with Docker Compose
+docker compose -f docker/docker-compose.yml up -d
+```
+
+Images: `abi-amplicon` (~1.5 GB), `abi-rnaseq` (~2.5 GB), `abi-wgs` (~2.0 GB), `abi-metatranscriptomics` (~2.0 GB), `abi-plasmid` (~15 GB). See `docker/docker-compose.yml` for the full orchestration.
 
 ## Architecture
 
@@ -111,11 +132,11 @@ ABI Core            schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
         │
         v
-Plugins             metagenomic_plasmid/    metatranscriptomics/
-                    (self-contained)        (native demo)
+Plugins             amplicon_16s/  rnaseq_expression/  wgs_bacteria/
+                    metatranscriptomics/  metagenomic_plasmid/
         │
         v
-Runtimes            local  │  Nextflow  │  HPC  │  cloud
+Runtimes            local  │  Docker  │  Nextflow  │  HPC  │  cloud
 ```
 
 ### Design Principles
@@ -192,16 +213,16 @@ default `.mamba` root; `AUTOPLASM_MAMBA_ROOT` remains accepted for compatibility
 More details:
 
 - [ABI Spec v0.1](docs/abi_spec_v0.1.md)
-- [Agent Usage Guide](docs/agent_usage.md)
-- [Development Guide](docs/development.md)
+- [Development Plan](docs/next_development_plan.md)
+- [API Reference](docs/api.rst) — Sphinx auto-generated from docstrings
 - [Plugin Development Guide](docs/plugin_development_guide.md)
-- [Development Plan](docs/abi_final_development_plan.md)
-- [Workflow Validation Plan](docs/workflow_validation.md)
-- [OpenAI Interface Standard](docs/openai_interface_standard.md)
+- [RNA-seq Workflow](docs/rnaseq_expression_workflow.md)
+- [Workflow Validation](docs/workflow_validation.md)
+- [HPC Development](docs/hpc_development.md)
+- [Agent Usage Guide](docs/agent_usage.md)
 - [Job Service Guide](docs/job_service.md)
-- [Experiment Plan](docs/experiments.md)
-- [Metagenomic Plasmid Plugin](docs/metagenomic_plasmid.md)
 - [Release Guide](docs/release.md)
+- [Dev Log](docs/devlog.md)
 
 ## Public SDK
 

@@ -29,6 +29,13 @@ abi list-types
 abi dry-run --type metatranscriptomics --outdir /tmp/abi-smoke
 autoplasm --help
 
+# Documentation build
+sphinx-build -b html docs/ docs/_build/
+
+# Docker build
+docker build -f docker/Dockerfile.amplicon -t abi-amplicon .
+docker compose -f docker/docker-compose.yml build
+
 # Agent integration
 abi-mcp                          # start MCP stdio server for Claude Desktop / Claude Code
 abi install-skills               # install ABI skills into ~/.claude/skills/abi/
@@ -81,11 +88,14 @@ src/abi/
                       citations, limitations, html — generic report system
   workflow/           ResourceManifest, workflow validation, figure_specs loading
   plugins/
-    metagenomic_plasmid/   Self-contained package (engine in _engine/)
-    rnaseq_expression.py   Inline plugin (4 tools, DESeq2 R script bundled)
-    wgs_bacteria.py        Inline plugin (5 tools, SPAdes/Prokka parsers)
-    amplicon_16s.py        Inline plugin (6 tools, cutadapt/vsearch parsers)
+    metagenomic_plasmid/   Self-contained package (engine in _engine/), 67 tools
+    rnaseq_expression.py   Inline plugin (6 tools, DESeq2 R script bundled)
+    wgs_bacteria.py        Inline plugin (5 tools, SPAdes/Prokka/AMR parsers)
+    amplicon_16s.py        Inline plugin (8 tools, cutadapt/vsearch/diversity parsers)
     metatranscriptomics.py Inline plugin (3 tools, shared parsers from _shared)
+  scripts/              Bundled scripts: amplicon_diversity.py, install_deseq2.R,
+                        setup_rnaseq_env.sh, download_rdp_sintax.sh, etc.
+  docker/               Dockerfiles + docker-compose.yml for containerized execution
   autoplasm/          Backward-compatible re-export shim → metagenomic_plasmid/_engine/
   _shared.py          Shared utilities: _read_tsv, _display_command, _plan_dict,
                       _common_overrides, _clean, _resolve_path,
@@ -134,14 +144,14 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 - `planning_write`: `plan`, `dry_run`, `report`, `export_nextflow` — writes plans/provenance, no tool execution
 - `execution`: `run` — **requires `confirm_execution=true`**, writes provenance, executes real tools
 
-### The five plugins (v0.1.6, 2026-06-18)
+### The five plugins (v1.2.0, 2026-06-18)
 
-All five plugins now have complete parsers, report generation, tests, and example data.
+All five plugins have complete tool chains, parsers, report generation, tests, and Docker images.
 
-- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (20 modules, 7,713 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 2,019 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard.
-- **`rnaseq_expression`**: 4-tool standard RNA-seq. fastp → STAR → featureCounts → DESeq2. All 4 parsers working. Has `pipeline_dag.yaml` (4 nodes). DESeq2 R script bundled.
-- **`wgs_bacteria`**: 5-tool bacterial isolate analysis. fastp → SPAdes → Prokka → MLST → AMRFinderPlus. All 5 parsers working (SPAdes N50/GC, Prokka GFF). Has `pipeline_dag.yaml` (5 nodes).
-- **`amplicon_16s`**: 6-tool microbial community analysis. cutadapt → vsearch (derep/denoise/taxonomy) → diversity. 5 of 6 tools have parsers. Has `pipeline_dag.yaml` (7 nodes).
+- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (20 modules, 7,713 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 2,019 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments.
+- **`rnaseq_expression`**: 6-tool standard RNA-seq. fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. All 6 parsers working. Has `pipeline_dag.yaml` (6 nodes). DESeq2 R script bundled, automated conda+BiocManager install.
+- **`wgs_bacteria`**: 5-tool bacterial isolate analysis. fastp → SPAdes → Prokka → MLST → AMRFinderPlus. All 5 parsers working (SPAdes N50/GC, Prokka GFF, AMRFinderPlus --plus). Has `pipeline_dag.yaml` (5 nodes).
+- **`amplicon_16s`**: 8-tool microbial community analysis. cutadapt → vsearch_mergepairs → vsearch_derep → UNOISE3 denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta via `scripts/amplicon_diversity.py`). All 8 tools have parsers. Has `pipeline_dag.yaml` (8 nodes).
 - **`metatranscriptomics`**: 3-tool demo. fastp, STAR/HISAT2, featureCounts. All 3 parsers working via shared imports from `abi._shared`.
 
 All plugins share the same `ABIAgentInterface` contract, tool contract format, `write_plugin_report()` template, and workflow declaration pattern. Each has a `pipeline_dag.yaml` for L1/L2/L3 DAG validation.
