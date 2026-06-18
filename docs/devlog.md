@@ -1,5 +1,45 @@
 # ABI Development Log
 
+## 2026-06-18 (continued) — P1-1: DESeq2 Installation Automation
+
+### P1-1: Reproducible DESeq2/R Environment Setup
+
+**Problem**: DESeq2 was installed manually in system R (`/home/bker/R/x86_64-pc-linux-gnu-library/4.3/`).
+No automated setup existed — new machines would fail at the DESeq2 step with
+cryptic R package errors.
+
+**Solution** (4 files):
+- **NEW** `envs/rnaseq.yml` — conda environment spec with fastp, STAR,
+  featureCounts, r-base, and R dependency packages from conda-forge
+- **NEW** `scripts/install_deseq2.R` — R script that installs DESeq2 +
+  companion packages via BiocManager with retry logic and verification
+- **NEW** `scripts/setup_rnaseq_env.sh` — orchestrator: creates conda env
+  then runs the R installer. Supports --dry-run, --mamba-root, --skip-r
+- `src/abi/resources.py` — `check_resources` now detects DESeq2 version
+  via Rscript; `setup_resources` delegates to setup_rnaseq_env.sh for
+  `--type rnaseq_expression`
+
+**Key design decisions**:
+- R packages installed via BiocManager rather than conda bioconda channel
+  (avoiding the dependency conflicts that plagued the previous session)
+- System R fallback: if r-base isn't in the conda env, the setup script
+  uses the system Rscript and installs packages to the user library
+- Marker file (`.abi_deseq2_installed`) written to the R library on success
+  for fast idempotent checks
+- `abi check-resources --type rnaseq_expression` now shows DESeq2 version
+
+**Verification**:
+```bash
+abi check-resources --type rnaseq_expression  # shows DESeq2 1.42.1 found
+abi setup-resources --type rnaseq_expression --dry-run  # shows plan
+```
+
+### Commits (pending)
+- P1-1: DESeq2 installation automation (envs/rnaseq.yml, install_deseq2.R,
+  setup_rnaseq_env.sh, resources.py rnaseq integration)
+
+---
+
 ## 2026-06-18 — Route C: Code Quality + P0-2 Amplicon Fix
 
 ### Overview

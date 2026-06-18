@@ -1,0 +1,26 @@
+name: rnaseq
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+channel_priority: strict
+dependencies:
+  # ── Core runtime ─────────────────────────────────────────────
+  - python=3.10
+  # ── QC ────────────────────────────────────────────────────────
+  - fastp>=0.23
+  # ── Alignment ──────────────────────────────────────────────────
+  - star>=2.7
+  # ── Quantification ──────────────────────────────────────────────
+  - subread>=2.0                     # provides featureCounts
+  # ── Differential expression ────────────────────────────────────
+  - r-base>=4.0
+  # R dependency packages (conda-forge has most of the Bioc dependency tree)
+  - r-matrixstats
+  - r-locfit
+  - r-ggplot2
+  # ── Utilities ──────────────────────────────────────────────────
+  - pigz
+  - gzip
+  - curl
+  - wget

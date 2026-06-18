@@ -28,6 +28,8 @@ def check_resources(
     """Check configured resources for an ABI analysis type."""
     if analysis_type == "metagenomic_plasmid":
         return check_autoplasm_resources(config, resource_ids=resource_ids)
+    if analysis_type == "rnaseq_expression":
+        return _check_rnaseq_expression(config, resource_ids=resource_ids)
     return _check_generic_resources(analysis_type, config, resource_ids=resource_ids)
 
 
@@ -46,6 +48,12 @@ def setup_resources(
             resource_ids=resource_ids,
             dry_run=dry_run,
             mock=mock,
+        )
+    if analysis_type == "rnaseq_expression":
+        return _setup_rnaseq_expression(
+            config,
+            resource_ids=resource_ids,
+            dry_run=dry_run,
         )
     if not dry_run and not mock:
         raise ABIError(
@@ -139,3 +147,152 @@ def _directory_file_count(path: Path) -> int:
     if not path.is_dir():
         return 0
     return sum(1 for child in path.rglob("*") if child.is_file())
+
+
+def _check_rnaseq_expression(
+    config: Mapping[str, Any],
+    *,
+    resource_ids: Optional[Sequence[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Check rnaseq_expression resources including DESeq2 installation."""
+    import os
+    import subprocess
+
+
+    rows = _check_generic_resources(
+        "rnaseq_expression", config, resource_ids=resource_ids
+    )
+
+    # Check DESeq2 availability via Rscript
+    deseq2_status = "not_installed"
+    deseq2_version = ""
+    rscript = os.environ.get("ABI_RSCRIPT_PATH", "Rscript")
+
+    try:
+        result = subprocess.run(
+            [
+                rscript, "--no-save", "-e",
+                'if (requireNamespace("DESeq2", quietly=TRUE)) '
+                'cat("OK:", as.character(packageVersion("DESeq2")))',
+            ],
+            capture_output=True, text=True, check=False, timeout=30,
+        )
+        if "OK:" in (result.stdout or ""):
+            deseq2_status = "ok"
+            deseq2_version = result.stdout.strip().split(":", 1)[-1].strip()
+    except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
+        deseq2_status = "not_installed"
+
+    rows.append(
+        {
+            "resource_id": "deseq2_package",
+            "tool_id": "deseq2",
+            "field": "r_package",
+            "path": rscript,
+            "status": deseq2_status,
+            "version": deseq2_version,
+            "source_url": "https://bioconductor.org/packages/DESeq2/",
+            "checksum": "",
+            "command": [rscript, "-e", "library(DESeq2)"],
+            "ready_check": "r_package_loaded",
+            "directory_file_count": 0,
+            "directory_size_bytes": 0,
+            "message": (
+                f"DESeq2 {deseq2_version} found." if deseq2_status == "ok"
+                else "DESeq2 is not installed. Run: abi setup-resources --type rnaseq_expression"
+            ),
+        }
+    )
+    return rows
+
+
+def _setup_rnaseq_expression(
+    config: Mapping[str, Any],
+    *,
+    resource_ids: Optional[Sequence[str]] = None,
+    dry_run: bool = False,
+) -> List[Dict[str, Any]]:
+    """Set up the rnaseq_expression conda environment and R packages.
+
+    Runs ``scripts/setup_rnaseq_env.sh`` which creates the ``rnaseq`` conda
+    environment with fastp, STAR, featureCounts, and R, then installs DESeq2
+    from Bioconductor.
+    """
+    import os
+    import subprocess
+
+    from abi.config import PROJECT_ROOT
+
+    setup_script = PROJECT_ROOT / "scripts" / "setup_rnaseq_env.sh"
+    if not setup_script.exists():
+        raise ABIError(
+            "setup_rnaseq_env.sh not found. "
+            "Reinstall ABI or create the rnaseq environment manually."
+        )
+
+    mamba_root = str(
+        config.get("mamba_root")
+        or os.environ.get("MAMBA_ROOT")
+        or str(PROJECT_ROOT / ".mamba")
+    )
+
+    cmd = ["bash", str(setup_script), "--mamba-root", mamba_root]
+    if dry_run:
+        cmd.append("--dry-run")
+
+    rows: List[Dict[str, Any]] = []
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        status = "ok" if result.returncode == 0 else "error"
+        message = result.stdout.strip()[-500:] if result.stdout else ""
+        if result.returncode != 0:
+            message = (result.stderr or result.stdout or "")[-500:]
+    except OSError as exc:
+        status = "error"
+        message = str(exc)
+
+    # Check for the marker file written by install_deseq2.R
+    rnaseq_env = Path(mamba_root) / "envs" / "rnaseq"
+    r_lib = rnaseq_env / "lib" / "R" / "library"
+    marker = r_lib / ".abi_deseq2_installed"
+    deseq2_installed = marker.exists()
+
+    # Also check system R library as fallback
+    if not deseq2_installed:
+        for lib_path in (".R", "R"):  # common system R library dirs
+            sys_lib = Path.home() / lib_path
+            for marker_candidate in sys_lib.glob("**/.abi_deseq2_installed"):
+                if marker_candidate.exists():
+                    deseq2_installed = True
+                    break
+
+    rows.append(
+        {
+            "resource_id": "rnaseq_environment",
+            "tool_id": "deseq2",
+            "field": "env_setup",
+            "path": str(setup_script),
+            "status": status if not dry_run else "planned",
+            "version": "",
+            "source_url": "https://bioconductor.org/packages/DESeq2/",
+            "checksum": "",
+            "command": cmd,
+            "ready_check": "deseq2_package_installed",
+            "directory_file_count": 0,
+            "directory_size_bytes": 0,
+            "message": (
+                f"DESeq2 installed: {deseq2_installed}. "
+                f"Env path: {rnaseq_env}. {message}"
+            ),
+        }
+    )
+
+    # Also run generic resource checks for genomes, annotations, etc.
+    generic_rows = _check_generic_resources(
+        "rnaseq_expression", config, resource_ids=resource_ids
+    )
+    for gr in generic_rows:
+        if gr["resource_id"] != "rnaseq_environment":
+            rows.append(gr)
+
+    return rows

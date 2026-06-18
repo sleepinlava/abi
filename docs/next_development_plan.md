@@ -37,7 +37,7 @@
 |-----|-------------|--------|--------|
 | P0-1 | build_count_matrix tool + DESeq2 fixes | ✅ | 77aca65 |
 | P0-2 | amplicon_16s vsearch mergepairs step | ✅ | 0c0b912 |
-| P1-1 | DESeq2 installation automation | ⬜ | — |
+| P1-1 | DESeq2 installation automation | ✅ | 4 files (envs/rnaseq.yml, install_deseq2.R, setup_rnaseq_env.sh, resources.py) |
 | P1-2 | amplicon small taxonomy DB | ⬜ | — |
 | P2 | Smoke tests with real tool execution | ⬜ | — |
 
