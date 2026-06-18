@@ -96,7 +96,7 @@ differential_expression:
 
 ### Sample sheet format
 
-```tsv
+```text
 sample_id	group	condition	platform	read1	read2
 sample1	treatment	treated	rna_seq	raw/s1_R1.fastq.gz	raw/s1_R2.fastq.gz
 sample2	treatment	treated	rna_seq	raw/s2_R1.fastq.gz	raw/s2_R2.fastq.gz

@@ -1,4 +1,4 @@
-# ABI — Agent-Bioinformatics Interface
+# <img src="figures/abi_logo.png" alt="ABI" width="36" height="36" align="top"> ABI — Agent-Bioinformatics Interface
 
 ABI is a Python interface layer for agent-driven bioinformatics workflows. It
 standardizes analysis plugins behind a common

@@ -1,4 +1,4 @@
-# ABI — Agent-Bioinformatics Interface（面向 Agent 的生物信息学接口）
+# <img src="figures/abi_logo.png" alt="ABI" width="36" height="36" align="top"> ABI — Agent-Bioinformatics Interface（面向 Agent 的生物信息学接口）
 
 > :us: [English version](README.md)
 

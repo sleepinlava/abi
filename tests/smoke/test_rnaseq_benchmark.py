@@ -160,9 +160,7 @@ def test_rnaseq_benchmark_assertions(tmp_path: Path) -> None:
                 f"Count matrix has {n_cols} sample columns"
             )
     else:
-        print(
-            "  count_matrix.tsv not generated (featureCounts failed with synthetic reads)"
-        )
+        print("  count_matrix.tsv not generated (featureCounts failed with synthetic reads)")
 
     # --- DESeq2 results (conditional — depends on featureCounts success) ---
     de_path = de_dir / "deseq2_results.tsv"
@@ -176,9 +174,7 @@ def test_rnaseq_benchmark_assertions(tmp_path: Path) -> None:
 
     norm_files = list(de_dir.glob("*normalized*"))
     if not norm_files:
-        print(
-            "  normalized_expression not generated (featureCounts failed with synthetic reads)"
-        )
+        print("  normalized_expression not generated (featureCounts failed with synthetic reads)")
 
     # --- Report ---
     report_md = results_dir / "report" / "report.md"

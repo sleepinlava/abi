@@ -6,6 +6,7 @@ channels:
 channel_priority: strict
 dependencies:
   - python=3.10
+  - pip
   - cutadapt>=4.0
   - vsearch>=2.20
   - mafft>=7.0

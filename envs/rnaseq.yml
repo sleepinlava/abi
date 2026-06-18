@@ -7,6 +7,7 @@ channel_priority: strict
 dependencies:
   # ── Core runtime ─────────────────────────────────────────────
   - python=3.10
+  - pip
   # ── QC ────────────────────────────────────────────────────────
   - fastp>=0.23
   # ── Alignment ──────────────────────────────────────────────────
@@ -15,10 +16,16 @@ dependencies:
   - subread>=2.0                     # provides featureCounts
   # ── Differential expression ────────────────────────────────────
   - r-base>=4.0
-  # R dependency packages (conda-forge has most of the Bioc dependency tree)
-  - r-matrixstats
-  - r-locfit
+  # DESeq2 + core Bioconductor deps (installed via conda — avoids
+  # BiocManager compilation failures in Docker where no Linux
+  # binaries are available)
+  - bioconductor-deseq2
+  - bioconductor-tximport
+  # R packages commonly paired with DESeq2
   - r-ggplot2
+  - r-readr
+  - r-pheatmap
+  - r-rcolorbrewer
   # ── Utilities ──────────────────────────────────────────────────
   - pigz
   - gzip

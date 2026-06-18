@@ -1,0 +1,177 @@
+/* ── ABI Docs — Custom Styles (Furo theme) ───────────────────────────── */
+
+/* ── Typography ─────────────────────────────────────────────────────── */
+body {
+  font-feature-settings: "kern" 1, "liga" 1;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: 2rem;
+  margin-top: 0;
+}
+
+h2 {
+  font-size: 1.5rem;
+  margin-top: 2.5rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--color-background-border);
+}
+
+h3 {
+  font-size: 1.2rem;
+  margin-top: 2rem;
+}
+
+/* ── Content width — slightly wider for code-heavy docs ─────────────── */
+@media (min-width: 82em) {
+  .content {
+    max-width: 88ch;
+  }
+}
+
+/* ── Inline code ────────────────────────────────────────────────────── */
+code.literal {
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  font-size: 0.9em;
+  border: 1px solid var(--color-background-border);
+}
+
+/* ── Code blocks ────────────────────────────────────────────────────── */
+div.highlight {
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+div.highlight pre {
+  padding: 1rem 1.2rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+/* ── Admonitions ────────────────────────────────────────────────────── */
+.admonition {
+  border-radius: 8px;
+  border-left-width: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.admonition .admonition-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+/* ── Tables ─────────────────────────────────────────────────────────── */
+table.docutils {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+table.docutils th {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+table.docutils td {
+  font-size: 0.9rem;
+}
+
+/* ── Navigation ─────────────────────────────────────────────────────── */
+.sidebar-brand {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sidebar-tree .toctree-l1 > .reference {
+  font-weight: 500;
+}
+
+/* ── API documentation ──────────────────────────────────────────────── */
+.py.class, .py.function, .py.method {
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  margin: 1rem 0;
+  border: 1px solid var(--color-background-border);
+}
+
+.py.class .sig, .py.function .sig {
+  font-family: var(--font-stack--monospace);
+  font-size: 0.92rem;
+}
+
+/* ── Header anchor links ────────────────────────────────────────────── */
+h1:hover > a.headerlink,
+h2:hover > a.headerlink,
+h3:hover > a.headerlink,
+h4:hover > a.headerlink {
+  opacity: 0.6;
+}
+
+a.headerlink {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  font-size: 0.85em;
+  margin-left: 0.3em;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-foreground-muted);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-foreground-secondary);
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────── */
+footer {
+  font-size: 0.85rem;
+}
+
+/* ── Keyboard shortcut hints ────────────────────────────────────────── */
+kbd {
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+  font-size: 0.85em;
+  border: 1px solid var(--color-background-border);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
+}
+
+/* ── Announcement banner ────────────────────────────────────────────── */
+div.announcement {
+  font-size: 0.88rem;
+  text-align: center;
+}
+
+div.announcement a {
+  color: inherit;
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+/* ── Edit this page button ──────────────────────────────────────────── */
+a.edit-this-page {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+a.edit-this-page:hover {
+  opacity: 1;
+}
