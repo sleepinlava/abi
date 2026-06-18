@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 
@@ -29,14 +28,16 @@ def test_rebuild_documentation_deliverables_exist() -> None:
     root = Path(__file__).resolve().parents[1]
     required = [
         "docs/abi_spec_v0.1.md",
-        "docs/abi_final_development_plan.md",
+        "docs/next_development_plan.md",
         "docs/plugin_development_guide.md",
         "docs/openai_interface_standard.md",
         "docs/job_service.md",
         "docs/agent_usage.md",
-        "docs/experiments.md",
-        "docs/experiments/metrics.tsv",
-        "docs/experiments/traces.jsonl",
+        "docs/workflow_validation.md",
+        "docs/hpc_development.md",
+        "docs/development.md",
+        "docs/release.md",
+        "docs/devlog.md",
         "demo_artifacts/README.md",
         "baseline_comparison/README.md",
         "figures/README.md",
@@ -58,14 +59,10 @@ def test_release_workflow_smoke_tests_installed_demo_dry_runs() -> None:
     assert "--type metatranscriptomics" in release_workflow
 
 
-def test_experiment_trace_index_points_to_golden_traces() -> None:
+def test_ci_includes_github_pages_deployment() -> None:
     root = Path(__file__).resolve().parents[1]
-    trace_index = root / "docs" / "experiments" / "traces.jsonl"
+    ci_workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    for line in trace_index.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        record = json.loads(line)
-        target = (trace_index.parent / record["trace"]).resolve()
-        assert target.exists(), record
-        assert target.is_file(), record
+    assert "actions/deploy-pages@v4" in ci_workflow
+    assert "actions/upload-pages-artifact@v3" in ci_workflow
+    assert ".nojekyll" in ci_workflow
