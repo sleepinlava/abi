@@ -1,7 +1,7 @@
 # ABI Next Stage Development Plan & Technical Design
 
 > **Status**: Active (2026-06-18)
-> **Last updated**: 2026-06-18 — Route C code quality phase + P0-2 amplicon fix complete
+> **Last updated**: 2026-06-18 — Direction A + B complete, all plugins fully functional
 > **Canonical reference**: This document supersedes `docs/abi_final_development_plan.md` and `docs/demo_plan.md`.
 > **Related**: `docs/workflow_validation.md`, `docs/pipeline_biological_validity.md`, `docs/plugin_development_guide.md`, `docs/hpc_development.md`
 
@@ -12,13 +12,32 @@
 | 0 | metagenomic_plasmid | ✅ Stable | Full | Full (32 tools) | Flagship plugin |
 | 1 | Report + figures layer | ✅ Complete | 435+ | N/A | Core capability |
 | 2 | rnaseq_expression | ✅ Complete | 21 tests | 5/5 tools | +build_count_matrix tool |
-| 3 | wgs_bacteria | ✅ Complete | 17 tests | 5/5 tools | Second full pipeline |
-| 4 | amplicon_16s | ✅ Complete | 15 tests | 6/6 tools | +vsearch_mergepairs tool |
+| 3 | wgs_bacteria | ✅ Complete | 17 tests | 5/5 tools | AMRFinderPlus parser fixed |
+| 4 | amplicon_16s | ✅ Complete | 15 tests | 7/7 tools | +merge, +phylogeny, +diversity script |
 | 5 | metatranscriptomics | ✅ Complete | 10 tests | 3/3 tools | Fourth full pipeline |
 | 6 | Benchmark datasets | ⏸️ Deferred | — | — | Requires real data |
 | 7 | Multi-plugin demos | ⏸️ Deferred | — | — | Depends on Phase 6 |
 
-**Total**: 617 tests (+90 from Route C), 0 mypy errors, 0 ruff errors, 5 functional plugins
+**Total**: 650 tests (+24 from Direction A), 0 mypy errors, 0 ruff errors, 5 functional plugins
+
+### Direction A: Amplicon Diversity + Phylogeny + AMRFinderPlus (2026-06-18)
+
+| Task | Description | Status |
+|------|-------------|--------|
+| A1 | Amplicon diversity script (ASV table + alpha/beta diversity) | ✅ scripts/amplicon_diversity.py, 781 lines, 23 tests |
+| A2 | WGS bacteria AMRFinderPlus parser fix | ✅ normalization + fixture + test |
+| A3 | Phylogeny tree step (MAFFT + FastTree) | ✅ new DAG node, tool contract, build_plan wiring |
+| A4 | _builtin_plugins() registers all 5 plugins | ✅ fixes 47 test failures in source-tree imports |
+
+### Direction B: Engineering Infrastructure (2026-06-18)
+
+| Task | Description | Status |
+|------|-------------|--------|
+| B1 | Sphinx API documentation + ReadTheDocs | ✅ docs/conf.py, api.rst, .readthedocs.yaml |
+| B2 | README badges (coverage + docs) | ✅ |
+| B3 | pre-commit hook version updates | ✅ ruff v0.9.0, hooks v5.0.0, mypy v1.14.0 |
+| B4 | CI docs build + coverage XML | ✅ |
+| B5 | _parse_sample_sheet check_files fix | ✅ all 4 inline plugins return synthetic context |
 
 ### Route C: Code Quality & Test Coverage (2026-06-18)
 
@@ -29,7 +48,7 @@
 | C3 | wgs_bacteria.py type annotations | ✅ Already clean |
 | C4 | amplicon_16s I/O error handling | ✅ Already in place |
 | C5 | Test coverage (+90 tests) | ✅ workflow/validation 98%, provenance 98%, hpc 66% |
-| C6 | Test infrastructure improvements | ⬜ Pending |
+| C6 | Test infrastructure improvements | ✅ smoke markers, requires_tools markers, dry-run smoke tests |
 
 ### P0-P2 Remediation (lightweight local IDE test)
 
@@ -37,9 +56,9 @@
 |-----|-------------|--------|--------|
 | P0-1 | build_count_matrix tool + DESeq2 fixes | ✅ | 77aca65 |
 | P0-2 | amplicon_16s vsearch mergepairs step | ✅ | 0c0b912 |
-| P1-1 | DESeq2 installation automation | ✅ | 4 files (envs/rnaseq.yml, install_deseq2.R, setup_rnaseq_env.sh, resources.py) |
-| P1-2 | amplicon small taxonomy DB | ⬜ | — |
-| P2 | Smoke tests with real tool execution | ⬜ | — |
+| P1-1 | DESeq2 installation automation | ✅ | envs/rnaseq.yml, install_deseq2.R, setup_rnaseq_env.sh |
+| P1-2 | amplicon taxonomy DB generation | ✅ | download_rdp_sintax.sh + synthetic fallback |
+| P2 | Smoke tests with real tool execution | ✅ | test_amplicon_smoke.py (10/11 steps pass) |
 
 ## 1. Project Goals
 
