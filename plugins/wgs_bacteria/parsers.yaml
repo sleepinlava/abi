@@ -1,0 +1,93 @@
+# parsers.yaml — declarative output parsing rules for wgs_bacteria.
+# Replaces hand-written _parse_amrfinderplus and _parse_mlst Python code.
+
+parsers:
+  amrfinderplus:
+    source:
+      type: tsv_mapping
+      pattern: "*amr*.tsv"
+      delimiter: "\t"
+    target_table: amr_profile
+    columns:
+      gene_symbol:
+        sources: ["Gene symbol"]
+        default: ""
+      sequence_name:
+        sources: ["Sequence name"]
+        default: ""
+      scope:
+        sources: ["Scope"]
+        default: ""
+      element_type:
+        sources: ["Element type"]
+        default: ""
+      element_subtype:
+        sources: ["Element subtype"]
+        default: ""
+      target_class:
+        sources: ["Class"]
+        default: ""
+      target_subclass:
+        sources: ["Subclass"]
+        default: ""
+      method:
+        sources: ["Method"]
+        default: ""
+      coverage_pct:
+        sources: ["% Coverage of reference sequence"]
+        default: ""
+      identity_pct:
+        sources: ["% Identity to reference sequence"]
+        default: ""
+    constants:
+      tool: amrfinderplus
+
+  mlst:
+    source:
+      type: tsv_mapping
+      pattern: "mlst*.tsv"
+      delimiter: "\t"
+    target_table: mlst_profile
+    columns:
+      scheme:
+        sources_from: column_index
+        index: 2
+        default: ""
+      sequence_type:
+        sources_from: column_index
+        index: 3
+        default: ""
+      allele_1:
+        sources_from: column_index
+        index: 4
+        default: ""
+      allele_2:
+        sources_from: column_index
+        index: 5
+        default: ""
+      allele_3:
+        sources_from: column_index
+        index: 6
+        default: ""
+      allele_4:
+        sources_from: column_index
+        index: 7
+        default: ""
+      allele_5:
+        sources_from: column_index
+        index: 8
+        default: ""
+      allele_6:
+        sources_from: column_index
+        index: 9
+        default: ""
+      allele_7:
+        sources_from: column_index
+        index: 10
+        default: ""
+      clonal_complex:
+        sources_from: column_index
+        index: 4
+        default: ""
+    constants:
+      tool: mlst

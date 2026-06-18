@@ -131,6 +131,103 @@ Plugins should import from the public SDK:
 | `abi.json_utils` | `load_json_file`, `load_json_payload` with `ABIJSONError` |
 | `abi.interfaces` | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin` protocols |
 | `abi._shared` | `_read_tsv`, `_display_command`, `_plan_dict`, `_common_overrides` |
+| `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — DAG-driven `build_plan()` (added 2026-06-18) |
+| `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — declarative TSV column mapping (added 2026-06-18) |
+
+## DAG-Driven Plan Construction (recommended for new plugins)
+
+Instead of writing a hand-coded `build_plan()` that iterates samples and
+constructs `PlanStep` objects (~200 lines of boilerplate), new plugins should
+declare their workflow in a `pipeline_dag.yaml` file and use the universal
+DAG planner:
+
+```python
+# In your plugin's build_plan():
+def build_plan(self, config, *, check_files=True):
+    context = self.build_sample_context(config, check_files=check_files)
+    if config.get("use_dag", True):
+        from abi.dag_planner import build_plan_from_dag
+        return build_plan_from_dag(
+            self.root / "pipeline_dag.yaml", config, context
+        )
+    # ... old hand-written code (deprecated)
+```
+
+### `pipeline_dag.yaml` structure
+
+```yaml
+pipeline_id: my_analysis
+platforms: [illumina]
+
+# Category → subdirectory mapping
+category_dirs:
+  qc: 01_qc
+  alignment: 02_alignment
+
+nodes:
+  qc_fastp:
+    tool_id: fastp
+    category: qc
+    scope: per_sample        # per_sample (default) or cross_sample
+    depends_on: []
+    inputs:
+      read1: {type: file, source: sample_sheet}
+      read2: {type: file, source: sample_sheet}
+    outputs:
+      clean_read1:
+        type: file
+        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_R1.clean.fastq.gz"
+      output_dir:
+        type: directory
+        path: "{outdir}/{category_dir}/{sample_id}"
+
+  aggregation_step:
+    tool_id: my_aggregator
+    scope: cross_sample      # runs once, collects all per-sample outputs
+    depends_on: [qc_fastp]
+    inputs:
+      per_sample_data: {aggregate: per_sample_outputs}
+```
+
+### Declarative TSV Parsing
+
+For tools with simple TSV/JSON/log output, declare column mappings in `parsers.yaml`
+instead of writing Python parser functions. Three source types are supported:
+
+| Source Type | Use Case | Example Tool |
+|---|---|---|
+| `tsv_mapping` | CSV/TSV column remap | AMRFinderPlus, featureCounts |
+| `json_mapping` | Nested JSON flatten | fastp (summary before/after blocks) |
+| `key_value_log` | Delimited log parsing | STAR (Log.final.out pipe-delimited) |
+
+Example `tsv_mapping`:
+
+```yaml
+parsers:
+  my_tool:
+    source:
+      type: tsv_mapping
+      pattern: "*.tsv"
+      delimiter: "\t"
+    target_table: my_standard_table
+    columns:
+      gene_name: {sources: [Gene, gene_name], default: ""}
+      coverage:  {sources: [Coverage, cov_pct], default: "0"}
+    constants:
+      tool: my_tool
+```
+
+Wire it up in `parse_outputs()`:
+
+```python
+def parse_outputs(self, tool_id, output_dir, sample_id):
+    if self._tsv_mapper.has_parser(tool_id):
+        rows = self._tsv_mapper.parse(tool_id, output_dir, sample_id=sample_id)
+        if rows:
+            return {self._tsv_mapper.get_target_table(tool_id): rows}
+    # Complex parsers remain as Python
+    ...
+```
 
 ## Execution Safety
 

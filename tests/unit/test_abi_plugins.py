@@ -27,7 +27,8 @@ def test_metatranscriptomics_plan_uses_plugin_schema(tmp_path):
 
     assert plan.analysis_type == "metatranscriptomics"
     assert [step.tool_id for step in plan.steps] == ["fastp", "star", "featurecounts"]
-    assert plan.steps[1].params["genome_index"] == "GENOME_INDEX_NOT_CONFIGURED"
+    # DAG planner resolves genome_index from config resources into inputs
+    assert "genome_index" in plan.steps[1].inputs
     assert "gene_expression" in plugin.table_schemas()
     assert Path(plan.outdir) == tmp_path / "results"
 

@@ -1,0 +1,906 @@
+"""Universal DAG planner — generates ExecutionPlan from pipeline_dag.yaml.
+
+This module provides a plugin-agnostic planner that reads a ``pipeline_dag.yaml``
+specification and produces an ``ExecutionPlan``, replacing the hand-written
+``build_plan()`` methods that currently duplicate ~700 lines of boilerplate
+across 4 inline plugins.
+
+Design
+~~~~~~
+- **UniversalDAG**: loads + queries a ``pipeline_dag.yaml`` from any plugin.
+- **build_plan_from_dag()**: the single entry point that plugins call.
+- **PathTemplateContext**: a dict subclass that resolves ``{variable}``
+  references in output path templates, using the same ``str.format_map()``
+  mechanism as ``GenericCommandSkill`` for command templates.
+
+Schema extensions (beyond the existing plasmid DAG format)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- ``category_dirs``: top-level mapping from category → subdirectory name.
+- ``scope``: ``"per_sample"`` (default) or ``"cross_sample"`` per node.
+- ``outputs.<key>.path``: template string for output file/directory paths.
+- ``inputs.<key>.aggregate``: ``"per_sample_outputs"`` for cross-sample nodes.
+
+Usage::
+
+    from abi.dag_planner import UniversalDAG, build_plan_from_dag
+    plan = build_plan_from_dag(
+        plugin.root / "pipeline_dag.yaml", config, sample_context
+    )
+"""
+
+from __future__ import annotations
+
+import logging
+from collections import deque
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Mapping
+
+import yaml
+
+from abi.schemas import ExecutionPlan, PlanStep, SampleContext, SampleInput
+
+_logger = logging.getLogger("abi.dag_planner")
+
+__all__ = [
+    "PathTemplateContext",
+    "UniversalDAG",
+    "build_plan_from_dag",
+]
+
+
+# ── PathTemplateContext ──────────────────────────────────────────────────
+# A dict subclass that resolves {variable} references in output path
+# templates.  Pre-flattens nested access (sample.platform, resources.key)
+# into simple keys so that str.format_map() works without dotted lookups.
+# / 用于解析输出路径模板中 {variable} 引用的字典子类。
+
+
+class PathTemplateContext(dict):
+    """Dict-like context for resolving ``{variable}`` path templates.
+
+    Unlike ``SafeFormatDict`` (which returns ``""`` for missing keys), this
+    context is pre-populated with all known variables.  Missing keys indicate
+    a template bug and raise ``KeyError``.
+
+    Usage::
+
+        ctx = PathTemplateContext(
+            config=config,
+            sample=sample,
+            category_dir="01_qc",
+            upstream_outputs={"qc_fastp": {"clean_read1": "/path/to/R1.fq.gz"}},
+        )
+        resolved = template.format_map(ctx)
+    """
+
+    def __init__(
+        self,
+        *,
+        config: Mapping[str, Any],
+        sample: SampleInput | None = None,
+        category_dir: str = "",
+        upstream_outputs: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> None:
+        super().__init__()
+        outdir = str(config.get("outdir", "."))
+        self["outdir"] = outdir
+        self["category_dir"] = category_dir
+
+        # Per-sample variables / 每个样本的变量
+        if sample is not None:
+            self["sample_id"] = sample.sample_id
+            self["sample.platform"] = sample.platform
+            for attr in (
+                "platform",
+                "read1",
+                "read2",
+                "long_reads",
+                "assembly",
+                "group",
+                "condition",
+                "technology",
+            ):
+                val = getattr(sample, attr, None)
+                if val:
+                    self[f"sample.{attr}"] = str(val)
+
+        # Config-level variables / 配置级变量
+        for key in ("threads", "mode", "project_name"):
+            val = config.get(key)
+            if val is not None:
+                self[str(key)] = str(val)
+
+        # Resources (nested config key) / 资源配置
+        resources = config.get("resources")
+        if isinstance(resources, Mapping):
+            for rkey, rval in resources.items():
+                if rval is not None:
+                    self[f"resources.{rkey}"] = str(rval)
+
+        # Upstream node outputs / 上游节点输出
+        if upstream_outputs:
+            for node_id, outputs in upstream_outputs.items():
+                for out_key, out_val in outputs.items():
+                    if out_val is not None:
+                        self[f"upstream_{node_id}.outputs.{out_key}"] = str(out_val)
+
+
+# ── UniversalDAG ─────────────────────────────────────────────────────────
+# In-memory representation of a pipeline_dag.yaml spec.  Plugin-agnostic:
+# the YAML path is a parameter, not hardcoded.
+# / pipeline_dag.yaml 规范的内存表示。插件无关：YAML 路径是参数而非硬编码。
+
+
+class UniversalDAG:
+    """In-memory representation of a ``pipeline_dag.yaml`` specification.
+
+    Usage::
+
+        dag = UniversalDAG.from_yaml(plugin_root / "pipeline_dag.yaml")
+        active = dag.active_node_ids("illumina", config)
+        order = dag.topological_order(active)
+        for node_id in order:
+            scope = dag.scope_for(node_id)
+            ...
+    """
+
+    def __init__(self, spec: Mapping[str, Any]) -> None:
+        self._spec = dict(spec)
+        raw_nodes = self._spec.get("nodes")
+        if not isinstance(raw_nodes, Mapping):
+            raise ValueError("pipeline_dag.yaml must contain a 'nodes' mapping")
+        self._nodes: Dict[str, Dict[str, Any]] = {
+            str(nid): dict(ndata) for nid, ndata in raw_nodes.items()
+        }
+        self._platforms: List[str] = [str(p) for p in self._spec.get("platforms", []) if p]
+        raw_dirs = self._spec.get("category_dirs")
+        self._category_dirs: Dict[str, str] = {}
+        if isinstance(raw_dirs, Mapping):
+            self._category_dirs = {str(k): str(v) for k, v in raw_dirs.items() if v}
+        self.pipeline_id: str = str(self._spec.get("pipeline_id", ""))
+        self.pipeline_name: str = str(self._spec.get("pipeline_name", ""))
+
+    # ── Factory ──────────────────────────────────────────────────────────
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> "UniversalDAG":
+        """Load a ``pipeline_dag.yaml`` from disk.
+
+        Args:
+            path: Path to the YAML file.
+
+        Returns:
+            A new ``UniversalDAG`` instance.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+            ValueError: If the file is not a valid DAG spec.
+        """
+        yaml_path = Path(path)
+        if not yaml_path.exists():
+            raise FileNotFoundError(f"Pipeline DAG spec not found: {yaml_path}")
+        with yaml_path.open("r", encoding="utf-8") as handle:
+            spec = yaml.safe_load(handle) or {}
+        if not isinstance(spec, Mapping):
+            raise ValueError(f"Pipeline DAG spec must be a YAML mapping: {yaml_path}")
+        return cls(spec)
+
+    # ── Properties ───────────────────────────────────────────────────────
+
+    @property
+    def platforms(self) -> List[str]:
+        """Supported platforms in declaration order."""
+        return list(self._platforms)
+
+    @property
+    def category_dirs(self) -> Dict[str, str]:
+        """Category → subdirectory mapping (e.g. ``{"qc": "01_qc"}``)."""
+        return dict(self._category_dirs)
+
+    def category_dir_for(self, category: str) -> str:
+        """Return the subdirectory for a category, or the category itself if unmapped."""
+        return self._category_dirs.get(category, category)
+
+    def scope_for(self, node_id: str) -> str:
+        """Return the scope of a node: ``"per_sample"`` (default) or ``"cross_sample"``."""
+        node = self._nodes.get(node_id, {})
+        scope = node.get("scope", "per_sample")
+        return str(scope) if scope else "per_sample"
+
+    def is_optional(self, node_id: str) -> bool:
+        """Return True if the node is marked optional."""
+        node = self._nodes.get(node_id, {})
+        return bool(node.get("optional", False))
+
+    def node_category(self, node_id: str) -> str:
+        """Return the category of a node."""
+        node = self._nodes.get(node_id, {})
+        return str(node.get("category", ""))
+
+    # ── Query ────────────────────────────────────────────────────────────
+
+    def active_node_ids(
+        self,
+        platform: str,
+        config: Mapping[str, Any],
+    ) -> List[str]:
+        """Return node IDs that are active for the given platform and config.
+
+        A node is active when ALL of these hold:
+        1. Its ``platforms`` list includes *platform* (or is empty, meaning all).
+        2. Its category is not explicitly disabled in config.
+        3. If it has an ``enable_condition``, the condition evaluates to True
+           against *config*.
+        4. If it is ``optional: true`` and has NO ``enable_condition``, it is
+           **excluded** by default (opt-in: requires an enable_condition or
+           explicit category enable to activate).
+
+        Required nodes without ``enable_condition`` are always active (opt-out:
+        the user must explicitly disable their category).
+
+        Args:
+            platform: The data platform (e.g. ``"illumina"``).
+            config: The fully-resolved pipeline configuration.
+
+        Returns:
+            List of active node IDs in declaration order.
+        """
+        active: List[str] = []
+        for node_id, node in self._nodes.items():
+            node_platforms = node.get("platforms")
+            if node_platforms and platform not in node_platforms:
+                continue
+            category = self.node_category(node_id)
+            if category and not self._category_enabled(config, category, node_id):
+                continue
+
+            # enable_condition evaluation / 条件求值
+            condition = node.get("enable_condition")
+            if isinstance(condition, Mapping):
+                if not self._evaluate_condition(condition, config):
+                    continue
+            elif self.is_optional(node_id) and not self._category_explicitly_enabled(
+                config, category
+            ):
+                # Optional nodes without enable_condition → excluded unless
+                # their category is explicitly enabled in config.
+                continue
+
+            active.append(node_id)
+        return active
+
+    @staticmethod
+    def _evaluate_condition(
+        condition: Mapping[str, Any],
+        config: Mapping[str, Any],
+    ) -> bool:
+        """Evaluate a node ``enable_condition`` against *config*.
+
+        Supported operators:
+        - ``value``: config field must equal the given value.
+        - ``not_empty``: config field must be non-None, non-empty.
+
+        The field is a dotted path into the config dict (e.g.
+        ``"host_removal.host_reference"``).
+        """
+        field_path: str = str(condition.get("field", ""))
+        operator: str = str(condition.get("operator", "value"))
+        expected = condition.get("value")
+
+        # Navigate dotted field path / 点号路径导航
+        value: Any = config
+        for part in field_path.split("."):
+            if isinstance(value, Mapping) and part in value:
+                value = value[part]
+            else:
+                return False
+
+        if operator == "value":
+            return value == expected
+        if operator == "not_empty":
+            if value is None:
+                return False
+            if isinstance(value, str) and not value.strip():
+                return False
+            if isinstance(value, (list, dict, set)) and len(value) == 0:
+                return False
+            return True
+
+        return False
+
+    def resolve_dependencies(
+        self, active_ids: Iterable[str], platform: str = ""
+    ) -> Dict[str, List[str]]:
+        """Resolve effective dependencies for each active node.
+
+        For each active node, its effective dependencies are the subset of
+        ``depends_on`` that are also active.  If an optional dependency is
+        NOT active, the node's ``fallback_depends`` is tried instead
+        (positional match: fallback_depends[i] is the alternative for
+        depends_on[i]).
+
+        Args:
+            active_ids: The set of active node IDs.
+            platform: Platform label (for error messages only).
+
+        Returns:
+            ``{node_id: [effective_dependency_ids]}`` mapping.
+
+        Raises:
+            ValueError: If a required dependency cannot be resolved.
+        """
+        active_set = set(active_ids)
+        resolved: Dict[str, List[str]] = {}
+
+        for node_id in active_set:
+            node_data = self._nodes.get(node_id, {})
+            deps: List[str] = list(node_data.get("depends_on", []))
+            fallbacks: List[str] = list(node_data.get("fallback_depends", []))
+            optional_flag = node_data.get("optional", False)
+
+            effective: List[str] = []
+            for i, dep in enumerate(deps):
+                if dep in active_set:
+                    if dep not in effective:
+                        effective.append(dep)
+                else:
+                    # Positional fallback
+                    if i < len(fallbacks) and fallbacks[i] in active_set:
+                        fb = fallbacks[i]
+                        if fb not in effective:
+                            effective.append(fb)
+
+            # Required nodes with declared deps but zero effective → error
+            if deps and not effective and not optional_flag:
+                if not any(fb in active_set for fb in fallbacks):
+                    raise ValueError(
+                        f"Node {node_id!r} declares dependencies {deps!r} but "
+                        f"none are active and no fallbacks are available for "
+                        f"platform {platform!r}"
+                    )
+
+            resolved[node_id] = effective
+
+        return resolved
+
+    def topological_order(self, node_ids: Iterable[str]) -> List[str]:
+        """Return *node_ids* in topological order (Kahn's algorithm).
+
+        Nodes listed first in ``depends_on`` will appear earlier in the result.
+        Only edges between nodes in *node_ids* are considered — external
+        dependencies are silently ignored.
+
+        Args:
+            node_ids: The set of nodes to order.
+
+        Returns:
+            A topologically sorted list of node IDs.
+
+        Raises:
+            ValueError: If a cycle is detected among the given nodes.
+        """
+        # Preserve input order for deterministic output (important for golden-trace
+        # parity when two nodes have the same dependency level).
+        node_list = list(node_ids)
+        node_set = set(node_list)
+        in_degree: Dict[str, int] = {}
+        successors: Dict[str, List[str]] = {}
+
+        for nid in node_list:
+            in_degree[nid] = 0
+            successors[nid] = []
+
+        for nid in node_set:
+            node = self._nodes.get(nid, {})
+            for dep in node.get("depends_on", []):
+                dep = str(dep)
+                if dep in node_set:
+                    in_degree[nid] = in_degree.get(nid, 0) + 1
+                    successors.setdefault(dep, []).append(nid)
+
+        queue: deque[str] = deque(nid for nid in node_set if in_degree.get(nid, 0) == 0)
+        result: List[str] = []
+
+        while queue:
+            nid = queue.popleft()
+            result.append(nid)
+            for succ in successors.get(nid, []):
+                in_degree[succ] -= 1
+                if in_degree[succ] == 0:
+                    queue.append(succ)
+
+        if len(result) != len(node_set):
+            remaining = node_set - set(result)
+            raise ValueError(
+                f"Cycle detected in pipeline DAG. Nodes not reached: {sorted(remaining)}"
+            )
+
+        return result
+
+    # ── Node details ─────────────────────────────────────────────────────
+
+    def node_inputs(self, node_id: str) -> Dict[str, Any]:
+        """Return the ``inputs`` dict for a node (shallow copy)."""
+        node = self._nodes.get(node_id, {})
+        inputs = node.get("inputs")
+        if not isinstance(inputs, Mapping):
+            return {}
+        return dict(inputs)
+
+    def node_outputs(self, node_id: str) -> Dict[str, Any]:
+        """Return the ``outputs`` dict for a node (shallow copy)."""
+        node = self._nodes.get(node_id, {})
+        outputs = node.get("outputs")
+        if not isinstance(outputs, Mapping):
+            return {}
+        return dict(outputs)
+
+    def node_depends_on(self, node_id: str) -> List[str]:
+        """Return the list of node IDs this node depends on."""
+        node = self._nodes.get(node_id, {})
+        deps = node.get("depends_on", [])
+        if not isinstance(deps, list):
+            return []
+        return [str(d) for d in deps]
+
+    def get_node(self, node_id: str) -> Dict[str, Any]:
+        """Return the full node definition dict (shallow copy)."""
+        return dict(self._nodes.get(node_id, {}))
+
+    # ── Helpers ──────────────────────────────────────────────────────────
+
+    def _category_enabled(
+        self, config: Mapping[str, Any], category: str, node_id: str = ""
+    ) -> bool:
+        """Check whether a category is enabled in config.
+
+        Looks for ``config.<category>.enable``.  If not found:
+        - Optional nodes default to disabled (opt-in).
+        - Required nodes default to enabled (opt-out).
+        """
+        block = config.get(category)
+        if isinstance(block, Mapping):
+            enabled = block.get("enable", True)
+            if isinstance(enabled, bool):
+                return enabled
+            if isinstance(enabled, str):
+                return enabled.lower() not in {"false", "no", "0"}
+            return bool(enabled)
+        # No config block: optional nodes default to disabled
+        if node_id and self.is_optional(node_id):
+            return False
+        return True
+
+    @staticmethod
+    def _category_explicitly_enabled(config: Mapping[str, Any], category: str) -> bool:
+        """Return True if *category* has an explicit ``enable: true`` in config."""
+        block = config.get(category)
+        if isinstance(block, Mapping):
+            enabled = block.get("enable")
+            if isinstance(enabled, bool):
+                return enabled
+            if isinstance(enabled, str):
+                return enabled.lower() in {"true", "yes", "1"}
+        return False
+
+
+# ── Plan generation ──────────────────────────────────────────────────────
+# The core logic that replaces hand-written build_plan() methods.
+# / 替代手写 build_plan() 方法的核心逻辑。
+
+
+def build_plan_from_dag(
+    dag_spec_path: str | Path,
+    config: Mapping[str, Any],
+    sample_context: SampleContext,
+    *,
+    plugin_root: str | Path | None = None,
+) -> ExecutionPlan:
+    """Build an ``ExecutionPlan`` from a ``pipeline_dag.yaml`` spec.
+
+    This is the universal entry point that plugins call instead of writing
+    their own ``build_plan()``.  It reads the DAG spec, filters active nodes
+    by platform and config, generates per-sample and cross-sample steps,
+    and returns a complete ``ExecutionPlan``.
+
+    Args:
+        dag_spec_path: Path to ``pipeline_dag.yaml`` (absolute, or relative
+            to *plugin_root* if provided).
+        config: Fully-resolved pipeline configuration dict.
+        sample_context: Pre-parsed sample collection metadata.
+        plugin_root: Optional plugin root directory for resolving relative
+            *dag_spec_path* values.
+
+    Returns:
+        A complete ``ExecutionPlan`` ready for the executor.
+    """
+    dag_path = Path(dag_spec_path)
+    if plugin_root is not None and not dag_path.is_absolute():
+        dag_path = Path(plugin_root) / dag_path
+    dag = UniversalDAG.from_yaml(dag_path)
+
+    outdir = Path(str(config.get("outdir", ".")))
+    threads = int(config.get("threads", 1))
+    mode = str(config.get("mode", "auto"))
+    log_dir = str(config.get("log_dir", str(outdir / "logs")))
+    project_name = str(config.get("project_name", dag.pipeline_id))
+
+    steps: List[PlanStep] = []
+
+    # Resolve the platform from the first sample (all samples share one
+    # platform in the simple plugins; plasmid handles multi-platform
+    # internally).
+    platform = sample_context.samples[0].platform if sample_context.samples else "illumina"
+
+    # Filter active nodes / 筛选活跃节点
+    active_ids = dag.active_node_ids(platform, config)
+    ordered_ids = dag.topological_order(active_ids)
+
+    # Separate per_sample and cross_sample nodes / 分离逐样本和跨样本节点
+    per_sample_ids = [nid for nid in ordered_ids if dag.scope_for(nid) == "per_sample"]
+    cross_sample_ids = [nid for nid in ordered_ids if dag.scope_for(nid) == "cross_sample"]
+
+    # ── Per-sample nodes ──────────────────────────────────────────────
+    # Track resolved outputs per sample per node for cross-sample aggregation.
+    # / 跟踪每个样本每个节点的解析输出，用于跨样本聚合。
+    sample_outputs: Dict[str, Dict[str, Dict[str, Any]]] = {}
+
+    for sample in sample_context.samples:
+        sample_outputs[sample.sample_id] = {}
+        upstream_outputs: Dict[str, Dict[str, Any]] = {}
+
+        for node_id in per_sample_ids:
+            category = dag.node_category(node_id)
+            category_dir = dag.category_dir_for(category)
+
+            # Resolve inputs / 解析输入
+            resolved_inputs = _resolve_inputs(
+                dag, node_id, sample, config, upstream_outputs, plugin_root
+            )
+
+            # Resolve output paths / 解析输出路径
+            template_ctx = PathTemplateContext(
+                config=config,
+                sample=sample,
+                category_dir=category_dir,
+                upstream_outputs=upstream_outputs,
+            )
+            resolved_outputs = _resolve_outputs(dag, node_id, template_ctx)
+
+            # Build step / 构建步骤
+            step_id = f"{sample.sample_id}_{category}_{node_id_to_tool_id(dag, node_id)}"
+            step = PlanStep(
+                step_id=step_id,
+                sample_id=sample.sample_id,
+                step_name=category,
+                tool_id=node_id_to_tool_id(dag, node_id),
+                category=category,
+                inputs=resolved_inputs,
+                outputs=resolved_outputs,
+                params=_resolve_params(dag, node_id, sample, config, template_ctx),
+            )
+            steps.append(step)
+            upstream_outputs[node_id] = resolved_outputs
+            sample_outputs[sample.sample_id][node_id] = resolved_outputs
+
+    # ── Cross-sample nodes ─────────────────────────────────────────────
+    # Track outputs of cross-sample nodes so subsequent cross-sample nodes
+    # can reference them via source: NODE.OUTPUT_KEY.
+    cross_sample_outputs: Dict[str, Dict[str, Any]] = {}
+
+    for node_id in cross_sample_ids:
+        category = dag.node_category(node_id)
+        category_dir = dag.category_dir_for(category)
+
+        # Collect upstream per-sample outputs / 收集上游逐样本输出
+        aggregated_upstream: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        node_deps = dag.node_depends_on(node_id)
+        for dep_id in node_deps:
+            if dep_id in per_sample_ids:
+                for sample in sample_context.samples:
+                    sid = sample.sample_id
+                    aggregated_upstream.setdefault(sid, {})[dep_id] = sample_outputs.get(
+                        sid, {}
+                    ).get(dep_id, {})
+
+        # Resolve inputs with aggregation / 解析带有聚合的输入
+        resolved_inputs = _resolve_cross_sample_inputs(
+            dag,
+            node_id,
+            sample_context,
+            config,
+            sample_outputs,
+            cross_sample_outputs,
+            plugin_root,
+        )
+
+        # Build template context (no single sample) / 构建模板上下文（无单一样本）
+        template_ctx = PathTemplateContext(
+            config=config,
+            sample=None,
+            category_dir=category_dir,
+        )
+        resolved_outputs = _resolve_outputs(dag, node_id, template_ctx)
+
+        tool_id = node_id_to_tool_id(dag, node_id)
+        step = PlanStep(
+            step_id=node_id,
+            sample_id="ALL",
+            step_name=category,
+            tool_id=tool_id,
+            category=category,
+            inputs=resolved_inputs,
+            outputs=resolved_outputs,
+            params=_resolve_params(dag, node_id, None, config, template_ctx),
+        )
+        steps.append(step)
+        cross_sample_outputs[node_id] = resolved_outputs
+
+    # ── Assemble plan ──────────────────────────────────────────────────
+    selected_tools = sorted({s.tool_id for s in steps if s.tool_id != "internal"})
+    return ExecutionPlan(
+        project_name=project_name,
+        analysis_type=dag.pipeline_id,
+        mode=mode,
+        threads=threads,
+        outdir=str(outdir),
+        log_dir=log_dir,
+        samples=list(sample_context.samples),
+        sample_context=sample_context,
+        selected_tools=selected_tools,
+        steps=steps,
+        provenance_dir=str(outdir / "provenance"),
+    )
+
+
+# ── Input resolution ─────────────────────────────────────────────────────
+
+
+def _resolve_inputs(
+    dag: UniversalDAG,
+    node_id: str,
+    sample: SampleInput,
+    config: Mapping[str, Any],
+    upstream_outputs: Mapping[str, Mapping[str, Any]],
+    plugin_root: str | Path | None,
+) -> Dict[str, Any]:
+    """Resolve input values for a per-sample node.
+
+    Resolution order for each input key:
+    1. If ``source: sample_sheet`` → look up in ``sample.to_dict()``.
+    2. If ``source: UPSTREAM_NODE.OUTPUT_KEY`` → look up in *upstream_outputs*.
+    3. If ``source`` is absent → try config resources, then config, then empty.
+    """
+    inputs_spec = dag.node_inputs(node_id)
+    resolved: Dict[str, Any] = {}
+    sample_dict = sample.to_dict()
+
+    for key, spec in inputs_spec.items():
+        if not isinstance(spec, Mapping):
+            resolved[key] = spec
+            continue
+
+        # Path template: resolve against a simple context / 路径模板解析
+        path_template = spec.get("path")
+        if path_template:
+            resolved[key] = _resolve_input_path(path_template, config, sample)
+            continue
+
+        source = spec.get("source")
+        if source is not None:
+            source_str = str(source)
+            if source_str == "sample_sheet":
+                resolved[key] = sample_dict.get(key, "")
+            elif "." in source_str:
+                # Upstream reference: "NODE_ID.OUTPUT_KEY"
+                parts = source_str.split(".", 1)
+                upstream_id, upstream_key = parts[0], parts[1]
+                resolved[key] = upstream_outputs.get(upstream_id, {}).get(upstream_key, "")
+            else:
+                resolved[key] = sample_dict.get(source_str, "")
+        else:
+            # No explicit source — try config resources, then config, then empty.
+            resolved[key] = _resolve_config_value(config, key)
+
+    return resolved
+
+
+def _resolve_cross_sample_inputs(
+    dag: UniversalDAG,
+    node_id: str,
+    sample_context: SampleContext,
+    config: Mapping[str, Any],
+    sample_outputs: Dict[str, Dict[str, Dict[str, Any]]],
+    cross_sample_outputs: Dict[str, Dict[str, Any]],
+    plugin_root: str | Path | None,
+) -> Dict[str, Any]:
+    """Resolve input values for a cross-sample node.
+
+    For inputs with ``aggregate: per_sample_outputs``, collects all upstream
+    per-sample output paths into a list (or a single string for simple cases).
+    For ``source: NODE.OUTPUT`` references, checks both per-sample and
+    cross-sample upstream outputs.
+    """
+    inputs_spec = dag.node_inputs(node_id)
+    resolved: Dict[str, Any] = {}
+
+    for key, spec in inputs_spec.items():
+        if not isinstance(spec, Mapping):
+            resolved[key] = spec
+            continue
+
+        # Path template: resolve against the output directory / 路径模板解析
+        path_template = spec.get("path")
+        if path_template:
+            resolved[key] = _resolve_input_path(path_template, config, None)
+            continue
+
+        aggregate = spec.get("aggregate")
+        if aggregate == "per_sample_outputs":
+            # Collect all per-sample outputs from the depends_on upstream node
+            # whose output key matches *key*.  If only one sample, use scalar.
+            values: List[str] = []
+            node_deps = dag.node_depends_on(node_id)
+            for dep_id in node_deps:
+                for sample in sample_context.samples:
+                    sid = sample.sample_id
+                    dep_outputs = sample_outputs.get(sid, {}).get(dep_id, {})
+                    val = dep_outputs.get(key)
+                    if val:
+                        values.append(str(val))
+            if len(sample_context.samples) == 1 and values:
+                resolved[key] = values[0]
+            else:
+                resolved[key] = values if values else ""
+        else:
+            source = spec.get("source")
+            if source is not None and "." in str(source):
+                # Upstream reference: "NODE_ID.OUTPUT_KEY"
+                parts = str(source).split(".", 1)
+                upstream_id, upstream_key = parts[0], parts[1]
+                # Check cross-sample outputs first, then per-sample
+                if upstream_id in cross_sample_outputs:
+                    resolved[key] = cross_sample_outputs[upstream_id].get(upstream_key, "")
+                else:
+                    first_sid = (
+                        sample_context.samples[0].sample_id if sample_context.samples else ""
+                    )
+                    resolved[key] = (
+                        sample_outputs.get(first_sid, {}).get(upstream_id, {}).get(upstream_key, "")
+                    )
+            else:
+                resolved[key] = _resolve_config_value(config, key)
+
+    return resolved
+
+
+def _resolve_config_value(config: Mapping[str, Any], key: str) -> Any:
+    """Try to resolve a key from config, falling back through common locations.
+
+    Lookup order: ``config["resources"][key]`` → ``config[key]`` → ``""``.
+    """
+    resources = config.get("resources")
+    if isinstance(resources, Mapping) and key in resources:
+        return resources[key]
+    if key in config:
+        return config[key]
+    return ""
+
+
+def _resolve_input_path(
+    template: Any,
+    config: Mapping[str, Any],
+    sample: SampleInput | None,
+) -> str:
+    """Resolve a path template string against config and optional sample.
+
+    Supports ``{outdir}``, ``{sample_id}``, ``{sample.attr}`` references.
+    Used for inputs that declare a ``path`` template rather than pulling
+    from an upstream source or config key.
+    """
+    template_str = str(template)
+    if "{" not in template_str:
+        return template_str
+    ctx = PathTemplateContext(config=config, sample=sample, category_dir="")
+    try:
+        return template_str.format_map(ctx)
+    except (KeyError, ValueError):
+        return template_str
+
+
+# ── Output resolution ────────────────────────────────────────────────────
+
+
+def _resolve_outputs(
+    dag: UniversalDAG,
+    node_id: str,
+    template_ctx: PathTemplateContext,
+) -> Dict[str, Any]:
+    """Resolve output paths for a node.
+
+    For each output with a ``path`` template, resolve it against
+    *template_ctx*.  Outputs without a ``path`` are left as empty strings.
+    Always ensures ``output_dir`` is present.
+    """
+    outputs_spec = dag.node_outputs(node_id)
+    resolved: Dict[str, Any] = {}
+
+    has_output_dir = False
+    for key, spec in outputs_spec.items():
+        if key == "output_dir":
+            has_output_dir = True
+        if not isinstance(spec, Mapping):
+            resolved[key] = spec
+            continue
+        path_template = spec.get("path")
+        if path_template:
+            try:
+                resolved[key] = str(path_template).format_map(template_ctx)
+            except (KeyError, ValueError) as exc:
+                _logger.warning(
+                    "Failed to resolve path template for %s.%s: %s",
+                    node_id,
+                    key,
+                    exc,
+                )
+                resolved[key] = ""
+        elif key == "output_dir":
+            # Default output_dir if no path template / 无路径模板时的默认 output_dir
+            resolved[key] = "{outdir}/{category_dir}/{sample_id}".format_map(template_ctx)
+            has_output_dir = True
+        else:
+            resolved[key] = ""
+
+    # Ensure output_dir is always present / 确保 output_dir 始终存在
+    if not has_output_dir:
+        resolved["output_dir"] = "{outdir}/{category_dir}/{sample_id}".format_map(template_ctx)
+
+    return resolved
+
+
+# ── Params resolution ────────────────────────────────────────────────────
+
+
+def _resolve_params(
+    dag: UniversalDAG,
+    node_id: str,
+    sample: SampleInput | None,
+    config: Mapping[str, Any],
+    template_ctx: PathTemplateContext,
+) -> Dict[str, Any]:
+    """Build the ``params`` dict for a PlanStep.
+
+    Includes mode, threads, sample_id (if per-sample), and any tool-level
+    overrides from config.
+    """
+    params: Dict[str, Any] = {
+        "mode": str(config.get("mode", "auto")),
+        "threads": int(config.get("threads", 1)),
+    }
+    if sample is not None:
+        params["sample_id"] = sample.sample_id
+
+    # Tool-level params from config.tool_params.<tool_id> / 工具级参数
+    tool_params_block = config.get("tool_params")
+    if isinstance(tool_params_block, Mapping):
+        tool_id = node_id_to_tool_id(dag, node_id)
+        tool_overrides = tool_params_block.get(tool_id)
+        if isinstance(tool_overrides, Mapping):
+            params.update(tool_overrides)
+
+    return params
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────
+
+
+def node_id_to_tool_id(dag: UniversalDAG, node_id: str) -> str:
+    """Extract the ``tool_id`` from a node definition.
+
+    Falls back to *node_id* itself if no ``tool_id`` field is present.
+    """
+    node = dag.get_node(node_id)
+    tool_id = node.get("tool_id")
+    if tool_id:
+        return str(tool_id)
+    return node_id

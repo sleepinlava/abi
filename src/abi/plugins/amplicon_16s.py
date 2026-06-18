@@ -35,8 +35,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 from abi._shared import _clean, _resolve_path
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
 from abi.report import write_plugin_report
-from abi.schemas import ABIExecutionPlan, ABIPlanStep, ABISample, ABISampleContext
-from abi.timeouts import mapping_block
+from abi.schemas import ABIExecutionPlan, ABISample, ABISampleContext
 from abi.tools import ToolRegistry
 
 
@@ -60,6 +59,14 @@ class Amplicon16SPlugin:
     @property
     def root(self) -> Path:
         return PLUGIN_ROOT / self.plugin_id
+
+    @property
+    def _tsv_mapper(self):
+        if not hasattr(self, "_tsv_mapper_cache"):
+            from abi.tsv_mapping import TSVMapper
+
+            self._tsv_mapper_cache = TSVMapper.from_yaml(self.root / "parsers.yaml")
+        return self._tsv_mapper_cache
 
     # ── Configuration ───────────────────────────────────────────────────
 
@@ -105,203 +112,9 @@ class Amplicon16SPlugin:
         check_files: bool = True,
     ) -> ABIExecutionPlan:
         context = self.build_sample_context(config, check_files=check_files)
-        outdir = Path(str(config["outdir"]))
-        threads = int(config["threads"])
-        primers = mapping_block(config, "primers")
-        forward_primer = str(primers.get("forward", "GTGCCAGCMGCCGCGGTAA"))
-        reverse_primer = str(primers.get("reverse", "GGACTACHVGGGTWTCTAAT"))
-        resources = config.get("resources", {})
-        if not isinstance(resources, Mapping):
-            resources = {}
-        taxonomy_db = str(resources.get("taxonomy_db", "TAXONOMY_DB_NOT_CONFIGURED"))
-        # Resolve diversity script — prefer explicit config, fall back to bundled script
-        _scripts_dir = str(Path(__file__).resolve().parent.parent.parent.parent / "scripts")
-        diversity_script = str(
-            resources.get("diversity_script") or f"{_scripts_dir}/amplicon_diversity.py"
-        )
-        do_otu = bool(mapping_block(config, "otu_clustering").get("enabled", False))
+        from abi.dag_planner import build_plan_from_dag
 
-        steps: List[ABIPlanStep] = []
-
-        for sample in context.samples:
-            # ── Step 1: Primer trimming (cutadapt) ──
-            trim_out = outdir / "01_trimmed" / sample.sample_id
-            steps.append(
-                ABIPlanStep(
-                    step_id=f"{sample.sample_id}_trim_cutadapt",
-                    sample_id=sample.sample_id,
-                    step_name="primer_trimming",
-                    tool_id="cutadapt",
-                    category="qc",
-                    inputs={
-                        "read1": sample.read1,
-                        "read2": sample.read2,
-                        "forward_primer": forward_primer,
-                        "reverse_primer": reverse_primer,
-                    },
-                    outputs={"output_dir": str(trim_out)},
-                    params={
-                        "sample_id": sample.sample_id,
-                        "threads": threads,
-                        "mode": config["mode"],
-                    },
-                )
-            )
-
-            # ── Step 2: Merge paired reads (vsearch) ──
-            merge_out = outdir / "02_merge" / sample.sample_id
-            trimmed_read1 = trim_out / f"{sample.sample_id}_R1.trimmed.fastq.gz"
-            trimmed_read2 = trim_out / f"{sample.sample_id}_R2.trimmed.fastq.gz"
-            merged_fasta = merge_out / f"{sample.sample_id}_merged.fasta"
-            steps.append(
-                ABIPlanStep(
-                    step_id=f"{sample.sample_id}_merge_vsearch",
-                    sample_id=sample.sample_id,
-                    step_name="merge_pairs",
-                    tool_id="vsearch_mergepairs",
-                    category="preprocessing",
-                    inputs={
-                        "read1": str(trimmed_read1),
-                        "read2": str(trimmed_read2),
-                    },
-                    outputs={
-                        "output_dir": str(merge_out),
-                        "merged_fasta": str(merged_fasta),
-                    },
-                    params={
-                        "sample_id": sample.sample_id,
-                        "threads": threads,
-                        "mode": config["mode"],
-                    },
-                )
-            )
-
-            # ── Step 3: Dereplicate (vsearch) ──
-            derep_out = outdir / "03_derep" / sample.sample_id
-            steps.append(
-                ABIPlanStep(
-                    step_id=f"{sample.sample_id}_derep_vsearch",
-                    sample_id=sample.sample_id,
-                    step_name="dereplicate",
-                    tool_id="vsearch_derep",
-                    category="preprocessing",
-                    inputs={"merged_fasta": str(merged_fasta)},
-                    outputs={"output_dir": str(derep_out)},
-                    params={"sample_id": sample.sample_id, "mode": config["mode"]},
-                )
-            )
-
-            # ── Step 4: Denoise UNOISE3 (vsearch) ──
-            denoise_out = outdir / "04_denoise" / sample.sample_id
-            derep_fasta = derep_out / "derep.fasta"
-            asv_fasta = denoise_out / "asvs.fasta"
-            steps.append(
-                ABIPlanStep(
-                    step_id=f"{sample.sample_id}_denoise_unoise3",
-                    sample_id=sample.sample_id,
-                    step_name="asv_denoising",
-                    tool_id="vsearch_denoise",
-                    category="denoising",
-                    inputs={"derep_fasta": str(derep_fasta)},
-                    outputs={"output_dir": str(denoise_out), "asv_fasta": str(asv_fasta)},
-                    params={"sample_id": sample.sample_id, "mode": config["mode"]},
-                )
-            )
-
-            # ── Step 5 (optional): OTU clustering ──
-            if do_otu:
-                otu_out = outdir / "04b_otu" / sample.sample_id
-                steps.append(
-                    ABIPlanStep(
-                        step_id=f"{sample.sample_id}_otu_cluster",
-                        sample_id=sample.sample_id,
-                        step_name="otu_clustering",
-                        tool_id="vsearch_otu",
-                        category="clustering",
-                        inputs={"asv_fasta": str(asv_fasta)},
-                        outputs={"output_dir": str(otu_out)},
-                        params={"sample_id": sample.sample_id, "mode": config["mode"]},
-                    )
-                )
-
-            # ── Step 6: SINTAX taxonomy (vsearch) ──
-            tax_out = outdir / "05_taxonomy" / sample.sample_id
-            steps.append(
-                ABIPlanStep(
-                    step_id=f"{sample.sample_id}_taxonomy_sintax",
-                    sample_id=sample.sample_id,
-                    step_name="taxonomic_classification",
-                    tool_id="vsearch_taxonomy",
-                    category="taxonomy",
-                    inputs={"asv_fasta": str(asv_fasta), "taxonomy_db": taxonomy_db},
-                    outputs={"output_dir": str(tax_out)},
-                    params={"sample_id": sample.sample_id, "mode": config["mode"]},
-                )
-            )
-
-        # ── Step 7: Phylogeny tree (all samples) ──
-        phylo_out = outdir / "05b_phylogeny"
-        phylo_tree = phylo_out / "phylogeny.nwk"
-        # Build a merged ASV FASTA from all per-sample ASV files
-        merged_asvs_fasta = phylo_out / "merged_asvs.fasta"
-
-        steps.append(
-            ABIPlanStep(
-                step_id="phylogeny_build",
-                sample_id="ALL",
-                step_name="phylogeny_build",
-                tool_id="phylogeny_build",
-                category="phylogeny",
-                inputs={
-                    "asv_fasta": str(merged_asvs_fasta),
-                    "threads": str(threads),
-                },
-                outputs={
-                    "output_dir": str(phylo_out),
-                    "phylogeny_tree": str(phylo_tree),
-                },
-                params={"mode": config["mode"]},
-            )
-        )
-
-        # ── Step 8: Diversity metrics (all samples) ──
-        div_out = outdir / "06_diversity"
-        denoise_dir = outdir / "04_denoise"
-        merge_dir = outdir / "02_merge"
-        steps.append(
-            ABIPlanStep(
-                step_id="diversity_metrics",
-                sample_id="ALL",
-                step_name="diversity_metrics",
-                tool_id="diversity_metrics",
-                category="diversity",
-                inputs={
-                    "diversity_script": diversity_script,
-                    "denoise_dir": str(denoise_dir),
-                    "merge_dir": str(merge_dir),
-                    "phylogeny_tree": str(phylo_tree),
-                },
-                outputs={"output_dir": str(div_out)},
-                params={"mode": config["mode"]},
-            )
-        )
-
-        selected_tools = sorted({step.tool_id for step in steps if step.tool_id != "internal"})
-        return ABIExecutionPlan(
-            project_name=str(config["project_name"]),
-            analysis_type=self.plugin_id,
-            mode=str(config["mode"]),
-            threads=threads,
-            outdir=str(outdir),
-            log_dir=str(config["log_dir"]),
-            samples=context.samples,
-            sample_context=context,
-            selected_tools=selected_tools,
-            steps=steps,
-            provenance_dir=str(outdir / "provenance"),
-        )
-
-    # ── Tool registry ────────────────────────────────────────────────────
+        return build_plan_from_dag(self.root / "pipeline_dag.yaml", config, context)
 
     def registry(self) -> ToolRegistry:
         return ToolRegistry.from_path(self.root / "tool_registry.yaml")
@@ -323,6 +136,13 @@ class Amplicon16SPlugin:
         output_dir: str | Path,
         sample_id: str,
     ) -> Mapping[str, List[Dict[str, Any]]]:
+        # Try declarative TSV mapper first
+        if self._tsv_mapper.has_parser(tool_id):
+            rows = self._tsv_mapper.parse(tool_id, output_dir, sample_id=sample_id)
+            if rows:
+                target = self._tsv_mapper.get_target_table(tool_id)
+                return {target: rows} if target else {}
+        # Fall back to hand-written parsers
         if tool_id == "cutadapt":
             return {"primer_trim_summary": _parse_cutadapt(Path(output_dir), sample_id)}
         if tool_id == "vsearch_mergepairs":

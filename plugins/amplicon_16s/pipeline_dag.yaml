@@ -1,6 +1,8 @@
 # ============================================================================
 # Amplicon 16S Pipeline DAG — Canonical Specification
 # ============================================================================
+# Updated 2026-06-18 with scope, category_dirs, and path templates for the
+# universal DAG planner (abi.dag_planner).
 
 abi_version: "0.1"
 pipeline_id: amplicon_16s
@@ -8,6 +10,16 @@ pipeline_name: "Standard 16S rRNA Amplicon Community Analysis Pipeline"
 
 platforms:
   - illumina
+
+category_dirs:
+  qc: 01_trimmed
+  preprocessing: 02_merge
+  dereplication: 03_derep
+  denoising: 04_denoise
+  clustering: 04b_otu
+  taxonomy: 05_taxonomy
+  phylogeny: 05b_phylogeny
+  diversity: 06_diversity
 
 standard_tables:
   asv_table:
@@ -24,17 +36,26 @@ nodes:
   trim_cutadapt:
     tool_id: cutadapt
     category: qc
-    platforms: [illumina]
+    scope: per_sample
     optional: false
     depends_on: []
     inputs:
-      read1:           {type: file, format: fastq.gz}
-      read2:           {type: file, format: fastq.gz}
+      read1:           {type: file, format: fastq.gz, source: sample_sheet}
+      read2:           {type: file, format: fastq.gz, source: sample_sheet}
       forward_primer:  {type: string}
       reverse_primer:  {type: string}
     outputs:
-      trimmed_read1:  {type: file, format: fastq.gz}
-      trimmed_read2:  {type: file, format: fastq.gz}
+      trimmed_read1:
+        type: file
+        format: fastq.gz
+        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_trimmed_R1.fastq.gz"
+      trimmed_read2:
+        type: file
+        format: fastq.gz
+        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_trimmed_R2.fastq.gz"
+      output_dir:
+        type: directory
+        path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
       - "output_dir.exists()"
 
@@ -42,28 +63,42 @@ nodes:
   merge_vsearch:
     tool_id: vsearch_mergepairs
     category: preprocessing
-    platforms: [illumina]
+    scope: per_sample
     optional: false
     depends_on: [trim_cutadapt]
     inputs:
       read1:  {type: file, format: fastq.gz, source: trim_cutadapt.trimmed_read1}
       read2:  {type: file, format: fastq.gz, source: trim_cutadapt.trimmed_read2}
     outputs:
-      merged_fasta:  {type: file, format: fasta, contract: {min_size: "100B"}}
+      merged_fasta:
+        type: file
+        format: fasta
+        contract: {min_size: "100B"}
+        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_merged.fasta"
+      output_dir:
+        type: directory
+        path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
       - "output_dir.exists()"
 
   # ── Dereplicate ─────────────────────────────────────────────────────
   derep_vsearch:
     tool_id: vsearch_derep
-    category: preprocessing
-    platforms: [illumina]
+    category: dereplication
+    scope: per_sample
     optional: false
     depends_on: [merge_vsearch]
     inputs:
       merged_fasta:  {type: file, format: fasta, source: merge_vsearch.merged_fasta}
     outputs:
-      derep_fasta:  {type: file, format: fasta, contract: {min_size: "100B"}}
+      derep_fasta:
+        type: file
+        format: fasta
+        contract: {min_size: "100B"}
+        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_derep.fasta"
+      output_dir:
+        type: directory
+        path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
       - "output_dir.exists()"
 
@@ -71,13 +106,20 @@ nodes:
   denoise_unoise3:
     tool_id: vsearch_denoise
     category: denoising
-    platforms: [illumina]
+    scope: per_sample
     optional: false
     depends_on: [derep_vsearch]
     inputs:
       derep_fasta:  {type: file, format: fasta, source: derep_vsearch.derep_fasta}
     outputs:
-      asv_fasta:  {type: file, format: fasta, contract: {min_size: "100B"}}
+      asv_fasta:
+        type: file
+        format: fasta
+        contract: {min_size: "100B"}
+        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_asv.fasta"
+      output_dir:
+        type: directory
+        path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
       - "output_dir.exists()"
 
@@ -85,14 +127,20 @@ nodes:
   otu_cluster:
     tool_id: vsearch_otu
     category: clustering
-    platforms: [illumina]
+    scope: per_sample
     optional: true
     depends_on: [denoise_unoise3]
     fallback_depends: [denoise_unoise3]
     inputs:
       asv_fasta:  {type: file, format: fasta, source: denoise_unoise3.asv_fasta}
     outputs:
-      otu_table:  {type: file, format: tsv}
+      otu_table:
+        type: file
+        format: tsv
+        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_otu.tsv"
+      output_dir:
+        type: directory
+        path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
       - "output_dir.exists()"
 
@@ -100,14 +148,21 @@ nodes:
   taxonomy_sintax:
     tool_id: vsearch_taxonomy
     category: taxonomy
-    platforms: [illumina]
+    scope: per_sample
     optional: false
     depends_on: [denoise_unoise3]
     inputs:
       asv_fasta:     {type: file, format: fasta, source: denoise_unoise3.asv_fasta}
       taxonomy_db:   {type: file, format: fasta}
     outputs:
-      taxonomy_tsv:  {type: file, format: tsv, contract: {min_size: "100B"}}
+      taxonomy_tsv:
+        type: file
+        format: tsv
+        contract: {min_size: "100B"}
+        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_taxonomy.tsv"
+      output_dir:
+        type: directory
+        path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
       - "output_dir.exists()"
 
@@ -115,13 +170,23 @@ nodes:
   phylogeny:
     tool_id: phylogeny_build
     category: phylogeny
-    platforms: [illumina]
+    scope: cross_sample
     optional: false
     depends_on: [denoise_unoise3]
     inputs:
-      asv_fasta:  {type: file, format: fasta}
+      asv_fasta:
+        type: file
+        format: fasta
+        aggregate: per_sample_outputs
     outputs:
-      phylogeny_tree:  {type: file, format: nwk, contract: {min_size: "10B"}}
+      phylogeny_tree:
+        type: file
+        format: nwk
+        contract: {min_size: "10B"}
+        path: "{outdir}/05b_phylogeny/phylogeny.nwk"
+      output_dir:
+        type: directory
+        path: "{outdir}/05b_phylogeny"
     assertions:
       - "output_dir.exists()"
 
@@ -129,15 +194,28 @@ nodes:
   diversity:
     tool_id: diversity_metrics
     category: diversity
-    platforms: [illumina]
+    scope: cross_sample
     optional: false
     depends_on: [denoise_unoise3, phylogeny]
     inputs:
       asv_table:        {type: file, format: tsv}
       diversity_script: {type: file, format: py}
-      phylogeny_tree:   {type: file, format: nwk, source: phylogeny.phylogeny_tree, optional: true}
+      phylogeny_tree:
+        type: file
+        format: nwk
+        source: phylogeny.phylogeny_tree
+        optional: true
     outputs:
-      alpha_tsv:  {type: file, format: tsv}
-      beta_tsv:   {type: file, format: tsv}
+      alpha_tsv:
+        type: file
+        format: tsv
+        path: "{outdir}/06_diversity/alpha_diversity.tsv"
+      beta_tsv:
+        type: file
+        format: tsv
+        path: "{outdir}/06_diversity/beta_diversity.tsv"
+      output_dir:
+        type: directory
+        path: "{outdir}/06_diversity"
     assertions:
       - "output_dir.exists()"

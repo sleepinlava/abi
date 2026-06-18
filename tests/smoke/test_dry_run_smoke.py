@@ -75,7 +75,7 @@ def test_rnaseq_expression_dry_run(tmp_path: Path) -> None:
     plan = plugin.build_plan(config, check_files=False)
     # 2 samples × 3 per-sample steps + build_count_matrix + DESeq2 = 8
     assert len(plan.steps) == 8
-    assert "build_count_matrix" in [s.step_id for s in plan.steps]
+    assert "build_count_matrix" in [s.tool_id for s in plan.steps]
     assert "deseq2" in [s.tool_id for s in plan.steps]
 
 

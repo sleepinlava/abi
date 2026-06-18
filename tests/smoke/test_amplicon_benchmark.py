@@ -82,6 +82,7 @@ def test_amplicon_benchmark_assertions(tmp_path: Path) -> None:
     config_path.write_text(
         yaml.dump(
             {
+                "use_dag": False,
                 "project_name": "bench-amplicon",
                 "mode": "local",
                 "threads": 2,

@@ -111,6 +111,24 @@ standard_tables:
 # ============================================================================
 # Node Definitions
 # ============================================================================
+# Category → subdirectory mapping (auto-generated for UniversalDAG)
+category_dirs:
+  abundance: 10_abundance
+  annotation: 08_annotation
+  assembly: 02_assembly
+  assembly_qc: 03_assembly_qc
+  comparative_genomics: 09_comparative_genomics
+  diversity: 11_diversity
+  host_prediction: 07_host_prediction
+  input_validation: 00_input_validation
+  network: 12_network
+  plasmid_binning: 05_plasmid_binning
+  plasmid_detection: 04_plasmid_detection
+  qc: 01_qc
+  report: report
+  typing: 06_plasmid_typing
+  visualization: 13_visualization
+
 nodes:
 
   # =========================================================================
@@ -121,6 +139,7 @@ nodes:
   qc_fastp:
     tool_id: fastp
     category: qc
+    scope: per_sample
     name: "fastp adapter trimming + quality filtering"
     platforms: [illumina, hybrid]
     optional: false
@@ -169,6 +188,7 @@ nodes:
   qc_fastqc_raw:
     tool_id: fastqc
     category: qc
+    scope: per_sample
     name: "FastQC on raw reads"
     platforms: [illumina, hybrid]
     optional: true
@@ -182,6 +202,7 @@ nodes:
   qc_fastqc_clean:
     tool_id: fastqc
     category: qc
+    scope: per_sample
     name: "FastQC on cleaned reads"
     platforms: [illumina, hybrid]
     optional: true
@@ -195,6 +216,7 @@ nodes:
   qc_multiqc_illumina:
     tool_id: multiqc
     category: qc
+    scope: per_sample
     name: "MultiQC aggregation (Illumina)"
     platforms: [illumina, hybrid]
     optional: true
@@ -216,6 +238,7 @@ nodes:
   qc_nanoplot:
     tool_id: nanoplot
     category: qc
+    scope: per_sample
     name: "NanoPlot quality report (ONT)"
     platforms: [ont, hybrid]
     optional: false
@@ -232,6 +255,7 @@ nodes:
   qc_filtlong:
     tool_id: filtlong
     category: qc
+    scope: per_sample
     name: "Filtlong long-read quality filtering"
     platforms: [ont, hybrid]
     optional: false
@@ -251,6 +275,7 @@ nodes:
   qc_multiqc_ont:
     tool_id: multiqc
     category: qc
+    scope: per_sample
     name: "MultiQC aggregation (ONT)"
     platforms: [ont, hybrid]
     optional: true
@@ -267,6 +292,7 @@ nodes:
   qc_hifiadapterfilt:
     tool_id: hifiadapterfilt
     category: qc
+    scope: per_sample
     name: "HiFiAdapterFilt adapter removal"
     platforms: [pacbio_hifi]
     optional: false
@@ -286,6 +312,7 @@ nodes:
   qc_multiqc_hifi:
     tool_id: multiqc
     category: qc
+    scope: per_sample
     name: "MultiQC aggregation (HiFi)"
     platforms: [pacbio_hifi]
     optional: true
@@ -304,6 +331,7 @@ nodes:
   host_removal_bowtie2:
     tool_id: bowtie2
     category: host_removal
+    scope: per_sample
     name: "Bowtie2 host read removal (short reads)"
     platforms: [illumina, hybrid]
     optional: true
@@ -332,6 +360,7 @@ nodes:
   host_removal_minimap2_long:
     tool_id: minimap2
     category: host_removal
+    scope: per_sample
     name: "minimap2 host read removal (long reads)"
     platforms: [ont, pacbio_hifi, hybrid]
     optional: true
@@ -362,6 +391,7 @@ nodes:
   assembly_megahit:
     tool_id: megahit
     category: assembly
+    scope: per_sample
     name: "MEGAHIT short-read metagenomic assembly"
     platforms: [illumina]
     optional: false
@@ -390,6 +420,7 @@ nodes:
   assembly_metaspades:
     tool_id: metaspades
     category: assembly
+    scope: per_sample
     name: "metaSPAdes short-read metagenomic assembly (alternative)"
     platforms: [illumina]
     optional: true
@@ -417,6 +448,7 @@ nodes:
   assembly_metaflye:
     tool_id: metaflye
     category: assembly
+    scope: per_sample
     name: "metaFlye long-read metagenomic assembly"
     platforms: [ont]
     optional: false
@@ -436,6 +468,7 @@ nodes:
   assembly_hifiasm:
     tool_id: hifiasm_meta
     category: assembly
+    scope: per_sample
     name: "hifiasm-meta HiFi metagenomic assembly"
     platforms: [pacbio_hifi]
     optional: false
@@ -456,6 +489,7 @@ nodes:
   assembly_opera_ms:
     tool_id: opera_ms
     category: assembly
+    scope: per_sample
     name: "OPERA-MS hybrid metagenomic assembly"
     platforms: [hybrid]
     optional: false
@@ -490,6 +524,7 @@ nodes:
   assembly_provided:
     tool_id: internal
     category: assembly
+    scope: per_sample
     name: "Use provided assembly FASTA"
     platforms: [assembly]
     optional: false
@@ -510,6 +545,7 @@ nodes:
   assembly_qc_quast:
     tool_id: quast
     category: assembly_qc
+    scope: per_sample
     name: "QUAST/metaQUAST assembly quality assessment"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: false
@@ -540,6 +576,7 @@ nodes:
   contig_coverage_bowtie2:
     tool_id: bowtie2
     category: contig_coverage
+    scope: per_sample
     name: "Bowtie2 map short reads to assembly contigs"
     platforms: [illumina, hybrid]
     optional: false
@@ -571,6 +608,7 @@ nodes:
   contig_coverage_minimap2:
     tool_id: minimap2
     category: contig_coverage
+    scope: per_sample
     name: "minimap2 map long reads to assembly contigs"
     platforms: [ont, pacbio_hifi, hybrid]
     optional: false
@@ -595,6 +633,7 @@ nodes:
   contig_coverage_samtools:
     tool_id: samtools
     category: contig_coverage
+    scope: per_sample
     name: "samtools sort alignment to BAM"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: false
@@ -613,6 +652,7 @@ nodes:
   contig_coverage_coverm:
     tool_id: coverm
     category: contig_coverage
+    scope: per_sample
     name: "CoverM contig coverage estimation"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: false
@@ -636,6 +676,7 @@ nodes:
   plasmid_detect_genomad:
     tool_id: genomad
     category: plasmid_detection
+    scope: per_sample
     name: "geNomad plasmid/virus classification"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: false
@@ -660,6 +701,7 @@ nodes:
   plasmid_detect_plasme:
     tool_id: plasme
     category: plasmid_detection
+    scope: per_sample
     name: "PLASMe plasmid classification (optional)"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -679,6 +721,7 @@ nodes:
   plasmid_detect_plasx:
     tool_id: plasx
     category: plasmid_detection
+    scope: per_sample
     name: "PlasX plasmid classification (optional)"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -704,6 +747,7 @@ nodes:
   plasmid_consensus:
     tool_id: internal
     category: plasmid_consensus
+    scope: per_sample
     name: "Plasmid consensus builder — merge predictions from all detection tools"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: false
@@ -766,6 +810,7 @@ nodes:
   plasmid_binning_plasmaag:
     tool_id: plasmaag
     category: plasmid_binning
+    scope: per_sample
     name: "PlasMAAG multi-sample graph-based plasmid binning"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -789,6 +834,7 @@ nodes:
   plasmid_binning_gplas2:
     tool_id: gplas2
     category: plasmid_binning
+    scope: per_sample
     name: "gplas2 graph-based plasmid binning"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -812,6 +858,7 @@ nodes:
   plasmid_binning_mob_recon:
     tool_id: mob_suite
     category: plasmid_binning
+    scope: per_sample
     name: "MOB-recon plasmid reconstruction"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -838,6 +885,7 @@ nodes:
   typing_plasmidfinder:
     tool_id: plasmidfinder
     category: typing
+    scope: per_sample
     name: "PlasmidFinder replicon/Inc typing"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: false
@@ -856,6 +904,7 @@ nodes:
   typing_mob_typer:
     tool_id: mob_typer
     category: typing
+    scope: per_sample
     name: "MOB-typer relaxase/MOB/oriT typing"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: false
@@ -871,6 +920,7 @@ nodes:
   typing_copla:
     tool_id: copla
     category: typing
+    scope: per_sample
     name: "COPLA PTU classification"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -896,6 +946,7 @@ nodes:
   host_prediction_metaphlan:
     tool_id: metaphlan
     category: host_prediction
+    scope: per_sample
     name: "MetaPhlAn4 taxonomic profiling"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: false
@@ -933,6 +984,7 @@ nodes:
   host_prediction_kraken2:
     tool_id: kraken2
     category: host_prediction
+    scope: per_sample
     name: "Kraken2 taxonomic classification (optional)"
     platforms: [illumina]
     optional: true
@@ -959,6 +1011,7 @@ nodes:
   host_prediction_plasmidhostfinder:
     tool_id: plasmidhostfinder
     category: host_prediction
+    scope: per_sample
     name: "PlasmidHostFinder assembly-based host prediction"
     platforms: [assembly]
     optional: false
@@ -981,6 +1034,7 @@ nodes:
   annotation_prodigal:
     tool_id: prodigal
     category: annotation
+    scope: per_sample
     name: "Prodigal gene calling on plasmid contigs"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: false
@@ -998,6 +1052,7 @@ nodes:
   annotation_bakta:
     tool_id: bakta
     category: annotation
+    scope: per_sample
     name: "Bakta comprehensive plasmid annotation"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: false
@@ -1019,6 +1074,7 @@ nodes:
   annotation_amrfinderplus:
     tool_id: amrfinderplus
     category: annotation
+    scope: per_sample
     name: "AMRFinderPlus ARG/VF detection"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: false
@@ -1034,6 +1090,7 @@ nodes:
   annotation_abricate:
     tool_id: abricate
     category: annotation
+    scope: per_sample
     name: "ABRicate multi-database ARG/VF screening"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1053,6 +1110,7 @@ nodes:
   annotation_isescan:
     tool_id: isescan
     category: annotation
+    scope: per_sample
     name: "ISEScan insertion sequence detection"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1068,6 +1126,7 @@ nodes:
   annotation_integronfinder:
     tool_id: integronfinder
     category: annotation
+    scope: per_sample
     name: "IntegronFinder integron detection"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1083,6 +1142,7 @@ nodes:
   annotation_mob_suite:
     tool_id: mob_suite
     category: annotation
+    scope: per_sample
     name: "MOB-suite plasmid annotation and reconstruction"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1106,6 +1166,7 @@ nodes:
   mag_metabat2:
     tool_id: metabat2
     category: mag_host_genomes
+    scope: per_sample
     name: "MetaBAT2 metagenomic binning"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1128,6 +1189,7 @@ nodes:
   mag_checkm2:
     tool_id: checkm2
     category: mag_host_genomes
+    scope: per_sample
     name: "CheckM2 MAG quality assessment"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1143,6 +1205,7 @@ nodes:
   mag_gtdbtk:
     tool_id: gtdbtk
     category: mag_host_genomes
+    scope: per_sample
     name: "GTDB-Tk taxonomic classification of MAGs"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1165,6 +1228,7 @@ nodes:
   host_plasmid_link_coabundance:
     tool_id: internal
     category: host_plasmid_linking
+    scope: per_sample
     name: "Co-abundance correlation host-plasmid linking"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1191,6 +1255,7 @@ nodes:
   host_plasmid_link_sequence:
     tool_id: internal
     category: host_plasmid_linking
+    scope: per_sample
     name: "Sequence similarity host-plasmid linking (k-mer/GC/codon usage)"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1218,6 +1283,7 @@ nodes:
   host_plasmid_link_crispr:
     tool_id: minced
     category: host_plasmid_linking
+    scope: per_sample
     name: "CRISPR spacer matching host-plasmid linking"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1238,6 +1304,7 @@ nodes:
   host_plasmid_link_longread:
     tool_id: internal
     category: host_plasmid_linking
+    scope: per_sample
     name: "Long-read bridge evidence host-plasmid linking"
     platforms: [ont, pacbio_hifi, hybrid]
     optional: true
@@ -1267,6 +1334,7 @@ nodes:
   abundance_bowtie2:
     tool_id: bowtie2
     category: abundance
+    scope: per_sample
     name: "Bowtie2 map reads to plasmid contigs for abundance"
     platforms: [illumina, hybrid]
     optional: false
@@ -1299,6 +1367,7 @@ nodes:
   abundance_minimap2:
     tool_id: minimap2
     category: abundance
+    scope: per_sample
     name: "minimap2 map reads to plasmid contigs for abundance"
     platforms: [ont, pacbio_hifi, hybrid]
     optional: false
@@ -1326,6 +1395,7 @@ nodes:
   abundance_samtools:
     tool_id: samtools
     category: abundance
+    scope: per_sample
     name: "samtools sort plasmid alignment to BAM"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: false
@@ -1342,6 +1412,7 @@ nodes:
   abundance_coverm:
     tool_id: coverm
     category: abundance
+    scope: per_sample
     name: "CoverM plasmid abundance estimation"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: false
@@ -1365,6 +1436,7 @@ nodes:
   multisample_diversity:
     tool_id: internal
     category: diversity
+    scope: cross_sample
     name: "Alpha/beta diversity analysis"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1389,6 +1461,7 @@ nodes:
   multisample_differential_abundance:
     tool_id: internal
     category: statistics
+    scope: cross_sample
     name: "Differential plasmid abundance between groups"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1417,6 +1490,7 @@ nodes:
   multisample_network_fastspar:
     tool_id: fastspar
     category: network
+    scope: cross_sample
     name: "FastSpar plasmid co-occurrence network"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1441,6 +1515,7 @@ nodes:
   comparative_mmseqs2:
     tool_id: mmseqs2
     category: comparative_genomics
+    scope: per_sample
     name: "MMseqs2 plasmid sequence clustering"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1463,6 +1538,7 @@ nodes:
   comparative_blast:
     tool_id: blast
     category: comparative_genomics
+    scope: per_sample
     name: "BLASTn plasmid sequence comparison"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1483,6 +1559,7 @@ nodes:
   comparative_mummer:
     tool_id: mummer
     category: comparative_genomics
+    scope: per_sample
     name: "MUMmer/nucmer whole-genome plasmid alignment"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1502,6 +1579,7 @@ nodes:
   comparative_clinker:
     tool_id: clinker
     category: comparative_genomics
+    scope: per_sample
     name: "clinker synteny visualization"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1520,6 +1598,7 @@ nodes:
   visualization_clinker_gene_maps:
     tool_id: clinker
     category: visualization
+    scope: cross_sample
     name: "clinker gene map visualization"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1534,6 +1613,7 @@ nodes:
   visualization_pycirclize:
     tool_id: pycirclize
     category: visualization
+    scope: cross_sample
     name: "pyCirclize plasmid circular map"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1553,6 +1633,7 @@ nodes:
   visualization_network:
     tool_id: pyvis
     category: visualization
+    scope: cross_sample
     name: "pyvis host-plasmid interaction network"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1583,6 +1664,7 @@ nodes:
   qc_chopper:
     tool_id: chopper
     category: qc
+    scope: per_sample
     name: "Chopper long-read QC (ONT alternative)"
     platforms: [ont, hybrid]
     optional: true
@@ -1597,6 +1679,7 @@ nodes:
   qc_porechop:
     tool_id: porechop
     category: qc
+    scope: per_sample
     name: "Porechop adapter trimming (ONT alternative)"
     platforms: [ont, hybrid]
     optional: true
@@ -1612,6 +1695,7 @@ nodes:
   host_removal_bwa:
     tool_id: bwa
     category: host_removal
+    scope: per_sample
     name: "BWA-MEM host read removal (short-read alternative)"
     platforms: [illumina, hybrid]
     optional: true
@@ -1628,6 +1712,7 @@ nodes:
   host_removal_kneaddata:
     tool_id: kneaddata
     category: host_removal
+    scope: per_sample
     name: "KneadData host decontamination (short-read alternative)"
     platforms: [illumina, hybrid]
     optional: true
@@ -1645,6 +1730,7 @@ nodes:
   assembly_hybridspades:
     tool_id: hybridspades
     category: assembly
+    scope: per_sample
     name: "hybridSPAdes hybrid metagenomic assembly (alternative)"
     platforms: [hybrid]
     optional: true
@@ -1664,6 +1750,7 @@ nodes:
   assembly_qc_bandage:
     tool_id: bandage
     category: assembly_qc
+    scope: per_sample
     name: "Bandage assembly graph visualization"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1678,6 +1765,7 @@ nodes:
   plasmid_detect_platon:
     tool_id: platon
     category: plasmid_detection
+    scope: per_sample
     name: "Platon plasmid detection and typing (recommended additional)"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1692,6 +1780,7 @@ nodes:
   plasmid_binning_scapp:
     tool_id: scapp
     category: plasmid_binning
+    scope: per_sample
     name: "SCAPP plasmid reconstruction from assembly graph"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1707,6 +1796,7 @@ nodes:
   plasmid_binning_recycler:
     tool_id: recycler
     category: plasmid_binning
+    scope: per_sample
     name: "Recycler plasmid reconstruction from graph cycles"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1723,6 +1813,7 @@ nodes:
   typing_pmlst:
     tool_id: pmlst
     category: typing
+    scope: per_sample
     name: "pMLST plasmid multi-locus sequence typing"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1736,6 +1827,7 @@ nodes:
   typing_conjscan:
     tool_id: conjscan
     category: typing
+    scope: per_sample
     name: "CONJscan conjugative system detection"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1749,6 +1841,7 @@ nodes:
   typing_macsyfinder:
     tool_id: macsyfinder
     category: typing
+    scope: per_sample
     name: "MacSyFinder macromolecular system detection"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1763,6 +1856,7 @@ nodes:
   annotation_rgi:
     tool_id: rgi
     category: annotation
+    scope: per_sample
     name: "RGI/CARD resistance gene identification (additional)"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1776,6 +1870,7 @@ nodes:
   annotation_eggnog_mapper:
     tool_id: eggnog_mapper
     category: annotation
+    scope: per_sample
     name: "eggNOG-mapper functional annotation (additional)"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1790,6 +1885,7 @@ nodes:
   mag_maxbin2:
     tool_id: maxbin2
     category: mag_host_genomes
+    scope: per_sample
     name: "MaxBin2 metagenomic binning (alternative)"
     platforms: [illumina, hybrid]
     optional: true
@@ -1806,6 +1902,7 @@ nodes:
   mag_concoct:
     tool_id: concoct
     category: mag_host_genomes
+    scope: per_sample
     name: "CONCOCT composition+coverage binning (alternative)"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1821,6 +1918,7 @@ nodes:
   mag_semibin:
     tool_id: semibin
     category: mag_host_genomes
+    scope: per_sample
     name: "SemiBin deep-learning metagenomic binning (alternative)"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1836,6 +1934,7 @@ nodes:
   mag_das_tool:
     tool_id: das_tool
     category: mag_host_genomes
+    scope: per_sample
     name: "DAS Tool meta-binner aggregation"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1851,6 +1950,7 @@ nodes:
   host_plasmid_link_hic:
     tool_id: hic_evidence
     category: host_plasmid_linking
+    scope: per_sample
     name: "Hi-C / meta3C host-plasmid linkage evidence"
     platforms: [illumina, ont, pacbio_hifi, hybrid]
     optional: true
@@ -1865,6 +1965,7 @@ nodes:
   visualization_dna_features:
     tool_id: dna_features_viewer
     category: visualization
+    scope: cross_sample
     name: "dna-features-viewer linear plasmid maps"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: true
@@ -1881,6 +1982,7 @@ nodes:
   report_markdown:
     tool_id: report_markdown
     category: report
+    scope: cross_sample
     name: "AutoPlasm Markdown + HTML report"
     platforms: [illumina, ont, pacbio_hifi, hybrid, assembly]
     optional: false

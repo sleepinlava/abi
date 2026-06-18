@@ -1,6 +1,8 @@
 # ============================================================================
 # WGS Bacterial Genome Pipeline DAG — Canonical Specification
 # ============================================================================
+# Updated 2026-06-18 with scope, category_dirs, and path templates for the
+# universal DAG planner (abi.dag_planner).
 
 abi_version: "0.1"
 pipeline_id: wgs_bacteria
@@ -8,6 +10,13 @@ pipeline_name: "Standard Bacterial Isolate WGS Analysis Pipeline"
 
 platforms:
   - illumina
+
+category_dirs:
+  qc: 01_qc
+  assembly: 02_assembly
+  annotation: 03_annotation
+  typing: 04_mlst
+  amr: 05_amr
 
 standard_tables:
   genome_assembly_stats:
@@ -24,15 +33,24 @@ nodes:
   qc_fastp:
     tool_id: fastp
     category: qc
-    platforms: [illumina]
+    scope: per_sample
     optional: false
     depends_on: []
     inputs:
-      read1:  {type: file, format: fastq.gz}
-      read2:  {type: file, format: fastq.gz}
+      read1:  {type: file, format: fastq.gz, source: sample_sheet}
+      read2:  {type: file, format: fastq.gz, source: sample_sheet}
     outputs:
-      clean_read1:  {type: file, format: fastq.gz}
-      clean_read2:  {type: file, format: fastq.gz}
+      clean_read1:
+        type: file
+        format: fastq.gz
+        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_R1.clean.fastq.gz"
+      clean_read2:
+        type: file
+        format: fastq.gz
+        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_R2.clean.fastq.gz"
+      output_dir:
+        type: directory
+        path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
       - "output_dir.exists()"
 
@@ -40,15 +58,25 @@ nodes:
   assembly_spades:
     tool_id: spades
     category: assembly
-    platforms: [illumina]
+    scope: per_sample
     optional: false
     depends_on: [qc_fastp]
     inputs:
       clean_read1:  {type: file, format: fastq.gz, source: qc_fastp.clean_read1}
       clean_read2:  {type: file, format: fastq.gz, source: qc_fastp.clean_read2}
     outputs:
-      contigs_fasta:    {type: file, format: fasta, contract: {min_size: "1KB"}}
-      scaffolds_fasta:  {type: file, format: fasta}
+      contigs_fasta:
+        type: file
+        format: fasta
+        contract: {min_size: "1KB"}
+        path: "{outdir}/{category_dir}/{sample_id}/contigs.fasta"
+      scaffolds_fasta:
+        type: file
+        format: fasta
+        path: "{outdir}/{category_dir}/{sample_id}/scaffolds.fasta"
+      output_dir:
+        type: directory
+        path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
       - "output_dir.exists()"
       - "output_files.contigs_fasta.min_size >= 1000"
@@ -57,7 +85,7 @@ nodes:
   annotation_prokka:
     tool_id: prokka
     category: annotation
-    platforms: [illumina]
+    scope: per_sample
     optional: false
     depends_on: [assembly_spades]
     inputs:
@@ -65,9 +93,23 @@ nodes:
       genus:           {type: string}
       species:         {type: string}
     outputs:
-      faa:  {type: file, format: fasta, contract: {min_size: "100B"}}
-      gff:  {type: file, format: gff, contract: {min_size: "100B"}}
-      gbk:  {type: file, format: gbk}
+      faa:
+        type: file
+        format: fasta
+        contract: {min_size: "100B"}
+        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.faa"
+      gff:
+        type: file
+        format: gff
+        contract: {min_size: "100B"}
+        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.gff"
+      gbk:
+        type: file
+        format: gbk
+        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.gbk"
+      output_dir:
+        type: directory
+        path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
       - "output_dir.exists()"
 
@@ -75,14 +117,21 @@ nodes:
   mlst:
     tool_id: mlst
     category: typing
-    platforms: [illumina]
+    scope: per_sample
     optional: false
     depends_on: [assembly_spades]
     inputs:
       assembly_fasta:  {type: file, format: fasta, source: assembly_spades.contigs_fasta}
       scheme:          {type: string, default: auto}
     outputs:
-      mlst_tsv:  {type: file, format: tsv, contract: {min_size: "50B"}}
+      mlst_tsv:
+        type: file
+        format: tsv
+        contract: {min_size: "50B"}
+        path: "{outdir}/{category_dir}/{sample_id}/mlst.tsv"
+      output_dir:
+        type: directory
+        path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
       - "output_dir.exists()"
 
@@ -90,13 +139,20 @@ nodes:
   amr:
     tool_id: amrfinderplus
     category: amr
-    platforms: [illumina]
+    scope: per_sample
     optional: false
     depends_on: [annotation_prokka]
     inputs:
       prokka_faa:  {type: file, format: fasta, source: annotation_prokka.faa}
       prokka_gff:  {type: file, format: gff, source: annotation_prokka.gff}
     outputs:
-      amr_tsv:  {type: file, format: tsv, contract: {min_size: "50B"}}
+      amr_tsv:
+        type: file
+        format: tsv
+        contract: {min_size: "50B"}
+        path: "{outdir}/{category_dir}/{sample_id}/amr.tsv"
+      output_dir:
+        type: directory
+        path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
       - "output_dir.exists()"

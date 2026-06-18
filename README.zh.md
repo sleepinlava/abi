@@ -135,7 +135,8 @@ ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch / query
         v
 ABI 核心层          schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
-                    contracts│  dag         │  figures      │  report
+                    contracts│  dag         │  figures      │  dag_planner
+                    tsv_mapping
         │
         v
 插件层              amplicon_16s/  rnaseq_expression/  wgs_bacteria/
@@ -247,6 +248,8 @@ python -m twine check dist/*
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError`, `MissingTemplateParamError` |
 | `abi.contracts` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, `save_checksums_atomic`, `run_contract_lint`, `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec` |
 | `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG 推断，支持 L1（文献）/ L2（路径）/ L3（验证）三层正确性模型 |
+| `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — 从 `pipeline_dag.yaml` 声明式生成执行计划（v1.3.2） |
+| `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML 驱动的 TSV 列映射，替换手写解析器样板代码（v1.3.2） |
 | `abi.tool_descriptors` | `ABI_AGENT_TOOLS`, `TOOL_ALIASES`, `export_openai_compatible`, `export_anthropic`, `export_gemini`, `PROVIDER_PROFILES` |
 | `abi.testing` | `assert_plugin_contract` |
 

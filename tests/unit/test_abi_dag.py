@@ -111,7 +111,10 @@ def test_infer_dag_accepts_metagenomic_plasmid_shared_output_dirs(tmp_path):
     plugin = get_plugin("metagenomic_plasmid")
     config = plugin.load_config(
         "examples/config_minimal.yaml",
-        overrides={"outdir": str(tmp_path / "plasmid"), "log_dir": str(tmp_path / "log")},
+        overrides={
+            "outdir": str(tmp_path / "plasmid"),
+            "log_dir": str(tmp_path / "log"),
+        },
     )
     plan = plugin.build_plan(config)
 

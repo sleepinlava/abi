@@ -1,7 +1,7 @@
 # ABI Next Stage Development Plan & Technical Design
 
 > **Status**: Active (2026-06-18)
-> **Last updated**: 2026-06-18 — Direction E complete, ABI v1.3.0 + Bench v0.5 released
+> **Last updated**: 2026-06-18 — Direction F complete, plasmid DAG migrated to UniversalDAG
 > **Canonical reference**: This document supersedes `docs/abi_final_development_plan.md` and `docs/demo_plan.md`.
 > **Related**: `docs/workflow_validation.md`, `docs/pipeline_biological_validity.md`, `docs/plugin_development_guide.md`, `docs/hpc_development.md`
 
@@ -18,7 +18,7 @@
 | 6 | Benchmark datasets | ✅ Complete | 4 smoke tests | — | 5/5 plugins, value-level validation |
 | 7 | Multi-plugin demos | ⏸️ Deferred | — | — | Depends on real input data |
 
-**Total**: 543 tests, 0 mypy errors, 0 ruff errors, 5 functional plugins, all with `pipeline_dag.yaml`
+**Total**: 688 tests, 0 mypy errors, 0 ruff errors, 5 functional plugins with DAG-driven plan generation
 
 ### Direction D: Benchmark Datasets + End-to-End Tests (2026-06-18)
 
@@ -91,6 +91,47 @@
 | P1-1 | DESeq2 installation automation | ✅ | envs/rnaseq.yml, install_deseq2.R, setup_rnaseq_env.sh |
 | P1-2 | amplicon taxonomy DB generation | ✅ | download_rdp_sintax.sh + synthetic fallback |
 | P2 | Smoke tests with real tool execution | ✅ | test_amplicon_smoke.py (10/11 steps pass) |
+| P3 | Windows compatibility assessment | ✅ **WON'T DO** | See below |
+
+### Direction G: Declarative DAG Planner + TSV Mapper (2026-06-18)
+
+uv-ification: replaced hand-written `build_plan()` boilerplate with YAML-driven
+DAG planner, and simple TSV column-mapping parsers with declarative config.
+
+| Task | Description | Status |
+|------|-------------|--------|
+| G1 | `src/abi/dag_planner.py` — UniversalDAG + `build_plan_from_dag()` | ✅ |
+| G2 | `src/abi/tsv_mapping.py` — TSVMapper + `generate_rows()` | ✅ |
+| G3 | 5 × `pipeline_dag.yaml` updated (scope, category_dirs, path templates) | ✅ |
+| G4 | 4 × `parsers.yaml` created (amrfinderplus, mlst, featurecounts ×2) | ✅ |
+| G5 | 4 × inline plugins wired (use_dag + TSVMapper) | ✅ |
+| G6 | Golden-trace verification (4/4 plugins match) | ✅ |
+| G7 | Documentation (CLAUDE.md, README.md, plugin_development_guide.md, devlog.md) | ✅ |
+
+### Direction F: Plasmid DAG Migration to UniversalDAG (2026-06-18)
+
+Replaced the plasmid plugin's `PipelineDAG` class (333 lines) with the universal
+`UniversalDAG` from `dag_planner.py`, eliminating logic duplication. Extended
+`UniversalDAG` with `enable_condition` evaluation, fallback dependency resolution,
+and cross_sample scope detection. All 5 platforms produce identical active node sets.
+
+| Task | Description | Status |
+|------|-------------|--------|
+| F1 | Extend UniversalDAG with `_evaluate_condition()` + `resolve_dependencies()` | ✅ |
+| F2 | Update plasmid `pipeline_dag.yaml` with category_dirs + scope (84 nodes) | ✅ |
+| F3 | Refactor plasmid planner to use UniversalDAG | ✅ |
+| F4 | Active node parity verification (5/5 platforms match PipelineDAG) | ✅ |
+
+**Current test status**: 688 passed, 7 pre-existing failures (5 benchmark/subprocess + 2 DAG/Nextflow exporter), 1 skipped.
+
+### Decision: No Native Windows Support
+
+The 89 bioinformatics tools orchestrated by ABI (fastp, STAR, SPAdes, Prokka,
+featureCounts, vsearch, geNomad, etc.) are all Linux-native. No production-quality
+Windows builds exist. Windows users run these tools via **WSL2** (Windows Subsystem
+for Linux) or **Docker Desktop for Windows** — both of which ABI already supports
+without modification. Native Windows porting has **no engineering value** and is
+explicitly excluded from the development roadmap.
 
 ## 1. Project Goals
 

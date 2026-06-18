@@ -64,7 +64,10 @@ _FIXTURES = Path("tests/fixtures/tool_outputs")
 def test_build_plan_structure(tmp_path):
     plugin = get_plugin("rnaseq_expression")
     cfg = plugin.load_config(
-        overrides={"outdir": str(tmp_path / "results"), "input": {"sample_sheet": _TEST_SS}}
+        overrides={
+            "outdir": str(tmp_path / "results"),
+            "input": {"sample_sheet": _TEST_SS},
+        }
     )
     plan = plugin.build_plan(cfg, check_files=False)
     assert plan.analysis_type == "rnaseq_expression"
@@ -77,7 +80,10 @@ def test_deseq2_step_is_last(tmp_path):
     """DESeq2 runs after all per-sample steps and aggregates across samples."""
     plugin = get_plugin("rnaseq_expression")
     cfg = plugin.load_config(
-        overrides={"outdir": str(tmp_path / "results"), "input": {"sample_sheet": _TEST_SS}}
+        overrides={
+            "outdir": str(tmp_path / "results"),
+            "input": {"sample_sheet": _TEST_SS},
+        }
     )
     plan = plugin.build_plan(cfg, check_files=False)
     last_step = plan.steps[-1]
@@ -105,7 +111,10 @@ def test_dag_cross_validation(tmp_path):
 
     plugin = get_plugin("rnaseq_expression")
     cfg = plugin.load_config(
-        overrides={"outdir": str(tmp_path / "results"), "input": {"sample_sheet": _TEST_SS}}
+        overrides={
+            "outdir": str(tmp_path / "results"),
+            "input": {"sample_sheet": _TEST_SS},
+        }
     )
     plan = plugin.build_plan(cfg, check_files=False)
 

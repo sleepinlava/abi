@@ -67,7 +67,8 @@ ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch / query
         │
 ABI Core            schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
-                    contracts│  dag         │  figures      │  report
+                    contracts│  dag         │  figures      │  dag_planner
+                    tsv_mapping
         │
 Plugins             metagenomic_plasmid/  rnaseq_expression/  wgs_bacteria/
                     amplicon_16s/  metatranscriptomics/
@@ -108,6 +109,11 @@ src/abi/
   tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1058 lines)
   schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
   executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement
+  dag_planner.py      Universal DAG planner — generates ExecutionPlan from pipeline_dag.yaml
+                      (replaces hand-written build_plan() boilerplate, added 2026-06-18)
+  tsv_mapping.py      Declarative TSV column mapper — YAML-driven output parsing
+                      with 3 source types (tsv_mapping, json_mapping, key_value_log).
+                      Replaces ~14 csv.DictReader → remap columns parser functions. (added 2026-06-18)
   dag.py              DAG inference engine — L1 (literature) / L2 (path) / L3 (validation)
   contracts/          WorkflowSpec, step contract enforcement, checksum chaining, assertion eval
     __init__.py         WorkflowSpec, WorkflowStepSpec, load_workflow_spec, run_contract_lint
@@ -132,6 +138,8 @@ src/abi/
 | `abi.contracts` | `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec` — literature-backed workflow declarations (added 2026-06-17) |
 | `abi.contracts.step_contract` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, checksum chaining |
 | `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with L1 (literature) / L2 (path) / L3 (validation) |
+| `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation from `pipeline_dag.yaml`. Replaces all hand-written `build_plan()`; plasmid planner also migrated to UniversalDAG. (added 2026-06-18) |
+| `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML-driven TSV/JSON/log column mapping with 3 source types (tsv_mapping, json_mapping, key_value_log), replaces ~14 boilerplate parsers (added 2026-06-18) |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
 | `abi.testing` | `assert_plugin_contract` |
 
@@ -150,15 +158,15 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 - `planning_write`: `plan`, `dry_run`, `report`, `export_nextflow` — writes plans/provenance, no tool execution
 - `execution`: `run` — **requires `confirm_execution=true`**, writes provenance, executes real tools
 
-### The five plugins (v1.3.0, 2026-06-18)
+### The five plugins (v1.3.2, 2026-06-18)
 
-All five plugins have complete tool chains, parsers, report generation, tests, benchmark datasets, and Docker images.
+All five plugins have complete tool chains, parsers, report generation, tests, benchmark datasets, and Docker images. All use DAG-driven plan generation via `UniversalDAG`.
 
-- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (20 modules, 7,713 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 2,019 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments.
-- **`rnaseq_expression`**: 6-tool standard RNA-seq. fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. All 6 parsers working. Has `pipeline_dag.yaml` (6 nodes). DESeq2 R script bundled, automated conda+BiocManager install.
-- **`wgs_bacteria`**: 5-tool bacterial isolate analysis. fastp → SPAdes → Prokka → MLST → AMRFinderPlus. All 5 parsers working (SPAdes N50/GC, Prokka GFF, AMRFinderPlus --plus). Has `pipeline_dag.yaml` (5 nodes).
-- **`amplicon_16s`**: 8-tool microbial community analysis. cutadapt → vsearch_mergepairs → vsearch_derep → UNOISE3 denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta via `scripts/amplicon_diversity.py`). All 8 tools have parsers. Has `pipeline_dag.yaml` (8 nodes).
-- **`metatranscriptomics`**: 3-tool demo. fastp, STAR/HISAT2, featureCounts. All 3 parsers working via shared imports from `abi._shared`.
+- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (20 modules, 7,713 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 2,019 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner using `UniversalDAG` with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments.
+- **`rnaseq_expression`**: 6-tool standard RNA-seq. fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. All 6 parsers working. Uses `build_plan_from_dag()` with TSVMapper for featureCounts. DESeq2 R script bundled, automated conda+BiocManager install.
+- **`wgs_bacteria`**: 5-tool bacterial isolate analysis. fastp → SPAdes → Prokka → MLST → AMRFinderPlus. All 5 parsers working. Uses `build_plan_from_dag()` with TSVMapper for AMRFinderPlus + MLST.
+- **`amplicon_16s`**: 8-tool microbial community analysis. cutadapt → vsearch_mergepairs → vsearch_derep → UNOISE3 denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta via `scripts/amplicon_diversity.py`). All 8 tools have parsers. Uses `build_plan_from_dag()`.
+- **`metatranscriptomics`**: 3-tool demo. fastp, STAR/HISAT2, featureCounts. All 3 parsers working via shared imports from `abi._shared` and TSVMapper for featureCounts. Uses `build_plan_from_dag()`.
 
 All plugins share the same `ABIAgentInterface` contract, tool contract format, `write_plugin_report()` template, and workflow declaration pattern. Each has a `pipeline_dag.yaml` for L1/L2/L3 DAG validation.
 
@@ -197,6 +205,12 @@ See: `abi.contracts.WorkflowSpec`, `abi.contracts.WorkflowStepSpec`, `abi.contra
 The lifecycle for any tool is: `check_installation → plan → validate_inputs → select_params → build_command → run → parse_outputs → normalize_outputs`. GenericCommandSkill handles this from YAML tool_contracts; only tools with complex post-processing need Python subclasses.
 
 Each contract may declare a `normalization` block (`parser` + `tables`) that maps tool outputs to standard tables via `abi.autoplasm.parsers` functions. 32 tools have custom parsers; the remaining 35 use generic TSV import or are intermediate steps whose output is consumed by downstream tools.
+
+For simple TSV/JSON/log output parsing, use `TSVMapper` with `parsers.yaml` declarations
+instead of writing Python parser functions. Supports 3 source types: `tsv_mapping`
+(column remap), `json_mapping` (nested JSON flatten), and `key_value_log`
+(pipe-delimited log parsing). See `src/abi/tsv_mapping.py` and each plugin's
+`parsers.yaml` for examples.
 
 ### Step contract enforcement
 
@@ -262,5 +276,7 @@ Every run writes to `<outdir>/provenance/`: `commands.tsv`, `resolved_inputs.tsv
 1. Implement `ABIPlugin` protocol in a new module or package under `plugins/`.
 2. Create `abi-plugin.yaml`, `tool_registry.yaml`, `standard_tables.yaml` under `plugins/<name>/`.
 3. Add tool contracts as `tool_contracts/*.yaml`.
-4. Register in `pyproject.toml` under `[project.entry-points."abi.plugins"]`.
-5. Verify with `assert_plugin_contract(plugin)` in tests.
+4. Create `pipeline_dag.yaml` with `category_dirs`, `scope` (per_sample/cross_sample), and `path` templates — use `abi.dag_planner.build_plan_from_dag()` as the sole `build_plan()` implementation.
+5. For simple TSV/JSON output parsers, create `parsers.yaml` and use `abi.tsv_mapping.TSVMapper` instead of writing hand-coded Python parsers.
+6. Register in `pyproject.toml` under `[project.entry-points."abi.plugins"]`.
+7. Verify with `assert_plugin_contract(plugin)` in tests.

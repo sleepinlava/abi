@@ -1,0 +1,20 @@
+# parsers.yaml — declarative output parsing rules for metatranscriptomics.
+
+parsers:
+  featurecounts:
+    source:
+      type: tsv_mapping
+      pattern: "*featureCounts*.txt"
+      delimiter: "\t"
+      skip_lines_starting_with: "#"
+    target_table: gene_expression
+    columns:
+      gene_id:
+        sources: ["Geneid"]
+        default: ""
+      count:
+        sources_from: last_column
+        default: "0"
+    constants:
+      tpm: ""
+      tool: featurecounts

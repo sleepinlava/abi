@@ -17,8 +17,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 from abi._shared import _parse_fastp, _resolve_path
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
 from abi.report import write_plugin_report
-from abi.schemas import ABIExecutionPlan, ABIPlanStep, ABISample, ABISampleContext
-from abi.timeouts import mapping_block
+from abi.schemas import ABIExecutionPlan, ABISample, ABISampleContext
 from abi.tools import ToolRegistry
 
 
@@ -40,6 +39,14 @@ class WGSBacteriaPlugin:
     @property
     def root(self) -> Path:
         return PLUGIN_ROOT / self.plugin_id
+
+    @property
+    def _tsv_mapper(self):
+        if not hasattr(self, "_tsv_mapper_cache"):
+            from abi.tsv_mapping import TSVMapper
+
+            self._tsv_mapper_cache = TSVMapper.from_yaml(self.root / "parsers.yaml")
+        return self._tsv_mapper_cache
 
     def load_config(self, config_path=None, *, profile=None, overrides=None) -> Dict[str, Any]:
         del profile
@@ -65,130 +72,9 @@ class WGSBacteriaPlugin:
         self, config: Mapping[str, Any], *, check_files: bool = True
     ) -> ABIExecutionPlan:
         context = self.build_sample_context(config, check_files=check_files)
-        outdir = Path(str(config["outdir"]))
-        threads = int(config["threads"])
-        annot_config = mapping_block(config, "annotation")
-        genus = str(annot_config.get("genus", "Escherichia"))
-        species = str(annot_config.get("species", "coli"))
-        typing_config = mapping_block(config, "typing")
-        mlst_scheme = str(typing_config.get("mlst_scheme", "auto"))
+        from abi.dag_planner import build_plan_from_dag
 
-        steps: List[ABIPlanStep] = []
-        for sample in context.samples:
-            # Step 1: QC (fastp)
-            qc_out = outdir / "01_qc" / sample.sample_id
-            cr1 = qc_out / f"{sample.sample_id}_R1.clean.fastq.gz"
-            cr2 = qc_out / f"{sample.sample_id}_R2.clean.fastq.gz"
-            steps.append(
-                ABIPlanStep(
-                    step_id=f"{sample.sample_id}_qc_fastp",
-                    sample_id=sample.sample_id,
-                    step_name="read_qc",
-                    tool_id="fastp",
-                    category="qc",
-                    inputs={"read1": sample.read1, "read2": sample.read2},
-                    outputs={
-                        "output_dir": str(qc_out),
-                        "clean_read1": str(cr1),
-                        "clean_read2": str(cr2),
-                    },
-                    params={
-                        "sample_id": sample.sample_id,
-                        "threads": threads,
-                        "mode": config["mode"],
-                    },
-                )
-            )
-
-            # Step 2: Assembly (SPAdes)
-            asm_out = outdir / "02_assembly" / sample.sample_id
-            contigs = asm_out / "contigs.fasta"
-            steps.append(
-                ABIPlanStep(
-                    step_id=f"{sample.sample_id}_assembly_spades",
-                    sample_id=sample.sample_id,
-                    step_name="genome_assembly",
-                    tool_id="spades",
-                    category="assembly",
-                    inputs={"clean_read1": str(cr1), "clean_read2": str(cr2)},
-                    outputs={"output_dir": str(asm_out), "contigs_fasta": str(contigs)},
-                    params={
-                        "sample_id": sample.sample_id,
-                        "threads": threads,
-                        "mode": config["mode"],
-                    },
-                )
-            )
-
-            # Step 3: Annotation (Prokka)
-            ann_out = outdir / "03_annotation" / sample.sample_id
-            faa = ann_out / f"{sample.sample_id}.faa"
-            gff = ann_out / f"{sample.sample_id}.gff"
-            steps.append(
-                ABIPlanStep(
-                    step_id=f"{sample.sample_id}_annotation_prokka",
-                    sample_id=sample.sample_id,
-                    step_name="genome_annotation",
-                    tool_id="prokka",
-                    category="annotation",
-                    inputs={"assembly_fasta": str(contigs), "genus": genus, "species": species},
-                    outputs={"output_dir": str(ann_out), "faa": str(faa), "gff": str(gff)},
-                    params={
-                        "sample_id": sample.sample_id,
-                        "threads": threads,
-                        "mode": config["mode"],
-                    },
-                )
-            )
-
-            # Step 4: MLST
-            mlst_out = outdir / "04_mlst" / sample.sample_id
-            steps.append(
-                ABIPlanStep(
-                    step_id=f"{sample.sample_id}_mlst",
-                    sample_id=sample.sample_id,
-                    step_name="mlst_typing",
-                    tool_id="mlst",
-                    category="typing",
-                    inputs={"assembly_fasta": str(contigs), "scheme": mlst_scheme},
-                    outputs={"output_dir": str(mlst_out)},
-                    params={"sample_id": sample.sample_id, "mode": config["mode"]},
-                )
-            )
-
-            # Step 5: AMR profiling
-            amr_out = outdir / "05_amr" / sample.sample_id
-            steps.append(
-                ABIPlanStep(
-                    step_id=f"{sample.sample_id}_amr",
-                    sample_id=sample.sample_id,
-                    step_name="amr_profiling",
-                    tool_id="amrfinderplus",
-                    category="amr",
-                    inputs={"prokka_faa": str(faa), "prokka_gff": str(gff)},
-                    outputs={"output_dir": str(amr_out)},
-                    params={
-                        "sample_id": sample.sample_id,
-                        "threads": threads,
-                        "mode": config["mode"],
-                    },
-                )
-            )
-
-        selected_tools = sorted({s.tool_id for s in steps if s.tool_id != "internal"})
-        return ABIExecutionPlan(
-            project_name=str(config["project_name"]),
-            analysis_type=self.plugin_id,
-            mode=str(config["mode"]),
-            threads=threads,
-            outdir=str(outdir),
-            log_dir=str(config["log_dir"]),
-            samples=context.samples,
-            sample_context=context,
-            selected_tools=selected_tools,
-            steps=steps,
-            provenance_dir=str(outdir / "provenance"),
-        )
+        return build_plan_from_dag(self.root / "pipeline_dag.yaml", config, context)
 
     def registry(self) -> ToolRegistry:
         return ToolRegistry.from_path(self.root / "tool_registry.yaml")
@@ -200,16 +86,20 @@ class WGSBacteriaPlugin:
     def parse_outputs(
         self, tool_id: str, output_dir: str | Path, sample_id: str
     ) -> Mapping[str, Iterable[Mapping[str, Any]]]:
+        # Try declarative TSV mapper first
+        if self._tsv_mapper.has_parser(tool_id):
+            rows = self._tsv_mapper.parse(tool_id, output_dir, sample_id=sample_id)
+            if rows:
+                target = self._tsv_mapper.get_target_table(tool_id)
+                return {target: rows} if target else {}
+        # Fall back to hand-written parsers
         if tool_id == "fastp":
             return {"qc_summary": _parse_fastp(Path(output_dir), sample_id)}
         if tool_id == "spades":
             return {"genome_assembly_stats": _parse_spades(Path(output_dir), sample_id)}
         if tool_id == "prokka":
             return {"genome_annotation": _parse_prokka(Path(output_dir), sample_id)}
-        if tool_id == "mlst":
-            return {"mlst_profile": _parse_mlst(Path(output_dir), sample_id)}
-        if tool_id == "amrfinderplus":
-            return {"amr_profile": _parse_amrfinderplus(Path(output_dir), sample_id)}
+        # mlst and amrfinderplus are handled by TSVMapper above
         return {}
 
     def write_report(self, plan: Any, result_dir: str | Path) -> Dict[str, Path]:
@@ -300,56 +190,6 @@ def _resolve_config_paths(config: Dict[str, Any]) -> None:
 
 
 # (``_clean``, ``_resolve_path`` are imported from abi._shared)
-
-
-def _parse_mlst(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
-    rows = []
-    for path in sorted(output_dir.glob("mlst*.tsv")):
-        with path.open() as h:
-            for line in h:
-                parts = line.strip().split("\t")
-                if len(parts) < 3:
-                    continue
-                row = {
-                    "sample_id": sample_id,
-                    "scheme": parts[1],
-                    "sequence_type": parts[2],
-                    "tool": "mlst",
-                    "source_file": str(path),
-                }
-                for j, allele in enumerate(parts[3:10], 1):
-                    row[f"allele_{j}"] = allele
-                row["clonal_complex"] = parts[3] if len(parts) > 3 else ""
-                rows.append(row)
-    return rows
-
-
-def _parse_amrfinderplus(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
-    rows = []
-    for path in sorted(output_dir.glob("*amr*.tsv")):
-        with path.open() as h:
-            r = csv.DictReader(h, delimiter="\t")
-            if not r.fieldnames:
-                continue
-            for row in r:
-                rows.append(
-                    {
-                        "sample_id": sample_id,
-                        "gene_symbol": row.get("Gene symbol", ""),
-                        "sequence_name": row.get("Sequence name", ""),
-                        "scope": row.get("Scope", ""),
-                        "element_type": row.get("Element type", ""),
-                        "element_subtype": row.get("Element subtype", ""),
-                        "target_class": row.get("Class", ""),
-                        "target_subclass": row.get("Subclass", ""),
-                        "method": row.get("Method", ""),
-                        "coverage_pct": row.get("% Coverage of reference sequence", ""),
-                        "identity_pct": row.get("% Identity to reference sequence", ""),
-                        "tool": "amrfinderplus",
-                        "source_file": str(path),
-                    }
-                )
-    return rows
 
 
 # ── SPAdes assembly parser ───────────────────────────────────────────────

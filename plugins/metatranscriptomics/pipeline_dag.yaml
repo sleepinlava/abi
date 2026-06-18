@@ -1,30 +1,27 @@
 # ============================================================================
-# RNA-seq Expression Pipeline DAG — Canonical Specification
+# Metatranscriptomics Pipeline DAG — Canonical Specification
 # ============================================================================
-# Generated 2026-06-17.  Updated 2026-06-18 with scope, category_dirs, and
-# path templates for the universal DAG planner (abi.dag_planner).
-# ============================================================================
+# Created 2026-06-18 for the universal DAG planner (abi.dag_planner).
 
 abi_version: "0.1"
-pipeline_id: rnaseq_expression
-pipeline_name: "Standard RNA-seq Differential Expression Pipeline"
+pipeline_id: metatranscriptomics
+pipeline_name: "Metatranscriptomics Expression Pipeline"
 
 platforms:
   - illumina
 
-# Category → subdirectory mapping (drives output path construction).
 category_dirs:
   qc: 01_qc
   alignment: 02_alignment
   expression: 03_expression
-  preprocessing: 03_expression
-  differential_expression: 04_differential_expression
 
 standard_tables:
+  qc_summary:
+    description: "fastp read QC metrics"
+  alignment_summary:
+    description: "STAR/HISAT2 alignment statistics"
   gene_expression:
-    description: "Per-gene raw counts from featureCounts"
-  differential_expression:
-    description: "DESeq2 results with log2FC, p-value, padj"
+    description: "featureCounts per-gene raw counts"
 
 nodes:
   # ── QC ──────────────────────────────────────────────────────────────
@@ -94,58 +91,5 @@ nodes:
       output_dir:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
-    assertions:
-      - "output_dir.exists()"
-
-  # ── Count Matrix Assembly ────────────────────────────────────────────
-  build_matrix:
-    tool_id: build_count_matrix
-    category: preprocessing
-    scope: cross_sample
-    optional: false
-    depends_on: [quant_featurecounts]
-    inputs:
-      expression_dir:
-        type: directory
-        path: "{outdir}/03_expression"
-      sample_sheet:        {type: file, format: tsv}
-      count_matrix_script: {type: file, format: py}
-    outputs:
-      count_matrix:
-        type: file
-        format: tsv
-        contract: {min_size: "100B"}
-        path: "{outdir}/04_differential_expression/count_matrix.tsv"
-      sample_metadata:
-        type: file
-        format: tsv
-        contract: {min_size: "20B"}
-        path: "{outdir}/04_differential_expression/sample_metadata.tsv"
-      output_dir:
-        type: directory
-        path: "{outdir}/04_differential_expression"
-    assertions:
-      - "output_dir.exists()"
-
-  # ── Differential Expression ─────────────────────────────────────────
-  de_deseq2:
-    tool_id: deseq2
-    category: differential_expression
-    scope: cross_sample
-    optional: false
-    depends_on: [build_matrix]
-    inputs:
-      count_matrix:     {type: file, format: tsv, source: build_matrix.count_matrix}
-      sample_metadata:  {type: file, format: tsv, source: build_matrix.sample_metadata}
-      deseq2_script:    {type: file, format: R}
-    outputs:
-      de_results:
-        type: file
-        format: tsv
-        contract: {min_size: "100B"}
-        path: "{outdir}/04_differential_expression/deseq2_results.tsv"
-      output_dir:
-        type: directory
-        path: "{outdir}/04_differential_expression"
     assertions:
       - "output_dir.exists()"

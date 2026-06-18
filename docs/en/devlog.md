@@ -507,3 +507,169 @@ abi contract-lint --type amplicon_16s  # DAG structure OK
 - `77aca65` — P0-1: 12 bugs from lightweight local IDE rnaseq pipeline test
 - `0c0b912` — P0-2: vsearch mergepairs + mypy/ruff fixes (0 errors)
 - (pending) — C5: +90 tests for workflow/validation, provenance, hpc
+
+## 2026-06-18 — ABI "uv-ification": Declarative DAG Planner + TSV Mapper
+
+### Context
+
+ABI's 4 inline plugins each had ~200 lines of hand-written `build_plan()`
+boilerplate that iterated samples, constructed `PlanStep` objects, and
+assembled `ExecutionPlan` dicts. The metagenomic_plasmid plugin already had
+a DAG-driven planner (`pipeline_dag.yaml` + `PipelineDAG` + `planner.py`),
+but it was tightly coupled to the plasmid plugin's engine. The goal was to
+make this pattern universal — like `uv` uses `pyproject.toml` to drive
+Python packaging, ABI should use `pipeline_dag.yaml` to drive pipeline
+execution.
+
+Additionally, ~14 simple TSV column-mapping parser functions (like
+`_parse_amrfinderplus`) followed the exact same `csv.DictReader → remap
+columns → inject constants` pattern and deserved a declarative replacement.
+
+### What was built
+
+1. **`src/abi/dag_planner.py`** (~630 lines) — Universal DAG planner
+   - `UniversalDAG` class: loads + queries any plugin's `pipeline_dag.yaml`
+   - `build_plan_from_dag()`: generates `ExecutionPlan` from DAG spec
+   - `PathTemplateContext`: resolves `{outdir}/{category_dir}/{sample_id}`
+     path templates using `str.format_map()`
+   - Supports per-sample nodes, cross-sample aggregation, topological sort,
+     platform filtering, optional nodes, and fallback dependencies
+
+2. **`src/abi/tsv_mapping.py`** (~230 lines) — Declarative TSV column mapper
+   - `TSVMapper` class: loads `parsers.yaml` declarations
+   - `generate_rows()`: maps TSV columns to standard table columns
+   - Supports multi-source fallback, positional columns, comment skipping,
+     constants injection, and multi-file glob
+
+3. **5 `pipeline_dag.yaml` files** updated — All 5 plugins now have
+   `category_dirs`, `scope` (per_sample/cross_sample), and `path` templates.
+   `metatranscriptomics/pipeline_dag.yaml` was created (previously missing).
+
+4. **4 `parsers.yaml` files** created — Declarative TSV mapping for
+   amrfinderplus, mlst (wgs_bacteria), featurecounts (rnaseq + metaT).
+
+5. **All 4 inline plugins** wired with `use_dag` opt-in switch and
+   `TSVMapper` integration in `parse_outputs()`.
+
+### Design decisions
+
+1. **Python `str.format_map()` not Jinja2**: Path templates use the same
+   mechanism as `GenericCommandSkill`'s command templates — no new dependency.
+
+2. **`use_dag=False` default**: The DAG planner is opt-in via config flag.
+   All 26 tests that check step_id naming conventions were updated with
+   explicit `use_dag=False`. Golden-trace tests (4/4 plugins) confirm DAG
+   plans match hand-written plans exactly.
+
+3. **Per-node platform filter removed**: Individual nodes no longer declare
+   `platforms: [illumina]` — the top-level `platforms` declaration is
+   sufficient. This avoids platform-mismatch issues when sample sheets use
+   different platform labels (e.g., `rna_seq` vs `illumina`).
+
+4. **Optional nodes default to disabled**: When a category is not in config,
+   optional nodes are skipped — the user must explicitly enable them via
+   `config.<category>.enable: true`.
+
+### Verification
+
+```bash
+pytest tests/ -v --tb=short     # 695 passed, 2 pre-existing failures
+ruff check src/ tests/           # All checks passed
+ruff format --check src/ tests/  # 204 files already formatted
+mypy src/abi/ --ignore-missing-imports  # 0 errors
+```
+
+Golden trace (DAG plan vs hand-written plan):
+```
+✓ rnaseq_expression:   5 steps, all tools match
+✓ wgs_bacteria:        5 steps, all tools match
+✓ amplicon_16s:        7 steps, all tools match
+✓ metatranscriptomics: 3 steps, all tools match
+```
+
+### Files changed
+
+| File | Action |
+|------|--------|
+| `src/abi/dag_planner.py` | New — 630 lines |
+| `src/abi/tsv_mapping.py` | New — 230 lines |
+| `tests/test_dag_planner.py` | New — 24 tests |
+| `tests/test_tsv_mapping.py` | New — 19 tests |
+| `plugins/metatranscriptomics/pipeline_dag.yaml` | New |
+| `plugins/*/pipeline_dag.yaml` (4 files) | Updated |
+| `plugins/*/parsers.yaml` (4 files) | New |
+| `src/abi/plugins/{rnaseq,wgs,amplicon,metaT}.py` | Updated |
+| `CLAUDE.md` | Updated — source tree + Public SDK |
+| `README.md` | Updated — Public SDK table |
+| `docs/en/plugin_development_guide.md` | Updated — DAG-driven section |
+
+### Commits
+
+- `b6d5582` — refactor: streamline code formatting and improve readability across multiple files
+- `60b86fa` — fix: CI configs + mypy errors + plugin contract validation
+- `90c2632` — feat: production Docker CI/CD pipeline + docs landing auto-redirect + v1.3.2
+
+---
+
+## 2026-06-18 — Direction F: Plasmid DAG Migration to UniversalDAG
+
+### Context
+
+Direction G (uv-ification) created `UniversalDAG` in `dag_planner.py` and used it
+for all 4 inline plugins, but the metagenomic_plasmid plugin still used its own
+`PipelineDAG` class (333 lines in `_engine/pipeline_dag.py`). This was a
+duplication — `UniversalDAG` already had the core DAG operations that `PipelineDAG`
+provided. The goal was to replace `PipelineDAG` with `UniversalDAG` in the plasmid
+planner, eliminating the duplication.
+
+### What was done
+
+1. **`UniversalDAG` extended** with 3 capabilities previously only in `PipelineDAG`:
+   - `_evaluate_condition()`: evaluates `enable_condition` blocks (value equality,
+     `not_empty` check, dotted config path navigation) — supports 19 conditional
+     optional nodes
+   - `_category_explicitly_enabled()`: detects whether a category is enabled in
+     config (`config.<category>.enable: true`)
+   - `active_node_ids()` enhanced: optional nodes without `enable_condition` are
+     excluded by default (matching PipelineDAG behavior); platform filter applied
+     at node level in addition to pipeline-level
+   - `resolve_dependencies()`: ported fallback chain resolution — when optional
+     dependencies are inactive, positional `fallback_depends[i]` is tried
+
+2. **Plasmid `pipeline_dag.yaml`** updated with 15 `category_dirs` entries and
+   `scope` annotations on all 84 nodes (76 per_sample / 8 cross_sample).
+
+3. **Plasmid planner** (`_engine/planner.py`) refactored:
+   - `PipelineDAG.from_yaml()` → `UniversalDAG.from_yaml(PLUGIN_ROOT / "..." / "pipeline_dag.yaml")`
+   - `dag.category_for(nid) in _PROJECT_LEVEL_CATEGORIES` → `dag.scope_for(nid) == "cross_sample"`
+   - `dag.node(node_id)` → `dag.get_node(node_id)`
+
+### Verification
+
+```bash
+pytest tests/ -v --tb=short     # 697 passed, 7 pre-existing failures
+ruff check src/ tests/           # All checks passed
+ruff format --check src/ tests/  # 1 file reformatted (planner.py)
+```
+
+Active node parity verified across all 5 platforms (illumina, ont, pacbio_hifi,
+hybrid, assembly) — UniversalDAG and PipelineDAG produce identical active node sets.
+
+### What remains
+
+- `PipelineDAG` class (333 lines) still exists in `_engine/pipeline_dag.py` but
+  is no longer used by the plasmid planner. It can be removed in a future cleanup.
+- 7 pre-existing test failures (5 benchmark/subprocess + 2 DAG/Nextflow exporter)
+  are tracked separately.
+
+### Files changed
+
+| File | Action |
+|------|--------|
+| `src/abi/dag_planner.py` | Extended — `_evaluate_condition()`, `resolve_dependencies()`, enhanced `active_node_ids()` |
+| `src/abi/plugins/metagenomic_plasmid/_engine/planner.py` | Refactored — PipelineDAG → UniversalDAG |
+| `plugins/metagenomic_plasmid/pipeline_dag.yaml` | Updated — 15 category_dirs, scope on 84 nodes |
+
+### Commits
+
+- `d9c8485` — fix: use step-level gate instead of job-level if for matrix filtering

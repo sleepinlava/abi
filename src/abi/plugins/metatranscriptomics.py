@@ -63,8 +63,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 from abi._shared import _clean, _parse_fastp, _parse_star, _resolve_path
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
 from abi.report import write_plugin_report
-from abi.schemas import ABIExecutionPlan, ABIPlanStep, ABISample, ABISampleContext
-from abi.timeouts import mapping_block
+from abi.schemas import ABIExecutionPlan, ABISample, ABISampleContext
 from abi.tools import ToolRegistry
 
 
@@ -104,6 +103,14 @@ class MetatranscriptomicsPlugin:
         插件数据（配置文件、工具注册表等）的文件系统根目录。
         """
         return PLUGIN_ROOT / self.plugin_id
+
+    @property
+    def _tsv_mapper(self):
+        if not hasattr(self, "_tsv_mapper_cache"):
+            from abi.tsv_mapping import TSVMapper
+
+            self._tsv_mapper_cache = TSVMapper.from_yaml(self.root / "parsers.yaml")
+        return self._tsv_mapper_cache
 
     # ── Configuration / 配置 ──────────────────────────────────────────────
 
@@ -193,105 +200,9 @@ class MetatranscriptomicsPlugin:
             <outdir>/03_expression/<sample_id>/-- featureCounts output
         """
         context = self.build_sample_context(config, check_files=check_files)
-        outdir = Path(str(config["outdir"]))
-        threads = int(config["threads"])
-        # Allow the user to choose STAR or HISAT2 / 允许用户选择 STAR 或 HISAT2
-        aligner = str(mapping_block(config, "alignment").get("tool", "star"))
-        resources = config.get("resources", {})
-        if not isinstance(resources, Mapping):
-            resources = {}
-        # Sentinels so plan generation succeeds even without real indices
-        # 哨兵值保证即使没有真实索引也能生成计划
-        genome_index = str(resources.get("genome_index", "GENOME_INDEX_NOT_CONFIGURED"))
-        annotation_gtf = str(resources.get("annotation_gtf", "ANNOTATION_GTF_NOT_CONFIGURED"))
-        steps: List[ABIPlanStep] = []
+        from abi.dag_planner import build_plan_from_dag
 
-        for sample in context.samples:
-            # ── Step 1: QC / 第 1 步：质控 ──
-            sample_out_qc = outdir / "01_qc" / sample.sample_id
-            clean_read1 = sample_out_qc / f"{sample.sample_id}_R1.clean.fastq.gz"
-            clean_read2 = sample_out_qc / f"{sample.sample_id}_R2.clean.fastq.gz"
-            steps.append(
-                ABIPlanStep(
-                    step_id=f"{sample.sample_id}_qc_fastp",
-                    sample_id=sample.sample_id,
-                    step_name="read_qc",
-                    tool_id="fastp",
-                    category="qc",
-                    inputs={"read1": sample.read1, "read2": sample.read2},
-                    outputs={
-                        "output_dir": str(sample_out_qc),
-                        "clean_read1": str(clean_read1),
-                        "clean_read2": str(clean_read2),
-                    },
-                    params={
-                        "sample_id": sample.sample_id,
-                        "threads": threads,
-                        "mode": config["mode"],
-                    },
-                )
-            )
-
-            # ── Step 2: Alignment / 第 2 步：比对 ──
-            align_out = outdir / "02_alignment" / sample.sample_id
-            bam = align_out / f"{sample.sample_id}.Aligned.sortedByCoord.out.bam"
-            steps.append(
-                ABIPlanStep(
-                    step_id=f"{sample.sample_id}_alignment_{aligner}",
-                    sample_id=sample.sample_id,
-                    step_name="alignment",
-                    tool_id=aligner,
-                    category="alignment",
-                    inputs={"read1": str(clean_read1), "read2": str(clean_read2)},
-                    outputs={"output_dir": str(align_out), "bam": str(bam)},
-                    params={
-                        "sample_id": sample.sample_id,
-                        "threads": threads,
-                        "mode": config["mode"],
-                        "genome_index": genome_index,
-                        "output_prefix": str(align_out / f"{sample.sample_id}."),
-                    },
-                )
-            )
-
-            # ── Step 3: Quantification / 第 3 步：定量 ──
-            expression_out = outdir / "03_expression" / sample.sample_id
-            counts = expression_out / f"{sample.sample_id}.featureCounts.txt"
-            steps.append(
-                ABIPlanStep(
-                    step_id=f"{sample.sample_id}_expression_featurecounts",
-                    sample_id=sample.sample_id,
-                    step_name="gene_quantification",
-                    tool_id="featurecounts",
-                    category="expression",
-                    inputs={"bam": str(bam), "annotation_gtf": annotation_gtf},
-                    outputs={"output_dir": str(expression_out), "counts": str(counts)},
-                    params={
-                        "sample_id": sample.sample_id,
-                        "threads": threads,
-                        "mode": config["mode"],
-                    },
-                )
-            )
-
-        # Track which tools were selected so the agent knows what to register /
-        # 跟踪选中的工具，agent 据此注册所需工具
-        selected_tools = sorted({step.tool_id for step in steps if step.tool_id != "internal"})
-        return ABIExecutionPlan(
-            project_name=str(config["project_name"]),
-            analysis_type=self.plugin_id,
-            mode=str(config["mode"]),
-            threads=threads,
-            outdir=str(outdir),
-            log_dir=str(config["log_dir"]),
-            samples=context.samples,
-            sample_context=context,
-            selected_tools=selected_tools,
-            steps=steps,
-            provenance_dir=str(outdir / "provenance"),
-        )
-
-    # ── Tool registry / 工具注册表 ───────────────────────────────────────
+        return build_plan_from_dag(self.root / "pipeline_dag.yaml", config, context)
 
     def registry(self) -> ToolRegistry:
         """Return the tool registry loaded from ``tool_registry.yaml``.
@@ -329,12 +240,18 @@ class MetatranscriptomicsPlugin:
         output_dir: str | Path,
         sample_id: str,
     ) -> Mapping[str, List[Dict[str, Any]]]:
+        # Try declarative TSV mapper first
+        if self._tsv_mapper.has_parser(tool_id):
+            rows = self._tsv_mapper.parse(tool_id, output_dir, sample_id=sample_id)
+            if rows:
+                target = self._tsv_mapper.get_target_table(tool_id)
+                return {target: rows} if target else {}
+        # Fall back to hand-written parsers
         if tool_id == "fastp":
             return {"qc_summary": _parse_fastp(Path(output_dir), sample_id)}
         if tool_id in ("star", "hisat2"):
             return {"alignment_summary": _parse_star(Path(output_dir), sample_id)}
-        if tool_id == "featurecounts":
-            return {"gene_expression": _parse_featurecounts(Path(output_dir), sample_id)}
+        # featurecounts is handled by TSVMapper above
         return {}
 
     # ── Report generation / 报告生成 ─────────────────────────────────────
@@ -495,46 +412,3 @@ def _resolve_config_paths(config: Dict[str, Any]) -> None:
 
 
 # ── featureCounts parser / featureCounts 解析器 ──────────────────────────
-
-
-def _parse_featurecounts(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
-    """Parse all featureCounts output files in ``output_dir``.
-
-    featureCounts files have comment lines starting with ``#`` which are
-    stripped before CSV parsing.  The last column (index ``-1``) holds the
-    count value because featureCounts appends a per-sample count column to
-    the right of the gene-annotation columns.
-
-    featureCounts 文件中以 ``#`` 开头的注释行在 CSV 解析前被剥离。
-    最后一列（索引 ``-1``）存放计数值，因为 featureCounts 会在基因注释列
-    右侧追加每个样本的计数列。
-    """
-    rows: List[Dict[str, Any]] = []
-    for path in sorted(output_dir.glob("*featureCounts*.txt")):
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            # Skip comment lines (featureCounts header metadata)
-            # 跳过注释行（featureCounts 头部元数据）
-            reader = csv.DictReader(
-                (line for line in handle if not line.startswith("#")),
-                delimiter="\t",
-            )
-            if not reader.fieldnames:
-                continue
-            # The last column is the per-sample count / 最后一列是每个样本的计数值
-            count_field = reader.fieldnames[-1]
-            for row in reader:
-                gene_id = row.get("Geneid")
-                if not gene_id:
-                    continue
-                rows.append(
-                    {
-                        "sample_id": sample_id,
-                        "gene_id": gene_id,
-                        "count": row.get(count_field, ""),
-                        "tpm": "",  # TPM not computed by featureCounts alone
-                        # TPM 不由 featureCounts 单独计算
-                        "tool": "featurecounts",
-                        "source_file": str(path),
-                    }
-                )
-    return rows

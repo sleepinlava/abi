@@ -1,0 +1,24 @@
+# parsers.yaml — declarative output parsing rules for rnaseq_expression.
+#
+# NOTE: deseq2 is NOT declarified — it returns TWO tables
+# (differential_expression + normalized_expression) from one output,
+# which requires the hand-written _parse_deseq2 + _parse_deseq2_normalized.
+
+parsers:
+  featurecounts:
+    source:
+      type: tsv_mapping
+      pattern: "*featureCounts*.txt"
+      delimiter: "\t"
+      skip_lines_starting_with: "#"
+    target_table: gene_expression
+    columns:
+      gene_id:
+        sources: ["Geneid"]
+        default: ""
+      count:
+        sources_from: last_column
+        default: "0"
+    constants:
+      tpm: ""
+      tool: featurecounts

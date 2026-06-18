@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
+from abi.config import PLUGIN_ROOT
 from abi.plugins.metagenomic_plasmid._engine.sample_sheet import (
     parse_sample_sheet,
     single_sample_context,
@@ -775,9 +776,9 @@ def build_plan_from_dag(
     Returns:
         A fully-typed ``ExecutionPlan`` with topologically ordered steps.
     """
-    from abi.plugins.metagenomic_plasmid._engine.pipeline_dag import PipelineDAG
+    from abi.dag_planner import UniversalDAG
 
-    dag = PipelineDAG.from_yaml()
+    dag = UniversalDAG.from_yaml(PLUGIN_ROOT / "metagenomic_plasmid" / "pipeline_dag.yaml")
     context = sample_context or context_from_config(config, check_files=check_files)
     platform = _resolve_platform(context, config)
     outdir = Path(str(config["outdir"]))
@@ -789,10 +790,8 @@ def build_plan_from_dag(
     order = dag.topological_order(resolved_deps)
 
     # Separate project-level from sample-level nodes
-    project_node_ids = [nid for nid in order if dag.category_for(nid) in _PROJECT_LEVEL_CATEGORIES]
-    sample_node_ids = [
-        nid for nid in order if dag.category_for(nid) not in _PROJECT_LEVEL_CATEGORIES
-    ]
+    project_node_ids = [nid for nid in order if dag.scope_for(nid) == "cross_sample"]
+    sample_node_ids = [nid for nid in order if dag.scope_for(nid) == "per_sample"]
 
     steps: List[PlanStep] = []
     skipped: List[PlanStep] = []
@@ -801,7 +800,7 @@ def build_plan_from_dag(
     for sample in context.samples:
         sample_params = _dag_sample_base_params(sample, config, platform)
         for node_id in sample_node_ids:
-            node = dag.node(node_id)
+            node = dag.get_node(node_id)
             step = _dag_step_for_node(
                 node_id=node_id,
                 node=node,
@@ -826,7 +825,7 @@ def build_plan_from_dag(
         "abundance_table": str(outdir / "10_abundance" / "plasmid_abundance_tpm.tsv"),
     }
     for node_id in project_node_ids:
-        node = dag.node(node_id)
+        node = dag.get_node(node_id)
         step = _dag_project_step(
             node_id=node_id,
             node=node,
