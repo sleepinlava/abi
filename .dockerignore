@@ -14,6 +14,5 @@ docker/
 .claude/
 baseline_comparison/
 demo_artifacts/
-golden_traces/
-examples/
+# golden_traces/ and examples/ needed by pyproject.toml force-include at build time
 experiments/

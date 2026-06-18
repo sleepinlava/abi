@@ -19,9 +19,13 @@ COPY src/ /app/src/
 COPY plugins/ /app/plugins/
 COPY config/ /app/config/
 COPY scripts/ /app/scripts/
+COPY envs/ /app/envs/
+COPY examples/ /app/examples/
+COPY golden_traces/ /app/golden_traces/
 
 RUN /opt/conda/envs/wgs/bin/pip install --no-cache-dir -e /app/ && \
-    rm -rf /app/src /app/plugins /app/config /app/pyproject.toml
+    rm -rf /app/src /app/plugins /app/config /app/pyproject.toml \
+    /app/envs /app/examples /app/golden_traces
 
 # ── Runtime ──────────────────────────────────────────────────────────────
 ENV PATH="/opt/conda/envs/wgs/bin:$PATH"

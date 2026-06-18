@@ -52,9 +52,13 @@ COPY plugins/ /app/plugins/
 COPY config/ /app/config/
 COPY scripts/ /app/scripts/
 COPY data/ /app/data/
+COPY envs/ /app/envs/
+COPY examples/ /app/examples/
+COPY golden_traces/ /app/golden_traces/
 
 RUN /opt/conda/envs/autoplasm-base/bin/pip install --no-cache-dir -e /app/ && \
-    rm -rf /app/src /app/plugins /app/config /app/pyproject.toml
+    rm -rf /app/src /app/plugins /app/config /app/pyproject.toml \
+    /app/envs /app/examples /app/golden_traces
 
 # ── Runtime ──────────────────────────────────────────────────────────────
 # Make the base env the default (has the most Python deps + autoplasm CLI)
