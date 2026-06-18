@@ -39,10 +39,19 @@ def _load_entry_point_plugins() -> Dict[str, ABIPlugin]:
 
 
 def _builtin_plugins() -> Dict[str, ABIPlugin]:
+    from abi.plugins.amplicon_16s import Amplicon16SPlugin
     from abi.plugins.metagenomic_plasmid import MetagenomicPlasmidPlugin
     from abi.plugins.metatranscriptomics import MetatranscriptomicsPlugin
+    from abi.plugins.rnaseq_expression import RNASeqExpressionPlugin
+    from abi.plugins.wgs_bacteria import WGSBacteriaPlugin
 
-    plugins: List[ABIPlugin] = [MetagenomicPlasmidPlugin(), MetatranscriptomicsPlugin()]
+    plugins: List[ABIPlugin] = [
+        Amplicon16SPlugin(),
+        MetagenomicPlasmidPlugin(),
+        MetatranscriptomicsPlugin(),
+        RNASeqExpressionPlugin(),
+        WGSBacteriaPlugin(),
+    ]
     return {str(plugin.plugin_id): plugin for plugin in plugins}
 
 
