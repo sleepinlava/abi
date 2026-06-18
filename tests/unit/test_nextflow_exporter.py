@@ -75,7 +75,10 @@ def test_nextflow_exporter_serializes_metagenomic_plasmid_steps_without_path_edg
     assert "process S1_ASSEMBLY_MEGAHIT" in script
     assert "process S1_ASSEMBLY_QC_QUAST" in script
     assert "process S1_PLASMID_DETECT_GENOMAD" in script
-    # Verify channel wiring exists for key steps
-    assert "ch_S1_QC_FASTP = S1_QC_FASTP(abi_root)" in script
+    # Verify channel wiring exists for key steps.
+    # The DAG-driven planner inserts host_prediction before fastp,
+    # so fastp channels depend on the upstream host_prediction process.
+    assert "ch_S1_QC_FASTP" in script
+    assert "= S1_QC_FASTP(" in script
     # The DAG should export without errors
     assert "workflow {" in script

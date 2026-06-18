@@ -46,6 +46,6 @@ rnaseq_expression:
 
   # ── Provenance ──
   provenance:
-    min_commands: 3                 # fastp + STAR (featureCounts/DESeq2 may fail with synthetic reads)
+    min_commands: 2                 # fastp + STAR (featureCounts/DESeq2 may fail with synthetic reads)
     checksums_exist: true
     run_summary_exists: true

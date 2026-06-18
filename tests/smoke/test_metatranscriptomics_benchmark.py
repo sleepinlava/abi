@@ -87,6 +87,29 @@ def test_metatranscriptomics_benchmark_assertions(tmp_path: Path) -> None:
             str(PROJECT_ROOT / "resources" / "star_index" / "NC_000913.3.gtf"),
         )
     )
+    if not star_index.is_dir():
+        pytest.skip(f"STAR index not found: {star_index}")
+    if not gtf.exists():
+        pytest.skip(f"GTF annotation not found: {gtf}")
+
+    # Verify that at least one sample's read files exist
+    _sample_rows = sample_sheet.read_text(encoding="utf-8").strip().split("\n")
+    _header = _sample_rows[0].split("\t")
+    try:
+        _r1_idx = _header.index("read1")
+        _r2_idx = _header.index("read2")
+    except ValueError:
+        pytest.skip("Sample sheet missing read1/read2 columns")
+    _found_reads = False
+    for _row in _sample_rows[1:]:
+        _cols = _row.split("\t")
+        _r1 = Path(_cols[_r1_idx])
+        _r2 = Path(_cols[_r2_idx])
+        if _r1.exists() or _r2.exists():
+            _found_reads = True
+            break
+    if not _found_reads:
+        pytest.skip("No read files found for benchmark samples")
 
     config_path.write_text(
         yaml.dump(

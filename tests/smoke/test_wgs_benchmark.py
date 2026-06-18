@@ -71,6 +71,27 @@ def test_wgs_benchmark_assertions(tmp_path: Path) -> None:
         if ss.exists():
             sample_sheet.write_text(ss.read_text(encoding="utf-8"))
 
+    # Verify that at least one sample's read files exist before proceeding
+    _sample_rows = sample_sheet.read_text(encoding="utf-8").strip().split("\n")
+    _header = _sample_rows[0].split("\t")
+    try:
+        _r1_idx = _header.index("read1")
+        _r2_idx = _header.index("read2")
+    except ValueError:
+        pytest.skip("Sample sheet missing read1/read2 columns")
+    _found_reads = False
+    for _row in _sample_rows[1:]:
+        _cols = _row.split("\t")
+        _r1 = Path(_cols[_r1_idx])
+        _r2 = Path(_cols[_r2_idx])
+        if _r1.exists() or _r2.exists():
+            _found_reads = True
+            break
+    if not _found_reads:
+        pytest.skip(
+            "No read files found for benchmark samples"
+        )
+
     config_path.write_text(
         yaml.dump(
             {
