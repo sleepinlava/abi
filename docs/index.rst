@@ -8,7 +8,7 @@ tracking, tool contracts, and execution gating across five bioinformatics
 analysis types.
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 2
    :caption: Contents
 
    self
@@ -16,6 +16,7 @@ analysis types.
    plugin_development_guide
    workflow_validation
    hpc_development
+   openai_interface_standard
    devlog
 
 .. toctree::
@@ -26,12 +27,22 @@ analysis types.
    rnaseq_expression_workflow
    plugin_report_figure_spec
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Operations
+
+   agent_usage
+   job_service
+   release
+   abi_spec_v0.1
+
 Quick Links
 -----------
 
 * :doc:`api` — Full Python API reference
 * :doc:`plugin_development_guide` — How to add a new analysis type
 * :doc:`workflow_validation` — Biological validation methodology
+* :doc:`openai_interface_standard` — Multi-LLM tool descriptor export
 * :doc:`devlog` — Development log
 
 Indices and Tables

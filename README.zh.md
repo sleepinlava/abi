@@ -216,6 +216,7 @@ python -m twine check dist/*
 - [RNA-seq 工作流](docs/rnaseq_expression_workflow.md)
 - [工作流验证](docs/workflow_validation.md)
 - [HPC 开发](docs/hpc_development.md)
+- [OpenAI/LLM 接口标准](docs/openai_interface_standard.md)
 - [Agent 使用指南](docs/agent_usage.md)
 - [Job Service 指南](docs/job_service.md)
 - [发布指南](docs/release.md)

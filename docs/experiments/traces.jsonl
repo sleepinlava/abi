@@ -1,2 +1,0 @@
-{"group":"abi_control_layer","task_id":"rnaseq_dry_run","trace":"../../golden_traces/metatranscriptomics.jsonl"}
-{"group":"abi_control_layer","task_id":"plasmid_dry_run","trace":"../../golden_traces/metagenomic_plasmid.jsonl"}

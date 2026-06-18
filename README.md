@@ -219,6 +219,7 @@ More details:
 - [RNA-seq Workflow](docs/rnaseq_expression_workflow.md)
 - [Workflow Validation](docs/workflow_validation.md)
 - [HPC Development](docs/hpc_development.md)
+- [OpenAI/LLM Interface Standard](docs/openai_interface_standard.md)
 - [Agent Usage Guide](docs/agent_usage.md)
 - [Job Service Guide](docs/job_service.md)
 - [Release Guide](docs/release.md)

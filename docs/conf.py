@@ -56,3 +56,9 @@ source_suffix = {
     ".rst": "restructuredtext",
     ".md": "markdown",
 }
+
+# -- Exclude patterns -------------------------------------------------------
+exclude_patterns = [
+    "_build",
+    "*_zh.md",          # Chinese translations — read directly on GitHub
+]
