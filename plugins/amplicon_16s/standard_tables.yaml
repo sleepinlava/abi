@@ -7,6 +7,12 @@ tables:
     - reads_written
     - tool
     - source_file
+  merge_stats:
+    - sample_id
+    - merged_reads
+    - tool
+    - stage
+    - source_file
   denoising_stats:
     - sample_id
     - stage

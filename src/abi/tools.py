@@ -892,6 +892,9 @@ class GenericCommandSkill(ToolSkill):
     def validate_inputs(self, params: Dict[str, Any]) -> None:
         """Check that all required input files exist on disk.
 
+        Only validates inputs that look like file paths — string parameters
+        (e.g. primer sequences, database names, URLs) are skipped.
+
         # Skip in dry_run / 试运行时跳过
         In dry-run mode, input files may not exist yet (e.g. outputs of
         upstream steps), so validation is skipped. / 试运行时上游输出可能还不存在。
@@ -899,7 +902,7 @@ class GenericCommandSkill(ToolSkill):
         missing: List[str] = []
         for key in self.metadata.get("inputs", []):
             value = params.get(key)
-            if value and not Path(str(value)).exists():
+            if value and _looks_like_path(str(value)) and not Path(str(value)).exists():
                 missing.append(f"{key}={value}")
         if missing and not params.get("dry_run", False):
             raise ToolError(f"{self.name}: input files do not exist: {', '.join(missing)}")
@@ -1468,6 +1471,27 @@ def _template_values(values: Mapping[str, Any]) -> Dict[str, Any]:
     Applies _template_value() to each value in the mapping. / 将每个值转为模板安全字符串。
     """
     return {key: _template_value(value) for key, value in values.items()}
+
+
+def _looks_like_path(value: str) -> bool:
+    """Return True if *value* looks like a file path rather than a string parameter.
+
+    Distinguishes file paths (``/data/reads.fastq.gz``, ``./sample.tsv``) from
+    string parameters (``GTGCCAGCMGCCGCGGTAA``, ``8``, ``local``).  Used by
+    ``validate_inputs`` to avoid checking DNA sequences and other non-path values.
+    """
+    if value.startswith("/") or value.startswith("./") or value.startswith("../"):
+        return True
+    path_exts = (
+        ".fq", ".fastq", ".fa", ".fasta", ".fna", ".bam", ".sam",
+        ".tsv", ".csv", ".json", ".yaml", ".yml", ".txt", ".gz",
+        ".bz2", ".nwk", ".tree", ".R", ".py", ".sh",
+    )
+    if any(value.endswith(ext) for ext in path_exts):
+        return True
+    if "/" in value:
+        return True
+    return False
 
 
 def _safe_output_path(path: Path | None, output_dir: Path) -> Path | None:
