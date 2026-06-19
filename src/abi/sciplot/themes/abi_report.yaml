@@ -8,10 +8,10 @@ figure:
   dpi: 150
 
 font:
-  family: "Arial"
+  family: "DejaVu Sans"
   fallback:
-    - "Helvetica"
-    - "DejaVu Sans"
+    - "DejaVu Serif"
+    - "sans-serif"
   base_size_pt: 9
   title_size_pt: 11
   label_size_pt: 9

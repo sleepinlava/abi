@@ -5,6 +5,8 @@ Shows full data distribution with a mini box plot inside each violin.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
@@ -60,7 +62,8 @@ def plot_violin_with_box(
         widths=0.6,
     )
 
-    for i, body in enumerate(vp["bodies"]):
+    bodies: Any = vp["bodies"]
+    for i, body in enumerate(bodies):
         body.set_facecolor(colors[i % len(colors)])
         body.set_alpha(0.6)
         body.set_edgecolor("black")

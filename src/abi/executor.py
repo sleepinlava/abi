@@ -1005,32 +1005,36 @@ def _resolve_actual_outputs(
         return resolved
 
     # Format → file extension(s) mapping.
+    # Some tools (e.g. geNomad) use .fna for FASTA, .faa for protein FASTA.
     # 格式 → 文件扩展名映射。
-    _FORMAT_EXT: Dict[str, str] = {
-        "fastq.gz": ".fastq.gz",
-        "fastq": ".fastq",
-        "fasta": ".fasta",
-        "fna": ".fna",
-        "fa": ".fa",
-        "json": ".json",
-        "html": ".html",
-        "tsv": ".tsv",
-        "csv": ".csv",
-        "txt": ".txt",
-        "bam": ".bam",
-        "sam": ".sam",
-        "gfa": ".gfa",
-        "gff": ".gff",
-        "gff3": ".gff3",
-        "png": ".png",
-        "svg": ".svg",
-        "pdf": ".pdf",
+    # 某些工具（例如 geNomad）对 FASTA 使用 .fna，对蛋白质 FASTA 使用 .faa。
+    _FORMAT_EXT: Dict[str, list] = {
+        "fastq.gz": [".fastq.gz"],
+        "fastq": [".fastq"],
+        "fasta": [".fasta", ".fna", ".fa", ".faa"],
+        "fna": [".fna"],
+        "fa": [".fa"],
+        "json": [".json"],
+        "html": [".html"],
+        "tsv": [".tsv"],
+        "csv": [".csv"],
+        "txt": [".txt"],
+        "bam": [".bam"],
+        "sam": [".sam"],
+        "gfa": [".gfa"],
+        "gff": [".gff"],
+        "gff3": [".gff3"],
+        "png": [".png"],
+        "svg": [".svg"],
+        "pdf": [".pdf"],
     }
 
-    # Gather all regular files in the output directory (non-recursive).
-    # 收集输出目录中的所有常规文件（非递归）。
+    # Gather all regular files in the output directory (recursive).
+    # Some tools (e.g. geNomad) write to subdirectories of output_dir.
+    # 收集输出目录中的所有常规文件（递归）。
+    # 某些工具（例如 geNomad）将文件写入 output_dir 的子目录中。
     try:
-        dir_files = sorted((f for f in outdir.iterdir() if f.is_file()), key=lambda f: f.name)
+        dir_files = sorted((f for f in outdir.rglob("*") if f.is_file()), key=lambda f: f.name)
     except OSError:
         return resolved
 
@@ -1049,13 +1053,14 @@ def _resolve_actual_outputs(
         extensions = _FORMAT_EXT.get(fmt)
         if not extensions:
             # Try the format itself as an extension (e.g. "fastq.gz").
-            extensions = f".{fmt}" if fmt else ""
+            extensions = [f".{fmt}"] if fmt else []
 
         if extensions:
+            ext_tuple = tuple(extensions)
             candidates = [
                 f
                 for f in dir_files
-                if f.name.endswith(extensions)
+                if f.name.endswith(ext_tuple)
                 and str(f.resolve()) not in assigned
                 and not f.name.endswith((".stdout.log", ".stderr.log"))
             ]

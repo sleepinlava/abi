@@ -9,9 +9,7 @@ def test_build_plan_selects_expected_routes():
     assert "fastp" in tool_ids
     assert "megahit" in tool_ids
     assert "genomad" in tool_ids
-    assert "metaphlan" in tool_ids
-    assert "samtools" in tool_ids
-    assert "fastspar" in tool_ids
+    # Optional categories disabled by default since Phase C
     assert "plasmaag" not in tool_ids
     assert "mob_suite" not in tool_ids
     assert "plasmidhostfinder" not in tool_ids
@@ -83,15 +81,6 @@ def test_illumina_route_uses_cleaned_reads_and_megahit_contigs(tmp_path):
 
     quast = steps["S1_assembly_qc_quast"]
     assert quast.params["assembly"].endswith("02_assembly/S1/final.contigs.fa")
-
-    coverm = steps["S1_abundance_coverm"]
-    assert coverm.params["bam"].endswith("10_abundance/S1/S1.bam")
-
-    metaphlan = steps["S1_host_prediction_metaphlan"]
-    metaphlan_read1, metaphlan_read2 = metaphlan.params["metaphlan_input"].split(",")
-    assert metaphlan_read1.endswith("01_qc/S1/S1_R1.clean.fastq.gz")
-    assert metaphlan_read2.endswith("01_qc/S1/S1_R2.clean.fastq.gz")
-    assert metaphlan.params["metaphlan_long_reads_flag"] == ""
 
 
 def test_ont_route_uses_filtered_long_reads_and_metaflye_contigs(tmp_path):

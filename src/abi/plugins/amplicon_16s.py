@@ -157,6 +157,7 @@ class Amplicon16SPlugin:
             return {
                 "alpha_diversity": _parse_alpha_diversity(Path(output_dir)),
                 "beta_diversity": _parse_beta_diversity(Path(output_dir)),
+                "asv_table": _parse_asv_table(Path(output_dir)),
             }
         return {}
 
@@ -451,7 +452,7 @@ def _parse_vsearch_denoise(output_dir: Path, sample_id: str) -> List[Dict[str, A
 
 def _parse_sintax(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-    for path in sorted(output_dir.glob("taxonomy*.tsv")):
+    for path in sorted(output_dir.glob("*_taxonomy.tsv")):
         with path.open("r", encoding="utf-8", newline="") as handle:
             for line in handle:
                 line = line.strip()
@@ -466,8 +467,14 @@ def _parse_sintax(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
                 ranks = tax_str.split(",")
                 rank_map: Dict[str, str] = {}
                 for rank_entry in ranks:
-                    prefix = rank_entry[0] if rank_entry else ""
-                    name = rank_entry[3:] if len(rank_entry) > 3 else rank_entry
+                    # SINTAX format: "d:Bacteria(1.00)" — prefix is first char,
+                    # name starts after "X:" (2 chars).  Use split for robustness.
+                    # / SINTAX 格式: "d:Bacteria(1.00)" — 用 split 而非硬编码偏移。
+                    if ":" in rank_entry:
+                        prefix, name = rank_entry.split(":", 1)
+                    else:
+                        prefix = rank_entry[0] if rank_entry else ""
+                        name = rank_entry[1:] if len(rank_entry) > 1 else rank_entry
                     if prefix == "d":
                         rank_map["kingdom"] = name
                     elif prefix == "p":
@@ -501,6 +508,42 @@ def _parse_sintax(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
 
 
 # ── Diversity parsers ───────────────────────────────────────────────────
+
+
+def _parse_asv_table(output_dir: Path) -> List[Dict[str, Any]]:
+    """Parse merged_asv_table.tsv → standard asv_table rows.
+
+    The merged table has columns ``[asv_id, sequence, <sample_id>...]``.
+    This unpivots it to one row per ASV per sample::
+
+        asv_id  sample_id  abundance  sequence  tool  source_file
+    """
+    merged = output_dir / "merged_asv_table.tsv"
+    if not merged.exists():
+        return []
+    rows: List[Dict[str, Any]] = []
+    with merged.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        if not reader.fieldnames or len(reader.fieldnames) < 3:
+            return []
+        # Column 0 = asv_id, column 1 = sequence, remaining = sample abundances
+        sample_cols = reader.fieldnames[2:]
+        for csv_row in reader:
+            asv_id = csv_row.get("asv_id", "")
+            sequence = csv_row.get("sequence", "")
+            for sample_id in sample_cols:
+                abundance = csv_row.get(sample_id, "0")
+                rows.append(
+                    {
+                        "asv_id": asv_id,
+                        "sample_id": sample_id,
+                        "abundance": abundance,
+                        "sequence": sequence,
+                        "tool": "diversity_metrics",
+                        "source_file": str(merged),
+                    }
+                )
+    return rows
 
 
 def _parse_alpha_diversity(output_dir: Path) -> List[Dict[str, Any]]:

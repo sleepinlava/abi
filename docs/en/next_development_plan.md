@@ -1,7 +1,7 @@
 # ABI Next Stage Development Plan & Technical Design
 
-> **Status**: Active (2026-06-18)
-> **Last updated**: 2026-06-18 — Direction F complete, plasmid DAG migrated to UniversalDAG
+> **Status**: Active (2026-06-20)
+> **Last updated**: 2026-06-20 — Phase 1-3 complete: lint/mypy/pytest clean, script auto-resolution, 4/5 plugins verified via end-to-end real execution
 > **Canonical reference**: This document supersedes `docs/abi_final_development_plan.md` and `docs/demo_plan.md`.
 > **Related**: `docs/workflow_validation.md`, `docs/pipeline_biological_validity.md`, `docs/plugin_development_guide.md`, `docs/hpc_development.md`
 
@@ -18,7 +18,7 @@
 | 6 | Benchmark datasets | ✅ Complete | 4 smoke tests | — | 5/5 plugins, value-level validation |
 | 7 | Multi-plugin demos | ⏸️ Deferred | — | — | Depends on real input data |
 
-**Total**: 688 tests, 0 mypy errors, 0 ruff errors, 5 functional plugins with DAG-driven plan generation
+**Total**: 698 tests, 0 mypy errors, 0 ruff errors, 5 functional plugins with DAG-driven plan generation (4/5 verified via end-to-end real execution)
 
 ### Direction D: Benchmark Datasets + End-to-End Tests (2026-06-18)
 
@@ -122,7 +122,7 @@ and cross_sample scope detection. All 5 platforms produce identical active node 
 | F3 | Refactor plasmid planner to use UniversalDAG | ✅ |
 | F4 | Active node parity verification (5/5 platforms match PipelineDAG) | ✅ |
 
-**Current test status**: 688 passed, 7 pre-existing failures (5 benchmark/subprocess + 2 DAG/Nextflow exporter), 1 skipped.
+**Current test status**: 698 passed, 0 failures, 8 skipped (7 benchmark smoke tests requiring conda tools + 1 DAG golden trace TODO).
 
 ### Decision: No Native Windows Support
 

@@ -796,9 +796,10 @@ def build_plan_from_dag(
     steps: List[PlanStep] = []
     skipped: List[PlanStep] = []
 
-    # Generate per-sample steps
+    # Generate per-sample steps with upstream output tracking
     for sample in context.samples:
         sample_params = _dag_sample_base_params(sample, config, platform)
+        upstream_outputs: Dict[str, Dict[str, Any]] = {}
         for node_id in sample_node_ids:
             node = dag.get_node(node_id)
             step = _dag_step_for_node(
@@ -809,11 +810,14 @@ def build_plan_from_dag(
                 platform=platform,
                 base_params=sample_params,
                 resolved_deps=resolved_deps,
+                upstream_outputs=upstream_outputs,
             )
             if step.skipped:
                 skipped.append(step)
             else:
                 steps.append(step)
+                # Track this step's outputs for downstream nodes
+                upstream_outputs[node_id] = dict(step.outputs)
 
     # Generate project-level steps (report, multi-sample analysis)
     project_params = {
@@ -900,6 +904,90 @@ def _data_profile_dag(sample: SampleInput, config: Mapping[str, Any]) -> str:
     return DATA_PROFILE_BY_PLATFORM.get(sample.platform, sample.platform)
 
 
+def _resolve_output_path_template(
+    template: str,
+    config: Mapping[str, Any],
+    sample: SampleInput | None,
+    category: str,
+) -> str:
+    """Resolve a DAG output path template against sample and config context."""
+    from abi.dag_planner import PathTemplateContext
+
+    category_dir = STEP_DIRS.get(category, category)
+    ctx = PathTemplateContext(
+        config=config,
+        sample=sample,
+        category_dir=category_dir,
+    )
+    return template.format_map(ctx)
+
+
+def _resolve_node_inputs(
+    node: Mapping[str, Any],
+    sample: SampleInput,
+    config: Mapping[str, Any],
+    upstream_outputs: Mapping[str, Mapping[str, Any]],
+) -> Dict[str, Any]:
+    """Resolve a DAG node's inputs by merging sample data with upstream outputs.
+
+    For each input key in the node's ``inputs`` spec:
+    1. If ``source: UPSTREAM_NODE.OUTPUT_KEY`` → use upstream output path.
+    2. If ``fallback: UPSTREAM_NODE.OUTPUT_KEY`` → try fallback when source missing.
+    3. Otherwise fall back to sample data or config defaults.
+    """
+    sample_dict = dict(sample.to_dict())
+    resolved: Dict[str, Any] = dict(sample_dict)
+
+    for key, spec in node.get("inputs", {}).items():
+        if not isinstance(spec, Mapping):
+            resolved.setdefault(key, spec)
+            continue
+
+        source = spec.get("source")
+        if isinstance(source, str) and "." in source:
+            parts = source.split(".", 1)
+            upstream_id, upstream_key = parts[0], parts[1]
+
+            # config.* sources: e.g. config.resources.genomad_database
+            if upstream_id == "config":
+                section: Any = config
+                for segment in upstream_key.split("."):
+                    if isinstance(section, Mapping) and segment in section:
+                        section = section[segment]
+                    else:
+                        section = None
+                        break
+                if section is not None:
+                    resolved[key] = str(section)
+                    continue
+
+            # Handle template source like "{active_assembly_node}.assembly"
+            if upstream_id.startswith("{") and upstream_id.endswith("}"):
+                # Template reference — try each upstream node
+                for uid, uouts in upstream_outputs.items():
+                    val = uouts.get(upstream_key)
+                    if val:
+                        resolved[key] = str(val)
+                        break
+            else:
+                val = upstream_outputs.get(upstream_id, {}).get(upstream_key)
+                if val is not None:
+                    resolved[key] = str(val)
+                    continue
+
+        # Try fallback
+        fallback = spec.get("fallback")
+        if isinstance(fallback, str) and "." in fallback:
+            parts = fallback.split(".", 1)
+            fb_id, fb_key = parts[0], parts[1]
+            val = upstream_outputs.get(fb_id, {}).get(fb_key)
+            if val is not None and key not in resolved:
+                resolved[key] = str(val)
+                continue
+
+    return resolved
+
+
 def _dag_step_for_node(
     *,
     node_id: str,
@@ -909,25 +997,41 @@ def _dag_step_for_node(
     platform: str,
     base_params: Dict[str, Any],
     resolved_deps: Mapping[str, List[str]],
+    upstream_outputs: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> PlanStep:
-    """Build a single ``PlanStep`` for one sample-level DAG node."""
+    """Build a single ``PlanStep`` for one sample-level DAG node.
+
+    Resolves inputs by merging raw sample data with upstream node outputs
+    (following DAG ``source`` references), then falling back to config values.
+    """
     tool_id = str(node.get("tool_id", "internal"))
     category = str(node.get("category", ""))
     outdir = Path(str(config["outdir"])) / STEP_DIRS.get(category, category) / sample.sample_id
     step_id = f"{sample.sample_id}_{node_id}"
 
+    # ── Resolve inputs first (outputs may reference them for internal nodes) ──
+    resolved_inputs = _resolve_node_inputs(node, sample, config, upstream_outputs or {})
+
     # Merge node outputs with computed output_dir.
-    # Append tool_id to generic output keys so that nodes in the same
-    # category (e.g. typing_plasmidfinder + typing_mob_typer) produce
-    # distinct output paths — required by the DAG inference engine.
     outputs: Dict[str, Any] = {"output_dir": str(outdir)}
     for key, spec in node.get("outputs", {}).items():
         if isinstance(spec, Mapping) and key != "output_dir":
-            # Use tool-specific suffix to avoid collisions
-            outputs[key] = str(outdir / f"{sample.sample_id}.{tool_id}.{key}")
+            path_template = spec.get("path")
+            if path_template:
+                outputs[key] = _resolve_output_path_template(
+                    path_template, config, sample, category
+                )
+            elif tool_id == "internal" and key in resolved_inputs:
+                # Internal nodes pass through their resolved inputs as outputs
+                outputs[key] = str(resolved_inputs[key])
+            else:
+                outputs[key] = str(outdir / f"{sample.sample_id}.{tool_id}.{key}")
+    # Ensure output_dir is present in params
+    resolved_inputs["output_dir"] = str(outdir)
 
-    # Build params: base + node inputs + tool-specific overrides
+    # Build params: base + resolved inputs + tool-specific overrides
     step_params: Dict[str, Any] = dict(base_params)
+    step_params.update(resolved_inputs)
     step_params["output_dir"] = str(outdir)
     step_params["sample_id"] = sample.sample_id
 
@@ -940,10 +1044,7 @@ def _dag_step_for_node(
     if deps:
         step_params["_upstream_nodes"] = deps
 
-    # Embed the step contract from the DAG spec so the executor can enforce
-    # output validation, assertions, and checksum chaining at runtime.
-    # 将 DAG 规范中的步骤契约嵌入，以便执行器在运行时执行输出验证、
-    # 断言和校验和链。
+    # Embed the step contract from the DAG spec
     step_params["_contract"] = {
         "outputs": node.get("outputs", {}),
         "assertions": node.get("assertions", []),
@@ -956,7 +1057,7 @@ def _dag_step_for_node(
         step_name=node.get("name", category),
         tool_id=tool_id,
         category=category,
-        inputs=sample.to_dict(),
+        inputs=resolved_inputs,
         outputs=outputs,
         params=step_params,
     )
@@ -978,7 +1079,11 @@ def _dag_project_step(
     outputs: Dict[str, Any] = {"outdir": str(outdir)}
     for key, spec in node.get("outputs", {}).items():
         if isinstance(spec, Mapping) and key != "outdir":
-            outputs[key] = str(outdir / key)
+            path_template = spec.get("path")
+            if path_template:
+                outputs[key] = _resolve_output_path_template(path_template, config, None, category)
+            else:
+                outputs[key] = str(outdir / key)
 
     step_params = dict(params)
     step_params["output_dir"] = str(outdir)

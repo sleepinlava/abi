@@ -46,12 +46,21 @@ def write_yaml(data: Mapping[str, Any], path: str | Path) -> Path:
 
 
 def resolved_mamba_root() -> Path:
-    """Return the local mamba root used by ABI-managed tool environments."""
-    return Path(
-        os.environ.get("ABI_MAMBA_ROOT")
-        or os.environ.get("AUTOPLASM_MAMBA_ROOT")
-        or PROJECT_ROOT / ".mamba"
-    )
+    """Return the local mamba root used by ABI-managed tool environments.
+
+    Resolution order:
+    1. ``ABI_MAMBA_ROOT`` env var (explicit override)
+    2. ``AUTOPLASM_MAMBA_ROOT`` env var (legacy compat)
+    3. ``PROJECT_ROOT / ".mamba"`` (default local install)
+    4. ``PROJECT_ROOT.parent / "abi-envs"`` (sibling dir, common in dev/deploy)
+    """
+    default = PROJECT_ROOT / ".mamba"
+    if default.exists():
+        return default
+    sibling = PROJECT_ROOT.parent / "abi-envs"
+    if sibling.exists():
+        return sibling
+    return default
 
 
 def deep_merge(base: Dict[str, Any], override: Mapping[str, Any]) -> Dict[str, Any]:

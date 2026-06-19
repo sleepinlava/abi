@@ -35,10 +35,14 @@ nodes:
   # ── Primer Trimming ─────────────────────────────────────────────────
   trim_cutadapt:
     tool_id: cutadapt
+    platforms: [illumina]
     category: qc
     scope: per_sample
     optional: false
     depends_on: []
+    params:
+      forward_primer: "CCTACGGGNGGCWGCAG"
+      reverse_primer: "GACTACHVGGGTATCTAATCC"
     inputs:
       read1:           {type: file, format: fastq.gz, source: sample_sheet}
       read2:           {type: file, format: fastq.gz, source: sample_sheet}
@@ -62,6 +66,7 @@ nodes:
   # ── Merge Paired Reads ──────────────────────────────────────────────
   merge_vsearch:
     tool_id: vsearch_mergepairs
+    platforms: [illumina]
     category: preprocessing
     scope: per_sample
     optional: false
@@ -84,6 +89,7 @@ nodes:
   # ── Dereplicate ─────────────────────────────────────────────────────
   derep_vsearch:
     tool_id: vsearch_derep
+    platforms: [illumina]
     category: dereplication
     scope: per_sample
     optional: false
@@ -105,6 +111,7 @@ nodes:
   # ── Denoise UNOISE3 ─────────────────────────────────────────────────
   denoise_unoise3:
     tool_id: vsearch_denoise
+    platforms: [illumina]
     category: denoising
     scope: per_sample
     optional: false
@@ -116,7 +123,7 @@ nodes:
         type: file
         format: fasta
         contract: {min_size: "100B"}
-        path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_asv.fasta"
+        path: "{outdir}/{category_dir}/{sample_id}/asvs.fasta"
       output_dir:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
@@ -126,6 +133,7 @@ nodes:
   # ── Optional OTU clustering ─────────────────────────────────────────
   otu_cluster:
     tool_id: vsearch_otu
+    platforms: [illumina]
     category: clustering
     scope: per_sample
     optional: true
@@ -147,6 +155,7 @@ nodes:
   # ── SINTAX Taxonomy ─────────────────────────────────────────────────
   taxonomy_sintax:
     tool_id: vsearch_taxonomy
+    platforms: [illumina]
     category: taxonomy
     scope: per_sample
     optional: false
@@ -166,9 +175,10 @@ nodes:
     assertions:
       - "output_dir.exists()"
 
-  # ── Phylogeny Tree ───────────────────────────────────────────────────
-  phylogeny:
-    tool_id: phylogeny_build
+  # ── Combine ASV FASTA ───────────────────────────────────────────────
+  phylogeny_combine:
+    tool_id: phylogeny_combine
+    platforms: [illumina]
     category: phylogeny
     scope: cross_sample
     optional: false
@@ -178,6 +188,56 @@ nodes:
         type: file
         format: fasta
         aggregate: per_sample_outputs
+    outputs:
+      combined_fasta:
+        type: file
+        format: fasta
+        contract: {min_size: "100B"}
+        path: "{outdir}/05b_phylogeny/combined.fasta"
+      output_dir:
+        type: directory
+        path: "{outdir}/05b_phylogeny"
+    assertions:
+      - "output_dir.exists()"
+
+  # ── Phylogeny Alignment ─────────────────────────────────────────────
+  phylogeny_mafft:
+    tool_id: phylogeny_mafft
+    platforms: [illumina]
+    category: phylogeny
+    scope: cross_sample
+    optional: false
+    depends_on: [phylogeny_combine]
+    inputs:
+      combined_fasta:
+        type: file
+        format: fasta
+        source: phylogeny_combine.combined_fasta
+    outputs:
+      aligned_fasta:
+        type: file
+        format: fasta
+        contract: {min_size: "100B"}
+        path: "{outdir}/05b_phylogeny/aligned.fasta"
+      output_dir:
+        type: directory
+        path: "{outdir}/05b_phylogeny"
+    assertions:
+      - "output_dir.exists()"
+
+  # ── Phylogeny Tree ───────────────────────────────────────────────────
+  phylogeny_tree:
+    tool_id: phylogeny_tree
+    platforms: [illumina]
+    category: phylogeny
+    scope: cross_sample
+    optional: false
+    depends_on: [phylogeny_mafft]
+    inputs:
+      aligned_fasta:
+        type: file
+        format: fasta
+        source: phylogeny_mafft.aligned_fasta
     outputs:
       phylogeny_tree:
         type: file
@@ -193,17 +253,21 @@ nodes:
   # ── Diversity Metrics ───────────────────────────────────────────────
   diversity:
     tool_id: diversity_metrics
+    platforms: [illumina]
     category: diversity
     scope: cross_sample
     optional: false
-    depends_on: [denoise_unoise3, phylogeny]
+    depends_on: [denoise_unoise3, phylogeny_tree]
+    params:
+      denoise_dir: "{outdir}/04_denoise"
+      merge_dir: "{outdir}/02_merge"
     inputs:
       asv_table:        {type: file, format: tsv}
       diversity_script: {type: file, format: py}
       phylogeny_tree:
         type: file
         format: nwk
-        source: phylogeny.phylogeny_tree
+        source: phylogeny_tree.phylogeny_tree
         optional: true
     outputs:
       alpha_tsv:

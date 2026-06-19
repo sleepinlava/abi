@@ -40,7 +40,7 @@ outputs:
 execution:
   env_name: amplicon
   executable: cutadapt
-  command_template: "cutadapt -g {forward_primer} -G {reverse_primer} -o {output_dir}/{sample_id}_R1.trimmed.fastq.gz -p {output_dir}/{sample_id}_R2.trimmed.fastq.gz {read1} {read2} --cores {threads} --minimum-length 50"
+  command_template: "cutadapt -g {forward_primer} -G {reverse_primer} -o {output_dir}/{sample_id}_trimmed_R1.fastq.gz -p {output_dir}/{sample_id}_trimmed_R2.fastq.gz {read1} {read2} --cores {threads} --minimum-length 50"
   network: false
   writes_output: true
 failure_handling:

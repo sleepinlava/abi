@@ -1,0 +1,79 @@
+# ABI metagenomic_plasmid default configuration
+# This file provides default values when no user config is specified.
+# Most users will override project_name, sample_sheet, and outdir.
+
+project_name: plasmid_analysis
+mode: dry_run
+threads: 4
+outdir: results/plasmid_analysis
+log_dir: logs/plasmid_analysis
+
+# Input section — reference a sample sheet or single-input path
+input:
+  sample_sheet: sample_sheet.tsv
+
+# QC: fastp trimming + optional fastqc/multiqc
+qc:
+  enable: auto
+  run_fastqc: false
+  run_multiqc: false
+  tool: fastp
+
+# Assembly: megahit (Illumina) / metaflye (ONT/HiFi) / hybridspades (hybrid)
+assembly:
+  enable: true
+  tool: auto
+  min_contig_length: 500
+
+# Assembly QC: QUAST evaluation
+assembly_qc:
+  enable: true
+
+# Plasmid detection: geNomad is the default single tool
+plasmid_detection:
+  enable: true
+  tools:
+    - genomad
+  strategy: single_tool
+
+# Host removal (optional — enabled in auto mode for samples with reads)
+host_removal:
+  enable: auto
+  tool: bowtie2
+
+# Host taxonomy (optional — enabled in auto mode)
+host_prediction:
+  enable: auto
+
+# Plasmid annotation
+annotation:
+  enable: true
+  general_annotator: bakta
+  enable_isescan: false
+  enable_integronfinder: false
+
+# AMR / virulence gene detection
+typing:
+  enable: auto
+  tools:
+    - amrfinderplus
+    - abricate
+
+# Plasmid abundance estimation
+abundance:
+  enable: auto
+  tool: coverm
+
+# Plasmid typing (MOB-suite, PlasmidFinder)
+plasmid_typing:
+  enable: auto
+
+# Comparative genomics / cross-sample analysis
+sample_analysis:
+  enable: auto
+
+# Resource paths — sentinel values indicate resources that need setup
+resources:
+  genomad_db: GENOMAD_DB_NOT_CONFIGURED
+  bakta_db: BAKTA_DB_NOT_CONFIGURED
+  amrfinder_db: AMRFINDER_DB_NOT_CONFIGURED

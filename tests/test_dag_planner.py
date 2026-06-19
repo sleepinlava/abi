@@ -69,7 +69,7 @@ class TestUniversalDAGLoading:
         [
             ("rnaseq_expression", 5),
             ("wgs_bacteria", 5),
-            ("amplicon_16s", 8),
+            ("amplicon_16s", 10),
         ],
     )
     def test_load_existing_dag(self, plugin_name: str, expected_nodes: int) -> None:

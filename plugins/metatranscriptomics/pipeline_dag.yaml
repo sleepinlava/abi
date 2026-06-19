@@ -27,6 +27,7 @@ nodes:
   # ── QC ──────────────────────────────────────────────────────────────
   qc_fastp:
     tool_id: fastp
+    platforms: [illumina]
     category: qc
     scope: per_sample
     optional: false
@@ -52,10 +53,13 @@ nodes:
   # ── Alignment ───────────────────────────────────────────────────────
   alignment_star:
     tool_id: star
+    platforms: [illumina]
     category: alignment
     scope: per_sample
     optional: false
     depends_on: [qc_fastp]
+    params:
+      output_prefix: "{outdir}/{category_dir}/{sample_id}/{sample_id}."
     inputs:
       read1:  {type: file, format: fastq.gz, source: qc_fastp.clean_read1}
       read2:  {type: file, format: fastq.gz, source: qc_fastp.clean_read2}
@@ -75,6 +79,7 @@ nodes:
   # ── Quantification ──────────────────────────────────────────────────
   quant_featurecounts:
     tool_id: featurecounts
+    platforms: [illumina]
     category: expression
     scope: per_sample
     optional: false

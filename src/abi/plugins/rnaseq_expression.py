@@ -226,7 +226,7 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
             samples.append(
                 ABISample(
                     sample_id=sample_id,
-                    platform=_clean(row.get("platform")) or "rna_seq",
+                    platform=_clean(row.get("platform")) or "illumina",
                     group=_clean(row.get("group")) or _clean(row.get("condition")),
                     read1=read1,
                     read2=read2,

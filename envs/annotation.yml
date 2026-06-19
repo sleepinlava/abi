@@ -2,7 +2,7 @@ name: autoplasm-annotation
 channels: [conda-forge, bioconda, defaults]
 channel_priority: strict
 dependencies:
-  - python=3.9
+  - python=3.10
   - bakta
   - prokka
   - prodigal

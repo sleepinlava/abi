@@ -354,8 +354,7 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
             samples.append(
                 ABISample(
                     sample_id=sample_id,
-                    # Default platform to "rna_seq" when not specified / 未指定时默认为 "rna_seq"
-                    platform=_clean(row.get("platform")) or "rna_seq",
+                    platform=_clean(row.get("platform")) or "illumina",
                     # group falls back to condition for DE-tool compatibility
                     # group 回退到 condition 以兼容差异表达工具
                     group=_clean(row.get("group")) or _clean(row.get("condition")),

@@ -4,7 +4,7 @@
 figures:
   - id: assembly_qc
     type: bar
-    source_table: assembly_qc
+    source_table: genome_assembly_stats
     x: sample_id
     y: n50
     title: "Assembly N50 and Contig Count"
@@ -14,8 +14,8 @@ figures:
 
   - id: genome_gc_scatter
     type: scatter
-    source_table: assembly_qc
-    x: genome_size
+    source_table: genome_assembly_stats
+    x: total_length
     y: gc_content
     title: "Genome Size vs GC Content"
     xlabel: "Genome Size (bp)"
@@ -24,28 +24,25 @@ figures:
 
   - id: amr_heatmap
     type: heatmap
-    source_table: amr_genes
+    source_table: amr_profile
     x: sample_id
     title: "AMR Gene Detection Heatmap"
     colormap: "Reds"
     top_n: 50
-    required: true
+    required: false
 
-  - id: amr_drug_class
+  - id: amr_target_class
     type: bar
-    source_table: amr_genes
-    x: drug_class
-    y: gene_count
-    title: "AMR Genes by Drug Class"
-    xlabel: "Drug Class"
-    ylabel: "Gene Count"
-    sort_by: gene_count
-    ascending: false
+    source_table: amr_profile
+    x: target_class
+    title: "AMR Genes by Target Class"
+    xlabel: "Target Class"
+    ylabel: "Count"
     required: false
 
   - id: annotation_composition
-    type: stacked_bar
-    source_table: annotation_summary
-    x: sample_id
-    title: "Genome Annotation Composition"
+    type: bar
+    source_table: genome_annotation
+    x: feature_type
+    title: "Genome Feature Types"
     required: false

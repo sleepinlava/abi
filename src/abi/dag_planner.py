@@ -37,7 +37,7 @@ from typing import Any, Dict, Iterable, List, Mapping
 
 import yaml
 
-from abi.schemas import ExecutionPlan, PlanStep, SampleContext, SampleInput
+from abi.schemas import VALID_PLATFORMS, ExecutionPlan, PlanStep, SampleContext, SampleInput
 
 _logger = logging.getLogger("abi.dag_planner")
 
@@ -45,6 +45,7 @@ __all__ = [
     "PathTemplateContext",
     "UniversalDAG",
     "build_plan_from_dag",
+    "detect_platform",
 ]
 
 
@@ -305,6 +306,12 @@ class UniversalDAG:
             if isinstance(value, (list, dict, set)) and len(value) == 0:
                 return False
             return True
+        if operator == "list_contains":
+            if isinstance(value, list) and expected in value:
+                return True
+            if isinstance(value, str) and expected == value:
+                return True
+            return False
 
         return False
 
@@ -484,6 +491,52 @@ class UniversalDAG:
         return False
 
 
+# ── Platform detection ───────────────────────────────────────────────────
+# Auto-detects the sequencing platform from sample data when the platform
+# column is "auto", empty, or "generic".
+# / 当 platform 列为 auto/空/generic 时，从样本数据自动检测测序平台。
+
+
+def detect_platform(sample: SampleInput) -> str:
+    """Auto-detect sequencing platform from sample data.
+
+    Resolution order:
+    1. Explicit, valid platform (in ``VALID_PLATFORMS``, not ``"generic"``).
+    2. Long reads present → ``"ont"``.
+    3. Paired-end or single-end short reads → ``"illumina"``.
+    4. Assembly-only input → ``"assembly"``.
+    5. Default fallback → ``"illumina"``.
+
+    Non-standard platform values (e.g. ``"rna_seq"``) are treated as
+    "auto" and trigger detection rather than being passed through.
+    This prevents legacy plugin-specific labels from silently failing
+    node platform filtering.
+
+    Args:
+        sample: A parsed ``SampleInput`` from the sample sheet.
+
+    Returns:
+        The resolved platform string (one of ``VALID_PLATFORMS``).
+    """
+    explicit = (sample.platform or "").strip().lower()
+    if explicit and explicit in VALID_PLATFORMS and explicit != "generic":
+        return explicit
+
+    if sample.long_reads:
+        return "ont"
+
+    if sample.read1 and sample.read2:
+        return "illumina"
+
+    if sample.read1:
+        return "illumina"
+
+    if sample.assembly:
+        return "assembly"
+
+    return "illumina"
+
+
 # ── Plan generation ──────────────────────────────────────────────────────
 # The core logic that replaces hand-written build_plan() methods.
 # / 替代手写 build_plan() 方法的核心逻辑。
@@ -527,14 +580,38 @@ def build_plan_from_dag(
 
     steps: List[PlanStep] = []
 
-    # Resolve the platform from the first sample (all samples share one
-    # platform in the simple plugins; plasmid handles multi-platform
-    # internally).
-    platform = sample_context.samples[0].platform if sample_context.samples else "illumina"
+    # ── Per-sample platform routing ─────────────────────────────────────
+    # Each sample may belong to a different sequencing platform (Illumina,
+    # ONT, PacBio, assembly).  Auto-detect platforms when the sample sheet
+    # declares "auto", empty, or "generic".  Per-sample nodes are filtered
+    # by the sample's own platform; cross-sample nodes use the union across
+    # all platforms so that multi-platform projects can aggregate.
+    # / 每个样本可属于不同测序平台。当 platform 列为 auto/空/generic 时自动检测。
+    # 逐样本节点按样本自身平台过滤；跨样本节点取所有平台并集。
+    sample_platforms: Dict[str, str] = {
+        s.sample_id: detect_platform(s) for s in sample_context.samples
+    }
+    unique_platforms = set(sample_platforms.values())
 
-    # Filter active nodes / 筛选活跃节点
-    active_ids = dag.active_node_ids(platform, config)
-    ordered_ids = dag.topological_order(active_ids)
+    # Compute active nodes per platform / 每个平台独立计算活跃节点
+    platform_active: Dict[str, set] = {}
+    for plat in unique_platforms:
+        platform_active[plat] = set(dag.active_node_ids(plat, config))
+
+    # Union across all platforms for global topological order and
+    # cross-sample nodes.  A cross-sample node is active if it is
+    # reachable from ANY platform present in the project.
+    # 所有平台并集用于全局拓扑排序和跨样本节点。
+    all_active: set = set()
+    for active_set in platform_active.values():
+        all_active |= active_set
+    if not all_active:
+        # Edge case: no nodes match any platform (e.g. empty config).
+        # Fall back to the first platform for a meaningful error message.
+        fallback_plat = next(iter(unique_platforms)) if unique_platforms else "illumina"
+        all_active = set(dag.active_node_ids(fallback_plat, config))
+
+    ordered_ids = dag.topological_order(list(all_active))
 
     # Separate per_sample and cross_sample nodes / 分离逐样本和跨样本节点
     per_sample_ids = [nid for nid in ordered_ids if dag.scope_for(nid) == "per_sample"]
@@ -546,10 +623,14 @@ def build_plan_from_dag(
     sample_outputs: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
     for sample in sample_context.samples:
+        sample_plat = sample_platforms[sample.sample_id]
+        sample_active = platform_active.get(sample_plat, set())
         sample_outputs[sample.sample_id] = {}
         upstream_outputs: Dict[str, Dict[str, Any]] = {}
 
         for node_id in per_sample_ids:
+            if node_id not in sample_active:
+                continue  # skip nodes inactive for this sample's platform
             category = dag.node_category(node_id)
             category_dir = dag.category_dir_for(category)
 
@@ -700,7 +781,9 @@ def _resolve_inputs(
                 resolved[key] = sample_dict.get(source_str, "")
         else:
             # No explicit source — try config resources, then config, then empty.
-            resolved[key] = _resolve_config_value(config, key)
+            resolved[key] = _resolve_script_path(
+                key, _resolve_config_value(config, key), plugin_root
+            )
 
     return resolved
 
@@ -769,7 +852,9 @@ def _resolve_cross_sample_inputs(
                         sample_outputs.get(first_sid, {}).get(upstream_id, {}).get(upstream_key, "")
                     )
             else:
-                resolved[key] = _resolve_config_value(config, key)
+                resolved[key] = _resolve_script_path(
+                    key, _resolve_config_value(config, key), plugin_root
+                )
 
     return resolved
 
@@ -777,14 +862,82 @@ def _resolve_cross_sample_inputs(
 def _resolve_config_value(config: Mapping[str, Any], key: str) -> Any:
     """Try to resolve a key from config, falling back through common locations.
 
-    Lookup order: ``config["resources"][key]`` → ``config[key]`` → ``""``.
+    Lookup order: ``config["resources"][key]`` → ``config["input"][key]``
+    → ``config["annotation"][key]`` → ``config["typing"][key]``
+    → ``config[key]`` → ``""``.
     """
     resources = config.get("resources")
     if isinstance(resources, Mapping) and key in resources:
         return resources[key]
+    input_section = config.get("input")
+    if isinstance(input_section, Mapping) and key in input_section:
+        return input_section[key]
+    for section_name in ("annotation", "typing"):
+        section = config.get(section_name)
+        if isinstance(section, Mapping) and key in section:
+            return section[key]
     if key in config:
         return config[key]
     return ""
+
+
+def _resolve_script_path(
+    key: str,
+    value: Any,
+    plugin_root: str | Path | None = None,
+) -> str:
+    """Auto-resolve bundled script paths when config provides none.
+
+    When a ``*_script`` parameter resolves to an empty string or a sentinel
+    value (e.g. ``DIVERSITY_SCRIPT_NOT_CONFIGURED``), search the plugin
+    ``scripts/`` directory and the project ``scripts/`` directory for a
+    matching file.
+
+    Search strategy:
+    1. If *value* is a non-empty, non-sentinel string, return it as-is.
+    2. Strip ``_script`` from *key* to get a stem (e.g. ``diversity``).
+    3. Search ``plugin_root/scripts/`` then ``PROJECT_ROOT/scripts/`` for
+       files whose name contains the stem (any of ``.py``, ``.R``, ``.sh``).
+    4. Return the first match, or the original *value* if nothing found.
+    """
+    value_str = str(value) if value else ""
+    if value_str and "NOT_CONFIGURED" not in value_str.upper():
+        return value_str
+
+    if not key.endswith("_script"):
+        return value_str
+
+    stem = key[:-7]  # remove "_script" suffix
+
+    # Build search directory list
+    search_dirs: list[Path] = []
+    if plugin_root:
+        plugin_scripts = Path(plugin_root) / "scripts"
+        if plugin_scripts.is_dir():
+            search_dirs.append(plugin_scripts)
+
+    try:
+        from abi.config import PROJECT_ROOT as _prj_root
+
+        project_scripts = _prj_root / "scripts"
+        if project_scripts.is_dir() and project_scripts not in search_dirs:
+            search_dirs.append(project_scripts)
+    except Exception:
+        pass
+
+    # Search for matching script files
+    for search_dir in search_dirs:
+        for ext in (".py", ".R", ".sh"):
+            # Direct stem match: e.g. stem="diversity" → diversity.py
+            candidate = search_dir / f"{stem}{ext}"
+            if candidate.is_file():
+                return str(candidate.resolve())
+            # Prefix match: e.g. stem="deseq2" → run_deseq2.R
+            for f in sorted(search_dir.glob(f"*{stem}*{ext}")):
+                if f.is_file():
+                    return str(f.resolve())
+
+    return value_str
 
 
 def _resolve_input_path(
@@ -870,8 +1023,9 @@ def _resolve_params(
 ) -> Dict[str, Any]:
     """Build the ``params`` dict for a PlanStep.
 
-    Includes mode, threads, sample_id (if per-sample), and any tool-level
-    overrides from config.
+    Includes mode, threads, sample_id (if per-sample), DAG node-level
+    params (formatted via template_ctx), and any tool-level overrides from
+    config.
     """
     params: Dict[str, Any] = {
         "mode": str(config.get("mode", "auto")),
@@ -880,10 +1034,33 @@ def _resolve_params(
     if sample is not None:
         params["sample_id"] = sample.sample_id
 
+    # DAG node-level params (formatted with template context) / DAG 节点级参数
+    node = dag.get_node(node_id)
+    node_params = node.get("params")
+    if isinstance(node_params, dict):
+        for pkey, pval in node_params.items():
+            try:
+                params[pkey] = str(pval).format_map(template_ctx)
+            except KeyError:
+                params[pkey] = pval
+
+    # Config section → params mapping for cross-sample tools / 配置段映射
+    # e.g. config.differential_expression.comparison → params["comparison"]
+    tool_id = node_id_to_tool_id(dag, node_id)
+    _CONFIG_SECTION_PARAMS: Dict[str, list] = {
+        "deseq2": ["comparison", "alpha"],
+    }
+    if tool_id in _CONFIG_SECTION_PARAMS:
+        de_config = config.get("differential_expression")
+        if isinstance(de_config, dict):
+            for key in _CONFIG_SECTION_PARAMS[tool_id]:
+                val = de_config.get(key)
+                if val is not None:
+                    params.setdefault(key, val)
+
     # Tool-level params from config.tool_params.<tool_id> / 工具级参数
     tool_params_block = config.get("tool_params")
     if isinstance(tool_params_block, Mapping):
-        tool_id = node_id_to_tool_id(dag, node_id)
         tool_overrides = tool_params_block.get(tool_id)
         if isinstance(tool_overrides, Mapping):
             params.update(tool_overrides)

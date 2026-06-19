@@ -16,7 +16,7 @@ tools:
     executable: spades.py
     default_enabled: true
     required: true
-    command_template: "spades.py --isolate -1 {clean_read1} -2 {clean_read2} -o {output_dir} -t {threads}"
+    command_template: "spades.py --careful --cov-cutoff auto -1 {clean_read1} -2 {clean_read2} -o {output_dir} -t {threads}"
     inputs: [clean_read1, clean_read2]
 
   - id: prokka
@@ -26,7 +26,7 @@ tools:
     executable: prokka
     default_enabled: true
     required: true
-    command_template: "prokka --outdir {output_dir} --prefix {sample_id} --cpus {threads} --genus {genus} --species {species} {assembly_fasta}"
+    command_template: "prokka --outdir {output_dir} --prefix {sample_id} --cpus {threads} --genus {genus} --species {species} --force {assembly_fasta}"
     inputs: [assembly_fasta]
 
   - id: mlst
@@ -36,7 +36,7 @@ tools:
     executable: mlst
     default_enabled: true
     required: true
-    command_template: "mlst --scheme {scheme} {assembly_fasta} > {output_dir}/mlst.tsv"
+    command_template: "mlst {assembly_fasta} > {output_dir}/mlst.tsv"
     inputs: [assembly_fasta]
 
   - id: amrfinderplus
@@ -46,5 +46,5 @@ tools:
     executable: amrfinder
     default_enabled: true
     required: true
-    command_template: "amrfinder --plus --protein {prokka_faa} --gff {prokka_gff} --output {output_dir}/amr.tsv --threads {threads}"
-    inputs: [prokka_faa, prokka_gff]
+    command_template: "amrfinder --plus --protein {prokka_faa} --output {output_dir}/amr.tsv --threads {threads}"
+    inputs: [prokka_faa]

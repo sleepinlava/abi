@@ -44,18 +44,6 @@ def _read_tsv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle, delimiter="\t"))
 
 
-def _sorted_columns(rows: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Return rows with columns sorted alphabetically for deterministic output (B14).
-
-    Use this when writing golden files or comparing standard table output
-    where column order must be stable across Python versions and platforms.
-    """
-    if not rows:
-        return rows
-    sorted_keys = sorted(rows[0].keys())
-    return [{k: row[k] for k in sorted_keys} for row in rows]
-
-
 def _display_command(command: Iterable[str]) -> str:
     """Format a shell command token list into a human-readable display string.
 

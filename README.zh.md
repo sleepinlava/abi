@@ -228,19 +228,19 @@ python -m twine check dist/*
 
 更多文档：
 
-- [ABI Spec v0.1](docs/abi_spec_v0.1.md)
-- [开发计划](docs/next_development_plan.md)
-- [API 参考](docs/api.rst) — Sphinx 自动从 docstring 生成
-- [abi_sciplot 设计文档](docs/abi_sciplot_design.md) — 科研图形编译器
-- [插件开发指南](docs/plugin_development_guide.md)
-- [RNA-seq 工作流](docs/rnaseq_expression_workflow.md)
-- [工作流验证](docs/workflow_validation.md)
-- [HPC 开发](docs/hpc_development.md)
-- [OpenAI/LLM 接口标准](docs/openai_interface_standard.md)
-- [Agent 使用指南](docs/agent_usage.md)
-- [Job Service 指南](docs/job_service.md)
-- [发布指南](docs/release.md)
-- [开发日志](docs/devlog.md)
+- [ABI Spec v0.1](docs/zh/abi_spec_v0.1.md)
+- [开发计划](docs/en/next_development_plan.md)
+- [API 参考](docs/en/api.rst) — Sphinx 自动从 docstring 生成
+- [abi_sciplot 设计文档](docs/en/abi_sciplot_design.md) — 科研图形编译器
+- [插件开发指南](docs/en/plugin_development_guide.md)
+- [RNA-seq 工作流](docs/en/rnaseq_expression_workflow.md)
+- [工作流验证](docs/zh/workflow_validation.md)
+- [HPC 开发](docs/en/hpc_development.md)
+- [OpenAI/LLM 接口标准](docs/zh/openai_interface_standard.md)
+- [Agent 使用指南](docs/zh/agent_usage.md)
+- [Job Service 指南](docs/zh/job_service.md)
+- [发布指南](docs/zh/release.md)
+- [开发日志](docs/en/devlog.md)
 
 ## 公共 SDK
 

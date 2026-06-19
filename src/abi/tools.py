@@ -700,6 +700,21 @@ class SafeFormatDict(dict):
         self.tool_name = tool_name
         self.missing_keys: list[str] = []
 
+    def __getitem__(self, key: str) -> Any:
+        """Return the value for *key*, joining lists into space-separated strings.
+
+        This is called by ``str.format_map()`` for each template key.  When a
+        parameter value is a list (e.g. aggregated cross-sample inputs), the
+        items are joined with spaces so they form valid command-line arguments.
+        Non-list values are returned unchanged — ``str.format_map()`` will call
+        ``str()`` on them as needed.
+        / 当值为列表时（如跨样本聚合输入），用空格连接。非列表值原样返回。
+        """
+        val = super().__getitem__(key)
+        if isinstance(val, (list, tuple)):
+            return " ".join(str(v) for v in val)
+        return val
+
     def __missing__(self, key: str) -> str:
         """Handle a missing template key.
 
@@ -813,11 +828,18 @@ class GenericCommandSkill(ToolSkill):
 
     @property
     def env_prefix(self) -> Path:
-        """Path to the conda environment directory: {mamba_root}/envs/{env_name}.
+        """Path to the conda environment directory.
 
-        This is the conda convention: environments live under <prefix>/envs/<name>.
-        / conda 约定：环境位于 <prefix>/envs/<name>。
+        Supports two layouts:
+        1. Direct: ``{mamba_root}/{env_name}`` (e.g. mamba env create -p ...)
+        2. Managed: ``{mamba_root}/envs/{env_name}`` (standard conda convention)
+
+        The direct layout is checked first; the managed layout is the fallback.
+        / 支持两种布局，优先检查直接路径。
         """
+        direct = self.mamba_root / self.env_name
+        if direct.exists():
+            return direct
         return self.mamba_root / "envs" / self.env_name
 
     @property
@@ -844,6 +866,11 @@ class GenericCommandSkill(ToolSkill):
           leaking into the isolated conda environment. / 移除 PYTHONPATH 防泄漏
         """
         env = os.environ.copy()
+        # Fix OMP_NUM_THREADS=0 (invalid value) inherited from host environment.
+        # Valid values are positive integers or unset. / 修复宿主环境中无效的 0 值。
+        omp_threads = env.get("OMP_NUM_THREADS", "")
+        if omp_threads == "0" or omp_threads == 0:
+            env.pop("OMP_NUM_THREADS", None)
         if self.env_bin.exists():
             env["PATH"] = f"{self.env_bin}{os.pathsep}{env.get('PATH', '')}"
             env["CONDA_PREFIX"] = str(self.env_prefix)
@@ -894,6 +921,9 @@ class GenericCommandSkill(ToolSkill):
         Only validates inputs that look like file paths — string parameters
         (e.g. primer sequences, database names, URLs) are skipped.
 
+        When a parameter value is a list (aggregated cross-sample inputs),
+        each element is checked individually. / 列表参数逐项检查。
+
         # Skip in dry_run / 试运行时跳过
         In dry-run mode, input files may not exist yet (e.g. outputs of
         upstream steps), so validation is skipped. / 试运行时上游输出可能还不存在。
@@ -901,8 +931,17 @@ class GenericCommandSkill(ToolSkill):
         missing: List[str] = []
         for key in self.metadata.get("inputs", []):
             value = params.get(key)
-            if value and _looks_like_path(str(value)) and not Path(str(value)).exists():
-                missing.append(f"{key}={value}")
+            if not value:
+                continue
+            # Handle aggregated lists (cross-sample inputs) / 处理聚合列表
+            candidates: List[str] = []
+            if isinstance(value, (list, tuple)):
+                candidates = [str(v) for v in value]
+            else:
+                candidates = [str(value)]
+            for cand in candidates:
+                if _looks_like_path(cand) and not Path(cand).exists():
+                    missing.append(f"{key}={cand}")
         if missing and not params.get("dry_run", False):
             raise ToolError(f"{self.name}: input files do not exist: {', '.join(missing)}")
 
