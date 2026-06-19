@@ -48,6 +48,13 @@ class MatplotlibRenderer(BaseRenderer):
             "heatmap",
             "volcano_plot",
             "lineplot",
+            # Biological-grade plot types (v1.4.0)
+            "phylum_stacked_bar",
+            "genus_heatmap",
+            "pcoa_plot",
+            "differential_volcano",
+            "alpha_stats_boxplot",
+            "phylogenetic_heatmap",
         }
     )
 

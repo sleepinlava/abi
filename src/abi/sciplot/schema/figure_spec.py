@@ -30,6 +30,13 @@ SUPPORTED_FIGURE_TYPES: frozenset[str] = frozenset(
         "heatmap",
         "volcano_plot",
         "lineplot",
+        # Biological-grade plot types (v1.4.0)
+        "phylum_stacked_bar",
+        "genus_heatmap",
+        "pcoa_plot",
+        "differential_volcano",
+        "alpha_stats_boxplot",
+        "phylogenetic_heatmap",
     }
 )
 
@@ -235,11 +242,11 @@ class FigureSpec(BaseModel):
     @model_validator(mode="after")
     def _validate_mapping_has_axes(self) -> "FigureSpec":
         """Ensure at least x or y is specified for non-heatmap types."""
-        # heatmap can work with just x (row labels) — columns are auto-detected
-        if self.figure_type == "heatmap":
-            return self
-        # ordination_plot auto-detects PC columns
-        if self.figure_type == "ordination_plot":
+        # These types auto-detect columns or read from other sources
+        if self.figure_type in {
+            "heatmap", "ordination_plot", "genus_heatmap",
+            "pcoa_plot", "phylogenetic_heatmap",
+        }:
             return self
         if not self.mapping.x and not self.mapping.y:
             raise ValueError(

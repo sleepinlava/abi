@@ -1,7 +1,15 @@
-# Figure specifications for the amplicon_16s plugin.
-# Column names match the actual standard table schemas produced by parsers.
+# Biological-grade figure specifications for the amplicon_16s plugin.
+# Uses sciplot v1.4.0 plot types for publication-ready visualizations.
+#
+# Data requirements:
+#   - Multi-sample data (≥2 groups with ≥2 replicates) enables beta diversity
+#     and differential abundance figures.
+#   - A joined taxonomy+abundance table (asv_id + taxonomy ranks + sample_id +
+#     abundance) is needed for phylum/genus composition charts.  The pipeline
+#     currently produces separate taxonomy.tsv and asv_table.tsv.
 
 figures:
+  # ── QC ─────────────────────────────────────────────────────────────────
   - id: read_retention
     type: bar
     source_table: denoising_stats
@@ -12,51 +20,76 @@ figures:
     ylabel: "Reads Retained"
     required: true
 
-  - id: taxonomy_barplot_phylum
-    type: bar
+  # ── Taxonomy (requires taxonomy+asv_table join; use asv_table as fallback) ─
+  - id: phylum_stacked_bar
+    type: phylum_stacked_bar
     source_table: asv_table
     x: sample_id
     y: abundance
-    title: "Total ASV Abundance by Sample"
+    hue: sample_id
+    title: "Phylum-Level Community Composition"
     xlabel: "Sample"
-    ylabel: "Abundance"
-    required: true
+    ylabel: "Relative Abundance"
+    palette: "colorblind_safe"
+    required: false
 
-  - id: alpha_diversity_boxplot
-    type: boxplot
+  - id: genus_heatmap
+    type: genus_heatmap
+    source_table: asv_table
+    x: sample_id
+    title: "Top 50 Genus Abundance (Z-Score)"
+    colormap: "RdBu_r"
+    required: false
+
+  # ── Alpha Diversity ────────────────────────────────────────────────────
+  - id: alpha_shannon_boxplot
+    type: alpha_stats_boxplot
     source_table: alpha_diversity
     x: sample_id
     y: shannon_entropy
-    title: "Alpha Diversity (Shannon)"
+    hue: sample_id
+    title: "Alpha Diversity (Shannon) by Sample"
     xlabel: "Sample"
     ylabel: "Shannon Entropy"
     required: true
 
-  - id: beta_diversity_scatter
-    type: scatter
-    source_table: beta_diversity
-    x: sample_a
-    y: distance
-    title: "Beta Diversity (Sample Pairs)"
-    xlabel: "Sample A"
-    ylabel: "Distance"
+  - id: alpha_chao1_boxplot
+    type: alpha_stats_boxplot
+    source_table: alpha_diversity
+    x: sample_id
+    y: chao1
+    hue: sample_id
+    title: "Richness (Chao1) by Sample"
+    xlabel: "Sample"
+    ylabel: "Chao1 Index"
     required: false
 
-  - id: top_taxa_heatmap
-    type: heatmap
+  # ── Beta Diversity (requires ≥2 samples) ───────────────────────────────
+  - id: pcoa_braycurtis
+    type: pcoa_plot
+    source_table: beta_diversity
+    x: PC1
+    y: PC2
+    hue: sample_id
+    title: "PCoA (Bray-Curtis) — Community Structure"
+    xlabel: "PCo1"
+    ylabel: "PCo2"
+    required: false
+
+  # ── ASV Abundance ──────────────────────────────────────────────────────
+  - id: top_asv_heatmap
+    type: phylogenetic_heatmap
     source_table: asv_table
     x: sample_id
-    title: "Top ASV Abundance Heatmap"
+    title: "Top ASV Abundance Heatmap (Phylogenetic Order)"
     colormap: "viridis"
-    top_n: 50
     required: false
 
-  - id: asv_abundance_scatter
-    type: scatter
+  # ── Differential Abundance (requires ≥2 groups + statistical test) ─────
+  - id: differential_volcano
+    type: differential_volcano
     source_table: asv_table
-    x: asv_id
-    y: abundance
-    title: "ASV Abundance Distribution"
-    xlabel: "ASV"
-    ylabel: "Abundance"
+    x: log2_fold_change
+    y: adjusted_pvalue
+    title: "Differential ASV Abundance"
     required: false

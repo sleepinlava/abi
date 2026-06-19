@@ -1395,7 +1395,7 @@ nodes:
     - pacbio_hifi
     - hybrid
     - assembly
-    optional: false
+    optional: true
     depends_on:
     - plasmid_consensus
     inputs:
@@ -1413,6 +1413,10 @@ nodes:
       nucleotide_seqs:
         type: file
         format: ffn
+    enable_condition:
+      field: annotation.tools
+      operator: list_contains
+      value: prodigal
   annotation_bakta:
     tool_id: bakta
     category: annotation
@@ -1424,7 +1428,7 @@ nodes:
     - pacbio_hifi
     - hybrid
     - assembly
-    optional: false
+    optional: true
     depends_on:
     - plasmid_consensus
     inputs:
@@ -2458,9 +2462,9 @@ nodes:
       output_dir:
         type: directory
     enable_condition:
-      field: assembly_qc.enable
-      operator: value
-      value: true
+      field: assembly_qc.tools
+      operator: list_contains
+      value: bandage
   plasmid_detect_platon:
     tool_id: platon
     category: plasmid_detection

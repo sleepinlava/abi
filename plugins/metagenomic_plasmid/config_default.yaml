@@ -28,6 +28,8 @@ assembly:
 # Assembly QC: QUAST evaluation
 assembly_qc:
   enable: true
+  tools:
+    - quast
 
 # Plasmid detection: geNomad is the default single tool
 plasmid_detection:

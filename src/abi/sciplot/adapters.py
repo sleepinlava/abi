@@ -42,11 +42,25 @@ TYPE_MAP: dict[str, str] = {
 
 
 def _map_type(old_type: str) -> str:
-    """Map an old FigureEngine figure type to an abi_sciplot figure type."""
+    """Map an old FigureEngine figure type to an abi_sciplot figure type.
+
+    If the type is already a valid sciplot figure type (e.g. from the
+    whitelist in figure_spec.py), it is returned as-is so that new
+    biological plot types work without a legacy alias.
+    """
+    from abi.sciplot.schema.figure_spec import SUPPORTED_FIGURE_TYPES
+
+    # Already a valid sciplot type — return as-is
+    if old_type in SUPPORTED_FIGURE_TYPES:
+        return old_type
+
+    # Legacy name → sciplot name
     mapped = TYPE_MAP.get(old_type)
     if mapped is None:
         raise ValueError(
-            f"Unknown legacy figure type '{old_type}'. Known types: {sorted(TYPE_MAP.keys())}"
+            f"Unknown figure type '{old_type}'. "
+            f"Known legacy types: {sorted(TYPE_MAP.keys())}. "
+            f"Known sciplot types: {sorted(SUPPORTED_FIGURE_TYPES)}"
         )
     return mapped
 
