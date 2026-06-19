@@ -1,8 +1,9 @@
 abi_version: '0.1'
 pipeline_id: metagenomic_plasmid
 pipeline_name: AutoPlasm — Metagenomic Plasmid Analysis
-description: 'Complete metagenomic plasmid detection, binning, typing, annotation, host-linking, abundance estimation, and
-  comparative genomics pipeline supporting Illumina, ONT, PacBio HiFi, Hybrid, and Assembly-only inputs.
+description: 'Complete metagenomic plasmid detection, binning, typing, annotation,
+  host-linking, abundance estimation, and comparative genomics pipeline supporting
+  Illumina, ONT, PacBio HiFi, Hybrid, and Assembly-only inputs.
 
   '
 platforms:
@@ -782,9 +783,7 @@ nodes:
       quast_report:
         type: file
         format: tsv
-        path: "{outdir}/{category_dir}/{sample_id}/report.tsv"
-        type: file
-        format: tsv
+        path: '{outdir}/{category_dir}/{sample_id}/report.tsv'
     assertions:
     - output_files.quast_report exists
   contig_coverage_bowtie2:
@@ -802,7 +801,7 @@ nodes:
     - assembly_opera_ms
     - assembly_provided
     inputs:
-      assembly:
+      plasmid_contigs:
         type: file
         format: fasta
         source: '{active_assembly_node}.assembly'
@@ -842,7 +841,7 @@ nodes:
     - assembly_hifiasm
     - assembly_opera_ms
     inputs:
-      assembly:
+      plasmid_contigs:
         type: file
         format: fasta
         source: '{active_assembly_node}.assembly'
@@ -914,7 +913,7 @@ nodes:
         type: file
         format: tsv
         contract:
-          min_size: 50B
+          min_size: 0B
       abundance_tsv:
         type: file
         format: tsv
@@ -952,19 +951,19 @@ nodes:
       plasmid_summary:
         type: file
         format: tsv
-        path: "{outdir}/{category_dir}/{sample_id}/contigs_summary/contigs_plasmid_summary.tsv"
+        path: '{outdir}/{category_dir}/{sample_id}/contigs_summary/contigs_plasmid_summary.tsv'
         contract:
           min_size: 50B
       plasmid_contigs:
         type: file
         format: fasta
-        path: "{outdir}/{category_dir}/{sample_id}/contigs_summary/contigs_plasmid.fna"
+        path: '{outdir}/{category_dir}/{sample_id}/contigs_summary/contigs_plasmid.fna'
         contract:
           min_size: 50B
       virus_summary:
         type: file
         format: tsv
-        path: "{outdir}/{category_dir}/{sample_id}/contigs_summary/contigs_virus_summary.tsv"
+        path: '{outdir}/{category_dir}/{sample_id}/contigs_summary/contigs_virus_summary.tsv'
         contract:
           min_size: 50B
     assertions:
@@ -1084,8 +1083,9 @@ nodes:
         - weighted_vote
       tool_weights:
         type: object
-        description: 'Per-tool weight map for weighted_vote strategy. Tools not listed receive a default weight of 1.0. Example:
-          {genomad: 0.6, plasme: 0.25, plasx: 0.15}
+        description: 'Per-tool weight map for weighted_vote strategy. Tools not listed
+          receive a default weight of 1.0. Example: {genomad: 0.6, plasme: 0.25, plasx:
+          0.15}
 
           '
         default: {}
@@ -1115,8 +1115,9 @@ nodes:
     - assembly
     optional: true
     enable_condition:
-      field: plasmid_binning.enable
-      value: true
+      field: plasmid_binning.tools
+      operator: list_contains
+      value: plasmaag
     depends_on:
     - plasmid_consensus
     inputs:
@@ -1147,8 +1148,9 @@ nodes:
     - assembly
     optional: true
     enable_condition:
-      field: plasmid_binning.enable
-      value: true
+      field: plasmid_binning.tools
+      operator: list_contains
+      value: gplas2
     depends_on:
     - plasmid_consensus
     inputs:
@@ -1178,8 +1180,9 @@ nodes:
     - assembly
     optional: true
     enable_condition:
-      field: plasmid_binning.enable
-      value: true
+      field: plasmid_binning.tools
+      operator: list_contains
+      value: mob_suite
     depends_on:
     - plasmid_consensus
     inputs:
@@ -1601,8 +1604,9 @@ nodes:
     - hybrid
     optional: true
     enable_condition:
-      field: mag_host_genomes.enable
-      value: true
+      field: mag_host_genomes.tools
+      operator: list_contains
+      value: metabat2
     depends_on:
     - contig_coverage_samtools
     inputs:
@@ -1642,9 +1646,9 @@ nodes:
         type: file
         format: tsv
     enable_condition:
-      field: mag_host_genomes.enable
-      operator: value
-      value: true
+      field: mag_host_genomes.tools
+      operator: list_contains
+      value: checkm2
   mag_gtdbtk:
     tool_id: gtdbtk
     category: mag_host_genomes
@@ -1673,9 +1677,9 @@ nodes:
         type: file
         format: tsv
     enable_condition:
-      field: mag_host_genomes.enable
-      operator: value
-      value: true
+      field: mag_host_genomes.tools
+      operator: list_contains
+      value: gtdbtk
   host_plasmid_link_coabundance:
     tool_id: internal
     category: host_plasmid_linking
@@ -2506,8 +2510,9 @@ nodes:
     - hybrid
     optional: true
     enable_condition:
-      field: plasmid_binning.enable
-      value: true
+      field: plasmid_binning.tools
+      operator: list_contains
+      value: scapp
     depends_on:
     - plasmid_consensus
     inputs:
@@ -2538,8 +2543,9 @@ nodes:
     - hybrid
     optional: true
     enable_condition:
-      field: plasmid_binning.enable
-      value: true
+      field: plasmid_binning.tools
+      operator: list_contains
+      value: recycler
     depends_on:
     - plasmid_consensus
     - contig_coverage_samtools
@@ -2715,8 +2721,9 @@ nodes:
     - hybrid
     optional: true
     enable_condition:
-      field: mag_host_genomes.enable
-      value: true
+      field: mag_host_genomes.tools
+      operator: list_contains
+      value: maxbin2
     depends_on:
     - contig_coverage_samtools
     inputs:
@@ -2752,8 +2759,9 @@ nodes:
     - hybrid
     optional: true
     enable_condition:
-      field: mag_host_genomes.enable
-      value: true
+      field: mag_host_genomes.tools
+      operator: list_contains
+      value: concoct
     depends_on:
     - contig_coverage_coverm
     inputs:
@@ -2783,8 +2791,9 @@ nodes:
     - hybrid
     optional: true
     enable_condition:
-      field: mag_host_genomes.enable
-      value: true
+      field: mag_host_genomes.tools
+      operator: list_contains
+      value: semibin
     depends_on:
     - contig_coverage_samtools
     inputs:
@@ -2814,8 +2823,9 @@ nodes:
     - hybrid
     optional: true
     enable_condition:
-      field: mag_host_genomes.enable
-      value: true
+      field: mag_host_genomes.tools
+      operator: list_contains
+      value: das_tool
     depends_on:
     - mag_metabat2
     - mag_maxbin2
