@@ -355,7 +355,7 @@ tools:
   - id: metabat2
     name: MetaBAT2
     category: mag_host_genomes
-    env_name: autoplasm-stats
+    env_name: autoplasm-plasmid-binning
     executable: metabat2
     default_enabled: false
     required: false
@@ -550,7 +550,7 @@ tools:
   - id: maxbin2
     name: MaxBin2
     category: mag_host_genomes
-    env_name: autoplasm-stats
+    env_name: autoplasm-plasmid-binning
     executable: run_MaxBin.pl
     default_enabled: false
     required: false
@@ -559,7 +559,7 @@ tools:
   - id: concoct
     name: CONCOCT
     category: mag_host_genomes
-    env_name: autoplasm-stats
+    env_name: autoplasm-plasmid-binning
     executable: concoct
     default_enabled: false
     required: false
@@ -568,7 +568,7 @@ tools:
   - id: semibin
     name: SemiBin
     category: mag_host_genomes
-    env_name: autoplasm-stats
+    env_name: autoplasm-plasmid-binning
     executable: SemiBin
     default_enabled: false
     required: false

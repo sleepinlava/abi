@@ -28,7 +28,11 @@ def parse_genomad(output_dir: Path, sample_id: str) -> StandardRows:
     rows = []
     for path in _candidate_files(
         output_dir,
-        ("*plasmid*summary*.tsv", "*plasmid*.tsv", "*summary*.tsv", "*.tsv"),
+        # Only read plasmid summary / classification files — NOT every .tsv.
+        # geNomad produces 5+ files per contig (summary, aggregated, marker,
+        # nn, features), but only the summary carries contig_length + topology.
+        # The old "*.tsv" fallback caused 81% null contig_length.
+        ("*plasmid*summary*.tsv", "*plasmid*.tsv", "*summary*.tsv"),
     ):
         for row in _read_table(path):
             contig = _get(
