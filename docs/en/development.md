@@ -7,36 +7,43 @@ This repository publishes one Python distribution: `abi-agent`.
 ```
 src/abi/
   agent/              ABIAgentInterface, JSON envelopes, agent context export
+  figures/            FigureEngine (7 renderers), FigureSpec — generic figure system
+  report/             write_full_report, write_plugin_report, write_methods,
+                      citations, limitations, html — generic report system
+  workflow/           ResourceManifest, workflow validation, figure_specs loading
   plugins/            Built-in analysis-type plugins
-    metagenomic_plasmid/   Self-contained plugin package (engine in _engine/)
-    metatranscriptomics.py Native ABI demo plugin (574 lines)
+    metagenomic_plasmid/   Self-contained plugin package (engine in _engine/, 67 tools, 84+ nodes)
+    rnaseq_expression.py   Bulk RNA-seq (6 tools)
+    wgs_bacteria.py        Bacterial WGS (5 tools)
+    amplicon_16s.py        16S microbiome (8 tools)
+    metatranscriptomics.py Metatranscriptomics (4 tools)
   autoplasm/          Backward-compatible re-export shim → plugins/metagenomic_plasmid/_engine/
+  sciplot/            Publication-grade scientific figure compiler — FigureSpec → Validate →
+                      Render → Export → Lint → Provenance. Pydantic schema, 15 plot types,
+                      3 themes, 11 lint rules, SHA256 provenance. (v1.4.0)
+  dag_planner.py      UniversalDAG — declarative plan generation from pipeline_dag.yaml
+  tsv_mapping.py      Declarative TSV column mapper — YAML-driven output parsing, 3 source types
   _shared.py          Shared utilities: _read_tsv, _display_command, _plan_dict, _common_overrides
   provenance.py       RunLogger, PipelineProgressRecorder, TSV provenance writers
   tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult
   schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
   executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement, provenance
+  dag.py              DAG inference engine — L1 (literature) / L2 (path) / L3 (validation)
+  contracts/          WorkflowSpec, step contract enforcement, checksum chaining, assertion eval
   permissions.py      read_only / planning_write / execution levels
   diagnostics.py      Error taxonomy + DiagnosticHint + classify_exception
   interfaces.py       ABIPlugin, ABIDryRunPlugin, ABIInitializablePlugin protocols
   json_utils.py       JSON file/payload loading with ABIJSONError wrapping
   timeouts.py         Timeout parsing: parse_timeout_seconds, timeout_from_env_or_value
-  dag.py              DAG inference engine for workflow dependency ordering
-  config.py           Configuration loading and management
   resources.py        Resource status checking (on-disk existence validation)
-  filesystem.py       Filesystem utilities
-  results.py          Result writing and management
   tables.py           StandardTableManager
-  report.py           Generic report writer
-  contracts/          Contract definitions + step contract enforcement
   tool_descriptors.py Unified tool descriptor SSOT (3 format families, 7+ LLM providers)
-  openai_contracts.py Backward-compat re-export shim → tool_descriptors
-  jobs/               HTTP Job Service (service, client)
-  runtimes/           local, Nextflow runtimes
+  jobs/               HTTP Job Service (service, client, force-kill support)
+  runtimes/           local, Nextflow, HPC runtimes
   exporters/          Nextflow DSL2 exporter
   mcp/                Optional MCP stdio server (exposed via ``abi-mcp``)
-  skills/             Agent skill files (41 bundled) → installed via ``abi install-skills``
-  cli.py              Typer CLI (abi, abi-mcp, autoplasm entry points)
+  skills/             Agent skill files → installed via ``abi install-skills``
+  cli.py              Typer CLI (abi, abi-mcp, autoplasm, abi-sciplot entry points)
 ```
 
 The `abi.autoplasm` package is a backward-compatible re-export shim that proxies
@@ -55,10 +62,14 @@ core modules for shared infrastructure.
 | `abi.contracts.step_contract` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, checksum chaining |
 | `abi.contracts` | `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec` — L1/L2/L3 workflow validation |
 | `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with literature + path + validation layers |
+| `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation, shared by all 5 plugins |
+| `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML-driven TSV/JSON/log parsing with 3 source types |
+| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure` — publication-grade figure compiler, 15 plot types, plotnine+seaborn backends (v1.4.0) |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
 | `abi.diagnostics` | Error taxonomy + `DiagnosticHint` + `classify_exception` |
 | `abi.json_utils` | JSON file/payload loading with `ABIJSONError` |
 | `abi.timeouts` | `parse_timeout_seconds`, `timeout_from_env_or_value` |
+| `abi.tool_descriptors` | `ABI_AGENT_TOOLS`, `TOOL_ALIASES`, `export_openai_compatible`, `export_anthropic`, `export_gemini`, `PROVIDER_PROFILES` |
 | `abi.testing` | `assert_plugin_contract` |
 
 ## Local Setup

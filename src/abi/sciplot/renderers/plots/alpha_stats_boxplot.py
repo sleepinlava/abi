@@ -39,9 +39,7 @@ def plot_alpha_stats_boxplot(
 
     for col in (x_col, y_col):
         if col not in data.columns:
-            raise ValueError(
-                f"Column '{col}' not found. Available: {sorted(data.columns)}"
-            )
+            raise ValueError(f"Column '{col}' not found. Available: {sorted(data.columns)}")
 
     y_vals = pd.to_numeric(data[y_col], errors="coerce")
     data = data.assign(_y_numeric=y_vals).dropna(subset=["_y_numeric"])
@@ -99,7 +97,8 @@ def plot_alpha_stats_boxplot(
             stat, pval = kw_test(*group_data)
             sig_str = _format_pvalue(pval)
             ax.text(
-                0.5, 0.92,
+                0.5,
+                0.92,
                 f"Kruskal-Wallis H-test: p = {sig_str}",
                 transform=ax.transAxes,
                 ha="center",

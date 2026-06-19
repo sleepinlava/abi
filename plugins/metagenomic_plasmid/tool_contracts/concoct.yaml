@@ -23,10 +23,10 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-stats
+  env_name: plasmid_binning
   executable: concoct
   command_template: concoct --composition_file {assembly} --coverage_file {abundance}
-    -o {output_dir} --threads {threads}
+    -o {output_dir} -t {threads}
   network: false
   writes_output: true
 failure_handling:

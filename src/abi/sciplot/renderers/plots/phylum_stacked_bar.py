@@ -41,19 +41,12 @@ def plot_phylum_stacked_bar(
     # Required columns
     for col in (x_col, hue_col, y_col):
         if col not in data.columns:
-            raise ValueError(
-                f"Column '{col}' not found in data. "
-                f"Available: {sorted(data.columns)}"
-            )
+            raise ValueError(f"Column '{col}' not found in data. Available: {sorted(data.columns)}")
 
     # Aggregate: sum abundance per sample + phylum
     if "abundance" in data.columns and "phylum" in data.columns:
         # Joined taxonomy + asv_table format
-        agg = (
-            data.groupby([x_col, hue_col])[y_col]
-            .sum()
-            .reset_index()
-        )
+        agg = data.groupby([x_col, hue_col])[y_col].sum().reset_index()
     else:
         # Already aggregated
         agg = data[[x_col, hue_col, y_col]].copy()

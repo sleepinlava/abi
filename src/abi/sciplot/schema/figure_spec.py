@@ -244,8 +244,11 @@ class FigureSpec(BaseModel):
         """Ensure at least x or y is specified for non-heatmap types."""
         # These types auto-detect columns or read from other sources
         if self.figure_type in {
-            "heatmap", "ordination_plot", "genus_heatmap",
-            "pcoa_plot", "phylogenetic_heatmap",
+            "heatmap",
+            "ordination_plot",
+            "genus_heatmap",
+            "pcoa_plot",
+            "phylogenetic_heatmap",
         }:
             return self
         if not self.mapping.x and not self.mapping.y:

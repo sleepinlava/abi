@@ -159,6 +159,21 @@ conda.lock
 !.claude/settings.local.json
 !.claude/skills/
 !.claude/skills/**
+!.claude/workflows/
+!.claude/workflows/**
 docs/_build/
 .readthedocs-cache/
 .codex/
+
+# Superpowers auto-generated plans
+docs/superpowers/
+
+# Work report archives (generated, tracked via git)
+# (work_report_*.md files are intentional docs — NOT ignored)
+
+# Demo execution databases (large, external)
+abi-databases/
+
+# Plugin benchmark run artifacts
+bench/Bench_1/bench/results/
+bench/results/

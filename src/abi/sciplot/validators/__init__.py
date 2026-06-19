@@ -129,8 +129,11 @@ def validate_data(spec: FigureSpec) -> DataValidationReport:
 
     # DATA003 — axis mapping (skip for types that auto-detect columns)
     if spec.figure_type not in {
-        "heatmap", "ordination_plot", "genus_heatmap",
-        "pcoa_plot", "phylogenetic_heatmap",
+        "heatmap",
+        "ordination_plot",
+        "genus_heatmap",
+        "pcoa_plot",
+        "phylogenetic_heatmap",
     }:
         if not spec.mapping.x and not spec.mapping.y:
             report.errors.append(

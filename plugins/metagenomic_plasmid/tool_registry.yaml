@@ -262,7 +262,7 @@ tools:
   executable: amrfinder
   default_enabled: true
   required: false
-  command_template: amrfinder -n {plasmid_contigs} -o {output_dir}/{sample_id}.amrfinder.tsv
+  command_template: amrfinder -n {plasmid_contigs} -d {database} -o {output_dir}/{sample_id}.amrfinder.tsv
 - id: mob_suite
   name: MOB-suite
   category: annotation
@@ -414,12 +414,11 @@ tools:
 - id: metabat2
   name: MetaBAT2
   category: mag_host_genomes
-  env_name: autoplasm-plasmid-binning
+  env_name: plasmid_binning
   executable: metabat2
   default_enabled: false
   required: false
   command_template: metabat2 -i {assembly} -a {bam} -o {output_dir}/{sample_id}.metabat2
-    --threads {threads}
   inputs:
   - assembly
   - bam
@@ -634,14 +633,15 @@ tools:
   - plasmid_contigs
   limitations: Requires eggNOG database download; functional annotation.
 - id: maxbin2
-  name: MaxBin2
+  name: MaxBin2 (PERMANENTLY DISABLED — perl-lwp-simple compilation failure)
   category: mag_host_genomes
-  env_name: autoplasm-plasmid-binning
+  env_name: plasmid_binning
   executable: run_MaxBin.pl
   default_enabled: false
   required: false
+  deprecated: true
   command_template: run_MaxBin.pl -contig {assembly} -reads {read1} -reads2 {read2}
-    -out {output_dir}/{sample_id}.maxbin2 --thread {threads}
+    -out {output_dir}/{sample_id}.maxbin2 -thread {threads}
   inputs:
   - assembly
   - read1
@@ -649,12 +649,12 @@ tools:
 - id: concoct
   name: CONCOCT
   category: mag_host_genomes
-  env_name: autoplasm-plasmid-binning
+  env_name: plasmid_binning
   executable: concoct
   default_enabled: false
   required: false
   command_template: concoct --composition_file {assembly} --coverage_file {abundance}
-    -o {output_dir} --threads {threads}
+    -o {output_dir} -t {threads}
   inputs:
   - assembly
   - abundance

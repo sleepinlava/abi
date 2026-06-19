@@ -79,3 +79,4 @@ resources:
   genomad_db: GENOMAD_DB_NOT_CONFIGURED
   bakta_db: BAKTA_DB_NOT_CONFIGURED
   amrfinder_db: AMRFINDER_DB_NOT_CONFIGURED
+  amrfinder_database: AMRFINDER_DB_NOT_CONFIGURED

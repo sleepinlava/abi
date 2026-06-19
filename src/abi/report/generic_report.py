@@ -306,12 +306,15 @@ def render_figures_via_sciplot(
                 if is_required:
                     _log.warning(
                         "Figure '%s' (required): source table '%s' not found at %s — skipping",
-                        spec_id, source_table, table_path,
+                        spec_id,
+                        source_table,
+                        table_path,
                     )
                 else:
                     _log.info(
                         "Figure '%s' (optional): source table '%s' not found — skipping",
-                        spec_id, source_table,
+                        spec_id,
+                        source_table,
                     )
                 continue
 
@@ -322,9 +325,7 @@ def render_figures_via_sciplot(
             except OSError:
                 line_count = 0
             if line_count <= 1:
-                msg = (
-                    "Figure '%s' (%s): source table '%s' is empty (no data rows) — skipping"
-                )
+                msg = "Figure '%s' (%s): source table '%s' is empty (no data rows) — skipping"
                 if is_required:
                     _log.warning(msg, spec_id, "required", source_table)
                 else:
@@ -358,7 +359,9 @@ def render_figures_via_sciplot(
             # Best-effort: log warning and skip figures that fail to render
             _log.warning(
                 "Figure '%s' failed to render: %s: %s",
-                spec_id, type(exc).__name__, exc,
+                spec_id,
+                type(exc).__name__,
+                exc,
             )
 
     return rendered

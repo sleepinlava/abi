@@ -48,9 +48,7 @@ def plot_differential_volcano(
 
     for col in (x_col, y_col):
         if col not in data.columns:
-            raise ValueError(
-                f"Column '{col}' not found. Available: {sorted(data.columns)}"
-            )
+            raise ValueError(f"Column '{col}' not found. Available: {sorted(data.columns)}")
 
     # Coerce to numeric
     x_vals = pd.to_numeric(data[x_col], errors="coerce")
@@ -125,7 +123,8 @@ def plot_differential_volcano(
 
     # Annotation of total counts
     ax.text(
-        0.98, 0.95,
+        0.98,
+        0.95,
         f"Up: {is_up.sum()}  Down: {is_down.sum()}  NS: {is_ns.sum()}",
         transform=ax.transAxes,
         ha="right",

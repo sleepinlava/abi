@@ -30,10 +30,10 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-stats
+  env_name: plasmid_binning
   executable: run_MaxBin.pl
   command_template: run_MaxBin.pl -contig {assembly} -reads {read1} -reads2 {read2}
-    -out {output_dir}/{sample_id}.maxbin2 --thread {threads}
+    -out {output_dir}/{sample_id}.maxbin2 -thread {threads}
   network: false
   writes_output: true
 failure_handling:

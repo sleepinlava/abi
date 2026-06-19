@@ -7,36 +7,43 @@
 ```
 src/abi/
   agent/              ABIAgentInterface、JSON 信封、Agent 上下文导出
+  figures/            FigureEngine（7 渲染器）、FigureSpec — 通用图表系统
+  report/             write_full_report、write_plugin_report、write_methods、
+                      citations、limitations、html — 通用报告系统
+  workflow/           ResourceManifest、工作流验证、figure_specs 加载
   plugins/            内置分析类型插件
-    metagenomic_plasmid/   自包含插件包（引擎在 _engine/ 中）
-    metatranscriptomics.py 原生 ABI 演示插件（574 行）
+    metagenomic_plasmid/   自包含插件包（引擎在 _engine/ 中，67 工具，84+ 节点）
+    rnaseq_expression.py   批量 RNA-seq（6 工具）
+    wgs_bacteria.py        细菌 WGS（5 工具）
+    amplicon_16s.py        16S 微生物组（8 工具）
+    metatranscriptomics.py 宏转录组（4 工具）
   autoplasm/          向后兼容的重导出垫片 → plugins/metagenomic_plasmid/_engine/
+  sciplot/            论文级科研图形编译器 — FigureSpec → Validate → Render → Export →
+                      Lint → Provenance。Pydantic schema，15 种图表类型，3 套主题，
+                      11 条 lint 规则，SHA256 溯源。（v1.4.0）
+  dag_planner.py      UniversalDAG — 从 pipeline_dag.yaml 声明式生成执行计划
+  tsv_mapping.py      声明式 TSV 列映射器 — YAML 驱动的输出解析，3 种源类型
   _shared.py          共享工具：_read_tsv、_display_command、_plan_dict、_common_overrides
   provenance.py       RunLogger、PipelineProgressRecorder、TSV 溯源写入器
   tools.py            ToolRegistry、ToolSkill、GenericCommandSkill、SafeFormatDict、RunResult
   schemas.py          规范类型：SampleInput、ExecutionPlan、PlanStep、SampleContext
   executor.py         GenericABIExecutor — 步骤迭代、工具调用、合约执行、溯源
+  dag.py              DAG 推断引擎 — L1（文献）/ L2（路径）/ L3（验证）
+  contracts/          WorkflowSpec、步骤合约执行、校验和链式追踪、断言评估
   permissions.py      read_only / planning_write / execution 级别
   diagnostics.py      错误分类 + DiagnosticHint + classify_exception
   interfaces.py       ABIPlugin、ABIDryRunPlugin、ABIInitializablePlugin 协议
   json_utils.py       带 ABIJSONError 封装的 JSON 文件/负载加载
   timeouts.py         超时解析：parse_timeout_seconds、timeout_from_env_or_value
-  dag.py              用于工作流依赖排序的 DAG 推断引擎
-  config.py           配置加载与管理
   resources.py        资源状态检查（磁盘存在性验证）
-  filesystem.py       文件系统工具
-  results.py          结果写入与管理
   tables.py           StandardTableManager
-  report.py           通用报告写入器
-  contracts/          合约定义 + 步骤合约执行
   tool_descriptors.py 统一工具描述符单点真相（3 格式家族、7+ LLM 提供商）
-  openai_contracts.py 向后兼容重新导出 shim → tool_descriptors
-  jobs/               HTTP Job Service（服务端、客户端）
-  runtimes/           local、Nextflow 运行时
+  jobs/               HTTP Job Service（服务端、客户端，force-kill 支持）
+  runtimes/           local、Nextflow、HPC 运行时
   exporters/          Nextflow DSL2 导出器
   mcp/                可选 MCP stdio 服务器（通过 ``abi-mcp`` 暴露）
-  skills/             Agent 技能文件（41 个捆绑）→ 通过 ``abi install-skills`` 安装
-  cli.py              Typer CLI（abi、abi-mcp、autoplasm 入口点）
+  skills/             Agent 技能文件 → 通过 ``abi install-skills`` 安装
+  cli.py              Typer CLI（abi、abi-mcp、autoplasm、abi-sciplot 入口点）
 ```
 
 `abi.autoplasm` 包是一个向后兼容的重导出垫片，代理到
@@ -54,10 +61,14 @@ src/abi/
 | `abi.contracts.step_contract` | `ContractViolationError`、`validate_output_contract`、`evaluate_assertions`、校验和链式追踪 |
 | `abi.contracts` | `WorkflowSpec`、`WorkflowStepSpec`、`load_workflow_spec` — L1/L2/L3 工作流验证 |
 | `abi.dag` | `infer_dag`、`ABIDAG`、`StepBinding` — DAG 推断，支持文献 + 路径 + 验证三层模型 |
+| `abi.dag_planner` | `UniversalDAG`、`build_plan_from_dag`、`PathTemplateContext` — 声明式计划生成，所有 5 个插件共用 |
+| `abi.tsv_mapping` | `TSVMapper`、`generate_rows` — YAML 驱动 TSV/JSON/日志解析，3 种源类型 |
+| `abi.sciplot` | `FigureSpec`、`render_figure`、`validate_spec`、`lint_figure` — 论文级科研图形编译器，15 种图表类型，plotnine+seaborn 后端（v1.4.0） |
 | `abi.errors` | `ABIError`、`ConfigError`、`SampleSheetError`、`ToolError` |
 | `abi.diagnostics` | 错误分类 + `DiagnosticHint` + `classify_exception` |
 | `abi.json_utils` | 带 `ABIJSONError` 的 JSON 文件/负载加载 |
 | `abi.timeouts` | `parse_timeout_seconds`、`timeout_from_env_or_value` |
+| `abi.tool_descriptors` | `ABI_AGENT_TOOLS`、`TOOL_ALIASES`、`export_openai_compatible`、`export_anthropic`、`export_gemini`、`PROVIDER_PROFILES` |
 | `abi.testing` | `assert_plugin_contract` |
 
 ## 本地设置

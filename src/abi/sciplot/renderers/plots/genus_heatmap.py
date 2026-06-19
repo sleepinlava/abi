@@ -33,26 +33,16 @@ def plot_genus_heatmap(
     x_col = spec.mapping.x or "sample_id"
 
     if x_col not in data.columns:
-        raise ValueError(
-            f"Column '{x_col}' not found. Available: {sorted(data.columns)}"
-        )
+        raise ValueError(f"Column '{x_col}' not found. Available: {sorted(data.columns)}")
 
     # Detect format: joined taxonomy+asv_table vs pre-aggregated
     if "genus" in data.columns and "abundance" in data.columns:
-        agg = (
-            data.groupby([x_col, "genus"])["abundance"]
-            .sum()
-            .reset_index()
-        )
+        agg = data.groupby([x_col, "genus"])["abundance"].sum().reset_index()
     elif "genus" in data.columns:
         # Try using value column
         val_col = spec.mapping.y or spec.mapping.value or "abundance"
         if val_col in data.columns:
-            agg = (
-                data.groupby([x_col, "genus"])[val_col]
-                .sum()
-                .reset_index()
-            )
+            agg = data.groupby([x_col, "genus"])[val_col].sum().reset_index()
         else:
             raise ValueError(
                 "Data must have 'genus' and 'abundance' columns, "

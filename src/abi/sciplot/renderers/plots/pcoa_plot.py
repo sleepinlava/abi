@@ -59,7 +59,7 @@ def plot_pcoa_plot(
 
     # PCoA via classical MDS
     # Double-centre the squared distance matrix
-    d2 = dist_mat ** 2
+    d2 = dist_mat**2
     n_cols = d2.shape[0]
     h = np.eye(n_cols) - np.ones((n_cols, n_cols)) / n_cols
     b = -0.5 * h @ d2 @ h
@@ -86,11 +86,13 @@ def plot_pcoa_plot(
     var2 = eigenvalues[1] / eigenvalues.sum() * 100
 
     # Build plot DataFrame
-    plot_df = pd.DataFrame({
-        "sample_id": samples,
-        "PC1": pc1,
-        "PC2": pc2,
-    })
+    plot_df = pd.DataFrame(
+        {
+            "sample_id": samples,
+            "PC1": pc1,
+            "PC2": pc2,
+        }
+    )
 
     # Group colouring
     hue_col = spec.mapping.hue
@@ -113,7 +115,8 @@ def plot_pcoa_plot(
     for group in groups:
         subset = plot_df[plot_df["group"] == group]
         ax.scatter(
-            subset["PC1"], subset["PC2"],
+            subset["PC1"],
+            subset["PC2"],
             c=group_colors[group],
             label=group,
             s=40,
@@ -124,7 +127,9 @@ def plot_pcoa_plot(
         # Confidence ellipse for groups with ≥3 points
         if len(subset) >= 3:
             _add_confidence_ellipse(
-                ax, subset["PC1"].values, subset["PC2"].values,
+                ax,
+                subset["PC1"].values,
+                subset["PC2"].values,
                 color=group_colors[group],
             )
 

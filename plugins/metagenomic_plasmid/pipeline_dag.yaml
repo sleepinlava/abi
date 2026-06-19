@@ -1211,6 +1211,10 @@ nodes:
     - hybrid
     - assembly
     optional: false
+    enable_condition:
+      field: typing.tools
+      operator: list_contains
+      value: plasmidfinder
     depends_on:
     - plasmid_consensus
     inputs:
@@ -1237,6 +1241,10 @@ nodes:
     - hybrid
     - assembly
     optional: false
+    enable_condition:
+      field: typing.tools
+      operator: list_contains
+      value: mob_typer
     depends_on:
     - plasmid_consensus
     inputs:
@@ -1470,6 +1478,9 @@ nodes:
         type: file
         format: fasta
         source: plasmid_consensus.plasmid_contigs
+      database:
+        type: path
+        source: config.resources.amrfinder_database
     outputs:
       arg_vf_results:
         type: file

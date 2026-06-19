@@ -37,9 +37,7 @@ def plot_phylogenetic_heatmap(
     x_col = spec.mapping.x or "sample_id"
 
     if x_col not in data.columns:
-        raise ValueError(
-            f"Column '{x_col}' not found. Available: {sorted(data.columns)}"
-        )
+        raise ValueError(f"Column '{x_col}' not found. Available: {sorted(data.columns)}")
 
     # Determine feature ID and abundance columns
     feature_col = spec.mapping.label or "asv_id"
@@ -47,9 +45,7 @@ def plot_phylogenetic_heatmap(
 
     for col in (feature_col, abund_col):
         if col not in data.columns:
-            raise ValueError(
-                f"Column '{col}' not found. Available: {sorted(data.columns)}"
-            )
+            raise ValueError(f"Column '{col}' not found. Available: {sorted(data.columns)}")
 
     # Pivot: rows=features, cols=samples, values=abundance
     pivot = data.pivot_table(
@@ -112,9 +108,7 @@ def plot_phylogenetic_heatmap(
 
     # Axis labels
     ax.set_xticks(range(len(pivot.columns)))
-    ax.set_xticklabels(
-        pivot.columns, rotation=45, ha="right", fontsize=theme.font.tick_size_pt
-    )
+    ax.set_xticklabels(pivot.columns, rotation=45, ha="right", fontsize=theme.font.tick_size_pt)
     if len(pivot) <= 30:
         ax.set_yticks(range(len(pivot.index)))
         ax.set_yticklabels(pivot.index, fontsize=5)
@@ -127,7 +121,8 @@ def plot_phylogenetic_heatmap(
 
     # Annotation
     ax.text(
-        0.98, 0.02,
+        0.98,
+        0.02,
         f"Top {len(pivot)} features (phylogenetic order)",
         transform=ax.transAxes,
         ha="right",
