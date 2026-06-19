@@ -115,6 +115,9 @@ assertions:
 | `abi._shared` | `_read_tsv`、`_display_command`、`_plan_dict`、`_common_overrides` |
 | `abi.dag_planner` | `UniversalDAG`、`build_plan_from_dag`、`PathTemplateContext` — DAG 驱动的 `build_plan()`（2026-06-18 新增） |
 | `abi.tsv_mapping` | `TSVMapper`、`generate_rows` — 声明式 TSV 列映射（2026-06-18 新增） |
+| `abi.sciplot` | `FigureSpec`、`render_figure`、`validate_spec`、`lint_figure` — 论文级科研图形编译器。15 种图表类型（含 PCoA、火山图、堆叠柱状图、系统发育热图），plotnine+seaborn 后端。（v1.4.0，2026-06-20 新增） |
+| `abi.contracts` | `WorkflowSpec`、`WorkflowStepSpec`、`load_workflow_spec`、`run_contract_lint` — L1/L2/L3 工作流声明与验证 |
+| `abi.report` | `write_plugin_report`、`render_figures_via_sciplot` — 报告生成与图表渲染 |
 
 ## DAG 驱动的计划构建（推荐用于新插件）
 

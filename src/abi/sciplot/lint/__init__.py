@@ -163,7 +163,13 @@ def _check_statistics(
     """STAT001-STAT002: Statistical annotation checks."""
     findings: List[LintFinding] = []
     # STAT001 - significance markers require statistical test
-    figure_types_that_need_stats = {"volcano_plot", "boxplot_with_points", "violin_with_box"}
+    figure_types_that_need_stats = {
+        "volcano_plot",
+        "boxplot_with_points",
+        "violin_with_box",
+        "differential_volcano",
+        "alpha_stats_boxplot",
+    }
     if spec.figure_type in figure_types_that_need_stats:
         if not spec.statistics or not spec.statistics.test:
             findings.append(
@@ -201,7 +207,12 @@ def _check_labels(
 ) -> List[LintFinding]:
     """LABEL001-LABEL002: Label checks."""
     findings: List[LintFinding] = []
-    if spec.figure_type != "heatmap":
+    if spec.figure_type not in {
+        "heatmap",
+        "genus_heatmap",
+        "phylogenetic_heatmap",
+        "phylum_stacked_bar",
+    }:
         if not spec.labels.x_label and not spec.mapping.x:
             findings.append(
                 LintFinding(

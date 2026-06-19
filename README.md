@@ -98,11 +98,11 @@ All agent-facing commands support `--output-json`.
 
 | Type | Tools | Description |
 | --- | --- | --- |
-| `amplicon_16s` | 8 | 16S rRNA microbiome: cutadapt → vsearch merge/derep/denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta) |
-| `rnaseq_expression` | 6 | Bulk RNA-seq: fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler |
-| `wgs_bacteria` | 5 | Bacterial isolate WGS: fastp → SPAdes → Prokka → MLST → AMRFinderPlus |
-| `metatranscriptomics` | 3 | Metatranscriptomics: fastp → STAR/HISAT2 → featureCounts |
-| `metagenomic_plasmid` | 67 | Flagship plasmid analysis: QC → assembly → plasmid detection → annotation → abundance → statistics. 10 conda envs, 84-node DAG. |
+| `amplicon_16s` | 8 | 16S rRNA microbiome: cutadapt → vsearch merge/derep/denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta). **✅ 端到端验证通过** |
+| `rnaseq_expression` | 6 | Bulk RNA-seq: fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. **✅ 端到端验证通过** |
+| `wgs_bacteria` | 5 | Bacterial isolate WGS: fastp → SPAdes → Prokka → MLST → AMRFinderPlus. **✅ 端到端验证通过** |
+| `metatranscriptomics` | 4 | Metatranscriptomics: fastp → STAR/HISAT2 → featureCounts. **✅ 端到端验证通过** |
+| `metagenomic_plasmid` | 67 | Flagship plasmid analysis: QC → assembly → plasmid detection → annotation → abundance → community analysis → visualization. 10 conda envs, 84+-node DAG, 16 standard tables. **⚠️ 核心流程通过，全量待数据库补齐** |
 
 The `autoplasm` CLI is preserved for backward compatibility:
 
@@ -148,6 +148,8 @@ ABI Core            schemas  │  provenance  │  permissions  │  diagnostics
         v
 Plugins             amplicon_16s/  rnaseq_expression/  wgs_bacteria/
                     metatranscriptomics/  metagenomic_plasmid/
+                        (community_analysis, comparative_genomics,
+                         visualization, co-occurrence_network)
         │
         v
 Runtimes            local  │  Docker  │  Nextflow  │  HPC  │  cloud
@@ -232,19 +234,20 @@ default `.mamba` root; `AUTOPLASM_MAMBA_ROOT` remains accepted for compatibility
 
 More details:
 
-- [ABI Spec v0.1](docs/abi_spec_v0.1.md)
-- [Development Plan](docs/next_development_plan.md)
-- [API Reference](docs/api.rst) — Sphinx auto-generated from docstrings
-- [abi_sciplot Design](docs/abi_sciplot_design.md) — Scientific figure compiler
-- [Plugin Development Guide](docs/plugin_development_guide.md)
-- [RNA-seq Workflow](docs/rnaseq_expression_workflow.md)
-- [Workflow Validation](docs/workflow_validation.md)
-- [HPC Development](docs/hpc_development.md)
-- [OpenAI/LLM Interface Standard](docs/openai_interface_standard.md)
-- [Agent Usage Guide](docs/agent_usage.md)
-- [Job Service Guide](docs/job_service.md)
-- [Release Guide](docs/release.md)
-- [Dev Log](docs/devlog.md)
+- [ABI Spec v0.1](docs/en/abi_spec_v0.1.md)
+- [Development Plan](docs/en/next_development_plan.md)
+- [API Reference](docs/en/api.rst) — Sphinx auto-generated from docstrings
+- [abi_sciplot Design](docs/en/abi_sciplot_design.md) — Scientific figure compiler
+- [Plugin Development Guide](docs/en/plugin_development_guide.md)
+- [RNA-seq Workflow](docs/en/rnaseq_expression_workflow.md)
+- [Workflow Validation](docs/en/workflow_validation.md)
+- [HPC Development](docs/en/hpc_development.md)
+- [OpenAI/LLM Interface Standard](docs/en/openai_interface_standard.md)
+- [Agent Usage Guide](docs/en/agent_usage.md)
+- [Job Service Guide](docs/en/job_service.md)
+- [Release Guide](docs/en/release.md)
+- [Dev Log](docs/en/devlog.md)
+- [Work Report 2026-06-20](docs/en/work_report_2026-06-20.md) — 最新工作报告
 
 ## Public SDK
 
@@ -261,7 +264,7 @@ Plugin authors should depend on these public modules:
 | `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with L1 (literature) / L2 (path) / L3 (validation) layers |
 | `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation from `pipeline_dag.yaml`. Replaces all hand-written `build_plan()` boilerplate; used by all 5 plugins including plasmid. (v1.3.2) |
 | `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML-driven TSV/JSON/log parsing with 3 source types (tsv_mapping, json_mapping, key_value_log). Replaces ~14 boilerplate parser functions. (v1.3.2) |
-| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure` — publication-grade scientific figure compiler. Pydantic schema, 8 plot types, PDF/SVG/PNG/TIFF export, 3 themes, FigureLint, SHA256 provenance. (v1.3.3) |
+| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure` — publication-grade scientific figure compiler. Pydantic schema, 15 plot types (including PCoA, volcano, stacked bar, heatmap, phylogeny), plotnine+seaborn backends, PDF/SVG/PNG/TIFF export, 3 themes, FigureLint, SHA256 provenance. (v1.4.0) |
 | `abi.tool_descriptors` | `ABI_AGENT_TOOLS`, `TOOL_ALIASES`, `export_openai_compatible`, `export_anthropic`, `export_gemini`, `PROVIDER_PROFILES` |
 | `abi.testing` | `assert_plugin_contract` |
 

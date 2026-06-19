@@ -48,6 +48,13 @@ class MatplotlibRenderer(BaseRenderer):
             "heatmap",
             "volcano_plot",
             "lineplot",
+            # Biological-grade plot types (v1.4.0)
+            "phylum_stacked_bar",
+            "genus_heatmap",
+            "pcoa_plot",
+            "differential_volcano",
+            "alpha_stats_boxplot",
+            "phylogenetic_heatmap",
         }
     )
 
@@ -140,8 +147,9 @@ class MatplotlibRenderer(BaseRenderer):
                     ax.set_ylabel(spec.labels.y_label)
                 elif spec.mapping.y:
                     ax.set_ylabel(spec.mapping.y)
-                if spec.labels.legend_title and ax.get_legend():
-                    ax.legend_.set_title(spec.labels.legend_title)
+                legend = ax.get_legend()
+                if spec.labels.legend_title and legend:
+                    legend.set_title(spec.labels.legend_title)
 
                 fig.tight_layout()
 

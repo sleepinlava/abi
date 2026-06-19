@@ -25,10 +25,9 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-stats
+  env_name: plasmid_binning
   executable: metabat2
   command_template: metabat2 -i {assembly} -a {bam} -o {output_dir}/{sample_id}.metabat2
-    --threads {threads}
   network: false
   writes_output: true
 failure_handling:

@@ -12,7 +12,16 @@ tests/
 Dockerfile*
 docker/
 .claude/
+.codex/
 baseline_comparison/
 demo_artifacts/
 # golden_traces/ and examples/ needed by pyproject.toml force-include at build time
 experiments/
+docs/superpowers/
+bench/
+data/benchmark/
+data/validation/
+abi-databases/
+*.log
+progress.json
+progress.jsonl

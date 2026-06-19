@@ -265,57 +265,29 @@ def _render_plasmid_figures(
 ) -> Mapping[str, Path]:
     """Render plasmid figures via abi_sciplot.
 
-    Loads ``figure_specs.yaml`` from the plugin root, adapts to abi_sciplot
-    FigureSpec format, and renders each figure.  Returns ``{spec_id: png_path}``
-    for HTML report embedding.
-    """
-    from abi.config import load_yaml
+    Delegates to the shared ``render_figures_via_sciplot()`` from
+    ``abi.report.generic_report`` — the same function used by the four
+    inline plugins (amplicon_16s, rnaseq_expression, wgs_bacteria,
+    metatranscriptomics).  Returns ``{spec_id: png_path}`` for HTML
+    report embedding.
 
-    # sciplot plot modules import matplotlib.axes at module level —
-    # bail out gracefully when matplotlib is not installed.
-    try:
-        from abi.sciplot.adapters import adapt_spec
-        from abi.sciplot.api import render_figure
-    except ImportError:
-        return {}
+    Unlike the previous inline implementation, this version properly
+    logs warnings for missing/empty tables, respects the ``required``
+    field, and surfaces rendering errors instead of silently swallowing
+    them.
+    """
+    from abi.report.generic_report import render_figures_via_sciplot
 
     fig_specs_path = plugin.root / "figure_specs.yaml"
     if not fig_specs_path.exists():
         return {}
 
-    data = load_yaml(fig_specs_path)
-    old_specs: list[dict] = list(data.get("figures", []))
-    if not old_specs:
-        return {}
-
-    abi_version = getattr(plugin, "abi_version", None)
-    rendered: dict[str, Path] = {}
-    for old in old_specs:
-        spec_id = old.get("id", "")
-        if not spec_id:
-            continue
-
-        # Skip optional figures whose source table doesn't exist
-        source_table = old.get("source_table", "")
-        table_path = tables_dir / f"{source_table}.tsv"
-        if not table_path.exists():
-            continue
-
-        try:
-            spec = adapt_spec(
-                old,
-                tables_dir,
-                figures_dir,
-                plugin_name="metagenomic_plasmid",
-                abi_version=abi_version,
-            )
-            result = render_figure(spec)
-            png_files = [p for p in result.output_files if p.suffix == ".png"]
-            if png_files and not result.errors:
-                rendered[spec_id] = png_files[0]
-        except Exception:
-            pass
-    return rendered
+    return render_figures_via_sciplot(
+        plugin,
+        fig_specs_path,
+        tables_dir,
+        figures_dir,
+    )
 
 
 def _plan_from_dict(data: Mapping[str, Any]) -> ExecutionPlan:

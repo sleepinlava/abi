@@ -188,6 +188,10 @@ def _parse_tsv_mapping(
     skip_prefix = source.get("skip_lines_starting_with")
     if skip_prefix is not None:
         skip_prefix = str(skip_prefix)
+    # Explicit fieldnames for headerless files (e.g. MLST output)
+    explicit_fieldnames = source.get("fieldnames")
+    if isinstance(explicit_fieldnames, list):
+        explicit_fieldnames = [str(f) for f in explicit_fieldnames]
 
     columns_spec = spec.get("columns")
     if not isinstance(columns_spec, Mapping):
@@ -211,6 +215,21 @@ def _parse_tsv_mapping(
                     lines_iter = (line for line in handle if not line.startswith(skip_prefix))
                 else:
                     lines_iter = handle
+
+                if explicit_fieldnames:
+                    # Headerless file: use reader + explicit fieldnames
+                    csv_reader = csv.reader(lines_iter, delimiter=delimiter)
+                    fieldnames = explicit_fieldnames
+                    for values in csv_reader:
+                        csv_row = dict(zip(fieldnames, values))
+                        if len(csv_row) < len(fieldnames):
+                            continue  # skip incomplete rows
+                        row = _map_row(columns_spec, csv_row, fieldnames)
+                        row["sample_id"] = sample_id
+                        row["source_file"] = str(path)
+                        row.update(constants)
+                        rows.append(row)
+                    continue  # processed with explicit fieldnames
 
                 reader = csv.DictReader(lines_iter, delimiter=delimiter)
                 if not reader.fieldnames:

@@ -97,11 +97,11 @@ abi job-service --workers 2 --store jobs.json --subprocess-workers
 
 | 类型 | 工具数 | 说明 |
 | --- | --- | --- |
-| `amplicon_16s` | 8 | 16S rRNA 微生物组：cutadapt → vsearch 合并/去冗余/去噪 → SINTAX 分类 → MAFFT+FastTree 系统发育 → alpha/beta 多样性 |
-| `rnaseq_expression` | 6 | 批量 RNA-seq：fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler |
-| `wgs_bacteria` | 5 | 细菌分离株 WGS：fastp → SPAdes → Prokka → MLST → AMRFinderPlus |
-| `metatranscriptomics` | 3 | 宏转录组：fastp → STAR/HISAT2 → featureCounts |
-| `metagenomic_plasmid` | 67 | 旗舰质粒分析：QC → 组装 → 质粒检测 → 注释 → 丰度 → 统计。10 个 conda 环境，84 节点 DAG。 |
+| `amplicon_16s` | 8 | 16S rRNA 微生物组：cutadapt → vsearch 合并/去冗余/去噪 → SINTAX 分类 → MAFFT+FastTree 系统发育 → alpha/beta 多样性。**✅ 端到端验证通过** |
+| `rnaseq_expression` | 6 | 批量 RNA-seq：fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler。**✅ 端到端验证通过** |
+| `wgs_bacteria` | 5 | 细菌分离株 WGS：fastp → SPAdes → Prokka → MLST → AMRFinderPlus。**✅ 端到端验证通过** |
+| `metatranscriptomics` | 4 | 宏转录组：fastp → STAR/HISAT2 → featureCounts。**✅ 端到端验证通过** |
+| `metagenomic_plasmid` | 67 | 旗舰质粒分析：QC → 组装 → 质粒检测 → 注释 → 丰度 → 群落分析 → 可视化。10 个 conda 环境，84+ 节点 DAG，16 张标准表。**⚠️ 核心流程通过，全量待数据库补齐** |
 
 `autoplasm` CLI 保留以维持向后兼容：
 
@@ -147,6 +147,8 @@ ABI 核心层          schemas  │  provenance  │  permissions  │  diagnost
         v
 插件层              amplicon_16s/  rnaseq_expression/  wgs_bacteria/
                     metatranscriptomics/  metagenomic_plasmid/
+                        (群落分析、比较基因组学、
+                         可视化、共现网络)
         │
         v
 运行时后端          local  │  Docker  │  Nextflow  │  HPC  │  cloud
@@ -228,19 +230,20 @@ python -m twine check dist/*
 
 更多文档：
 
-- [ABI Spec v0.1](docs/abi_spec_v0.1.md)
-- [开发计划](docs/next_development_plan.md)
-- [API 参考](docs/api.rst) — Sphinx 自动从 docstring 生成
-- [abi_sciplot 设计文档](docs/abi_sciplot_design.md) — 科研图形编译器
-- [插件开发指南](docs/plugin_development_guide.md)
-- [RNA-seq 工作流](docs/rnaseq_expression_workflow.md)
-- [工作流验证](docs/workflow_validation.md)
-- [HPC 开发](docs/hpc_development.md)
-- [OpenAI/LLM 接口标准](docs/openai_interface_standard.md)
-- [Agent 使用指南](docs/agent_usage.md)
-- [Job Service 指南](docs/job_service.md)
-- [发布指南](docs/release.md)
-- [开发日志](docs/devlog.md)
+- [ABI Spec v0.1](docs/zh/abi_spec_v0.1.md)
+- [开发计划](docs/en/next_development_plan.md)
+- [API 参考](docs/en/api.rst) — Sphinx 自动从 docstring 生成
+- [abi_sciplot 设计文档](docs/en/abi_sciplot_design.md) — 科研图形编译器
+- [插件开发指南](docs/en/plugin_development_guide.md)
+- [RNA-seq 工作流](docs/en/rnaseq_expression_workflow.md)
+- [工作流验证](docs/zh/workflow_validation.md)
+- [HPC 开发](docs/en/hpc_development.md)
+- [OpenAI/LLM 接口标准](docs/zh/openai_interface_standard.md)
+- [Agent 使用指南](docs/zh/agent_usage.md)
+- [Job Service 指南](docs/zh/job_service.md)
+- [发布指南](docs/zh/release.md)
+- [开发日志](docs/en/devlog.md)
+- [最新工作报告](docs/en/work_report_2026-06-20.md)
 
 ## 公共 SDK
 
@@ -257,7 +260,7 @@ python -m twine check dist/*
 | `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG 推断，支持 L1（文献）/ L2（路径）/ L3（验证）三层正确性模型 |
 | `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — 从 `pipeline_dag.yaml` 声明式生成执行计划（v1.3.2） |
 | `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML 驱动的 TSV 列映射，替换手写解析器样板代码（v1.3.2） |
-| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure` — 论文级科研图形编译器。Pydantic schema，8 种图形类型，PDF/SVG/PNG/TIFF 导出，3 套主题，FigureLint 质检，SHA256 溯源。（v1.3.3） |
+| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure` — 论文级科研图形编译器。Pydantic schema，15 种图形类型（含 PCoA、火山图、堆叠柱状图、热图、系统发育热图），plotnine+seaborn 后端，PDF/SVG/PNG/TIFF 导出，3 套主题，FigureLint 质检，SHA256 溯源。（v1.4.0） |
 | `abi.tool_descriptors` | `ABI_AGENT_TOOLS`, `TOOL_ALIASES`, `export_openai_compatible`, `export_anthropic`, `export_gemini`, `PROVIDER_PROFILES` |
 | `abi.testing` | `assert_plugin_contract` |
 

@@ -47,47 +47,38 @@ parsers:
       type: tsv_mapping
       pattern: "mlst*.tsv"
       delimiter: "\t"
+      fieldnames: [file, scheme, sequence_type, allele_1, allele_2, allele_3, allele_4, allele_5, allele_6, allele_7]
     target_table: mlst_profile
     columns:
       scheme:
-        sources_from: column_index
-        index: 2
+        sources: [scheme]
         default: ""
       sequence_type:
-        sources_from: column_index
-        index: 3
+        sources: [sequence_type]
         default: ""
       allele_1:
-        sources_from: column_index
-        index: 4
+        sources: [allele_1]
         default: ""
       allele_2:
-        sources_from: column_index
-        index: 5
+        sources: [allele_2]
         default: ""
       allele_3:
-        sources_from: column_index
-        index: 6
+        sources: [allele_3]
         default: ""
       allele_4:
-        sources_from: column_index
-        index: 7
+        sources: [allele_4]
         default: ""
       allele_5:
-        sources_from: column_index
-        index: 8
+        sources: [allele_5]
         default: ""
       allele_6:
-        sources_from: column_index
-        index: 9
+        sources: [allele_6]
         default: ""
       allele_7:
-        sources_from: column_index
-        index: 10
+        sources: [allele_7]
         default: ""
       clonal_complex:
-        sources_from: column_index
-        index: 4
+        sources: [sequence_type]
         default: ""
     constants:
       tool: mlst

@@ -76,8 +76,8 @@ def test_build_plan_structure(tmp_path):
     )
     plan = plugin.build_plan(cfg, check_files=False)
     assert plan.analysis_type == "amplicon_16s"
-    # 1 sample → 5 per-sample steps + 2 cross-sample (phylogeny + diversity)
-    assert len(plan.steps) >= 7
+    # 1 sample → 5 per-sample steps + 4 cross-sample (3 phylogeny + diversity)
+    assert len(plan.steps) >= 9
     tool_ids = {s.tool_id for s in plan.steps}
     assert tool_ids >= {
         "cutadapt",
@@ -85,7 +85,9 @@ def test_build_plan_structure(tmp_path):
         "vsearch_derep",
         "vsearch_denoise",
         "vsearch_taxonomy",
-        "phylogeny_build",
+        "phylogeny_combine",
+        "phylogeny_mafft",
+        "phylogeny_tree",
         "diversity_metrics",
     }
 

@@ -1,0 +1,7 @@
+# TUNA mirror configuration for ABI Docker builds
+custom_channels:
+  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  defaults: https://mirrors.tuna.tsinghua.edu.cn/anaconda
+show_channel_urls: true
+channel_priority: strict

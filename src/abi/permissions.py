@@ -129,10 +129,10 @@ def permission_for_tool(tool_name: str) -> PermissionLevel:
 
     **Fallback behavior / 回退行为:**
     If ``tool_name`` is not in ``TOOL_PERMISSIONS``, returns
-    ``PermissionLevel.PLANNING_WRITE`` -- a safe default that allows
-    non-destructive operations but blocks execution.
-    如果 tool_name 不在 TOOL_PERMISSIONS 中，返回 PLANNING_WRITE --
-    一个允许非破坏性操作但阻止执行的安全默认值。
+    ``PermissionLevel.READ_ONLY`` (S11: unregistered tools default to
+    the most restrictive permission level for safety).
+    如果 tool_name 不在 TOOL_PERMISSIONS 中，返回 READ_ONLY --
+    未注册工具默认使用最严格的权限级别以确保安全（S11）。
     """
     # S11: default to READ_ONLY for unknown tools — unregistered tools
     # should not be allowed to write files or execute by default.

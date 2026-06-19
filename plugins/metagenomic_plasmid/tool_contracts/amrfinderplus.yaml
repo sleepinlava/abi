@@ -8,6 +8,7 @@ when_to_use:
   - resistance_annotation_required
 inputs:
   plasmid_contigs: {type: file, format: fasta, required: true}
+  database: {type: string, required: true}
   sample_id: {type: string, required: true}
 outputs:
   output_dir: {type: directory}
@@ -15,7 +16,7 @@ outputs:
 execution:
   env_name: autoplasm-annotation
   executable: amrfinder
-  command_template: "amrfinder -n {plasmid_contigs} -o {output_dir}/{sample_id}.amrfinder.tsv"
+  command_template: "amrfinder -n {plasmid_contigs} -d {database} -o {output_dir}/{sample_id}.amrfinder.tsv"
   network: false
   writes_output: true
 normalization:

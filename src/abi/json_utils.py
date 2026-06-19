@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
-from abi.schemas import ABIError
+from abi.errors import ABIError
 
 
 class ABIJSONError(ABIError):

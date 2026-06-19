@@ -19,7 +19,10 @@ from pydantic import BaseModel, Field
 class FontSpec(BaseModel):
     """Font configuration for a theme."""
 
-    family: str = Field("Arial", description="Primary font family.")
+    family: str = Field(
+        "DejaVu Sans",
+        description="Primary font family (universally available open-source sans-serif).",
+    )
     fallback: list[str] = Field(
         default_factory=lambda: ["Helvetica", "DejaVu Sans"],
         description="Fallback font families in priority order.",

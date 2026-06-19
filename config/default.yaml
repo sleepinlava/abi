@@ -45,8 +45,8 @@ qc:
   enable: true
   short_read_tool: fastp
   long_read_tool: filtlong
-  run_fastqc: true
-  run_multiqc: true
+  run_fastqc: false
+  run_multiqc: false
   avoid_duplicate_qc: true
 
 assembly:
@@ -68,16 +68,16 @@ plasmid_detection:
   output_uncertain: true
 
 plasmid_binning:
-  enable: auto
+  enable: false
   tools: auto
   strategy: auto
 
 typing:
-  enable: auto
+  enable: true
   tools: auto
 
 host_prediction:
-  enable: auto
+  enable: false
   tools: auto
   use_abundance_correlation: true
   use_crispr_spacer: false
@@ -97,11 +97,11 @@ annotation:
     - integronfinder
 
 comparative_genomics:
-  enable: auto
+  enable: false
   tools: auto
 
 abundance:
-  enable: auto
+  enable: false
   mapper_short: bowtie2
   mapper_long: minimap2
   calculator: coverm
@@ -120,13 +120,13 @@ abundance:
     - tpm
 
 sample_analysis:
-  enable: auto
+  enable: false
   alpha_diversity: true
   beta_diversity: true
   differential_abundance: true
   network: true
 
 visualization:
-  enable: true
+  enable: false
   html_report: true
   markdown_report: true

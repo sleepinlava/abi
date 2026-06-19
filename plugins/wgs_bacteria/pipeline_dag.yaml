@@ -32,6 +32,7 @@ nodes:
   # ── QC ──────────────────────────────────────────────────────────────
   qc_fastp:
     tool_id: fastp
+    platforms: [illumina]
     category: qc
     scope: per_sample
     optional: false
@@ -57,6 +58,7 @@ nodes:
   # ── Assembly ────────────────────────────────────────────────────────
   assembly_spades:
     tool_id: spades
+    platforms: [illumina]
     category: assembly
     scope: per_sample
     optional: false
@@ -84,6 +86,7 @@ nodes:
   # ── Annotation ──────────────────────────────────────────────────────
   annotation_prokka:
     tool_id: prokka
+    platforms: [illumina, assembly]
     category: annotation
     scope: per_sample
     optional: false
@@ -116,6 +119,7 @@ nodes:
   # ── MLST ────────────────────────────────────────────────────────────
   mlst:
     tool_id: mlst
+    platforms: [illumina, assembly]
     category: typing
     scope: per_sample
     optional: false
@@ -138,13 +142,13 @@ nodes:
   # ── AMR Profiling ───────────────────────────────────────────────────
   amr:
     tool_id: amrfinderplus
+    platforms: [illumina, assembly]
     category: amr
     scope: per_sample
     optional: false
     depends_on: [annotation_prokka]
     inputs:
       prokka_faa:  {type: file, format: fasta, source: annotation_prokka.faa}
-      prokka_gff:  {type: file, format: gff, source: annotation_prokka.gff}
     outputs:
       amr_tsv:
         type: file

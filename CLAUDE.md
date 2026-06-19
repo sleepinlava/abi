@@ -111,9 +111,9 @@ src/abi/
   autoplasm/          Backward-compatible re-export shim → metagenomic_plasmid/_engine/
   _shared.py          Shared utilities: _read_tsv, _display_command, _plan_dict,
                       _common_overrides, _clean, _resolve_path,
-                      _parse_fastp, _parse_star (~260 lines)
-  provenance.py       RunLogger, PipelineProgressRecorder, TSV writers (749 lines)
-  tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1058 lines)
+                      _parse_fastp, _parse_star (340 lines)
+  provenance.py       RunLogger, PipelineProgressRecorder, TSV writers (849 lines)
+  tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1715 lines)
   schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
   executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement
   dag_planner.py      Universal DAG planner — generates ExecutionPlan from pipeline_dag.yaml
@@ -123,7 +123,7 @@ src/abi/
                       Replaces ~14 csv.DictReader → remap columns parser functions. (added 2026-06-18)
   sciplot/            Publication-grade scientific figure compiler — FigureSpec →
                       Validate → Render → Export → Lint → Provenance.
-                      Pydantic schema, 8 plot types, 3 themes, 11 lint rules,
+                      Pydantic schema, 9 plot types, 3 themes, 11 lint rules,
                       SHA256 provenance. (added 2026-06-19, v1.3.3)
   dag.py              DAG inference engine — L1 (literature) / L2 (path) / L3 (validation)
   contracts/          WorkflowSpec, step contract enforcement, checksum chaining, assertion eval
@@ -151,7 +151,7 @@ src/abi/
 | `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with L1 (literature) / L2 (path) / L3 (validation) |
 | `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation from `pipeline_dag.yaml`. Replaces all hand-written `build_plan()`; plasmid planner also migrated to UniversalDAG. (added 2026-06-18) |
 | `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML-driven TSV/JSON/log column mapping with 3 source types (tsv_mapping, json_mapping, key_value_log), replaces ~14 boilerplate parsers (added 2026-06-18) |
-| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure`, `load_spec` — scientific figure compiler (Pydantic schema, 8 plot types, PDF/SVG/PNG/TIFF, lint, provenance). (added 2026-06-19, v1.3.3) |
+| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure`, `load_spec` — scientific figure compiler (Pydantic schema, 9 plot types, PDF/SVG/PNG/TIFF, lint, provenance). (added 2026-06-19, v1.3.3) |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
 | `abi.testing` | `assert_plugin_contract` |
 
@@ -170,11 +170,11 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 - `planning_write`: `plan`, `dry_run`, `report`, `export_nextflow` — writes plans/provenance, no tool execution
 - `execution`: `run` — **requires `confirm_execution=true`**, writes provenance, executes real tools
 
-### The five plugins (v1.3.2, 2026-06-18)
+### The five plugins (v1.3.3, 2026-06-20)
 
-All five plugins have complete tool chains, parsers, report generation, tests, benchmark datasets, and Docker images. All use DAG-driven plan generation via `UniversalDAG`.
+All five plugins have complete tool chains, parsers, report generation, tests, benchmark datasets, and Docker images. All use DAG-driven plan generation via `UniversalDAG`. All 4 inline plugins verified via end-to-end real execution with 16-thread demo data.
 
-- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (20 modules, 7,713 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 2,019 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner using `UniversalDAG` with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments.
+- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (40 modules, 9,195 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 3,025 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner using `UniversalDAG` with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments.
 - **`rnaseq_expression`**: 6-tool standard RNA-seq. fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. All 6 parsers working. Uses `build_plan_from_dag()` with TSVMapper for featureCounts. DESeq2 R script bundled, automated conda+BiocManager install.
 - **`wgs_bacteria`**: 5-tool bacterial isolate analysis. fastp → SPAdes → Prokka → MLST → AMRFinderPlus. All 5 parsers working. Uses `build_plan_from_dag()` with TSVMapper for AMRFinderPlus + MLST.
 - **`amplicon_16s`**: 8-tool microbial community analysis. cutadapt → vsearch_mergepairs → vsearch_derep → UNOISE3 denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta via `scripts/amplicon_diversity.py`). All 8 tools have parsers. Uses `build_plan_from_dag()`.

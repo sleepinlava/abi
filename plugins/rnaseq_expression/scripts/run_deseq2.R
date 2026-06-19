@@ -96,8 +96,8 @@ if (!("condition" %in% colnames(metadata))) {
 # Keep only samples present in both metadata and count matrix
 sample_cols <- colnames(count_matrix)
 metadata <- metadata[metadata$sample_id %in% sample_cols, , drop = FALSE]
-if (nrow(metadata) < 4) {
-  stop("Need at least 4 samples (2 per group) for DESeq2; got ",
+if (nrow(metadata) < 2) {
+  stop("Need at least 2 samples (1 per group) for DESeq2; got ",
        nrow(metadata), call. = FALSE)
 }
 
@@ -141,11 +141,28 @@ keep <- rowSums(counts(dds) >= min_count) >= min(2, smallest_group_size)
 if (sum(keep) >= 2) dds <- dds[keep, ]
 
 dds <- estimateSizeFactors(dds, type = "poscounts")
-dds <- DESeq(dds, fitType = "mean")
-
-# Extract results for the comparison
-res <- results(dds, contrast = c("condition", numerator, denominator),
-               alpha = alpha)
+no_replicates <- smallest_group_size < 2
+if (no_replicates) {
+  # No replicates: simple fold changes with pseudocount
+  norm_counts <- counts(dds, normalized = TRUE)
+  grp1 <- rowMeans(norm_counts[, metadata$condition == denominator, drop = FALSE])
+  grp2 <- rowMeans(norm_counts[, metadata$condition == numerator,   drop = FALSE])
+  lfc <- log2((grp2 + 1) / (grp1 + 1))
+  res <- data.frame(
+    baseMean       = rowMeans(norm_counts),
+    log2FoldChange = lfc,
+    lfcSE          = NA_real_,
+    stat           = NA_real_,
+    pvalue         = NA_real_,
+    padj           = NA_real_,
+    row.names      = rownames(norm_counts)
+  )
+} else {
+  dds <- DESeq(dds, fitType = "mean")
+  # Extract results for the comparison
+  res <- results(dds, contrast = c("condition", numerator, denominator),
+                 alpha = alpha)
+}
 
 # ── Write output files / 写入输出文件 ──────────────────────────────────────
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)

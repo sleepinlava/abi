@@ -1,50 +1,40 @@
 # Figure specifications for the metatranscriptomics plugin.
-# See: docs/next_development_plan.md §6.5
+# References only tables that this 3-tool pipeline actually produces:
+#   qc_summary, alignment_summary, gene_expression
 
 figures:
-  - id: rrna_filtering
+  - id: qc_read_counts
     type: bar
-    source_table: rrna_filter_summary
+    source_table: qc_summary
     x: sample_id
-    y: rrna_removed_rate
-    title: "rRNA Removal Efficiency"
+    y: value
+    title: "Read QC Summary per Sample"
     xlabel: "Sample"
-    ylabel: "rRNA Removed (%)"
+    ylabel: "Reads"
     required: true
 
-  - id: taxonomic_activity
-    type: stacked_bar
-    source_table: taxonomic_expression
+  - id: mapping_rate
+    type: bar
+    source_table: alignment_summary
     x: sample_id
-    title: "Transcriptional Activity by Taxon"
-    colormap: "tab20"
+    y: value
+    title: "STAR Mapping Statistics per Sample"
+    xlabel: "Sample"
+    ylabel: "Value"
     required: true
 
-  - id: pathway_heatmap
+  - id: gene_expression_heatmap
     type: heatmap
-    source_table: pathway_expression
-    x: pathway_id
-    title: "Pathway Expression Heatmap"
+    source_table: gene_expression
+    x: sample_id
+    title: "Gene Expression Heatmap"
     colormap: "viridis"
     top_n: 50
-    required: true
+    required: false
 
-  - id: gene_family_pca
+  - id: gene_expression_pca
     type: pca
-    source_table: gene_family_expression
+    source_table: gene_expression
     label: sample_id
-    color: group
-    title: "PCA of Gene Family Expression"
-    required: true
-
-  - id: top_pathway_diff
-    type: bar
-    source_table: functional_activity_summary
-    x: pathway_name
-    y: fold_change
-    title: "Top Differentially Expressed Pathways"
-    xlabel: "Pathway"
-    ylabel: "log2(Fold Change)"
-    sort_by: fold_change
-    ascending: false
+    title: "PCA of Gene Expression"
     required: false

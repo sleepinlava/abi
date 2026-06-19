@@ -47,6 +47,8 @@ report = [
     "jinja2",
     "matplotlib",
     "plotly",
+    "plotnine>=0.12",
+    "seaborn>=0.12",
 ]
 docs = [
     "sphinx>=7.0",

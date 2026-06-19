@@ -1,36 +1,46 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: megahit
 name: MEGAHIT
 category: assembly
 purpose: Assemble paired-end metagenomic reads into contigs.
 when_to_use:
-  - illumina_reads
-  - assembly_required
+- illumina_reads
+- assembly_required
 inputs:
-  read1: {type: file, required: true}
-  read2: {type: file, required: true}
-  threads: {type: integer, minimum: 1}
+  read1:
+    type: file
+    required: true
+  read2:
+    type: file
+    required: true
+  threads:
+    type: integer
+    minimum: 1
 outputs:
-  output_dir: {type: directory}
-  assembly: {type: file, format: fasta}
+  output_dir:
+    type: directory
+  assembly:
+    type: file
+    format: fasta
 execution:
   env_name: autoplasm-assembly
   executable: megahit
-  command_template: "megahit -1 {read1} -2 {read2} -o {output_dir} -t {threads}"
+  command_template: bash -c "rm -rf {output_dir} && megahit -1 {read1} -2 {read2}
+    -o {output_dir} -t {threads}"
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_megahit"
-  tables: [assembly_summary]
+  parser: abi.autoplasm.parsers:parse_megahit
+  tables:
+  - assembly_summary
 failure_handling:
   missing_input:
-    hint: "Check cleaned read paths from the QC step."
+    hint: Check cleaned read paths from the QC step.
   tool_not_found:
-    hint: "Install megahit in the autoplasm-assembly environment."
+    hint: Install megahit in the autoplasm-assembly environment.
   nonzero_exit:
-    hint: "Inspect the MEGAHIT stderr log and assembly output directory."
-
+    hint: Inspect the MEGAHIT stderr log and assembly output directory.
 resources:
   cpu: 16
-  memory: "64GB"
-  walltime: "08:00:00"
+  memory: 64GB
+  walltime: 08:00:00

@@ -625,7 +625,8 @@ def test_illumina_mock_run_chains_to_standard_tables_and_report(tmp_path, monkey
     tables = tmp_path / "results" / "tables"
 
     qc_tools = {row["tool"] for row in read_standard_table(tables, "qc_summary")}
-    assert {"fastp", "fastqc", "multiqc"}.issubset(qc_tools)
+    # fastqc and multiqc are optional (gated by qc.run_fastqc / qc.run_multiqc config)
+    assert "fastp" in qc_tools
     assembly_tools = {row["tool"] for row in read_standard_table(tables, "assembly_summary")}
     assert {"megahit", "quast"}.issubset(assembly_tools)
     assert read_standard_table(tables, "plasmid_predictions")
