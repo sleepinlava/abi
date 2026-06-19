@@ -171,7 +171,7 @@ class TestThemeSpec:
         theme_path = Path(__file__).parent.parent / "themes" / "abi_nature.yaml"
         theme = ThemeSpec.from_yaml(theme_path)
         assert theme.theme_name == "abi_nature"
-        assert theme.font.family == "Arial"
+        assert theme.font.family == "DejaVu Sans"
         assert theme.figure.dpi == 300
 
 

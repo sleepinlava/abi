@@ -1,58 +1,62 @@
 # Figure specifications for the amplicon_16s plugin.
-# See: docs/next_development_plan.md §6.4
+# Column names match the actual standard table schemas produced by parsers.
 
 figures:
   - id: read_retention
     type: bar
     source_table: denoising_stats
-    x: sample_id
-    y: nonchimera_reads
+    x: stage
+    y: output_reads
     title: "Read Retention Across Pipeline Stages"
-    xlabel: "Sample"
-    ylabel: "Reads"
+    xlabel: "Stage"
+    ylabel: "Reads Retained"
     required: true
 
   - id: taxonomy_barplot_phylum
-    type: stacked_bar
-    source_table: taxonomy
+    type: bar
+    source_table: asv_table
     x: sample_id
-    title: "Taxonomic Composition at Phylum Level"
-    colormap: "tab20"
+    y: abundance
+    title: "Total ASV Abundance by Sample"
+    xlabel: "Sample"
+    ylabel: "Abundance"
     required: true
 
   - id: alpha_diversity_boxplot
     type: boxplot
     source_table: alpha_diversity
-    x: group
+    x: sample_id
     y: shannon_entropy
-    title: "Alpha Diversity (Shannon) by Group"
-    xlabel: "Group"
+    title: "Alpha Diversity (Shannon)"
+    xlabel: "Sample"
     ylabel: "Shannon Entropy"
     required: true
 
-  - id: beta_diversity_pcoa
-    type: pca
+  - id: beta_diversity_scatter
+    type: scatter
     source_table: beta_diversity
-    label: sample_id
-    color: group
-    title: "PCoA of Beta Diversity"
-    required: true
+    x: sample_a
+    y: distance
+    title: "Beta Diversity (Sample Pairs)"
+    xlabel: "Sample A"
+    ylabel: "Distance"
+    required: false
 
   - id: top_taxa_heatmap
     type: heatmap
     source_table: asv_table
     x: sample_id
-    title: "Top Taxa Abundance Heatmap"
+    title: "Top ASV Abundance Heatmap"
     colormap: "viridis"
     top_n: 50
     required: false
 
-  - id: asv_prevalence
+  - id: asv_abundance_scatter
     type: scatter
     source_table: asv_table
     x: asv_id
-    y: prevalence
-    title: "ASV Prevalence Across Samples"
+    y: abundance
+    title: "ASV Abundance Distribution"
     xlabel: "ASV"
-    ylabel: "Prevalence"
+    ylabel: "Abundance"
     required: false
