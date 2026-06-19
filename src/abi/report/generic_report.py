@@ -252,7 +252,7 @@ def write_full_report(
     return paths
 
 
-def _render_figures_via_sciplot(
+def render_figures_via_sciplot(
     plugin: Any,
     specs_path: Path,
     tables_dir: Path,
@@ -263,6 +263,10 @@ def _render_figures_via_sciplot(
     Loads legacy-format ``figure_specs.yaml``, adapts each spec to the
     new abi_sciplot FigureSpec, and renders through MatplotlibRenderer.
     Returns ``{spec_id: png_path}`` for HTML report embedding.
+
+    This is the **canonical** figure rendering entry point for ALL plugins
+    (both inline plugins via ``write_plugin_report()`` and the flagship
+    metagenomic_plasmid plugin via ``_render_plasmid_figures()``).
     """
     from abi.config import load_yaml
 
@@ -336,10 +340,20 @@ def _render_figures_via_sciplot(
                 abi_version=abi_version,
             )
             result = render_figure(spec)
+            # Log any validation / rendering errors
+            for err in result.errors:
+                _log.warning("Figure '%s': %s", spec_id, err)
+            for warn in result.warnings:
+                _log.info("Figure '%s': %s", spec_id, warn)
             # Find the PNG output for HTML embedding
             png_files = [p for p in result.output_files if p.suffix == ".png"]
             if png_files:
                 rendered[spec_id] = png_files[0]
+            elif not result.errors:
+                _log.info(
+                    "Figure '%s' rendered but produced no PNG — lint/provenance only",
+                    spec_id,
+                )
         except Exception as exc:
             # Best-effort: log warning and skip figures that fail to render
             _log.warning(
@@ -358,7 +372,7 @@ def _render_figures_via_legacy(
 ) -> Dict[str, Path]:
     """Render figures using the legacy FigureEngine (PNG only).
 
-    Kept for backward compatibility.  Use ``_render_figures_via_sciplot``
+    Kept for backward compatibility.  Use ``render_figures_via_sciplot``
     for new code.
     """
     from abi.figures import FigureEngine
@@ -426,7 +440,7 @@ def write_plugin_report(
         if fig_specs_path.exists():
             try:
                 if use_sciplot:
-                    rendered_figures = _render_figures_via_sciplot(
+                    rendered_figures = render_figures_via_sciplot(
                         plugin,
                         fig_specs_path,
                         Path(result_dir) / "tables",

@@ -28,7 +28,12 @@ from abi.report.citations import (
     format_citations_markdown,
     load_citations,
 )
-from abi.report.generic_report import write_full_report, write_generic_report, write_plugin_report
+from abi.report.generic_report import (
+    render_figures_via_sciplot,
+    write_full_report,
+    write_generic_report,
+    write_plugin_report,
+)
 from abi.report.html import write_html_report
 from abi.report.limitations import (
     format_limitations_html,
@@ -45,6 +50,7 @@ __all__ = [
     "format_limitations_markdown",
     "load_citations",
     "load_limitations",
+    "render_figures_via_sciplot",
     "write_full_report",
     "write_generic_report",
     "write_html_report",
