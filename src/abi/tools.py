@@ -1472,9 +1472,7 @@ class ToolRegistry:
             }
         else:
             # Flat format — all tools go under a default plugin key
-            cls._env_assignments = {
-                "_default": {str(k): str(v) for k, v in raw.items()}
-            }
+            cls._env_assignments = {"_default": {str(k): str(v) for k, v in raw.items()}}
 
     @classmethod
     def env_for(cls, tool_id: str, plugin: str = "_default") -> str:

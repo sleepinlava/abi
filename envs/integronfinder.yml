@@ -1,7 +1,0 @@
-name: autoplasm-integronfinder
-channels: [conda-forge, bioconda, defaults]
-channel_priority: flexible
-dependencies:
-  - python=3.10
-  - integron_finder
-  - biopython>=1.77

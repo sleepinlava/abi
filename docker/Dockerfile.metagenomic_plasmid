@@ -15,41 +15,42 @@ RUN conda install -y -n base -c conda-forge mamba && \
 # ── Core environments (installed first for layer caching) ────────────────
 # Each COPY + mamba create pair is a cacheable layer
 
-COPY envs/base.yml /tmp/envs/base.yml
-RUN mamba env create -f /tmp/envs/base.yml && rm /tmp/envs/base.yml
+COPY envs/autoplasm-base.yml /tmp/envs/autoplasm-base.yml
+RUN mamba env create -f /tmp/envs/autoplasm-base.yml && rm /tmp/envs/autoplasm-base.yml
 
-COPY envs/qc.yml /tmp/envs/qc.yml
-RUN mamba env create -f /tmp/envs/qc.yml && rm /tmp/envs/qc.yml
+COPY envs/autoplasm-qc.yml /tmp/envs/autoplasm-qc.yml
+RUN mamba env create -f /tmp/envs/autoplasm-qc.yml && rm /tmp/envs/autoplasm-qc.yml
 
-COPY envs/assembly.yml /tmp/envs/assembly.yml
-RUN mamba env create -f /tmp/envs/assembly.yml && rm /tmp/envs/assembly.yml
+COPY envs/autoplasm-assembly.yml /tmp/envs/autoplasm-assembly.yml
+RUN mamba env create -f /tmp/envs/autoplasm-assembly.yml && rm /tmp/envs/autoplasm-assembly.yml
 
-COPY envs/annotation.yml /tmp/envs/annotation.yml
-RUN mamba env create -f /tmp/envs/annotation.yml && rm /tmp/envs/annotation.yml
+COPY envs/autoplasm-annotation.yml /tmp/envs/autoplasm-annotation.yml
+RUN mamba env create -f /tmp/envs/autoplasm-annotation.yml && rm /tmp/envs/autoplasm-annotation.yml
 
-COPY envs/abundance.yml /tmp/envs/abundance.yml
-RUN mamba env create -f /tmp/envs/abundance.yml && rm /tmp/envs/abundance.yml
+COPY envs/autoplasm-abundance.yml /tmp/envs/autoplasm-abundance.yml
+RUN mamba env create -f /tmp/envs/autoplasm-abundance.yml && rm /tmp/envs/autoplasm-abundance.yml
 
 # ── Specialized environments ─────────────────────────────────────────────
-COPY envs/plasmid_detect.yml /tmp/envs/plasmid_detect.yml
-RUN mamba env create -f /tmp/envs/plasmid_detect.yml && rm /tmp/envs/plasmid_detect.yml
+COPY envs/autoplasm-plasmid-detect.yml /tmp/envs/autoplasm-plasmid-detect.yml
+RUN mamba env create -f /tmp/envs/autoplasm-plasmid-detect.yml && rm /tmp/envs/autoplasm-plasmid-detect.yml
 
-COPY envs/plasmid_binning.yml /tmp/envs/plasmid_binning.yml
-RUN mamba env create -f /tmp/envs/plasmid_binning.yml && rm /tmp/envs/plasmid_binning.yml
+COPY envs/autoplasm-plasmid-binning.yml /tmp/envs/autoplasm-plasmid-binning.yml
+RUN mamba env create -f /tmp/envs/autoplasm-plasmid-binning.yml && rm /tmp/envs/autoplasm-plasmid-binning.yml
 
-COPY envs/stats.yml /tmp/envs/stats.yml
-RUN mamba env create -f /tmp/envs/stats.yml && rm /tmp/envs/stats.yml
+COPY envs/autoplasm-stats.yml /tmp/envs/autoplasm-stats.yml
+RUN mamba env create -f /tmp/envs/autoplasm-stats.yml && rm /tmp/envs/autoplasm-stats.yml
 
-COPY envs/visualization.yml /tmp/envs/visualization.yml
-RUN mamba env create -f /tmp/envs/visualization.yml && rm /tmp/envs/visualization.yml
+COPY envs/autoplasm-visualization.yml /tmp/envs/autoplasm-visualization.yml
+RUN mamba env create -f /tmp/envs/autoplasm-visualization.yml && rm /tmp/envs/autoplasm-visualization.yml
 
-COPY envs/integronfinder.yml /tmp/envs/integronfinder.yml
-RUN mamba env create -f /tmp/envs/integronfinder.yml && rm /tmp/envs/integronfinder.yml
+COPY envs/autoplasm-integronfinder.yml /tmp/envs/autoplasm-integronfinder.yml
+RUN mamba env create -f /tmp/envs/autoplasm-integronfinder.yml && rm /tmp/envs/autoplasm-integronfinder.yml
 
 # ── Cleanup ──────────────────────────────────────────────────────────────
 RUN mamba clean -afy
 
 # ── ABI package ──────────────────────────────────────────────────────────
+# envs/*.yml are generated from environments.yaml via scripts/emit_env_yamls.py
 COPY pyproject.toml README.md /app/
 COPY src/ /app/src/
 COPY plugins/ /app/plugins/

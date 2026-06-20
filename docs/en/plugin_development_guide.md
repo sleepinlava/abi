@@ -67,11 +67,15 @@ Contracts are machine-readable and must match the runtime registry:
 
 - `tool_id`
 - `category`
-- `execution.env_name`
 - `execution.executable`
 - `execution.command_template`
 - declared input/output template fields
 - normalized standard table names
+
+Environment names are **not** stored in individual contracts or registries.
+They are centralized in `environments.yaml` under `tool_assignments:` (one mapping
+per plugin), and the `ToolRegistry` injects the correct `env_name` at runtime.
+See: `environments.yaml`, `scripts/emit_env_yamls.py`.
 
 Use `assert_plugin_contract(plugin)` in plugin tests.
 

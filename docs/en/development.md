@@ -127,7 +127,7 @@ Regression coverage lives in `tests/unit/test_executor.py` and
 Small source assets are tracked:
 
 - `config/`
-- `envs/`
+- `envs/` — generated from `environments.yaml` via `scripts/emit_env_yamls.py`
 - `skills/` (inside ``src/abi/skills/`` — bundled with the package, installed via ``abi install-skills``)
 - `plugins/`
 - `examples/`
@@ -142,9 +142,14 @@ Large or generated runtime state is ignored:
 - `log/`
 - Nextflow work directories
 
-Tool execution resolves environments from `.mamba/envs/<env_name>/bin` by
-default. Override with `ABI_MAMBA_ROOT`; `AUTOPLASM_MAMBA_ROOT` is still
-accepted for compatibility.
+Tool execution resolves environments via ``abi.config.resolved_mamba_root()``
+with this priority:
+1. ``ABI_MAMBA_ROOT`` env var (explicit override)
+2. ``AUTOPLASM_MAMBA_ROOT`` env var (legacy compat)
+3. ``PROJECT_ROOT / ".mamba"`` (default local install)
+4. ``PROJECT_ROOT.parent / "abi-envs"`` (sibling dir)
+The ``env_name`` for each tool is resolved at runtime from ``environments.yaml``
+(single source of truth for all 16 conda environments and 93 tool→env assignments).
 
 ## Agent Interfaces
 

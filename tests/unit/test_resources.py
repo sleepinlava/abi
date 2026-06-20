@@ -414,14 +414,35 @@ def test_all_28_resources_in_check_resources(tmp_path):
 
     assert len(ids) == 28
     expected_db = {
-        "genomad", "bakta", "mob_suite", "plasmidfinder", "metaphlan",
-        "amrfinderplus", "kraken2", "gtdbtk", "checkm2",
-        "plasme", "plasx_annotations", "plasx_model",
-        "copla_refgraph", "copla_reflist", "blast", "plasmidhostfinder",
+        "genomad",
+        "bakta",
+        "mob_suite",
+        "plasmidfinder",
+        "metaphlan",
+        "amrfinderplus",
+        "kraken2",
+        "gtdbtk",
+        "checkm2",
+        "plasme",
+        "plasx_annotations",
+        "plasx_model",
+        "copla_refgraph",
+        "copla_reflist",
+        "blast",
+        "plasmidhostfinder",
     }
     expected_tools = {
-        "plasme_tool", "plasx_tool", "platon_tool", "macsyfinder_tool",
-        "plasmaag_tool", "gplas2_tool", "scapp_tool", "recycler_tool",
-        "copla_tool", "plasmidhostfinder_tool", "pmlst_tool", "conjscan_tool",
+        "plasme_tool",
+        "plasx_tool",
+        "platon_tool",
+        "macsyfinder_tool",
+        "plasmaag_tool",
+        "gplas2_tool",
+        "scapp_tool",
+        "recycler_tool",
+        "copla_tool",
+        "plasmidhostfinder_tool",
+        "pmlst_tool",
+        "conjscan_tool",
     }
     assert ids == expected_db | expected_tools

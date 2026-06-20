@@ -1169,8 +1169,7 @@ def _resource_ready_check(path: Path, spec: ResourceSpec) -> str:
         ):
             return f"tool '{spec.resource_id}' downloaded"
         return (
-            f"tool '{spec.resource_id}' not downloaded. "
-            f"Download from {spec.source_url} to {path}."
+            f"tool '{spec.resource_id}' not downloaded. Download from {spec.source_url} to {path}."
         )
     if path.is_dir() and any(path.iterdir()):
         return "non-empty database directory found"

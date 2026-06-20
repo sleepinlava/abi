@@ -279,8 +279,6 @@ output:
   outdir: results/demo_a
 execution:
   threads: 16
-environment:
-  env_name: rnaseq
 EOF
 
 # Step 3: Plan and dry-run

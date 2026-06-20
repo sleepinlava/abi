@@ -136,6 +136,9 @@ src/abi/
   timeouts.py         Timeout parsing: parse_timeout_seconds, timeout_from_env_or_value
   cli.py              Typer CLI: abi + autoplasm entry points
   skills/             Agent skill files (abi_agent + per-tool), installed via ``abi install-skills``
+
+environments.yaml      Single source of truth: 16 conda envs + 93 tool→env assignments
+scripts/emit_env_yamls.py  Generates per-environment ``envs/*.yml`` from environments.yaml
 ```
 
 ### Key modules for plugin authors (Public SDK)
@@ -153,6 +156,7 @@ src/abi/
 | `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML-driven TSV/JSON/log column mapping with 3 source types (tsv_mapping, json_mapping, key_value_log), replaces ~14 boilerplate parsers (added 2026-06-18) |
 | `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure`, `load_spec` — scientific figure compiler (Pydantic schema, 9 plot types, PDF/SVG/PNG/TIFF, lint, provenance). (added 2026-06-19, v1.3.3) |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
+| `abi.config` | `resolved_mamba_root()`, `PROJECT_ROOT`, `load_yaml`, `deep_merge` — env resolution with 4-level priority (ABI_MAMBA_ROOT > AUTOPLASM_MAMBA_ROOT > .mamba > abi-envs) |
 | `abi.testing` | `assert_plugin_contract` |
 
 ## Architectural invariants

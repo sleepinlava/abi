@@ -1,7 +1,0 @@
-name: autoplasm-nextflow
-channels:
-  - conda-forge
-  - bioconda
-channel_priority: strict
-dependencies:
-  - nextflow

@@ -1,5 +1,38 @@
 # ABI Development Log
 
+## 2026-06-21 — Phase 1: Unified Environment Architecture
+
+### Overview
+
+Phase 1 centralized all conda environment definitions into a single source of truth.
+
+### Core deliverables
+
+| File | Action | Description |
+|------|--------|-------------|
+| `environments.yaml` | **New** | 16 conda environments + 93 tool→env assignments across all 5 plugins |
+| `scripts/emit_env_yamls.py` | **New** | Generates per-environment YAMLs (`envs/*.yml`) from `environments.yaml` |
+| `src/abi/tools.py` | Modified | `ToolRegistry` auto-resolves `env_name` from `environments.yaml` at runtime |
+| `src/abi/plugins/metagenomic_plasmid/_engine/skills/registry.py` | Modified | Same `environments.yaml` injection pattern for engine's `ToolRegistry` |
+| `src/abi/config.py` | Modified | `resolved_mamba_root()`: env var checks (ABI_MAMBA_ROOT/AUTOPLASM_MAMBA_ROOT) now come FIRST |
+| `src/abi/plugins/metagenomic_plasmid/_engine/config.py` | Modified | Same `resolved_mamba_root()` fix |
+| `src/abi/plugins/metagenomic_plasmid/_engine/resources.py` | Modified | `ResourceSpec` extended with `resource_type` and `install_post`; 12 tool specs added |
+| `src/abi/contracts/__init__.py` | Modified | `env_name` made optional in contract validation |
+| `pyproject.toml` | Modified | `numpy>=1.24` → `numpy>=1.21` (fixes pip-overwrite-conda C ABI break) |
+| `plugins/*/tool_registry.yaml` (6 files) | Modified | Removed all `env_name:` fields (now auto-injected) |
+| `plugins/*/tool_contracts/*.yaml` (84 files) | Modified | Removed all `execution.env_name:` fields |
+| `envs/*.yml` (11 files) | Deleted | Old flat names; regenerated with correct `autoplasm-*` prefix by emit_env_yamls.py |
+| `docker/Dockerfile.metagenomic_plasmid` | Modified | Updated env names to `autoplasm-*` prefix |
+
+### Key design decisions
+
+- **Plugin-qualified tool_assignments**: `environments.yaml` uses `{plugin_name: {tool_id: env_name}}` nesting to handle cross-plugin tool ID collisions (e.g., `fastp` in both metagenomic_plasmid and wgs_bacteria).
+- **Fallback resolution**: `ToolRegistry._resolve_env()` searches specified plugin → all plugins → `_default` fallback.
+- **Two-tier ResourceSpec**: Level 1 tools (auto_setup=True, 4 mainstream plasmid tools) auto-install; Level 2 tools (auto_setup=False, 8 experimental tools) are guided manual install.
+- **No new CLI command**: Tool installation reuses existing `abi setup-resources` (extended ResourceSpec `resource_type` field).
+
+---
+
 ## 2026-06-20 (pm) — AMRFinderPlus Database Path Fix
 
 ### AMRFinderPlus: Missing `--database` Flag

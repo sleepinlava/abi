@@ -114,7 +114,7 @@ pytest tests/ -v --tb=short
 小型源资产被跟踪：
 
 - `config/`
-- `envs/`
+- `envs/` — 由 `environments.yaml` 通过 `scripts/emit_env_yamls.py` 生成
 - `skills/`（位于 ``src/abi/skills/`` — 随包捆绑，通过 ``abi install-skills`` 安装）
 - `plugins/`
 - `examples/`
@@ -129,7 +129,13 @@ pytest tests/ -v --tb=short
 - `log/`
 - Nextflow 工作目录
 
-工具执行默认从 `.mamba/envs/<env_name>/bin` 解析环境。可通过 `ABI_MAMBA_ROOT` 覆盖；为兼容性仍接受 `AUTOPLASM_MAMBA_ROOT`。
+工具执行通过 ``abi.config.resolved_mamba_root()`` 解析环境，优先级如下：
+1. ``ABI_MAMBA_ROOT`` 环境变量（显式覆盖）
+2. ``AUTOPLASM_MAMBA_ROOT`` 环境变量（旧版兼容）
+3. ``PROJECT_ROOT / ".mamba"``（默认本地安装）
+4. ``PROJECT_ROOT.parent / "abi-envs"``（同级目录）
+每个工具的 ``env_name`` 在运行时从 ``environments.yaml`` 解析
+（所有 16 个 conda 环境和 93 个工具→环境映射的单一事实来源）。
 
 ## Agent 接口
 

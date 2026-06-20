@@ -1,3 +1,10 @@
+# ── Default/Fallback Tool Registry ──────────────────────────────────────────
+# env_name is NOT defined here — it is resolved at runtime from
+# environments.yaml (single source of truth for tool→env assignments).
+# Plugin-specific registries under plugins/*/tool_registry.yaml take priority.
+#
+# This file serves as a fallback for tools not found in plugin registries.
+# See: environments.yaml, scripts/emit_env_yamls.py
 tools:
 - id: fastp
   name: fastp

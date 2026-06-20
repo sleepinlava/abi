@@ -51,9 +51,7 @@ class ToolRegistry:
             tool_dict = dict(tool)
             # Auto-fill env_name from environments.yaml if missing
             if not tool_dict.get("env_name") and ToolRegistry._env_assignments:
-                resolved = ToolRegistry._resolve_env(
-                    tool_id, plugin=plugin_name
-                )
+                resolved = ToolRegistry._resolve_env(tool_id, plugin=plugin_name)
                 if resolved and resolved != "abi-base":
                     tool_dict["env_name"] = resolved
             self._tools[tool_id] = tool_dict
@@ -69,13 +67,10 @@ class ToolRegistry:
         raw = data.get("tool_assignments", {})
         if raw and isinstance(next(iter(raw.values())), dict):
             cls._env_assignments = {
-                str(pn): {str(k): str(v) for k, v in tools.items()}
-                for pn, tools in raw.items()
+                str(pn): {str(k): str(v) for k, v in tools.items()} for pn, tools in raw.items()
             }
         else:
-            cls._env_assignments = {
-                "_default": {str(k): str(v) for k, v in raw.items()}
-            }
+            cls._env_assignments = {"_default": {str(k): str(v) for k, v in raw.items()}}
 
     @classmethod
     def _resolve_env(cls, tool_id: str, plugin: str = "_default") -> str:

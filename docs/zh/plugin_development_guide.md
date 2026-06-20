@@ -61,11 +61,14 @@ abi install-skills      # → ~/.claude/skills/abi/
 
 - `tool_id`
 - `category`
-- `execution.env_name`
 - `execution.executable`
 - `execution.command_template`
 - 声明的输入/输出模板字段
 - 标准化的标准表名称
+
+环境名称不存储在单独的合约或注册表中。它们集中在 `environments.yaml` 中的
+`tool_assignments:` 下（每个插件一个映射），由 `ToolRegistry` 在运行时注入正确的
+`env_name`。参见：`environments.yaml`、`scripts/emit_env_yamls.py`。
 
 在插件测试中使用 `assert_plugin_contract(plugin)`。
 

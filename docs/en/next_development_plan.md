@@ -836,7 +836,6 @@ Every tool must have `tool_contracts/<tool>.yaml`:
 tool_id: fastp
 category: qc
 execution:
-  env_name: rnaseq
   executable: fastp
   version_command: "fastp --version"
   command_template: >
