@@ -2,7 +2,6 @@ tools:
 - id: fastp
   name: fastp
   category: qc
-  env_name: autoplasm-qc
   executable: fastp
   default_enabled: true
   required: true
@@ -20,7 +19,6 @@ tools:
 - id: fastqc
   name: FastQC
   category: qc
-  env_name: autoplasm-qc
   executable: fastqc
   default_enabled: true
   required: false
@@ -28,7 +26,6 @@ tools:
 - id: multiqc
   name: MultiQC
   category: qc
-  env_name: autoplasm-qc
   executable: multiqc
   default_enabled: true
   required: false
@@ -36,7 +33,6 @@ tools:
 - id: fastplong
   name: fastplong
   category: qc
-  env_name: autoplasm-qc
   executable: fastplong
   default_enabled: false
   required: true
@@ -46,7 +42,6 @@ tools:
 - id: nanoplot
   name: NanoPlot
   category: qc
-  env_name: autoplasm-qc
   executable: NanoPlot
   default_enabled: true
   required: false
@@ -57,7 +52,6 @@ tools:
 - id: filtlong
   name: Filtlong
   category: qc
-  env_name: autoplasm-qc
   executable: filtlong
   default_enabled: true
   required: false
@@ -67,7 +61,6 @@ tools:
 - id: hifiadapterfilt
   name: HiFiAdapterFilt
   category: qc
-  env_name: autoplasm-qc
   executable: hifiadapterfilt.sh
   default_enabled: true
   required: false
@@ -80,7 +73,6 @@ tools:
 - id: megahit
   name: MEGAHIT
   category: assembly
-  env_name: autoplasm-assembly
   executable: megahit
   default_enabled: true
   required: true
@@ -89,7 +81,6 @@ tools:
 - id: metaspades
   name: metaSPAdes
   category: assembly
-  env_name: autoplasm-assembly
   executable: metaspades.py
   default_enabled: false
   required: true
@@ -97,7 +88,6 @@ tools:
 - id: metaflye
   name: metaFlye
   category: assembly
-  env_name: autoplasm-assembly
   executable: flye
   default_enabled: true
   required: true
@@ -108,7 +98,6 @@ tools:
 - id: hifiasm_meta
   name: hifiasm
   category: assembly
-  env_name: autoplasm-assembly
   executable: hifiasm
   default_enabled: true
   required: false
@@ -123,7 +112,6 @@ tools:
 - id: opera_ms
   name: OPERA-MS
   category: assembly
-  env_name: autoplasm-assembly
   executable: OPERA-MS.pl
   default_enabled: true
   required: true
@@ -138,7 +126,6 @@ tools:
 - id: quast
   name: metaQUAST
   category: assembly_qc
-  env_name: autoplasm-assembly
   executable: metaquast.py
   default_enabled: true
   required: false
@@ -147,7 +134,6 @@ tools:
 - id: genomad
   name: geNomad
   category: plasmid_detection
-  env_name: autoplasm-plasmid-detect
   executable: genomad
   default_enabled: true
   required: true
@@ -156,7 +142,6 @@ tools:
 - id: plasme
   name: PLASMe
   category: plasmid_detection
-  env_name: autoplasm-plasmid-detect
   executable: PLASMe.py
   default_enabled: false
   required: false
@@ -165,7 +150,6 @@ tools:
 - id: plasx
   name: PlasX
   category: plasmid_detection
-  env_name: autoplasm-plasmid-detect
   executable: plasx
   default_enabled: false
   required: false
@@ -174,7 +158,6 @@ tools:
 - id: plasmidfinder
   name: PlasmidFinder
   category: typing
-  env_name: autoplasm-annotation
   executable: plasmidfinder.py
   default_enabled: false
   required: false
@@ -182,7 +165,6 @@ tools:
 - id: plasmaag
   name: PlasMAAG
   category: plasmid_binning
-  env_name: autoplasm-plasmid-binning
   executable: plasmaag
   default_enabled: false
   required: false
@@ -193,7 +175,6 @@ tools:
 - id: gplas2
   name: gplas2
   category: plasmid_binning
-  env_name: autoplasm-plasmid-binning
   executable: gplas2
   default_enabled: false
   required: false
@@ -202,7 +183,6 @@ tools:
 - id: mob_typer
   name: MOB-typer
   category: typing
-  env_name: autoplasm-annotation
   executable: mob_typer
   default_enabled: false
   required: false
@@ -210,7 +190,6 @@ tools:
 - id: copla
   name: COPLA
   category: typing
-  env_name: autoplasm-annotation
   executable: copla
   default_enabled: false
   required: false
@@ -219,7 +198,6 @@ tools:
 - id: plasmidhostfinder
   name: PlasmidHostFinder
   category: host_prediction
-  env_name: autoplasm-annotation
   executable: plasmidhostfinder.py
   default_enabled: false
   required: false
@@ -228,7 +206,6 @@ tools:
 - id: prodigal
   name: Prodigal
   category: annotation
-  env_name: autoplasm-annotation
   executable: prodigal
   default_enabled: true
   required: false
@@ -240,7 +217,6 @@ tools:
 - id: bakta
   name: Bakta
   category: annotation
-  env_name: autoplasm-annotation
   executable: bakta
   default_enabled: true
   required: false
@@ -249,7 +225,6 @@ tools:
 - id: abricate
   name: ABRicate
   category: annotation
-  env_name: autoplasm-annotation
   executable: abricate
   default_enabled: true
   required: false
@@ -258,7 +233,6 @@ tools:
 - id: amrfinderplus
   name: AMRFinderPlus
   category: annotation
-  env_name: autoplasm-annotation
   executable: amrfinder
   default_enabled: true
   required: false
@@ -266,7 +240,6 @@ tools:
 - id: mob_suite
   name: MOB-suite
   category: annotation
-  env_name: autoplasm-annotation
   executable: mob_recon
   default_enabled: false
   required: false
@@ -275,7 +248,6 @@ tools:
 - id: isescan
   name: ISEScan
   category: annotation
-  env_name: autoplasm-annotation
   executable: isescan.py
   default_enabled: true
   required: false
@@ -283,7 +255,6 @@ tools:
 - id: integronfinder
   name: IntegronFinder
   category: annotation
-  env_name: autoplasm-integronfinder
   executable: integron_finder
   default_enabled: true
   required: false
@@ -294,7 +265,6 @@ tools:
 - id: bowtie2
   name: bowtie2
   category: abundance
-  env_name: autoplasm-abundance
   executable: bowtie2
   default_enabled: true
   required: true
@@ -309,7 +279,6 @@ tools:
 - id: minimap2
   name: minimap2
   category: abundance
-  env_name: autoplasm-abundance
   executable: minimap2
   default_enabled: true
   required: true
@@ -321,7 +290,6 @@ tools:
 - id: samtools
   name: samtools
   category: abundance
-  env_name: autoplasm-abundance
   executable: samtools
   default_enabled: true
   required: true
@@ -331,7 +299,6 @@ tools:
 - id: coverm
   name: CoverM
   category: abundance
-  env_name: autoplasm-abundance
   executable: coverm
   default_enabled: true
   required: false
@@ -342,7 +309,6 @@ tools:
 - id: kraken2
   name: Kraken2
   category: host_prediction
-  env_name: autoplasm-stats
   executable: kraken2
   default_enabled: false
   required: false
@@ -351,7 +317,6 @@ tools:
 - id: metaphlan
   name: MetaPhlAn
   category: host_prediction
-  env_name: autoplasm-stats
   executable: metaphlan
   default_enabled: false
   required: false
@@ -360,7 +325,6 @@ tools:
 - id: fastspar
   name: FastSpar
   category: network
-  env_name: autoplasm-stats
   executable: fastspar
   default_enabled: true
   required: false
@@ -369,7 +333,6 @@ tools:
 - id: blast
   name: BLAST+
   category: comparative_genomics
-  env_name: autoplasm-annotation
   executable: blastn
   default_enabled: false
   required: false
@@ -378,7 +341,6 @@ tools:
 - id: mmseqs2
   name: MMseqs2
   category: comparative_genomics
-  env_name: autoplasm-annotation
   executable: mmseqs
   default_enabled: false
   required: false
@@ -387,7 +349,6 @@ tools:
 - id: mummer
   name: MUMmer/nucmer
   category: comparative_genomics
-  env_name: autoplasm-annotation
   executable: nucmer
   default_enabled: false
   required: false
@@ -397,7 +358,6 @@ tools:
 - id: clinker
   name: clinker
   category: comparative_genomics
-  env_name: autoplasm-visualization
   executable: clinker
   default_enabled: false
   required: false
@@ -406,7 +366,6 @@ tools:
 - id: report_markdown
   name: AutoPlasm Markdown report
   category: report
-  env_name: autoplasm-base
   executable: autoplasm
   default_enabled: true
   required: false
@@ -414,7 +373,6 @@ tools:
 - id: metabat2
   name: MetaBAT2
   category: mag_host_genomes
-  env_name: plasmid_binning
   executable: metabat2
   default_enabled: false
   required: false
@@ -425,7 +383,6 @@ tools:
 - id: checkm2
   name: CheckM2
   category: mag_host_genomes
-  env_name: autoplasm-stats
   executable: checkm2
   default_enabled: false
   required: false
@@ -436,7 +393,6 @@ tools:
 - id: gtdbtk
   name: GTDB-Tk
   category: mag_host_genomes
-  env_name: autoplasm-stats
   executable: gtdbtk
   default_enabled: false
   required: false
@@ -447,7 +403,6 @@ tools:
 - id: minced
   name: MinCED
   category: host_plasmid_linking
-  env_name: autoplasm-annotation
   executable: minced
   default_enabled: false
   required: false
@@ -459,7 +414,6 @@ tools:
 - id: pycirclize
   name: pyCirclize
   category: visualization
-  env_name: autoplasm-visualization
   executable: python
   default_enabled: false
   required: false
@@ -474,7 +428,6 @@ tools:
 - id: pyvis
   name: pyvis
   category: visualization
-  env_name: autoplasm-visualization
   executable: python
   default_enabled: false
   required: false
@@ -487,7 +440,6 @@ tools:
 - id: chopper
   name: Chopper
   category: qc
-  env_name: autoplasm-qc
   executable: chopper
   default_enabled: false
   required: false
@@ -498,7 +450,6 @@ tools:
 - id: porechop
   name: Porechop
   category: qc
-  env_name: autoplasm-qc
   executable: porechop
   default_enabled: false
   required: false
@@ -510,7 +461,6 @@ tools:
 - id: bwa
   name: BWA
   category: host_removal
-  env_name: autoplasm-abundance
   executable: bwa
   default_enabled: false
   required: false
@@ -524,7 +474,6 @@ tools:
 - id: kneaddata
   name: KneadData
   category: host_removal
-  env_name: autoplasm-qc
   executable: kneaddata
   default_enabled: false
   required: false
@@ -538,7 +487,6 @@ tools:
 - id: platon
   name: Platon
   category: plasmid_detection
-  env_name: autoplasm-plasmid-detect
   executable: platon
   default_enabled: false
   required: false
@@ -549,7 +497,6 @@ tools:
 - id: scapp
   name: SCAPP
   category: plasmid_binning
-  env_name: autoplasm-plasmid-binning
   executable: scapp
   default_enabled: false
   required: false
@@ -562,7 +509,6 @@ tools:
 - id: recycler
   name: Recycler
   category: plasmid_binning
-  env_name: autoplasm-plasmid-binning
   executable: recycle.py
   default_enabled: false
   required: false
@@ -576,7 +522,6 @@ tools:
 - id: pmlst
   name: pMLST
   category: typing
-  env_name: autoplasm-annotation
   executable: pmlst
   default_enabled: false
   required: false
@@ -588,7 +533,6 @@ tools:
 - id: conjscan
   name: CONJscan
   category: typing
-  env_name: autoplasm-annotation
   executable: conjscan
   default_enabled: false
   required: false
@@ -600,7 +544,6 @@ tools:
 - id: macsyfinder
   name: MacSyFinder
   category: typing
-  env_name: autoplasm-annotation
   executable: macsyfinder
   default_enabled: false
   required: false
@@ -611,7 +554,6 @@ tools:
 - id: rgi
   name: RGI/CARD
   category: annotation
-  env_name: autoplasm-annotation
   executable: rgi
   default_enabled: false
   required: false
@@ -623,7 +565,6 @@ tools:
 - id: eggnog_mapper
   name: eggNOG-mapper
   category: annotation
-  env_name: autoplasm-annotation
   executable: emapper.py
   default_enabled: false
   required: false
@@ -635,7 +576,6 @@ tools:
 - id: maxbin2
   name: MaxBin2 (PERMANENTLY DISABLED — perl-lwp-simple compilation failure)
   category: mag_host_genomes
-  env_name: plasmid_binning
   executable: run_MaxBin.pl
   default_enabled: false
   required: false
@@ -649,7 +589,6 @@ tools:
 - id: concoct
   name: CONCOCT
   category: mag_host_genomes
-  env_name: plasmid_binning
   executable: concoct
   default_enabled: false
   required: false
@@ -661,7 +600,6 @@ tools:
 - id: semibin
   name: SemiBin
   category: mag_host_genomes
-  env_name: autoplasm-plasmid-binning
   executable: SemiBin2
   default_enabled: false
   required: false
@@ -673,7 +611,6 @@ tools:
 - id: das_tool
   name: DAS Tool
   category: mag_host_genomes
-  env_name: autoplasm-stats
   executable: DAS_Tool
   default_enabled: false
   required: false
@@ -686,7 +623,6 @@ tools:
 - id: hybridspades
   name: hybridSPAdes
   category: assembly
-  env_name: autoplasm-assembly
   executable: spades.py
   default_enabled: false
   required: false
@@ -700,7 +636,6 @@ tools:
 - id: bandage
   name: Bandage
   category: assembly_qc
-  env_name: autoplasm-assembly
   executable: Bandage
   default_enabled: false
   required: false
@@ -712,7 +647,6 @@ tools:
 - id: dna_features_viewer
   name: dna-features-viewer
   category: visualization
-  env_name: autoplasm-visualization
   executable: python
   default_enabled: false
   required: false
@@ -725,7 +659,6 @@ tools:
 - id: hic_evidence
   name: Hi-C meta3C
   category: host_plasmid_linking
-  env_name: autoplasm-stats
   executable: python
   default_enabled: false
   required: false

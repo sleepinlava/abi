@@ -16,7 +16,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-stats
   executable: checkm2
   command_template: checkm2 predict --input {mag_bins} --output-directory {output_dir}
     --threads {threads}
@@ -29,8 +28,7 @@ failure_handling:
     hint: Install checkm2 in the autoplasm-stats environment.
   nonzero_exit:
     hint: Inspect CheckM2 log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

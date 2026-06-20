@@ -1,0 +1,14 @@
+name: autoplasm-abundance
+channel_priority: strict
+channels:
+- conda-forge
+- bioconda
+- defaults
+dependencies:
+- python=3.10
+- bowtie2
+- bwa
+- minimap2
+- samtools
+- coverm
+- subread

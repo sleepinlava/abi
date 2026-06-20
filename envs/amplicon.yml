@@ -1,18 +1,18 @@
 name: amplicon
-channels:
-  - conda-forge
-  - bioconda
-  - defaults
 channel_priority: strict
+channels:
+- conda-forge
+- bioconda
+- defaults
 dependencies:
-  - python=3.10
-  - pip
-  - cutadapt>=4.0
-  - vsearch>=2.20
-  - mafft>=7.0
-  - fasttree>=2.0
-  - numpy>=1.24
-  - scipy>=1.10
-  - pandas>=2.0
-  - biopython>=1.80
-  - pigz
+- python=3.10
+- pip
+- cutadapt>=4.0
+- vsearch>=2.20
+- mafft>=7.0
+- fasttree>=2.0
+- numpy>=1.24
+- scipy>=1.10
+- pandas>=2.0
+- biopython>=1.80
+- pigz

@@ -400,7 +400,9 @@ def lint_tool_contracts(
                 )
             )
         else:
-            for exec_field in ("env_name", "executable", "command_template"):
+            for exec_field in ("executable", "command_template"):
+                # env_name is resolved at runtime from environments.yaml;
+                # omitting it from contracts is no longer a warning.
                 if not execution.get(exec_field):
                     findings.append(
                         LintFinding(

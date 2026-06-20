@@ -21,7 +21,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-stats
   executable: DAS_Tool
   command_template: DAS_Tool --inputbasenames {output_dir}/metabat2,{output_dir}/maxbin2,{output_dir}/concoct
     --contigs {assembly} --outputbasename {output_dir}/{sample_id}.das_tool --threads
@@ -35,8 +34,7 @@ failure_handling:
     hint: Install das_tool in the autoplasm-stats environment.
   nonzero_exit:
     hint: Inspect DAS Tool stderr log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

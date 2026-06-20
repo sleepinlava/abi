@@ -23,7 +23,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: plasmid_binning
   executable: concoct
   command_template: concoct --composition_file {assembly} --coverage_file {abundance}
     -o {output_dir} -t {threads}
@@ -36,8 +35,7 @@ failure_handling:
     hint: Install concoct in the autoplasm-stats environment.
   nonzero_exit:
     hint: Inspect CONCOCT stderr log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

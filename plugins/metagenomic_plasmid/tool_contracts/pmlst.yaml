@@ -21,7 +21,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-annotation
   executable: pmlst
   command_template: pmlst --input {plasmid_contigs} --output {output_dir}/{sample_id}.pmlst.tsv
     --threads {threads}
@@ -34,8 +33,7 @@ failure_handling:
     hint: Install pmlst in the autoplasm-annotation environment.
   nonzero_exit:
     hint: Inspect pMLST stderr log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "8GB"
-  walltime: "02:00:00"
+  memory: 8GB
+  walltime: 02:00:00

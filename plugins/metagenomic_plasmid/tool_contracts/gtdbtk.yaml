@@ -17,7 +17,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-stats
   executable: gtdbtk
   command_template: gtdbtk classify_wf --genome_dir {mag_bins} --out_dir {output_dir}
     --cpus {threads}
@@ -32,8 +31,7 @@ failure_handling:
     hint: Install gtdbtk in the autoplasm-stats environment.
   nonzero_exit:
     hint: Inspect GTDB-Tk log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

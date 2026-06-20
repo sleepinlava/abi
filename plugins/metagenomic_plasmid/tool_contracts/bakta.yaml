@@ -1,35 +1,43 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: bakta
 name: Bakta
 category: annotation
 purpose: Annotate predicted plasmid contigs.
 when_to_use:
-  - plasmid_contigs_available
-  - annotation_required
+- plasmid_contigs_available
+- annotation_required
 inputs:
-  plasmid_contigs: {type: file, format: fasta, required: true}
-  database: {type: directory, required: true}
-  threads: {type: integer, minimum: 1}
+  plasmid_contigs:
+    type: file
+    format: fasta
+    required: true
+  database:
+    type: directory
+    required: true
+  threads:
+    type: integer
+    minimum: 1
 outputs:
-  output_dir: {type: directory}
+  output_dir:
+    type: directory
 execution:
-  env_name: autoplasm-annotation
   executable: bakta
-  command_template: "bakta --db {database} --output {output_dir} --threads {threads} {plasmid_contigs}"
+  command_template: bakta --db {database} --output {output_dir} --threads {threads}
+    {plasmid_contigs}
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_bakta"
-  tables: [annotations]
+  parser: abi.autoplasm.parsers:parse_bakta
+  tables:
+  - annotations
 failure_handling:
   missing_database:
-    hint: "Configure the Bakta database path."
+    hint: Configure the Bakta database path.
   missing_input:
-    hint: "Check plasmid_contigs output from plasmid detection."
+    hint: Check plasmid_contigs output from plasmid detection.
   parse_failed:
-    hint: "Check Bakta TSV outputs."
-
+    hint: Check Bakta TSV outputs.
 resources:
   cpu: 8
-  memory: "16GB"
-  walltime: "04:00:00"
+  memory: 16GB
+  walltime: 04:00:00

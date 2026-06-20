@@ -1,16 +1,18 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: vsearch_otu
 name: vsearch OTU clustering
 category: clustering
-purpose: Cluster ASVs into operational taxonomic units (OTUs) at a given identity threshold.
+purpose: Cluster ASVs into operational taxonomic units (OTUs) at a given identity
+  threshold.
 when_to_use:
-  - otu_based_analysis
-  - asv_alternative
-  - comparative_analysis
+- otu_based_analysis
+- asv_alternative
+- comparative_analysis
 inputs:
   asv_fasta:
     type: file
-    formats: [fasta]
+    formats:
+    - fasta
     required: true
 outputs:
   output_dir:
@@ -22,18 +24,17 @@ outputs:
     type: file
     format: tsv
 execution:
-  env_name: amplicon
   executable: vsearch
-  command_template: "vsearch --cluster_size {asv_fasta} --id 0.97 --centroids {output_dir}/otus.fasta --uc {output_dir}/otu.uc --otutabout {output_dir}/otu_table.tsv"
+  command_template: vsearch --cluster_size {asv_fasta} --id 0.97 --centroids {output_dir}/otus.fasta
+    --uc {output_dir}/otu.uc --otutabout {output_dir}/otu_table.tsv
   network: false
   writes_output: true
 failure_handling:
   missing_input:
-    hint: "ASV FASTA not found. Verify vsearch_denoise completed successfully."
+    hint: ASV FASTA not found. Verify vsearch_denoise completed successfully.
   tool_not_found:
-    hint: "vsearch not found. Install: conda install -c bioconda vsearch"
-
+    hint: 'vsearch not found. Install: conda install -c bioconda vsearch'
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

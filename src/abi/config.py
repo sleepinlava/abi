@@ -54,6 +54,9 @@ def resolved_mamba_root() -> Path:
     3. ``PROJECT_ROOT / ".mamba"`` (default local install)
     4. ``PROJECT_ROOT.parent / "abi-envs"`` (sibling dir, common in dev/deploy)
     """
+    env_override = os.environ.get("ABI_MAMBA_ROOT") or os.environ.get("AUTOPLASM_MAMBA_ROOT")
+    if env_override:
+        return Path(env_override)
     default = PROJECT_ROOT / ".mamba"
     if default.exists():
         return default

@@ -1,0 +1,16 @@
+name: autoplasm-assembly
+channel_priority: strict
+channels:
+- conda-forge
+- bioconda
+- defaults
+dependencies:
+- python=3.10
+- megahit
+- spades
+- flye
+- hifiasm
+- raven-assembler
+- quast
+- bandage
+- perl-opera-ms

@@ -1,22 +1,24 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: phylogeny_build
 name: Phylogeny (MAFFT + FastTree)
 category: phylogeny
-purpose: >
-  Build a maximum-likelihood phylogenetic tree from ASV sequences using
-  MAFFT multiple sequence alignment and FastTree approximate ML inference.
-  The tree enables Faith's Phylogenetic Diversity (alpha) and UniFrac
-  (beta) distance metrics in the downstream diversity step.
+purpose: 'Build a maximum-likelihood phylogenetic tree from ASV sequences using MAFFT
+  multiple sequence alignment and FastTree approximate ML inference. The tree enables
+  Faith''s Phylogenetic Diversity (alpha) and UniFrac (beta) distance metrics in the
+  downstream diversity step.
+
+  '
 when_to_use:
-  - phylogeny_diversity
-  - asv_tree
-  - unifrac
+- phylogeny_diversity
+- asv_tree
+- unifrac
 inputs:
   asv_fasta:
     type: file
-    formats: [fasta]
+    formats:
+    - fasta
     required: true
-    description: "Concatenated ASV sequences from all samples"
+    description: Concatenated ASV sequences from all samples
   threads:
     type: integer
     minimum: 1
@@ -27,21 +29,21 @@ outputs:
   phylogeny_tree:
     type: file
     format: nwk
-    description: "Newick-format phylogenetic tree"
+    description: Newick-format phylogenetic tree
 execution:
-  env_name: amplicon
   executable: bash
-  command_template: >
-    mafft --auto --thread {threads} {asv_fasta} > {output_dir}/aligned.fasta
+  command_template: 'mafft --auto --thread {threads} {asv_fasta} > {output_dir}/aligned.fasta
     && fasttree -nt {output_dir}/aligned.fasta > {output_dir}/phylogeny.nwk
+
+    '
   network: false
   writes_output: true
 failure_handling:
   missing_input:
-    hint: "ASV FASTA file not found. Verify denoising step completed successfully."
+    hint: ASV FASTA file not found. Verify denoising step completed successfully.
   tool_not_found:
-    hint: "MAFFT or FastTree not found. Install: conda install -c bioconda mafft fasttree"
+    hint: 'MAFFT or FastTree not found. Install: conda install -c bioconda mafft fasttree'
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

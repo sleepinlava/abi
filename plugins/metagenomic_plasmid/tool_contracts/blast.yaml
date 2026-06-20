@@ -22,15 +22,15 @@ outputs:
   output_dir:
     type: path
 execution:
-  env_name: autoplasm-annotation
   executable: blastn
   command_template: blastn -query {plasmid_contigs} -db {database} -out {output_dir}/{sample_id}.blast.tsv
     -outfmt 6 -num_threads {threads}
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_blast"
-  tables: [comparative_hits]
+  parser: abi.autoplasm.parsers:parse_blast
+  tables:
+  - comparative_hits
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.
@@ -39,8 +39,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 8
-  memory: "16GB"
-  walltime: "04:00:00"
+  memory: 16GB
+  walltime: 04:00:00

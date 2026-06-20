@@ -23,7 +23,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-stats
   executable: SemiBin
   command_template: SemiBin single_easy_bin --input_contigs {assembly} --input_bam
     {bam} --output {output_dir} --threads {threads}
@@ -36,8 +35,7 @@ failure_handling:
     hint: Install SemiBin in the autoplasm-stats environment.
   nonzero_exit:
     hint: Inspect SemiBin stderr log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

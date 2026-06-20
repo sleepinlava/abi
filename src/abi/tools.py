@@ -1371,13 +1371,31 @@ class ToolRegistry:
     locking. / 构造后只读，线程安全。
     """
 
-    def __init__(self, tools: Iterable[Mapping[str, Any]]) -> None:
+    _env_assignments: dict[str, dict[str, str]] | None = None
+    """Cache: plugin_name → {tool_id → env_name} loaded from environments.yaml."""
+
+    def __init__(
+        self,
+        tools: Iterable[Mapping[str, Any]],
+        *,
+        environments_path: str | Path | None = None,
+        plugin_name: str = "_default",
+    ) -> None:
         """Build the registry from an iterable of tool definition dicts.
 
-        # Validation / 验证
-        - Every tool must have a non-empty string id. / 每个工具必须有非空 id
-        - Duplicate ids raise ConfigError immediately (fail-fast). / 重复 id 立即报错
+        # env_name resolution / 环境名称解析
+        If *environments_path* points to a valid environments.yaml, the
+        ``tool_assignments`` section is loaded and used to fill in ``env_name``
+        for any tool that does not already declare one in its registry YAML.
+        *plugin_name* selects the per-plugin subsection in tool_assignments.
+        / 从 environments.yaml 自动补齐缺失的 env_name。
         """
+        self._plugin = plugin_name
+
+        # Load tool→env assignments from environments.yaml (once)
+        if ToolRegistry._env_assignments is None and environments_path is not None:
+            ToolRegistry._load_environment_assignments(environments_path)
+
         self._tools: Dict[str, Dict[str, Any]] = {}
         for tool in tools:
             tool_id = str(tool.get("id", "")).strip()
@@ -1385,17 +1403,22 @@ class ToolRegistry:
                 raise ConfigError("tool_registry.yaml contains a tool without id")
             if tool_id in self._tools:
                 raise ConfigError(f"Duplicate tool id in registry: {tool_id}")
-            self._tools[tool_id] = dict(tool)
+            tool_dict = dict(tool)
+            # Auto-fill env_name from environments.yaml if missing
+            if not tool_dict.get("env_name") and ToolRegistry._env_assignments:
+                resolved = ToolRegistry.env_for(tool_id, plugin=plugin_name)
+                if resolved and resolved != "abi-base":
+                    tool_dict["env_name"] = resolved
+            self._tools[tool_id] = tool_dict
 
     @classmethod
     def from_path(cls, path: str | Path | None = None) -> "ToolRegistry":
         """Load the registry from a YAML file on disk.
 
-        # Why require an explicit path? / 为什么需要显式路径？
-        The path argument is required (no default) because the registry file
-        location depends on the ABI installation and deployment context.
-        Callers must explicitly provide it to avoid loading the wrong file.
-        / 必须显式提供路径以避免加载错误的文件。
+        Automatically looks for ``environments.yaml`` in the project root to
+        resolve ``env_name`` for tools that do not declare it in their registry
+        YAML.  The plugin name is auto-detected from the path
+        (``plugins/<name>/tool_registry.yaml``). / 自动从 environments.yaml 解析 env_name。
         """
         if path is None:
             raise ConfigError("ToolRegistry.from_path requires an explicit path")
@@ -1407,7 +1430,73 @@ class ToolRegistry:
         tools = data.get("tools")
         if not isinstance(tools, list):
             raise ConfigError("tool_registry.yaml must contain a tools list")
-        return cls(tools)
+
+        # Auto-detect plugin name from path
+        plugin = registry_path.parent.name if "plugins" in str(registry_path) else "_default"
+        if plugin == "config":
+            plugin = "_default"
+
+        # Auto-detect environments.yaml for env_name resolution
+        env_path = registry_path.parent.parent / "environments.yaml"
+        if not env_path.exists():
+            env_path = PROJECT_ROOT / "environments.yaml"
+
+        return cls(
+            tools,
+            environments_path=env_path if env_path.exists() else None,
+            plugin_name=plugin,
+        )
+
+    @classmethod
+    def _load_environment_assignments(cls, path: str | Path) -> None:
+        """Load tool→env assignments from environments.yaml (idempotent cache).
+
+        Called once by __init__; subsequent calls are no-ops because the
+        result is stored in the class-level ``_env_assignments`` cache.
+        Supports both flat ``{tool_id: env}`` and nested
+        ``{plugin: {tool_id: env}}`` formats.
+        / 从 environments.yaml 加载工具→环境映射，结果缓存于类变量。
+        """
+        if cls._env_assignments is not None:
+            return
+        env_file = Path(path)
+        if not env_file.exists():
+            return
+        data = yaml.safe_load(env_file.read_text(encoding="utf-8")) or {}
+        raw = data.get("tool_assignments", {})
+        # Detect format: if top-level values are dicts, it's plugin-qualified
+        if raw and isinstance(next(iter(raw.values())), dict):
+            cls._env_assignments = {
+                str(plugin): {str(k): str(v) for k, v in tools.items()}
+                for plugin, tools in raw.items()
+            }
+        else:
+            # Flat format — all tools go under a default plugin key
+            cls._env_assignments = {
+                "_default": {str(k): str(v) for k, v in raw.items()}
+            }
+
+    @classmethod
+    def env_for(cls, tool_id: str, plugin: str = "_default") -> str:
+        """Resolve the conda environment name for *tool_id*.
+
+        Returns the env_name from environments.yaml's ``tool_assignments``,
+        or ``"abi-base"`` as a safe default. / 从 environments.yaml 解析环境名称。
+        """
+        if cls._env_assignments is None:
+            return "abi-base"
+        # Direct lookup in the specified plugin
+        plugin_map = cls._env_assignments.get(plugin, {})
+        if plugin_map and tool_id in plugin_map:
+            return plugin_map[tool_id]
+        # Fallback: search all plugins
+        for pn, pmap in cls._env_assignments.items():
+            if pn == plugin:
+                continue
+            if tool_id in pmap:
+                return pmap[tool_id]
+        # Last resort
+        return cls._env_assignments.get("_default", {}).get(tool_id, "abi-base")
 
     def ids(self) -> List[str]:
         """Return sorted tool IDs for stable iteration order.

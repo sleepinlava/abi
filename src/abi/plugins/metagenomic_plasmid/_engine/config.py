@@ -239,9 +239,22 @@ def write_resolved_config(config: Mapping[str, Any]) -> Path:
 
 
 def resolved_mamba_root() -> Path:
-    """Return the repository-local mamba root for ABI-bundled AutoPlasm tools."""
-    return Path(
-        os.environ.get("ABI_MAMBA_ROOT")
-        or os.environ.get("AUTOPLASM_MAMBA_ROOT")
-        or PROJECT_ROOT / ".mamba"
-    )
+    """Return the local mamba root used by ABI-managed tool environments.
+
+    Resolution order:
+    1. ``ABI_MAMBA_ROOT`` env var (explicit override)
+    2. ``AUTOPLASM_MAMBA_ROOT`` env var (legacy compat)
+    3. ``PROJECT_ROOT / ".mamba"`` (default local install)
+    4. ``PROJECT_ROOT.parent / "abi-envs"`` (sibling dir, common in dev/deploy)
+    """
+    # Env var overrides come FIRST
+    env_override = os.environ.get("ABI_MAMBA_ROOT") or os.environ.get("AUTOPLASM_MAMBA_ROOT")
+    if env_override:
+        return Path(env_override)
+    default = PROJECT_ROOT / ".mamba"
+    if default.exists():
+        return default
+    sibling = PROJECT_ROOT.parent / "abi-envs"
+    if sibling.exists():
+        return sibling
+    return default

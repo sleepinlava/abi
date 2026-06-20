@@ -1,16 +1,18 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: mlst
 name: MLST
 category: typing
-purpose: Multi-locus sequence typing (MLST) for bacterial isolates using the PubMLST scheme database.
+purpose: Multi-locus sequence typing (MLST) for bacterial isolates using the PubMLST
+  scheme database.
 when_to_use:
-  - bacterial_typing
-  - epidemiological_surveillance
-  - outbreak_investigation
+- bacterial_typing
+- epidemiological_surveillance
+- outbreak_investigation
 inputs:
   assembly_fasta:
     type: file
-    formats: [fasta]
+    formats:
+    - fasta
     required: true
   scheme:
     type: string
@@ -22,18 +24,16 @@ outputs:
     type: file
     format: tsv
 execution:
-  env_name: wgs
   executable: mlst
-  command_template: "mlst --scheme {scheme} {assembly_fasta} > {output_dir}/mlst.tsv"
+  command_template: mlst --scheme {scheme} {assembly_fasta} > {output_dir}/mlst.tsv
   network: false
   writes_output: true
 failure_handling:
   missing_input:
-    hint: "Assembly FASTA not found. Verify SPAdes completed successfully."
+    hint: Assembly FASTA not found. Verify SPAdes completed successfully.
   tool_not_found:
-    hint: "mlst not found. Install: conda install -c bioconda mlst"
-
+    hint: 'mlst not found. Install: conda install -c bioconda mlst'
 resources:
   cpu: 4
-  memory: "8GB"
-  walltime: "02:00:00"
+  memory: 8GB
+  walltime: 02:00:00

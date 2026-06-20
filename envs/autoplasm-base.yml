@@ -1,0 +1,33 @@
+name: autoplasm-base
+channel_priority: strict
+channels:
+- conda-forge
+- bioconda
+- defaults
+dependencies:
+- python=3.10
+- pip
+- pyyaml
+- pandas
+- numpy
+- scipy
+- scikit-learn
+- biopython=1.85
+- typer
+- rich
+- pydantic
+- jinja2
+- networkx
+- seqkit
+- pigz
+- matplotlib
+- plotly
+- pytest
+- pytest-cov
+- black
+- ruff
+- mypy
+- conda-lock
+- pip:
+  - dna-features-viewer
+  - pycirclize

@@ -1,19 +1,23 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: cutadapt
 name: cutadapt
 category: qc
 purpose: Remove adapter sequences and primers from paired-end amplicon reads.
 when_to_use:
-  - paired_end_amplicon
-  - primer_removal_required
+- paired_end_amplicon
+- primer_removal_required
 inputs:
   read1:
     type: file
-    formats: [fastq, fastq.gz]
+    formats:
+    - fastq
+    - fastq.gz
     required: true
   read2:
     type: file
-    formats: [fastq, fastq.gz]
+    formats:
+    - fastq
+    - fastq.gz
     required: true
   forward_primer:
     type: string
@@ -38,18 +42,19 @@ outputs:
     type: file
     format: fastq.gz
 execution:
-  env_name: amplicon
   executable: cutadapt
-  command_template: "cutadapt -g {forward_primer} -G {reverse_primer} -o {output_dir}/{sample_id}_trimmed_R1.fastq.gz -p {output_dir}/{sample_id}_trimmed_R2.fastq.gz {read1} {read2} --cores {threads} --minimum-length 50"
+  command_template: cutadapt -g {forward_primer} -G {reverse_primer} -o {output_dir}/{sample_id}_trimmed_R1.fastq.gz
+    -p {output_dir}/{sample_id}_trimmed_R2.fastq.gz {read1} {read2} --cores {threads}
+    --minimum-length 50
   network: false
   writes_output: true
 failure_handling:
   missing_input:
-    hint: "Check sample sheet read1/read2 paths."
+    hint: Check sample sheet read1/read2 paths.
   tool_not_found:
-    hint: "Install cutadapt in the amplicon environment: conda install -c bioconda cutadapt"
-
+    hint: 'Install cutadapt in the amplicon environment: conda install -c bioconda
+      cutadapt'
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

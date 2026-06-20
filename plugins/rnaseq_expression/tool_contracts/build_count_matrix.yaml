@@ -1,11 +1,12 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: build_count_matrix
 name: Build Count Matrix
 category: preprocessing
-purpose: Merge per-sample featureCounts outputs into a unified gene-level count matrix and sample metadata file for DESeq2.
+purpose: Merge per-sample featureCounts outputs into a unified gene-level count matrix
+  and sample metadata file for DESeq2.
 when_to_use:
-  - multi_sample_rnaseq
-  - deseq2_input_required
+- multi_sample_rnaseq
+- deseq2_input_required
 inputs:
   expression_dir:
     type: directory
@@ -13,12 +14,14 @@ inputs:
     description: Root directory containing per-sample featureCounts output subdirectories
   sample_sheet:
     type: file
-    formats: [tsv]
+    formats:
+    - tsv
     required: true
     description: Sample sheet with sample_id, group, condition columns
   count_matrix_script:
     type: file
-    formats: [py]
+    formats:
+    - py
     required: true
     description: Path to build_count_matrix.py
 outputs:
@@ -33,20 +36,21 @@ outputs:
     format: tsv
     description: Sample metadata for DESeq2
 execution:
-  env_name: rnaseq
   executable: python
-  command_template: "python {count_matrix_script} --expression-dir {expression_dir} --sample-sheet {sample_sheet} --output-dir {output_dir}"
+  command_template: python {count_matrix_script} --expression-dir {expression_dir}
+    --sample-sheet {sample_sheet} --output-dir {output_dir}
   network: false
   writes_output: true
 failure_handling:
   missing_input:
-    hint: "Verify that all upstream featureCounts steps completed successfully and *.featureCounts.txt files exist."
+    hint: Verify that all upstream featureCounts steps completed successfully and
+      *.featureCounts.txt files exist.
   execution_error:
-    hint: "Check that featureCounts output files have expected format (Geneid column + count column)."
+    hint: Check that featureCounts output files have expected format (Geneid column
+      + count column).
   tool_not_found:
-    hint: "Python 3 must be available in the rnaseq conda environment."
-
+    hint: Python 3 must be available in the rnaseq conda environment.
 resources:
   cpu: 1
-  memory: "1GB"
-  walltime: "00:15:00"
+  memory: 1GB
+  walltime: 00:15:00

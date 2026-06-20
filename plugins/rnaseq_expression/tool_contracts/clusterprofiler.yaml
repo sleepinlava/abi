@@ -1,22 +1,24 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: clusterprofiler
 name: clusterProfiler
 category: enrichment
 purpose: Gene set enrichment analysis for GO and KEGG pathways using clusterProfiler.
 when_to_use:
-  - gene_set_enrichment_required
-  - differential_expression_complete
+- gene_set_enrichment_required
+- differential_expression_complete
 inputs:
   gene_list:
     type: file
-    formats: [tsv]
+    formats:
+    - tsv
     required: true
   org_db:
     type: string
     required: true
   enrichment_script:
     type: file
-    formats: ["R"]
+    formats:
+    - R
     required: true
   pvalue_cutoff:
     type: number
@@ -31,20 +33,19 @@ outputs:
     type: file
     format: tsv
 execution:
-  env_name: rnaseq
   executable: Rscript
-  command_template: "Rscript {enrichment_script} --genes {gene_list} --org {org_db} --output {output_dir} --pvalue {pvalue_cutoff} --qvalue {qvalue_cutoff}"
+  command_template: Rscript {enrichment_script} --genes {gene_list} --org {org_db}
+    --output {output_dir} --pvalue {pvalue_cutoff} --qvalue {qvalue_cutoff}
   network: false
   writes_output: true
 failure_handling:
   missing_input:
-    hint: "Verify DESeq2 completed successfully and the gene list file exists."
+    hint: Verify DESeq2 completed successfully and the gene list file exists.
   tool_not_found:
-    hint: "Install R and clusterProfiler: BiocManager::install('clusterProfiler')."
+    hint: 'Install R and clusterProfiler: BiocManager::install(''clusterProfiler'').'
   execution_error:
-    hint: "Check that the organism database (org_db) is installed and valid."
-
+    hint: Check that the organism database (org_db) is installed and valid.
 resources:
   cpu: 4
-  memory: "8GB"
-  walltime: "02:00:00"
+  memory: 8GB
+  walltime: 02:00:00

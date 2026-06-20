@@ -18,7 +18,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-annotation
   executable: macsyfinder
   command_template: macsyfinder --sequence-db {plasmid_contigs} --db-type ordered_replicon
     --output-dir {output_dir} --threads {threads}
@@ -31,8 +30,7 @@ failure_handling:
     hint: Install MacSyFinder in the autoplasm-annotation environment.
   nonzero_exit:
     hint: Inspect MacSyFinder stderr log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "8GB"
-  walltime: "02:00:00"
+  memory: 8GB
+  walltime: 02:00:00

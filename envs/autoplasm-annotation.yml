@@ -1,0 +1,25 @@
+name: autoplasm-annotation
+channel_priority: strict
+channels:
+- conda-forge
+- bioconda
+- defaults
+dependencies:
+- python=3.10
+- numpy >=1.23,<1.24
+- pandas >=1.5,<2
+- bakta
+- prokka
+- prodigal
+- diamond
+- hmmer
+- blast
+- kma
+- abricate
+- ncbi-amrfinderplus
+- mob_suite
+- plasmidfinder
+- isescan
+- mummer
+- eggnog-mapper
+- rgi

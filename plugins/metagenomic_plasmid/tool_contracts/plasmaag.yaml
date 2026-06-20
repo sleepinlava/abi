@@ -16,15 +16,16 @@ outputs:
   output_dir:
     type: path
 execution:
-  env_name: autoplasm-plasmid-binning
   executable: plasmaag
   command_template: plasmaag --reads_and_contigs {reads_contigs_table} --output {output_dir}
     --threads {threads}
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_plasmaag"
-  tables: [plasmid_bins, bin_to_contig]
+  parser: abi.autoplasm.parsers:parse_plasmaag
+  tables:
+  - plasmid_bins
+  - bin_to_contig
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.
@@ -33,8 +34,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

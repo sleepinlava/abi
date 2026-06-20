@@ -1,15 +1,17 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: vsearch_denoise
 name: vsearch UNOISE3 denoise
 category: denoising
-purpose: Denoise dereplicated sequences into amplicon sequence variants (ASVs) using the UNOISE3 algorithm.
+purpose: Denoise dereplicated sequences into amplicon sequence variants (ASVs) using
+  the UNOISE3 algorithm.
 when_to_use:
-  - asv_inference
-  - amplicon_denoising
+- asv_inference
+- amplicon_denoising
 inputs:
   derep_fasta:
     type: file
-    formats: [fasta]
+    formats:
+    - fasta
     required: true
 outputs:
   output_dir:
@@ -21,18 +23,17 @@ outputs:
     type: file
     format: uc
 execution:
-  env_name: amplicon
   executable: vsearch
-  command_template: "vsearch --cluster_unoise {derep_fasta} --centroids {output_dir}/asvs.fasta --uc {output_dir}/denoise.uc --minsize 8"
+  command_template: vsearch --cluster_unoise {derep_fasta} --centroids {output_dir}/asvs.fasta
+    --uc {output_dir}/denoise.uc --minsize 8
   network: false
   writes_output: true
 failure_handling:
   missing_input:
-    hint: "Dereplicated FASTA not found. Verify vsearch_derep completed successfully."
+    hint: Dereplicated FASTA not found. Verify vsearch_derep completed successfully.
   tool_not_found:
-    hint: "vsearch not found. Install: conda install -c bioconda vsearch"
-
+    hint: 'vsearch not found. Install: conda install -c bioconda vsearch'
 resources:
   cpu: 4
-  memory: "8GB"
-  walltime: "02:00:00"
+  memory: 8GB
+  walltime: 02:00:00

@@ -16,14 +16,15 @@ outputs:
   output_dir:
     type: path
 execution:
-  env_name: autoplasm-annotation
   executable: plasmidfinder.py
   command_template: plasmidfinder.py -i {assembly} -o {output_dir} -p {database}
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_plasmidfinder"
-  tables: [plasmid_predictions, annotations]
+  parser: abi.autoplasm.parsers:parse_plasmidfinder
+  tables:
+  - plasmid_predictions
+  - annotations
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.
@@ -32,8 +33,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 4
-  memory: "8GB"
-  walltime: "02:00:00"
+  memory: 8GB
+  walltime: 02:00:00

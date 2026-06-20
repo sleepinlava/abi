@@ -1,15 +1,17 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: prokka
 name: Prokka
 category: annotation
-purpose: Rapid prokaryotic genome annotation producing GFF, GenBank, and protein FASTA files.
+purpose: Rapid prokaryotic genome annotation producing GFF, GenBank, and protein FASTA
+  files.
 when_to_use:
-  - bacterial_genome_annotation
-  - gene_prediction
+- bacterial_genome_annotation
+- gene_prediction
 inputs:
   assembly_fasta:
     type: file
-    formats: [fasta]
+    formats:
+    - fasta
     required: true
   genus:
     type: string
@@ -37,18 +39,17 @@ outputs:
     type: file
     format: gbk
 execution:
-  env_name: wgs
   executable: prokka
-  command_template: "prokka --outdir {output_dir} --prefix {sample_id} --cpus {threads} --genus {genus} --species {species} {assembly_fasta}"
+  command_template: prokka --outdir {output_dir} --prefix {sample_id} --cpus {threads}
+    --genus {genus} --species {species} {assembly_fasta}
   network: false
   writes_output: true
 failure_handling:
   missing_input:
-    hint: "Assembly FASTA not found. Verify SPAdes completed successfully."
+    hint: Assembly FASTA not found. Verify SPAdes completed successfully.
   tool_not_found:
-    hint: "Prokka not found. Install: conda install -c bioconda prokka"
-
+    hint: 'Prokka not found. Install: conda install -c bioconda prokka'
 resources:
   cpu: 8
-  memory: "16GB"
-  walltime: "04:00:00"
+  memory: 16GB
+  walltime: 04:00:00

@@ -1,30 +1,33 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: isescan
 name: ISEScan
 category: annotation
 purpose: Detect insertion sequences in plasmid contigs.
 when_to_use:
-  - plasmid_contigs_available
-  - mobile_element_annotation_required
+- plasmid_contigs_available
+- mobile_element_annotation_required
 inputs:
-  plasmid_contigs: {type: file, format: fasta, required: true}
+  plasmid_contigs:
+    type: file
+    format: fasta
+    required: true
 outputs:
-  output_dir: {type: directory}
+  output_dir:
+    type: directory
 execution:
-  env_name: autoplasm-annotation
   executable: isescan.py
-  command_template: "isescan.py --seqfile {plasmid_contigs} --output {output_dir}"
+  command_template: isescan.py --seqfile {plasmid_contigs} --output {output_dir}
   network: false
   writes_output: true
 normalization:
-  tables: [annotations]
+  tables:
+  - annotations
 failure_handling:
   missing_input:
-    hint: "Check plasmid_contigs FASTA path."
+    hint: Check plasmid_contigs FASTA path.
   tool_not_found:
-    hint: "Install isescan.py in the autoplasm-annotation environment."
-
+    hint: Install isescan.py in the autoplasm-annotation environment.
 resources:
   cpu: 8
-  memory: "16GB"
-  walltime: "04:00:00"
+  memory: 16GB
+  walltime: 04:00:00

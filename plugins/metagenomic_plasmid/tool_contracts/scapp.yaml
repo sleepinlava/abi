@@ -22,7 +22,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-plasmid-binning
   executable: scapp
   command_template: scapp --contigs {assembly} --graphs {assembly_graph} --output
     {output_dir} --threads {threads}
@@ -35,8 +34,7 @@ failure_handling:
     hint: Install SCAPP in the autoplasm-plasmid-binning environment.
   nonzero_exit:
     hint: Inspect SCAPP stderr log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

@@ -1,28 +1,33 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: samtools
 name: samtools
 category: abundance
 purpose: Sort read alignments before abundance quantification.
 when_to_use:
-  - alignment_sam_available
+- alignment_sam_available
 inputs:
-  alignment: {type: file, format: sam, required: true}
-  threads: {type: integer, minimum: 1}
+  alignment:
+    type: file
+    format: sam
+    required: true
+  threads:
+    type: integer
+    minimum: 1
 outputs:
-  bam: {type: file, format: bam}
+  bam:
+    type: file
+    format: bam
 execution:
-  env_name: autoplasm-abundance
   executable: samtools
-  command_template: "samtools sort -@ {threads} -o {bam} {alignment}"
+  command_template: samtools sort -@ {threads} -o {bam} {alignment}
   network: false
   writes_output: true
 failure_handling:
   missing_input:
-    hint: "Check bowtie2/minimap2 alignment output."
+    hint: Check bowtie2/minimap2 alignment output.
   tool_not_found:
-    hint: "Install samtools in the autoplasm-abundance environment."
-
+    hint: Install samtools in the autoplasm-abundance environment.
 resources:
   cpu: 8
-  memory: "16GB"
-  walltime: "02:00:00"
+  memory: 16GB
+  walltime: 02:00:00

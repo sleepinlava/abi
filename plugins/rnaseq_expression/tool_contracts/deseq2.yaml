@@ -1,23 +1,27 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: deseq2
 name: DESeq2
 category: differential_expression
-purpose: Perform differential gene expression analysis using DESeq2 median-of-ratios normalisation and Wald test.
+purpose: Perform differential gene expression analysis using DESeq2 median-of-ratios
+  normalisation and Wald test.
 when_to_use:
-  - multi_group_comparison
-  - differential_expression_required
+- multi_group_comparison
+- differential_expression_required
 inputs:
   count_matrix:
     type: file
-    formats: [tsv]
+    formats:
+    - tsv
     required: true
   sample_metadata:
     type: file
-    formats: [tsv]
+    formats:
+    - tsv
     required: true
   deseq2_script:
     type: file
-    formats: ["R"]
+    formats:
+    - R
     required: true
   comparison:
     type: string
@@ -32,20 +36,22 @@ outputs:
     type: file
     format: tsv
 execution:
-  env_name: rnaseq
   executable: Rscript
-  command_template: "Rscript {deseq2_script} --counts {count_matrix} --metadata {sample_metadata} --output {output_dir} --comparison {comparison} --alpha {alpha}"
+  command_template: Rscript {deseq2_script} --counts {count_matrix} --metadata {sample_metadata}
+    --output {output_dir} --comparison {comparison} --alpha {alpha}
   network: false
   writes_output: true
 failure_handling:
   missing_input:
-    hint: "One or both of count_matrix or sample_metadata files are missing. Verify featureCounts completed successfully."
+    hint: One or both of count_matrix or sample_metadata files are missing. Verify
+      featureCounts completed successfully.
   tool_not_found:
-    hint: "Rscript or DESeq2 package not available. Ensure R is installed and DESeq2 is installed (BiocManager::install('DESeq2'))."
+    hint: Rscript or DESeq2 package not available. Ensure R is installed and DESeq2
+      is installed (BiocManager::install('DESeq2')).
   execution_error:
-    hint: "DESeq2 execution failed. Check that sample_metadata groups match count_matrix columns and there are at least 2 replicates per group."
-
+    hint: DESeq2 execution failed. Check that sample_metadata groups match count_matrix
+      columns and there are at least 2 replicates per group.
 resources:
   cpu: 1
-  memory: "8GB"
-  walltime: "01:00:00"
+  memory: 8GB
+  walltime: 01:00:00

@@ -1,0 +1,368 @@
+abi_version: '0.1'
+environments:
+  autoplasm-base:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - pip
+    - pyyaml
+    - pandas
+    - numpy
+    - scipy
+    - scikit-learn
+    - biopython=1.85
+    - typer
+    - rich
+    - pydantic
+    - jinja2
+    - networkx
+    - seqkit
+    - pigz
+    - matplotlib
+    - plotly
+    - pytest
+    - pytest-cov
+    - black
+    - ruff
+    - mypy
+    - conda-lock
+    - pip:
+      - dna-features-viewer
+      - pycirclize
+  autoplasm-qc:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - fastp
+    - fastplong
+    - fastqc
+    - multiqc
+    - trimmomatic
+    - cutadapt
+    - nanoplot
+    - filtlong
+    - chopper
+    - porechop
+    - hifiadapterfilt
+    - kneaddata
+  autoplasm-assembly:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - megahit
+    - spades
+    - flye
+    - hifiasm
+    - raven-assembler
+    - quast
+    - bandage
+    - perl-opera-ms
+  autoplasm-annotation:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - numpy >=1.23,<1.24
+    - pandas >=1.5,<2
+    - bakta
+    - prokka
+    - prodigal
+    - diamond
+    - hmmer
+    - blast
+    - kma
+    - abricate
+    - ncbi-amrfinderplus
+    - mob_suite
+    - plasmidfinder
+    - isescan
+    - mummer
+    - eggnog-mapper
+    - rgi
+  autoplasm-abundance:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - bowtie2
+    - bwa
+    - minimap2
+    - samtools
+    - coverm
+    - subread
+  autoplasm-plasmid-detect:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - genomad
+    - blast
+    - hmmer
+    - mmseqs2
+  autoplasm-plasmid-binning:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - metabat2
+    - maxbin2
+    - concoct
+    - semibin
+  autoplasm-integronfinder:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: flexible
+    dependencies:
+    - python=3.10
+    - integron_finder
+    - biopython>=1.77
+  autoplasm-stats:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - scipy
+    - statsmodels
+    - scikit-bio
+    - pandas
+    - numpy
+    - fastspar
+    - kraken2
+    - metaphlan
+    - checkm2
+    - gtdbtk
+    - r-base
+    - r-vegan
+    - bioconductor-deseq2
+  autoplasm-visualization:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - matplotlib
+    - plotly
+    - networkx
+    - pyvis
+    - jinja2
+    - pip
+    - pip:
+      - clinker
+      - dna-features-viewer
+      - pycirclize
+      - pygenomeviz
+  autoplasm-nextflow:
+    channels:
+    - conda-forge
+    - bioconda
+    channel_priority: strict
+    dependencies:
+    - nextflow
+  abi-qc:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - pip
+    - fastp>=0.23
+  abi-stats:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - pip
+    - star>=2.7
+    - hisat2>=2.2
+    - subread>=2.0
+  rnaseq:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - pip
+    - fastp>=0.23
+    - star>=2.7
+    - subread>=2.0
+    - r-base>=4.0
+    - bioconductor-deseq2
+    - bioconductor-tximport
+    - r-ggplot2
+    - r-readr
+    - r-pheatmap
+    - r-rcolorbrewer
+    - pigz
+    - gzip
+    - curl
+    - wget
+  amplicon:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - pip
+    - cutadapt>=4.0
+    - vsearch>=2.20
+    - mafft>=7.0
+    - fasttree>=2.0
+    - numpy>=1.24
+    - scipy>=1.10
+    - pandas>=2.0
+    - biopython>=1.80
+    - pigz
+  wgs:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - pip
+    - fastp>=0.23
+    - spades>=3.15
+    - prokka>=1.14
+    - mlst>=2.0
+    - ncbi-amrfinderplus>=3.12
+    - pigz
+tool_assignments:
+  metagenomic_plasmid:
+    fastp: autoplasm-qc
+    fastqc: autoplasm-qc
+    multiqc: autoplasm-qc
+    fastplong: autoplasm-qc
+    nanoplot: autoplasm-qc
+    filtlong: autoplasm-qc
+    hifiadapterfilt: autoplasm-qc
+    chopper: autoplasm-qc
+    porechop: autoplasm-qc
+    kneaddata: autoplasm-qc
+    megahit: autoplasm-assembly
+    metaspades: autoplasm-assembly
+    metaflye: autoplasm-assembly
+    hifiasm_meta: autoplasm-assembly
+    opera_ms: autoplasm-assembly
+    quast: autoplasm-assembly
+    hybridspades: autoplasm-assembly
+    bandage: autoplasm-assembly
+    bakta: autoplasm-annotation
+    prodigal: autoplasm-annotation
+    abricate: autoplasm-annotation
+    amrfinderplus: autoplasm-annotation
+    mob_suite: autoplasm-annotation
+    mob_typer: autoplasm-annotation
+    isescan: autoplasm-annotation
+    plasmidfinder: autoplasm-annotation
+    blast: autoplasm-annotation
+    mmseqs2: autoplasm-annotation
+    mummer: autoplasm-annotation
+    minced: autoplasm-annotation
+    eggnog_mapper: autoplasm-annotation
+    rgi: autoplasm-annotation
+    copla: autoplasm-annotation
+    plasmidhostfinder: autoplasm-annotation
+    pmlst: autoplasm-annotation
+    conjscan: autoplasm-annotation
+    macsyfinder: autoplasm-annotation
+    bowtie2: autoplasm-abundance
+    minimap2: autoplasm-abundance
+    samtools: autoplasm-abundance
+    coverm: autoplasm-abundance
+    bwa: autoplasm-abundance
+    genomad: autoplasm-plasmid-detect
+    plasme: autoplasm-plasmid-detect
+    plasx: autoplasm-plasmid-detect
+    platon: autoplasm-plasmid-detect
+    metabat2: autoplasm-plasmid-binning
+    maxbin2: autoplasm-plasmid-binning
+    concoct: autoplasm-plasmid-binning
+    semibin: autoplasm-plasmid-binning
+    plasmaag: autoplasm-plasmid-binning
+    gplas2: autoplasm-plasmid-binning
+    scapp: autoplasm-plasmid-binning
+    recycler: autoplasm-plasmid-binning
+    kraken2: autoplasm-stats
+    metaphlan: autoplasm-stats
+    fastspar: autoplasm-stats
+    checkm2: autoplasm-stats
+    gtdbtk: autoplasm-stats
+    das_tool: autoplasm-stats
+    hic_evidence: autoplasm-stats
+    clinker: autoplasm-visualization
+    pycirclize: autoplasm-visualization
+    pyvis: autoplasm-visualization
+    dna_features_viewer: autoplasm-visualization
+    integronfinder: autoplasm-integronfinder
+    report_markdown: autoplasm-base
+  wgs_bacteria:
+    fastp: wgs
+    spades: wgs
+    prokka: wgs
+    mlst: wgs
+    amrfinderplus: wgs
+  amplicon_16s:
+    cutadapt: amplicon
+    diversity_metrics: amplicon
+    phylogeny_build: amplicon
+    phylogeny_combine: amplicon
+    phylogeny_mafft: amplicon
+    phylogeny_tree: amplicon
+    vsearch_denoise: amplicon
+    vsearch_derep: amplicon
+    vsearch_mergepairs: amplicon
+    vsearch_otu: amplicon
+    vsearch_taxonomy: amplicon
+  rnaseq_expression:
+    fastp: rnaseq
+    star: rnaseq
+    featurecounts: rnaseq
+    build_count_matrix: rnaseq
+    deseq2: rnaseq
+    clusterprofiler: rnaseq
+  metatranscriptomics:
+    fastp: abi-qc
+    star: abi-stats
+    hisat2: abi-stats
+    featurecounts: abi-stats

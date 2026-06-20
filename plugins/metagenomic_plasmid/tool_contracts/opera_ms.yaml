@@ -22,7 +22,6 @@ outputs:
   output_dir:
     type: path
 execution:
-  env_name: autoplasm-assembly
   executable: OPERA-MS.pl
   command_template: sh -c 'mkdir -p "$1" && OPERA-MS.pl --short-read1 "$2" --short-read2
     "$3" --long-read "$4" --out-dir "$1" --num-processors "$5" && sh "$6/scripts/normalize_opera_ms_output.sh"
@@ -31,8 +30,9 @@ execution:
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_opera_ms"
-  tables: [assembly_summary]
+  parser: abi.autoplasm.parsers:parse_opera_ms
+  tables:
+  - assembly_summary
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.
@@ -41,8 +41,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 16
-  memory: "64GB"
-  walltime: "08:00:00"
+  memory: 64GB
+  walltime: 08:00:00

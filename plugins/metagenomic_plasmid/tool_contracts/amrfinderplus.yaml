@@ -1,34 +1,43 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: amrfinderplus
 name: AMRFinderPlus
 category: annotation
 purpose: Detect antimicrobial resistance features in plasmid contigs.
 when_to_use:
-  - plasmid_contigs_available
-  - resistance_annotation_required
+- plasmid_contigs_available
+- resistance_annotation_required
 inputs:
-  plasmid_contigs: {type: file, format: fasta, required: true}
-  database: {type: string, required: true}
-  sample_id: {type: string, required: true}
+  plasmid_contigs:
+    type: file
+    format: fasta
+    required: true
+  database:
+    type: string
+    required: true
+  sample_id:
+    type: string
+    required: true
 outputs:
-  output_dir: {type: directory}
-  amrfinder_tsv: {type: file, format: tsv}
+  output_dir:
+    type: directory
+  amrfinder_tsv:
+    type: file
+    format: tsv
 execution:
-  env_name: autoplasm-annotation
   executable: amrfinder
-  command_template: "amrfinder -n {plasmid_contigs} -d {database} -o {output_dir}/{sample_id}.amrfinder.tsv"
+  command_template: amrfinder -n {plasmid_contigs} -d {database} -o {output_dir}/{sample_id}.amrfinder.tsv
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_amrfinderplus"
-  tables: [annotations]
+  parser: abi.autoplasm.parsers:parse_amrfinderplus
+  tables:
+  - annotations
 failure_handling:
   missing_input:
-    hint: "Check plasmid_contigs FASTA path."
+    hint: Check plasmid_contigs FASTA path.
   tool_not_found:
-    hint: "Install amrfinder in the autoplasm-annotation environment."
-
+    hint: Install amrfinder in the autoplasm-annotation environment.
 resources:
   cpu: 8
-  memory: "16GB"
-  walltime: "04:00:00"
+  memory: 16GB
+  walltime: 04:00:00

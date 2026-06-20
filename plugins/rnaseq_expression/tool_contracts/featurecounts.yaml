@@ -1,10 +1,10 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: featurecounts
 name: featureCounts
 category: expression
 purpose: Count reads overlapping gene annotations from an aligned BAM file.
 when_to_use:
-  - gene_expression_quantification
+- gene_expression_quantification
 inputs:
   bam:
     type: file
@@ -22,26 +22,25 @@ outputs:
     type: file
     format: txt
 execution:
-  env_name: rnaseq
   executable: featureCounts
-  command_template: "featureCounts -T {threads} -p -a {annotation_gtf} -o {counts} {bam}"
+  command_template: featureCounts -T {threads} -p -a {annotation_gtf} -o {counts}
+    {bam}
   network: false
   writes_output: true
 normalization:
-  parser: "abi.plugins.metatranscriptomics:_parse_featurecounts"
+  parser: abi.plugins.metatranscriptomics:_parse_featurecounts
   tables:
-    - gene_expression
+  - gene_expression
 failure_handling:
   missing_input:
-    hint: "Check that the alignment step produced the BAM path in the plan."
+    hint: Check that the alignment step produced the BAM path in the plan.
   missing_resource:
-    hint: "Configure resources.annotation_gtf to a valid GTF annotation."
+    hint: Configure resources.annotation_gtf to a valid GTF annotation.
   tool_not_found:
-    hint: "Install featureCounts in the abi-stats environment."
+    hint: Install featureCounts in the abi-stats environment.
   parse_failed:
-    hint: "Check the featureCounts output format before normalizing gene_expression.tsv."
-
+    hint: Check the featureCounts output format before normalizing gene_expression.tsv.
 resources:
   cpu: 4
-  memory: "8GB"
-  walltime: "02:00:00"
+  memory: 8GB
+  walltime: 02:00:00

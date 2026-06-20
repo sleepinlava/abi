@@ -26,7 +26,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-qc
   executable: kneaddata
   command_template: kneaddata --input {read1} --input {read2} --reference-db {host_reference}
     --output {output_dir} --threads {threads}
@@ -39,8 +38,7 @@ failure_handling:
     hint: Install kneaddata in the autoplasm-qc environment.
   nonzero_exit:
     hint: Inspect KneadData log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

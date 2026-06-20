@@ -1,50 +1,53 @@
 tools:
-  - id: fastp
-    name: fastp
-    category: qc
-    env_name: wgs
-    executable: fastp
-    default_enabled: true
-    required: true
-    command_template: "fastp -i {read1} -I {read2} -o {output_dir}/{sample_id}_R1.clean.fastq.gz -O {output_dir}/{sample_id}_R2.clean.fastq.gz --thread {threads} --html {output_dir}/{sample_id}.fastp.html --json {output_dir}/{sample_id}.fastp.json"
-    inputs: [read1, read2]
-
-  - id: spades
-    name: SPAdes
-    category: assembly
-    env_name: wgs
-    executable: spades.py
-    default_enabled: true
-    required: true
-    command_template: "spades.py --careful --cov-cutoff auto -1 {clean_read1} -2 {clean_read2} -o {output_dir} -t {threads}"
-    inputs: [clean_read1, clean_read2]
-
-  - id: prokka
-    name: Prokka
-    category: annotation
-    env_name: wgs
-    executable: prokka
-    default_enabled: true
-    required: true
-    command_template: "prokka --outdir {output_dir} --prefix {sample_id} --cpus {threads} --genus {genus} --species {species} --force {assembly_fasta}"
-    inputs: [assembly_fasta]
-
-  - id: mlst
-    name: MLST
-    category: typing
-    env_name: wgs
-    executable: mlst
-    default_enabled: true
-    required: true
-    command_template: "mlst {assembly_fasta} > {output_dir}/mlst.tsv"
-    inputs: [assembly_fasta]
-
-  - id: amrfinderplus
-    name: AMRFinderPlus
-    category: amr
-    env_name: wgs
-    executable: amrfinder
-    default_enabled: true
-    required: true
-    command_template: "amrfinder --plus --protein {prokka_faa} --output {output_dir}/amr.tsv --threads {threads}"
-    inputs: [prokka_faa]
+- id: fastp
+  name: fastp
+  category: qc
+  executable: fastp
+  default_enabled: true
+  required: true
+  command_template: fastp -i {read1} -I {read2} -o {output_dir}/{sample_id}_R1.clean.fastq.gz
+    -O {output_dir}/{sample_id}_R2.clean.fastq.gz --thread {threads} --html {output_dir}/{sample_id}.fastp.html
+    --json {output_dir}/{sample_id}.fastp.json
+  inputs:
+  - read1
+  - read2
+- id: spades
+  name: SPAdes
+  category: assembly
+  executable: spades.py
+  default_enabled: true
+  required: true
+  command_template: spades.py --careful --cov-cutoff auto -1 {clean_read1} -2 {clean_read2}
+    -o {output_dir} -t {threads}
+  inputs:
+  - clean_read1
+  - clean_read2
+- id: prokka
+  name: Prokka
+  category: annotation
+  executable: prokka
+  default_enabled: true
+  required: true
+  command_template: prokka --outdir {output_dir} --prefix {sample_id} --cpus {threads}
+    --genus {genus} --species {species} --force {assembly_fasta}
+  inputs:
+  - assembly_fasta
+- id: mlst
+  name: MLST
+  category: typing
+  executable: mlst
+  default_enabled: true
+  required: true
+  command_template: mlst {assembly_fasta} > {output_dir}/mlst.tsv
+  inputs:
+  - assembly_fasta
+- id: amrfinderplus
+  name: AMRFinderPlus
+  category: amr
+  executable: amrfinder
+  default_enabled: true
+  required: true
+  command_template: amrfinder --plus --protein {prokka_faa} --output {output_dir}/amr.tsv
+    --threads {threads}
+  inputs:
+  - prokka_faa

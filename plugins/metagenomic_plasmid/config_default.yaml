@@ -74,9 +74,42 @@ plasmid_typing:
 sample_analysis:
   enable: auto
 
-# Resource paths — sentinel values indicate resources that need setup
+# Resource paths — each resource block holds a path that can be overridden.
+# Level 1 resources (auto_setup=true) can be downloaded via:
+#   abi setup-resources --type metagenomic_plasmid --confirm
+# Level 2 resources (auto_setup=false) must be downloaded manually;
+# run `abi check-resources --type metagenomic_plasmid` for guidance.
 resources:
-  genomad_db: GENOMAD_DB_NOT_CONFIGURED
-  bakta_db: BAKTA_DB_NOT_CONFIGURED
-  amrfinder_db: AMRFINDER_DB_NOT_CONFIGURED
-  amrfinder_database: AMRFINDER_DB_NOT_CONFIGURED
+  root: resources/autoplasm
+  auto_download: false
+
+  genomad:
+    database: GENOMAD_DB_NOT_CONFIGURED
+  bakta:
+    database: BAKTA_DB_NOT_CONFIGURED
+  mob_suite:
+    database: MOB_SUITE_DB_NOT_CONFIGURED
+  plasmidfinder:
+    database: PLASMIDFINDER_DB_NOT_CONFIGURED
+  metaphlan:
+    database: METAPHLAN_DB_NOT_CONFIGURED
+  amrfinderplus:
+    database: AMRFINDERPLUS_DB_NOT_CONFIGURED
+  kraken2:
+    database: KRAKEN2_DB_NOT_CONFIGURED
+  gtdbtk:
+    database: GTDBTK_DB_NOT_CONFIGURED
+  checkm2:
+    database: CHECKM2_DB_NOT_CONFIGURED
+  plasme:
+    database: PLASME_DB_NOT_CONFIGURED
+  plasx:
+    annotations: PLASX_DATA_NOT_CONFIGURED
+    model: PLASX_MODEL_NOT_CONFIGURED
+  copla:
+    refgraph: COPLA_REFGRAPH_NOT_CONFIGURED
+    reflist: COPLA_REFLIST_NOT_CONFIGURED
+  blast:
+    database: BLAST_DB_NOT_CONFIGURED
+  plasmidhostfinder:
+    database: PLASMIDHOSTFINDER_DB_NOT_CONFIGURED

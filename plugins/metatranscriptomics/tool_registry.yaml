@@ -1,41 +1,53 @@
 tools:
-  - id: fastp
-    name: fastp
-    category: qc
-    env_name: abi-qc
-    executable: fastp
-    default_enabled: true
-    required: true
-    skill_path: plugins/metatranscriptomics/skills/fastp/SKILL.md
-    command_template: "fastp -i {read1} -I {read2} -o {output_dir}/{sample_id}_R1.clean.fastq.gz -O {output_dir}/{sample_id}_R2.clean.fastq.gz --thread {threads} --html {output_dir}/{sample_id}.fastp.html --json {output_dir}/{sample_id}.fastp.json"
-    inputs: [read1, read2]
-  - id: star
-    name: STAR
-    category: alignment
-    env_name: abi-stats
-    executable: STAR
-    default_enabled: true
-    required: true
-    skill_path: plugins/metatranscriptomics/skills/star/SKILL.md
-    command_template: "STAR --runThreadN {threads} --genomeDir {genome_index} --readFilesIn {read1} {read2} --readFilesCommand zcat --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {output_prefix}"
-    inputs: [read1, read2, genome_index]
-  - id: hisat2
-    name: HISAT2
-    category: alignment
-    env_name: abi-stats
-    executable: hisat2
-    default_enabled: false
-    required: false
-    skill_path: plugins/metatranscriptomics/skills/hisat2/SKILL.md
-    command_template: "hisat2 -p {threads} -x {genome_index} -1 {read1} -2 {read2} -S {output_dir}/{sample_id}.sam"
-    inputs: [read1, read2, genome_index]
-  - id: featurecounts
-    name: featureCounts
-    category: expression
-    env_name: abi-stats
-    executable: featureCounts
-    default_enabled: true
-    required: true
-    skill_path: plugins/metatranscriptomics/skills/featurecounts/SKILL.md
-    command_template: "featureCounts -T {threads} -p -a {annotation_gtf} -o {counts} {bam}"
-    inputs: [bam, annotation_gtf]
+- id: fastp
+  name: fastp
+  category: qc
+  executable: fastp
+  default_enabled: true
+  required: true
+  skill_path: plugins/metatranscriptomics/skills/fastp/SKILL.md
+  command_template: fastp -i {read1} -I {read2} -o {output_dir}/{sample_id}_R1.clean.fastq.gz
+    -O {output_dir}/{sample_id}_R2.clean.fastq.gz --thread {threads} --html {output_dir}/{sample_id}.fastp.html
+    --json {output_dir}/{sample_id}.fastp.json
+  inputs:
+  - read1
+  - read2
+- id: star
+  name: STAR
+  category: alignment
+  executable: STAR
+  default_enabled: true
+  required: true
+  skill_path: plugins/metatranscriptomics/skills/star/SKILL.md
+  command_template: STAR --runThreadN {threads} --genomeDir {genome_index} --readFilesIn
+    {read1} {read2} --readFilesCommand zcat --outSAMtype BAM SortedByCoordinate --outFileNamePrefix
+    {output_prefix}
+  inputs:
+  - read1
+  - read2
+  - genome_index
+- id: hisat2
+  name: HISAT2
+  category: alignment
+  executable: hisat2
+  default_enabled: false
+  required: false
+  skill_path: plugins/metatranscriptomics/skills/hisat2/SKILL.md
+  command_template: hisat2 -p {threads} -x {genome_index} -1 {read1} -2 {read2} -S
+    {output_dir}/{sample_id}.sam
+  inputs:
+  - read1
+  - read2
+  - genome_index
+- id: featurecounts
+  name: featureCounts
+  category: expression
+  executable: featureCounts
+  default_enabled: true
+  required: true
+  skill_path: plugins/metatranscriptomics/skills/featurecounts/SKILL.md
+  command_template: featureCounts -T {threads} -p -a {annotation_gtf} -o {counts}
+    {bam}
+  inputs:
+  - bam
+  - annotation_gtf

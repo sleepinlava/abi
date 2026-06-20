@@ -19,7 +19,6 @@ outputs:
   output_dir:
     type: path
 execution:
-  env_name: autoplasm-assembly
   executable: hifiasm
   command_template: sh -c 'mkdir -p "$1" && hifiasm -t "$2" -o "$1/$3" "$4" && sh
     "$5/scripts/hifiasm_gfa_to_fasta.sh" "$1/$3" "$1/$3.hifiasm.fasta"' autoplasm
@@ -27,8 +26,9 @@ execution:
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_hifiasm_meta"
-  tables: [assembly_summary]
+  parser: abi.autoplasm.parsers:parse_hifiasm_meta
+  tables:
+  - assembly_summary
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.
@@ -37,8 +37,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 16
-  memory: "64GB"
-  walltime: "08:00:00"
+  memory: 64GB
+  walltime: 08:00:00

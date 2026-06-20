@@ -174,8 +174,12 @@ def validate_tool_contract(contract: Mapping[str, Any], *, path: str | Path | No
     _require_mapping(contract.get("inputs"), f"{label}: inputs")
     _require_mapping(contract.get("outputs"), f"{label}: outputs")
     execution = _require_mapping(contract.get("execution"), f"{label}: execution")
-    for key in ("env_name", "executable", "command_template"):
+    for key in ("executable", "command_template"):
         _require_non_empty_string(execution.get(key), f"{label}: execution.{key}")
+    # env_name is optional — resolved at runtime from environments.yaml
+    env_name = execution.get("env_name")
+    if env_name is not None and not isinstance(env_name, str):
+        raise ContractValidationError(f"{label}: execution.env_name must be string")
     if "network" in execution and not isinstance(execution["network"], bool):
         raise ContractValidationError(f"{label}: execution.network must be boolean")
     if "writes_output" in execution and not isinstance(execution["writes_output"], bool):
@@ -379,7 +383,9 @@ def _validate_contract_matches_registry(
     tool_id = str(contract["tool_id"])
     execution = contract["execution"]
     assert isinstance(execution, Mapping)
-    for key in ("env_name", "executable"):
+    # Only validate executable against registry — env_name is resolved at
+    # runtime from environments.yaml, not duplicated in contracts/registry.
+    for key in ("executable",):
         if str(execution[key]) != str(registry_tool.get(key, "")):
             raise ContractValidationError(
                 f"{tool_id}: contract execution.{key} does not match registry"

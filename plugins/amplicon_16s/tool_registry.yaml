@@ -1,100 +1,107 @@
 tools:
-  - id: cutadapt
-    name: cutadapt
-    category: qc
-    env_name: amplicon
-    executable: cutadapt
-    default_enabled: true
-    required: true
-    command_template: "cutadapt -g {forward_primer} -G {reverse_primer} -o {output_dir}/{sample_id}_trimmed_R1.fastq.gz -p {output_dir}/{sample_id}_trimmed_R2.fastq.gz {read1} {read2} --cores {threads} --minimum-length 50"
-    inputs: [read1, read2, forward_primer, reverse_primer]
-
-  - id: vsearch_mergepairs
-    name: vsearch merge pairs
-    category: preprocessing
-    env_name: amplicon
-    executable: vsearch
-    default_enabled: true
-    required: true
-    command_template: "vsearch --fastq_mergepairs {read1} --reverse {read2} --fastqout {output_dir}/{sample_id}_merged.fastq --fastaout {output_dir}/{sample_id}_merged.fasta --threads {threads}"
-    inputs: [read1, read2]
-
-  - id: vsearch_derep
-    name: vsearch dereplicate
-    category: preprocessing
-    env_name: amplicon
-    executable: vsearch
-    default_enabled: true
-    required: true
-    command_template: "vsearch --derep_fulllength {merged_fasta} --output {output_dir}/{sample_id}_derep.fasta --sizeout --relabel {sample_id}."
-    inputs: [merged_fasta]
-
-  - id: vsearch_denoise
-    name: vsearch UNOISE3 denoise
-    category: denoising
-    env_name: amplicon
-    executable: vsearch
-    default_enabled: true
-    required: true
-    command_template: "vsearch --cluster_unoise {derep_fasta} --centroids {output_dir}/asvs.fasta --uc {output_dir}/denoise.uc --minsize 1"
-    inputs: [derep_fasta]
-
-  - id: vsearch_otu
-    name: vsearch OTU clustering
-    category: clustering
-    env_name: amplicon
-    executable: vsearch
-    default_enabled: false
-    required: false
-    command_template: "vsearch --cluster_size {asv_fasta} --id 0.97 --centroids {output_dir}/otus.fasta --uc {output_dir}/otu.uc --otutabout {output_dir}/{sample_id}_otu.tsv"
-    inputs: [asv_fasta]
-
-  - id: vsearch_taxonomy
-    name: vsearch SINTAX taxonomy
-    category: taxonomy
-    env_name: amplicon
-    executable: vsearch
-    default_enabled: true
-    required: true
-    command_template: "vsearch --sintax {asv_fasta} --db {taxonomy_db} --sintax_cutoff 0.8 --tabbedout {output_dir}/{sample_id}_taxonomy.tsv"
-    inputs: [asv_fasta, taxonomy_db]
-
-  - id: diversity_metrics
-    name: Diversity Metrics
-    category: diversity
-    env_name: amplicon
-    executable: python
-    default_enabled: true
-    required: true
-    command_template: "python {diversity_script} --denoise-dir {denoise_dir} --merge-dir {merge_dir} --output-dir {output_dir} --tree {phylogeny_tree}"
-    inputs: [diversity_script, denoise_dir, merge_dir]
-
-  - id: phylogeny_combine
-    name: Combine ASV FASTA files
-    category: phylogeny
-    env_name: amplicon
-    executable: cat
-    default_enabled: true
-    required: false
-    command_template: "cat {asv_fasta} > {output_dir}/combined.fasta"
-    inputs: [asv_fasta]
-
-  - id: phylogeny_mafft
-    name: Phylogeny Alignment (MAFFT)
-    category: phylogeny
-    env_name: amplicon
-    executable: mafft
-    default_enabled: true
-    required: false
-    command_template: "mafft --auto --thread {threads} {combined_fasta} > {output_dir}/aligned.fasta"
-    inputs: [combined_fasta]
-
-  - id: phylogeny_tree
-    name: Phylogeny Tree (FastTree)
-    category: phylogeny
-    env_name: amplicon
-    executable: fasttree
-    default_enabled: true
-    required: false
-    command_template: "fasttree -nt {aligned_fasta} > {output_dir}/phylogeny.nwk"
-    inputs: [aligned_fasta]
+- id: cutadapt
+  name: cutadapt
+  category: qc
+  executable: cutadapt
+  default_enabled: true
+  required: true
+  command_template: cutadapt -g {forward_primer} -G {reverse_primer} -o {output_dir}/{sample_id}_trimmed_R1.fastq.gz
+    -p {output_dir}/{sample_id}_trimmed_R2.fastq.gz {read1} {read2} --cores {threads}
+    --minimum-length 50
+  inputs:
+  - read1
+  - read2
+  - forward_primer
+  - reverse_primer
+- id: vsearch_mergepairs
+  name: vsearch merge pairs
+  category: preprocessing
+  executable: vsearch
+  default_enabled: true
+  required: true
+  command_template: vsearch --fastq_mergepairs {read1} --reverse {read2} --fastqout
+    {output_dir}/{sample_id}_merged.fastq --fastaout {output_dir}/{sample_id}_merged.fasta
+    --threads {threads}
+  inputs:
+  - read1
+  - read2
+- id: vsearch_derep
+  name: vsearch dereplicate
+  category: preprocessing
+  executable: vsearch
+  default_enabled: true
+  required: true
+  command_template: vsearch --derep_fulllength {merged_fasta} --output {output_dir}/{sample_id}_derep.fasta
+    --sizeout --relabel {sample_id}.
+  inputs:
+  - merged_fasta
+- id: vsearch_denoise
+  name: vsearch UNOISE3 denoise
+  category: denoising
+  executable: vsearch
+  default_enabled: true
+  required: true
+  command_template: vsearch --cluster_unoise {derep_fasta} --centroids {output_dir}/asvs.fasta
+    --uc {output_dir}/denoise.uc --minsize 1
+  inputs:
+  - derep_fasta
+- id: vsearch_otu
+  name: vsearch OTU clustering
+  category: clustering
+  executable: vsearch
+  default_enabled: false
+  required: false
+  command_template: vsearch --cluster_size {asv_fasta} --id 0.97 --centroids {output_dir}/otus.fasta
+    --uc {output_dir}/otu.uc --otutabout {output_dir}/{sample_id}_otu.tsv
+  inputs:
+  - asv_fasta
+- id: vsearch_taxonomy
+  name: vsearch SINTAX taxonomy
+  category: taxonomy
+  executable: vsearch
+  default_enabled: true
+  required: true
+  command_template: vsearch --sintax {asv_fasta} --db {taxonomy_db} --sintax_cutoff
+    0.8 --tabbedout {output_dir}/{sample_id}_taxonomy.tsv
+  inputs:
+  - asv_fasta
+  - taxonomy_db
+- id: diversity_metrics
+  name: Diversity Metrics
+  category: diversity
+  executable: python
+  default_enabled: true
+  required: true
+  command_template: python {diversity_script} --denoise-dir {denoise_dir} --merge-dir
+    {merge_dir} --output-dir {output_dir} --tree {phylogeny_tree}
+  inputs:
+  - diversity_script
+  - denoise_dir
+  - merge_dir
+- id: phylogeny_combine
+  name: Combine ASV FASTA files
+  category: phylogeny
+  executable: cat
+  default_enabled: true
+  required: false
+  command_template: cat {asv_fasta} > {output_dir}/combined.fasta
+  inputs:
+  - asv_fasta
+- id: phylogeny_mafft
+  name: Phylogeny Alignment (MAFFT)
+  category: phylogeny
+  executable: mafft
+  default_enabled: true
+  required: false
+  command_template: mafft --auto --thread {threads} {combined_fasta} > {output_dir}/aligned.fasta
+  inputs:
+  - combined_fasta
+- id: phylogeny_tree
+  name: Phylogeny Tree (FastTree)
+  category: phylogeny
+  executable: fasttree
+  default_enabled: true
+  required: false
+  command_template: fasttree -nt {aligned_fasta} > {output_dir}/phylogeny.nwk
+  inputs:
+  - aligned_fasta

@@ -27,7 +27,20 @@ RESOURCE_FIELDS = {
 
 
 class ToolRegistry:
-    def __init__(self, tools: Iterable[Mapping[str, Any]]) -> None:
+    _env_assignments = None  # class-level cache for tool→env assignments
+
+    def __init__(
+        self,
+        tools: Iterable[Mapping[str, Any]],
+        *,
+        environments_path: str | Path | None = None,
+        plugin_name: str = "_default",
+    ) -> None:
+        self._plugin = plugin_name
+        # Load tool→env assignments from environments.yaml (once, cached)
+        if ToolRegistry._env_assignments is None and environments_path is not None:
+            ToolRegistry._load_environment_assignments(environments_path)
+
         self._tools: Dict[str, Dict[str, Any]] = {}
         for tool in tools:
             tool_id = str(tool.get("id", "")).strip()
@@ -35,7 +48,52 @@ class ToolRegistry:
                 raise ConfigError("tool_registry.yaml contains a tool without id")
             if tool_id in self._tools:
                 raise ConfigError(f"Duplicate tool id in registry: {tool_id}")
-            self._tools[tool_id] = dict(tool)
+            tool_dict = dict(tool)
+            # Auto-fill env_name from environments.yaml if missing
+            if not tool_dict.get("env_name") and ToolRegistry._env_assignments:
+                resolved = ToolRegistry._resolve_env(
+                    tool_id, plugin=plugin_name
+                )
+                if resolved and resolved != "abi-base":
+                    tool_dict["env_name"] = resolved
+            self._tools[tool_id] = tool_dict
+
+    @classmethod
+    def _load_environment_assignments(cls, path: str | Path) -> None:
+        if cls._env_assignments is not None:
+            return
+        env_file = Path(path)
+        if not env_file.exists():
+            return
+        data = yaml.safe_load(env_file.read_text(encoding="utf-8")) or {}
+        raw = data.get("tool_assignments", {})
+        if raw and isinstance(next(iter(raw.values())), dict):
+            cls._env_assignments = {
+                str(pn): {str(k): str(v) for k, v in tools.items()}
+                for pn, tools in raw.items()
+            }
+        else:
+            cls._env_assignments = {
+                "_default": {str(k): str(v) for k, v in raw.items()}
+            }
+
+    @classmethod
+    def _resolve_env(cls, tool_id: str, plugin: str = "_default") -> str:
+        if cls._env_assignments is None:
+            return ""
+        # Direct lookup in the specified plugin
+        plugin_map = cls._env_assignments.get(plugin, {})
+        if plugin_map and tool_id in plugin_map:
+            return plugin_map[tool_id]
+        # Fallback: search all plugins for the tool
+        for pn, pmap in cls._env_assignments.items():
+            if pn == plugin:
+                continue
+            if tool_id in pmap:
+                return pmap[tool_id]
+        # Last resort: try _default
+        default_map = cls._env_assignments.get("_default", {})
+        return default_map.get(tool_id, "")
 
     @classmethod
     def from_path(cls, path: str | Path | None = None) -> "ToolRegistry":
@@ -47,7 +105,22 @@ class ToolRegistry:
         tools = data.get("tools")
         if not isinstance(tools, list):
             raise ConfigError("tool_registry.yaml must contain a tools list")
-        return cls(tools)
+
+        # Auto-detect plugin name from path
+        plugin = registry_path.parent.name if "plugins" in str(registry_path) else "_default"
+        if plugin == "config":
+            plugin = "_default"
+
+        # Auto-detect environments.yaml
+        env_path = registry_path.parent.parent / "environments.yaml"
+        if not env_path.exists():
+            env_path = PROJECT_ROOT / "environments.yaml"
+
+        return cls(
+            tools,
+            environments_path=env_path if env_path.exists() else None,
+            plugin_name=plugin,
+        )
 
     def ids(self) -> List[str]:
         return sorted(self._tools)

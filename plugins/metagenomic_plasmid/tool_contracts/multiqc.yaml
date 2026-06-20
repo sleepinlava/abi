@@ -1,30 +1,33 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: multiqc
 name: MultiQC
 category: qc
 purpose: Aggregate QC outputs into a single report directory.
 when_to_use:
-  - multiple_qc_outputs
+- multiple_qc_outputs
 inputs:
-  output_dir: {type: directory, required: true}
+  output_dir:
+    type: directory
+    required: true
 outputs:
-  multiqc_report: {type: file, format: html}
+  multiqc_report:
+    type: file
+    format: html
 execution:
-  env_name: autoplasm-qc
   executable: multiqc
-  command_template: "multiqc {output_dir} --outdir {output_dir}"
+  command_template: multiqc {output_dir} --outdir {output_dir}
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_multiqc"
-  tables: [qc_summary]
+  parser: abi.autoplasm.parsers:parse_multiqc
+  tables:
+  - qc_summary
 failure_handling:
   missing_input:
-    hint: "Run read QC before MultiQC aggregation."
+    hint: Run read QC before MultiQC aggregation.
   tool_not_found:
-    hint: "Install multiqc in the autoplasm-qc environment."
-
+    hint: Install multiqc in the autoplasm-qc environment.
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

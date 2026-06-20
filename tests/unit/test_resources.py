@@ -242,12 +242,12 @@ def test_metaphlan_resource_is_required_when_selected(tmp_path):
     assert "metaphlan.database" in issues[0]
 
 
-def test_metaphlan_resource_setup_requires_explicit_selection(tmp_path):
+def test_metaphlan_resource_is_included_in_default_setup(tmp_path):
     config = {"resources": {"root": str(tmp_path / "resources")}}
 
     rows = setup_resources(config, dry_run=True)
 
-    assert "metaphlan" not in {row["resource_id"] for row in rows}
+    assert "metaphlan" in {row["resource_id"] for row in rows}
 
 
 def test_fetch_example_dataset_mock(tmp_path):
@@ -258,3 +258,170 @@ def test_fetch_example_dataset_mock(tmp_path):
     assert "NC_002127_1" in sample_sheet.read_text(encoding="utf-8")
     fasta = tmp_path / "NC_002127.1.fasta"
     assert sha256_path(fasta)
+
+
+# ---- New tests for Level 1 + Level 2 resources (2026-06-20) ----
+
+
+def test_level1_resources_included_in_default_setup(tmp_path):
+    """All Level 1 (auto_setup=True) resources appear in default dry-run."""
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    rows = setup_resources(config, dry_run=True)
+    ids = {row["resource_id"] for row in rows}
+
+    assert "genomad" in ids
+    assert "bakta" in ids
+    assert "mob_suite" in ids
+    assert "plasmidfinder" in ids
+    assert "metaphlan" in ids
+    assert "amrfinderplus" in ids
+    assert "kraken2" in ids
+    assert "gtdbtk" in ids
+    assert "checkm2" in ids
+    # Level 1 = 9 databases + 4 auto-install tools = 13
+    assert len(rows) == 13
+
+
+def test_level2_resources_excluded_from_default_setup(tmp_path):
+    """Level 2 (auto_setup=False) resources are skipped in default setup."""
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    rows = setup_resources(config, dry_run=True)
+    ids = {row["resource_id"] for row in rows}
+
+    assert "plasme" not in ids
+    assert "plasx_annotations" not in ids
+    assert "plasx_model" not in ids
+    assert "copla_refgraph" not in ids
+    assert "copla_reflist" not in ids
+    assert "blast" not in ids
+    assert "plasmidhostfinder" not in ids
+    # Level 2 tool specs also excluded
+    assert "plasmaag_tool" not in ids
+    assert "gplas2_tool" not in ids
+    assert "scapp_tool" not in ids
+    assert "recycler_tool" not in ids
+    assert "copla_tool" not in ids
+    assert "plasmidhostfinder_tool" not in ids
+    assert "pmlst_tool" not in ids
+    assert "conjscan_tool" not in ids
+
+
+def test_level2_resources_appear_in_check_resources(tmp_path):
+    """Level 2 resources are reported by check_resources with missing status."""
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    rows = check_resources(config)
+    ids = {row["resource_id"] for row in rows}
+
+    assert "plasme" in ids
+    assert "plasx_annotations" in ids
+    assert "plasx_model" in ids
+    assert "copla_refgraph" in ids
+    assert "copla_reflist" in ids
+    assert "blast" in ids
+    assert "plasmidhostfinder" in ids
+
+
+def test_level2_resources_report_missing_status(tmp_path):
+    """Level 2 resources with no path configured report 'missing' status."""
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    rows = check_resources(config)
+
+    for row in rows:
+        if row["resource_id"] == "plasme":
+            assert row["status"] == "missing"
+            assert "PLASMe" in row.get("source_url", "")
+
+
+def test_level2_resource_can_be_explicitly_selected(tmp_path):
+    """An auto_setup=False resource is included when explicitly selected."""
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    rows = setup_resources(config, resource_ids=["plasme"], dry_run=True)
+    ids = {row["resource_id"] for row in rows}
+
+    assert "plasme" in ids
+    assert len(rows) == 1
+
+
+def test_amrfinderplus_required_resource_issues(tmp_path):
+    """required_resource_issues detects missing amrfinderplus database."""
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    issues = required_resource_issues(config, ["amrfinderplus"])
+
+    assert len(issues) >= 1
+    assert any("amrfinderplus.database" in i for i in issues)
+
+
+def test_gtdbtk_env_var_injection(tmp_path):
+    """GTDB-Tk download sets GTDBTK_DATA_PATH in runtime environment."""
+    from abi.plugins.metagenomic_plasmid._engine.resources import (
+        ResourceSpec,
+        _resource_runtime_env,
+    )
+
+    root = tmp_path / "resources"
+    config = {"resources": {"root": str(root)}}
+    spec = ResourceSpec(
+        resource_id="gtdbtk",
+        tool_id="gtdbtk",
+        field="database",
+        env_name="autoplasm-stats",
+        executable="gtdbtk",
+        default_subdir="gtdbtk",
+        source_url="https://example.com",
+        command_template=["gtdbtk", "db", "download"],
+    )
+
+    env = _resource_runtime_env(config, "autoplasm-stats", spec)
+    assert "GTDBTK_DATA_PATH" in env
+    assert env["GTDBTK_DATA_PATH"] == str(root / "gtdbtk")
+
+
+def test_checkm2_env_var_injection(tmp_path):
+    """CheckM2 download sets CHECKM2DB when path is configured."""
+    from abi.plugins.metagenomic_plasmid._engine.resources import (
+        ResourceSpec,
+        _resource_runtime_env,
+    )
+
+    db_path = tmp_path / "checkm2_custom"
+    config = {
+        "resources": {
+            "root": str(tmp_path / "resources"),
+            "checkm2": {"database": str(db_path)},
+        }
+    }
+    spec = ResourceSpec(
+        resource_id="checkm2",
+        tool_id="checkm2",
+        field="database",
+        env_name="autoplasm-stats",
+        executable="checkm2",
+        default_subdir="checkm2",
+        source_url="https://example.com",
+        command_template=["checkm2", "download"],
+    )
+
+    env = _resource_runtime_env(config, "autoplasm-stats", spec)
+    assert "CHECKM2DB" in env
+    assert env["CHECKM2DB"] == str(db_path)
+
+
+def test_all_28_resources_in_check_resources(tmp_path):
+    """check_resources returns all 28 registered resources (16 DB + 12 tool)."""
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    rows = check_resources(config)
+    ids = {row["resource_id"] for row in rows}
+
+    assert len(ids) == 28
+    expected_db = {
+        "genomad", "bakta", "mob_suite", "plasmidfinder", "metaphlan",
+        "amrfinderplus", "kraken2", "gtdbtk", "checkm2",
+        "plasme", "plasx_annotations", "plasx_model",
+        "copla_refgraph", "copla_reflist", "blast", "plasmidhostfinder",
+    }
+    expected_tools = {
+        "plasme_tool", "plasx_tool", "platon_tool", "macsyfinder_tool",
+        "plasmaag_tool", "gplas2_tool", "scapp_tool", "recycler_tool",
+        "copla_tool", "plasmidhostfinder_tool", "pmlst_tool", "conjscan_tool",
+    }
+    assert ids == expected_db | expected_tools

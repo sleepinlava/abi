@@ -44,6 +44,14 @@ class ResourceSpec:
     command_template: List[str]
     version: str = "latest"
     auto_setup: bool = True
+    resource_type: str = "database"
+    # "database"      = download data files (existing behaviour)
+    # "tool_git"      = git clone tool source  →  git clone <source_url> <target>
+    # "tool_pip"      = pip install tool       →  pip install <source_url> --target <target>
+    # "tool_download" = download tool binary   →  wget <source_url> -O <target>/<executable>
+    install_post: str | None = None
+    # Post-install command run inside target_dir after tool_git clone
+    # (e.g. "pip install -e .")
 
 
 @dataclass
@@ -79,6 +87,7 @@ ResourceProgressCallback = Callable[[str, str, str], None]
 def default_resource_specs(config: Mapping[str, Any]) -> List[ResourceSpec]:
     root = resource_root(config)
     return [
+        # ---- Level 1: fully automated (auto_setup=True) ----
         ResourceSpec(
             resource_id="genomad",
             tool_id="genomad",
@@ -150,6 +159,288 @@ def default_resource_specs(config: Mapping[str, Any]) -> List[ResourceSpec]:
                 "--db_dir",
                 str(root / "metaphlan"),
             ],
+        ),
+        ResourceSpec(
+            resource_id="amrfinderplus",
+            tool_id="amrfinderplus",
+            field="database",
+            env_name="autoplasm-annotation",
+            executable="amrfinder_update",
+            default_subdir="amrfinderplus",
+            source_url="https://github.com/ncbi/amr",
+            command_template=[
+                "amrfinder_update",
+                "-d",
+                str(root / "amrfinderplus"),
+            ],
+        ),
+        ResourceSpec(
+            resource_id="kraken2",
+            tool_id="kraken2",
+            field="database",
+            env_name="autoplasm-stats",
+            executable="kraken2-build",
+            default_subdir="kraken2",
+            source_url="https://benlangmead.github.io/aws-indexes/k2",
+            command_template=[
+                "kraken2-build",
+                "--standard",
+                "--db",
+                str(root / "kraken2"),
+            ],
+            version="standard",
+        ),
+        ResourceSpec(
+            resource_id="gtdbtk",
+            tool_id="gtdbtk",
+            field="database",
+            env_name="autoplasm-stats",
+            executable="gtdbtk",
+            default_subdir="gtdbtk",
+            source_url="https://data.gtdb.ecogenomic.org/",
+            command_template=[
+                "gtdbtk",
+                "db",
+                "download",
+            ],
+            version="r220",
+        ),
+        ResourceSpec(
+            resource_id="checkm2",
+            tool_id="checkm2",
+            field="database",
+            env_name="autoplasm-stats",
+            executable="checkm2",
+            default_subdir="checkm2",
+            source_url="https://github.com/chklovski/CheckM2",
+            command_template=[
+                "checkm2",
+                "download",
+                "--path",
+                str(root / "checkm2"),
+            ],
+        ),
+        # ---- Level 2: guided (auto_setup=False) ----
+        ResourceSpec(
+            resource_id="plasme",
+            tool_id="plasme",
+            field="database",
+            env_name="autoplasm-plasmid-detect",
+            executable="",
+            default_subdir="plasme",
+            source_url="https://github.com/ccb-hms/PLASMe",
+            command_template=[],
+            auto_setup=False,
+        ),
+        ResourceSpec(
+            resource_id="plasx_annotations",
+            tool_id="plasx",
+            field="annotations",
+            env_name="autoplasm-plasmid-detect",
+            executable="",
+            default_subdir="plasx",
+            source_url="https://github.com/michaelgoldman/PlasX",
+            command_template=[],
+            auto_setup=False,
+        ),
+        ResourceSpec(
+            resource_id="plasx_model",
+            tool_id="plasx",
+            field="model",
+            env_name="autoplasm-plasmid-detect",
+            executable="",
+            default_subdir="plasx_model",
+            source_url="https://github.com/michaelgoldman/PlasX",
+            command_template=[],
+            auto_setup=False,
+        ),
+        ResourceSpec(
+            resource_id="copla_refgraph",
+            tool_id="copla",
+            field="refgraph",
+            env_name="autoplasm-annotation",
+            executable="",
+            default_subdir="copla",
+            source_url="https://github.com/BeatrizBonete/COPLA",
+            command_template=[],
+            auto_setup=False,
+        ),
+        ResourceSpec(
+            resource_id="copla_reflist",
+            tool_id="copla",
+            field="reflist",
+            env_name="autoplasm-annotation",
+            executable="",
+            default_subdir="copla_reflist",
+            source_url="https://github.com/BeatrizBonete/COPLA",
+            command_template=[],
+            auto_setup=False,
+        ),
+        ResourceSpec(
+            resource_id="blast",
+            tool_id="blast",
+            field="database",
+            env_name="autoplasm-annotation",
+            executable="",
+            default_subdir="blast",
+            source_url="https://ftp.ncbi.nlm.nih.gov/blast/db/",
+            command_template=[],
+            auto_setup=False,
+        ),
+        ResourceSpec(
+            resource_id="plasmidhostfinder",
+            tool_id="plasmidhostfinder",
+            field="database",
+            env_name="autoplasm-annotation",
+            executable="",
+            default_subdir="plasmidhostfinder",
+            source_url="https://bitbucket.org/genomicepidemiology/plasmidfinder_db.git",
+            command_template=[],
+            auto_setup=False,
+        ),
+        # ---- Level 1: auto-install tools (resource_type=tool_*) ----
+        ResourceSpec(
+            resource_id="plasme_tool",
+            tool_id="plasme",
+            field="install_path",
+            env_name="autoplasm-plasmid-detect",
+            executable="PLASMe.py",
+            default_subdir="PLASMe",
+            source_url="https://github.com/ccb-hms/PLASMe.git",
+            command_template=["git", "clone", "https://github.com/ccb-hms/PLASMe.git"],
+            resource_type="tool_git",
+            install_post="pip install -e .",
+        ),
+        ResourceSpec(
+            resource_id="plasx_tool",
+            tool_id="plasx",
+            field="install_path",
+            env_name="autoplasm-plasmid-detect",
+            executable="plasx",
+            default_subdir="PlasX",
+            source_url="https://github.com/michaelgoldman/PlasX.git",
+            command_template=["git", "clone", "https://github.com/michaelgoldman/PlasX.git"],
+            resource_type="tool_git",
+            install_post="pip install -e .",
+        ),
+        ResourceSpec(
+            resource_id="platon_tool",
+            tool_id="platon",
+            field="install_path",
+            env_name="autoplasm-plasmid-detect",
+            executable="platon",
+            default_subdir="platon",
+            source_url="https://github.com/oschwengers/platon.git",
+            command_template=["git", "clone", "https://github.com/oschwengers/platon.git"],
+            resource_type="tool_git",
+            install_post="pip install -e .",
+        ),
+        ResourceSpec(
+            resource_id="macsyfinder_tool",
+            tool_id="macsyfinder",
+            field="install_path",
+            env_name="autoplasm-annotation",
+            executable="macsyfinder",
+            default_subdir="macsyfinder",
+            source_url="macsyfinder",
+            command_template=["pip", "install", "macsyfinder"],
+            resource_type="tool_pip",
+        ),
+        # ---- Level 2: guided tool install (auto_setup=False) ----
+        ResourceSpec(
+            resource_id="plasmaag_tool",
+            tool_id="plasmaag",
+            field="install_path",
+            env_name="autoplasm-plasmid-binning",
+            executable="plasmidag",
+            default_subdir="PlasmidHostFinder",
+            source_url="https://github.com/wanyuac/PlasmidHostFinder.git",
+            command_template=[],
+            resource_type="tool_git",
+            auto_setup=False,
+        ),
+        ResourceSpec(
+            resource_id="gplas2_tool",
+            tool_id="gplas2",
+            field="install_path",
+            env_name="autoplasm-plasmid-binning",
+            executable="gplas2",
+            default_subdir="gplas2",
+            source_url="https://github.com/simonrolph/gplas2.git",
+            command_template=[],
+            resource_type="tool_git",
+            auto_setup=False,
+        ),
+        ResourceSpec(
+            resource_id="scapp_tool",
+            tool_id="scapp",
+            field="install_path",
+            env_name="autoplasm-plasmid-binning",
+            executable="scapp",
+            default_subdir="modified-scapp",
+            source_url="https://github.com/avsastry/modified-scapp.git",
+            command_template=[],
+            resource_type="tool_git",
+            auto_setup=False,
+        ),
+        ResourceSpec(
+            resource_id="recycler_tool",
+            tool_id="recycler",
+            field="install_path",
+            env_name="autoplasm-plasmid-binning",
+            executable="recycle.py",
+            default_subdir="Recycler",
+            source_url="https://github.com/Shamir-Lab/Recycler.git",
+            command_template=[],
+            resource_type="tool_git",
+            auto_setup=False,
+        ),
+        ResourceSpec(
+            resource_id="copla_tool",
+            tool_id="copla",
+            field="install_path",
+            env_name="autoplasm-annotation",
+            executable="copla",
+            default_subdir="COPLA",
+            source_url="https://zenodo.org/records/10059131/files/COPLA_DB.tar.gz",
+            command_template=[],
+            resource_type="tool_download",
+            auto_setup=False,
+        ),
+        ResourceSpec(
+            resource_id="plasmidhostfinder_tool",
+            tool_id="plasmidhostfinder",
+            field="install_path",
+            env_name="autoplasm-annotation",
+            executable="plasmidhostfinder.py",
+            default_subdir="plasmidhostfinder",
+            source_url="https://bitbucket.org/genomicepidemiology/plasmidhostfinder.git",
+            command_template=[],
+            resource_type="tool_git",
+            auto_setup=False,
+        ),
+        ResourceSpec(
+            resource_id="pmlst_tool",
+            tool_id="pmlst",
+            field="install_path",
+            env_name="autoplasm-annotation",
+            executable="pmlst.py",
+            default_subdir="pMLST",
+            source_url="https://bitbucket.org/genomicepidemiology/pmlst.git",
+            command_template=[],
+            resource_type="tool_git",
+            auto_setup=False,
+        ),
+        ResourceSpec(
+            resource_id="conjscan_tool",
+            tool_id="conjscan",
+            field="install_path",
+            env_name="autoplasm-annotation",
+            executable="conjscan",
+            default_subdir="conjscan",
+            source_url="https://github.com/ruizhang84/conjscan/releases",
+            command_template=[],
+            resource_type="tool_download",
             auto_setup=False,
         ),
     ]
@@ -490,6 +781,19 @@ def _resource_block(config: Mapping[str, Any], resource_id: str) -> Mapping[str,
 def _resolved_resource_command(
     config: Mapping[str, Any], spec: ResourceSpec, target_path: Path
 ) -> List[str]:
+    # ── tool install commands (resource_type-prefixed) ──
+    if spec.resource_type == "tool_git":
+        return ["git", "clone", spec.source_url, str(target_path)]
+    if spec.resource_type == "tool_pip":
+        return ["pip", "install", spec.source_url, "--target", str(target_path)]
+    if spec.resource_type == "tool_download":
+        return [
+            "wget",
+            "-O",
+            str(target_path / spec.default_subdir),
+            spec.source_url,
+        ]
+    # ── database download commands (resource_id-specific fallback) ──
     if spec.resource_id == "genomad":
         return ["genomad", "download-database", str(target_path)]
     if spec.resource_id == "bakta":
@@ -510,6 +814,14 @@ def _resolved_resource_command(
             source_url,
             str(target_path),
         ]
+    if spec.resource_id == "amrfinderplus":
+        return ["amrfinder_update", "-d", str(target_path)]
+    if spec.resource_id == "kraken2":
+        return ["kraken2-build", "--standard", "--db", str(target_path)]
+    if spec.resource_id == "gtdbtk":
+        return ["gtdbtk", "db", "download"]
+    if spec.resource_id == "checkm2":
+        return ["checkm2", "download", "--path", str(target_path)]
     return list(spec.command_template)
 
 
@@ -561,7 +873,7 @@ def _run_resource_command(
             check=False,
             text=True,
             capture_output=True,
-            env=_resource_runtime_env(config, spec.env_name),
+            env=_resource_runtime_env(config, spec.env_name, spec),
             timeout=timeout_seconds,
         )
     except subprocess.TimeoutExpired as exc:
@@ -573,6 +885,26 @@ def _run_resource_command(
         raise ResourceError(
             f"{spec.resource_id} setup failed with code {completed.returncode}: {details}"
         )
+    # Post-install command (e.g. "pip install -e ." after git clone)
+    if spec.install_post:
+        target_path = _configured_resource_path(config, spec)
+        post_cmd = spec.install_post.split()
+        post_resolved = _resolve_executable(config, spec.env_name, post_cmd[0])
+        post_run = [str(post_resolved), *post_cmd[1:]]
+        post_completed = subprocess.run(
+            post_run,
+            check=False,
+            text=True,
+            capture_output=True,
+            cwd=str(target_path),
+            env=_resource_runtime_env(config, spec.env_name, spec),
+            timeout=timeout_seconds,
+        )
+        if post_completed.returncode != 0:
+            raise ResourceError(
+                f"{spec.resource_id} post-install '{spec.install_post}' failed: "
+                f"{post_completed.stderr.strip()}"
+            )
 
 
 def _run_plasmidfinder_install(config: Mapping[str, Any], path: Path) -> None:
@@ -635,7 +967,11 @@ def _resolve_executable(config: Mapping[str, Any], env_name: str, executable: st
     raise ResourceError(f"Executable {executable!r} was not found in {env_bin}")
 
 
-def _resource_runtime_env(config: Mapping[str, Any], env_name: str) -> Dict[str, str]:
+def _resource_runtime_env(
+    config: Mapping[str, Any],
+    env_name: str,
+    spec: ResourceSpec | None = None,
+) -> Dict[str, str]:
     env = os.environ.copy()
     mamba_root = resolved_mamba_root()
     env_bin = mamba_root / "envs" / env_name / "bin"
@@ -644,6 +980,20 @@ def _resource_runtime_env(config: Mapping[str, Any], env_name: str) -> Dict[str,
         env["CONDA_PREFIX"] = str(mamba_root / "envs" / env_name)
         env["MAMBA_ROOT_PREFIX"] = str(mamba_root)
         env.pop("PYTHONPATH", None)
+    # GTDB-Tk needs GTDBTK_DATA_PATH to locate the database during download
+    if spec is not None and spec.resource_id == "gtdbtk":
+        block = _resource_block(config, spec.resource_id)
+        path_value = block.get(spec.field)
+        if path_value:
+            env["GTDBTK_DATA_PATH"] = str(Path(str(path_value)))
+        else:
+            env["GTDBTK_DATA_PATH"] = str(resource_root(config) / spec.default_subdir)
+    # CheckM2 may need CHECKM2DB to place the database
+    if spec is not None and spec.resource_id == "checkm2":
+        block = _resource_block(config, spec.resource_id)
+        path_value = block.get(spec.field)
+        if path_value:
+            env["CHECKM2DB"] = str(Path(str(path_value)))
     return env
 
 
@@ -665,6 +1015,42 @@ def _resource_path_ready(path: Path, spec: ResourceSpec) -> bool:
         return (path / "config").exists() and any(path.glob("*.fsa"))
     if spec.resource_id == "metaphlan":
         return any(path.glob("mpa_*.pkl")) or any(path.glob("*.bt2l"))
+    if spec.resource_id == "amrfinderplus":
+        return (
+            (path / "AMR_CDS").exists()
+            or any(path.glob("AMR.LIB*"))
+            or (path / "database").is_dir()
+        )
+    if spec.resource_id == "kraken2":
+        return (path / "taxonomy").is_dir() and (path / "library").is_dir()
+    if spec.resource_id == "gtdbtk":
+        return (path / "markers").is_dir() and any((path / "markers").glob("*.hmm"))
+    if spec.resource_id == "checkm2":
+        return any(path.glob("*.pkl")) or (path / "checkm2").is_dir()
+    if spec.resource_id == "plasme":
+        return (path / "PLASMe_DB").is_dir()
+    if spec.resource_id == "plasx_annotations":
+        return (path / "data").is_dir() or (path / "COG").is_dir()
+    if spec.resource_id == "plasx_model":
+        return (path / "plasx_model.pkl").exists() or (path / "data" / "plasx_model.pkl").exists()
+    if spec.resource_id == "copla_refgraph":
+        return (path / "COPLA_DB").is_dir() or any(path.glob("*_reference_graph.gml"))
+    if spec.resource_id == "copla_reflist":
+        return (path / "COPLA_DB").is_dir() or any(path.glob("*_reference_list.txt"))
+    if spec.resource_id == "blast":
+        blast_suffixes = {".nhr", ".nin", ".nsq", ".ndb", ".not", ".ntf", ".nto"}
+        return any(file.suffix in blast_suffixes for file in path.glob("*.n*"))
+    if spec.resource_id == "plasmidhostfinder":
+        return (path / "config").exists() and any(path.glob("*.fsa"))
+    # ── tool type readiness ──
+    if spec.resource_type == "tool_git":
+        return path.exists() and (path / ".git").exists()
+    if spec.resource_type == "tool_pip":
+        return path.exists() and any(path.iterdir())
+    if spec.resource_type == "tool_download":
+        if spec.executable:
+            return path.exists() and any(path.glob(spec.executable))
+        return path.is_dir()
     return path.is_dir() and any(path.iterdir())
 
 
@@ -694,6 +1080,98 @@ def _resource_ready_check(path: Path, spec: ResourceSpec) -> str:
         if any(path.glob("mpa_*.pkl")) or any(path.glob("*.bt2l")):
             return "MetaPhlAn marker database files found"
         return "MetaPhlAn marker database files missing"
+    if spec.resource_id == "amrfinderplus":
+        if (path / "AMR_CDS").exists() or any(path.glob("AMR.LIB*")):
+            return "AMRFinderPlus database found (AMR_CDS/AMR.LIB)"
+        if (path / "database").is_dir():
+            return "AMRFinderPlus database directory found"
+        return "AMRFinderPlus database missing — run 'amrfinder_update -d <path>'"
+    if spec.resource_id == "kraken2":
+        if (path / "taxonomy").is_dir() and (path / "library").is_dir():
+            return "Kraken2 standard database found"
+        return "Kraken2 standard database missing (WARNING: ~50 GB download)"
+    if spec.resource_id == "gtdbtk":
+        if (path / "markers").is_dir():
+            return "GTDB-Tk marker database found"
+        return "GTDB-Tk database missing (WARNING: ~30 GB download; sets GTDBTK_DATA_PATH)"
+    if spec.resource_id == "checkm2":
+        if any(path.glob("*.pkl")):
+            return "CheckM2 model files found"
+        return "CheckM2 database missing — run 'checkm2 download --path <path>'"
+    if spec.resource_id == "plasme":
+        if (path / "PLASMe_DB").is_dir():
+            return "PLASMe_DB directory found"
+        return (
+            "PLASMe database missing. Download PLASMe_DB.tar.gz from "
+            "https://github.com/ccb-hms/PLASMe/releases and extract to this path."
+        )
+    if spec.resource_id == "plasx_annotations":
+        if (path / "data").is_dir() or (path / "COG").is_dir():
+            return "PlasX annotations/cog data found"
+        return (
+            "PlasX annotations missing. Clone https://github.com/michaelgoldman/PlasX "
+            "and configure this path to the data/ directory."
+        )
+    if spec.resource_id == "plasx_model":
+        if (path / "plasx_model.pkl").exists() or (path / "data" / "plasx_model.pkl").exists():
+            return "PlasX model file found"
+        return (
+            "PlasX model missing. Clone https://github.com/michaelgoldman/PlasX "
+            "and configure this path to data/plasx_model.pkl."
+        )
+    if spec.resource_id == "copla_refgraph":
+        if (path / "COPLA_DB").is_dir() or any(path.glob("*_reference_graph.gml")):
+            return "COPLA reference graph found"
+        return (
+            "COPLA reference graph missing. Download COPLA_DB from "
+            "https://github.com/BeatrizBonete/COPLA (Zenodo record) and extract to this path."
+        )
+    if spec.resource_id == "copla_reflist":
+        if (path / "COPLA_DB").is_dir() or any(path.glob("*_reference_list.txt")):
+            return "COPLA reference list found"
+        return (
+            "COPLA reference list missing. Download COPLA_DB from "
+            "https://github.com/BeatrizBonete/COPLA (Zenodo record) and extract to this path."
+        )
+    if spec.resource_id == "blast":
+        blast_suffixes = {".nhr", ".nin", ".nsq", ".ndb", ".not", ".ntf", ".nto"}
+        if any(file.suffix in blast_suffixes for file in path.glob("*.n*")):
+            return "BLAST nucleotide database found"
+        return (
+            "BLAST database missing. Use 'update_blastdb.pl --decompress nt' or "
+            "download pre-built from https://ftp.ncbi.nlm.nih.gov/blast/db/."
+        )
+    if spec.resource_id == "plasmidhostfinder":
+        if (path / "config").exists() and any(path.glob("*.fsa")):
+            return "PlasmidHostFinder database found"
+        return (
+            "PlasmidHostFinder database missing. May reuse the PlasmidFinder database "
+            "from https://bitbucket.org/genomicepidemiology/plasmidfinder_db.git."
+        )
+    # ── tool type ready checks ──
+    if spec.resource_type == "tool_git":
+        if path.exists() and (path / ".git").exists():
+            return f"tool '{spec.resource_id}' cloned successfully (git repo found)"
+        return (
+            f"tool '{spec.resource_id}' not installed. "
+            f"Run 'git clone {spec.source_url} {path}' to install."
+        )
+    if spec.resource_type == "tool_pip":
+        if path.exists() and any(path.iterdir()):
+            return f"tool '{spec.resource_id}' installed via pip"
+        return (
+            f"tool '{spec.resource_id}' not installed. "
+            f"Run 'pip install {spec.source_url} --target {path}' to install."
+        )
+    if spec.resource_type == "tool_download":
+        if path.exists() and (
+            any(path.glob(spec.executable)) if spec.executable else path.is_dir()
+        ):
+            return f"tool '{spec.resource_id}' downloaded"
+        return (
+            f"tool '{spec.resource_id}' not downloaded. "
+            f"Download from {spec.source_url} to {path}."
+        )
     if path.is_dir() and any(path.iterdir()):
         return "non-empty database directory found"
     return "empty directory"

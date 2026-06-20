@@ -1,19 +1,24 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: spades
 name: SPAdes
 category: assembly
-purpose: De novo genome assembly from paired-end Illumina reads using SPAdes in isolate mode.
+purpose: De novo genome assembly from paired-end Illumina reads using SPAdes in isolate
+  mode.
 when_to_use:
-  - bacterial_isolate_assembly
-  - short_read_assembly
+- bacterial_isolate_assembly
+- short_read_assembly
 inputs:
   clean_read1:
     type: file
-    formats: [fastq, fastq.gz]
+    formats:
+    - fastq
+    - fastq.gz
     required: true
   clean_read2:
     type: file
-    formats: [fastq, fastq.gz]
+    formats:
+    - fastq
+    - fastq.gz
     required: true
   threads:
     type: integer
@@ -29,18 +34,17 @@ outputs:
     type: file
     format: fasta
 execution:
-  env_name: wgs
   executable: spades.py
-  command_template: "spades.py --isolate -1 {clean_read1} -2 {clean_read2} -o {output_dir} -t {threads}"
+  command_template: spades.py --isolate -1 {clean_read1} -2 {clean_read2} -o {output_dir}
+    -t {threads}
   network: false
   writes_output: true
 failure_handling:
   missing_input:
-    hint: "Cleaned FASTQ files not found. Verify fastp completed successfully."
+    hint: Cleaned FASTQ files not found. Verify fastp completed successfully.
   tool_not_found:
-    hint: "SPAdes not found. Install: conda install -c bioconda spades"
-
+    hint: 'SPAdes not found. Install: conda install -c bioconda spades'
 resources:
   cpu: 16
-  memory: "64GB"
-  walltime: "08:00:00"
+  memory: 64GB
+  walltime: 08:00:00

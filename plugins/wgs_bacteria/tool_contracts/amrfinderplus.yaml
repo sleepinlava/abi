@@ -1,20 +1,24 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: amrfinderplus
 name: AMRFinderPlus
 category: amr
-purpose: Identify antimicrobial resistance genes, stress response genes, and virulence factors in bacterial protein sequences.
+purpose: Identify antimicrobial resistance genes, stress response genes, and virulence
+  factors in bacterial protein sequences.
 when_to_use:
-  - amr_surveillance
-  - clinical_microbiology
-  - resistance_profiling
+- amr_surveillance
+- clinical_microbiology
+- resistance_profiling
 inputs:
   prokka_faa:
     type: file
-    formats: [fasta, faa]
+    formats:
+    - fasta
+    - faa
     required: true
   prokka_gff:
     type: file
-    formats: [gff]
+    formats:
+    - gff
     required: false
   threads:
     type: integer
@@ -27,23 +31,21 @@ outputs:
     type: file
     format: tsv
 execution:
-  env_name: wgs
   executable: amrfinder
-  command_template: "amrfinder --plus --protein {prokka_faa} --gff {prokka_gff} --output {output_dir}/amr.tsv --threads {threads}"
+  command_template: amrfinder --plus --protein {prokka_faa} --gff {prokka_gff} --output
+    {output_dir}/amr.tsv --threads {threads}
   network: false
   writes_output: true
 failure_handling:
   missing_input:
-    hint: "Prokka protein FASTA or GFF not found. Verify Prokka completed successfully."
+    hint: Prokka protein FASTA or GFF not found. Verify Prokka completed successfully.
   tool_not_found:
-    hint: "AMRFinderPlus not found. Install: conda install -c bioconda ncbi-amrfinderplus"
-
+    hint: 'AMRFinderPlus not found. Install: conda install -c bioconda ncbi-amrfinderplus'
 normalization:
-  parser: "abi.plugins.wgs_bacteria:_parse_amrfinderplus"
+  parser: abi.plugins.wgs_bacteria:_parse_amrfinderplus
   tables:
-    - amr_profile
-
+  - amr_profile
 resources:
   cpu: 4
-  memory: "8GB"
-  walltime: "02:00:00"
+  memory: 8GB
+  walltime: 02:00:00

@@ -15,14 +15,14 @@ outputs:
   output_dir:
     type: path
 execution:
-  env_name: autoplasm-visualization
   executable: clinker
   command_template: clinker {genbank_files} -p {output_dir}/{sample_id}.clinker.html
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_clinker"
-  tables: [visualization_outputs]
+  parser: abi.autoplasm.parsers:parse_clinker
+  tables:
+  - visualization_outputs
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.
@@ -31,8 +31,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 8
-  memory: "16GB"
-  walltime: "04:00:00"
+  memory: 16GB
+  walltime: 04:00:00

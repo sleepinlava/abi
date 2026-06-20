@@ -18,7 +18,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-annotation
   executable: conjscan
   command_template: macsyfinder conjscan --db-type ordered_replicon --sequence-db
     {plasmid_contigs} --output-dir {output_dir} --threads {threads}
@@ -31,8 +30,7 @@ failure_handling:
     hint: Install MacSyFinder + CONJscan in the autoplasm-annotation environment.
   nonzero_exit:
     hint: Inspect MacSyFinder stderr log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "8GB"
-  walltime: "02:00:00"
+  memory: 8GB
+  walltime: 02:00:00

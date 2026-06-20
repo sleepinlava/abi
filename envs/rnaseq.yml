@@ -1,33 +1,23 @@
 name: rnaseq
-channels:
-  - conda-forge
-  - bioconda
-  - defaults
 channel_priority: strict
+channels:
+- conda-forge
+- bioconda
+- defaults
 dependencies:
-  # ── Core runtime ─────────────────────────────────────────────
-  - python=3.10
-  - pip
-  # ── QC ────────────────────────────────────────────────────────
-  - fastp>=0.23
-  # ── Alignment ──────────────────────────────────────────────────
-  - star>=2.7
-  # ── Quantification ──────────────────────────────────────────────
-  - subread>=2.0                     # provides featureCounts
-  # ── Differential expression ────────────────────────────────────
-  - r-base>=4.0
-  # DESeq2 + core Bioconductor deps (installed via conda — avoids
-  # BiocManager compilation failures in Docker where no Linux
-  # binaries are available)
-  - bioconductor-deseq2
-  - bioconductor-tximport
-  # R packages commonly paired with DESeq2
-  - r-ggplot2
-  - r-readr
-  - r-pheatmap
-  - r-rcolorbrewer
-  # ── Utilities ──────────────────────────────────────────────────
-  - pigz
-  - gzip
-  - curl
-  - wget
+- python=3.10
+- pip
+- fastp>=0.23
+- star>=2.7
+- subread>=2.0
+- r-base>=4.0
+- bioconductor-deseq2
+- bioconductor-tximport
+- r-ggplot2
+- r-readr
+- r-pheatmap
+- r-rcolorbrewer
+- pigz
+- gzip
+- curl
+- wget

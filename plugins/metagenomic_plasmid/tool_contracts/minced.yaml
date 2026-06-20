@@ -22,7 +22,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-annotation
   executable: minced
   command_template: minced -spacers {output_dir}/{sample_id}.crispr_spacers.fa {host_genomes}
     {plasmid_contigs}
@@ -35,8 +34,7 @@ failure_handling:
     hint: Install minced in the autoplasm-annotation environment.
   nonzero_exit:
     hint: Inspect MinCED stderr log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

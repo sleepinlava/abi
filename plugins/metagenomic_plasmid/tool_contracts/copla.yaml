@@ -19,15 +19,15 @@ outputs:
   output_dir:
     type: path
 execution:
-  env_name: autoplasm-annotation
   executable: copla
   command_template: copla --input {plasmid_contigs} --refgraph {refgraph} --reflist
     {reflist} --output-dir {output_dir}
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_copla"
-  tables: [plasmid_typing]
+  parser: abi.autoplasm.parsers:parse_copla
+  tables:
+  - plasmid_typing
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.
@@ -36,8 +36,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 4
-  memory: "8GB"
-  walltime: "02:00:00"
+  memory: 8GB
+  walltime: 02:00:00

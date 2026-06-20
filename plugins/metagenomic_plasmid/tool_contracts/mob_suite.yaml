@@ -19,15 +19,17 @@ outputs:
   output_dir:
     type: path
 execution:
-  env_name: autoplasm-annotation
   executable: mob_recon
   command_template: mob_recon --infile {plasmid_contigs} --outdir {output_dir} --num_threads
     {threads} --database_directory {database}
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_mob_suite"
-  tables: [plasmid_predictions, annotations, host_predictions]
+  parser: abi.autoplasm.parsers:parse_mob_suite
+  tables:
+  - plasmid_predictions
+  - annotations
+  - host_predictions
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.
@@ -36,8 +38,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 8
-  memory: "16GB"
-  walltime: "04:00:00"
+  memory: 16GB
+  walltime: 04:00:00

@@ -1,19 +1,23 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: fastp
 name: fastp
 category: qc
 purpose: Trim and quality-control paired-end RNA-seq reads.
 when_to_use:
-  - paired_end_reads
-  - quality_control_required
+- paired_end_reads
+- quality_control_required
 inputs:
   read1:
     type: file
-    formats: ["fastq", "fastq.gz"]
+    formats:
+    - fastq
+    - fastq.gz
     required: true
   read2:
     type: file
-    formats: ["fastq", "fastq.gz"]
+    formats:
+    - fastq
+    - fastq.gz
     required: true
   sample_id:
     type: string
@@ -38,23 +42,23 @@ outputs:
     type: file
     format: json
 execution:
-  env_name: wgs
   executable: fastp
-  command_template: "fastp -i {read1} -I {read2} -o {output_dir}/{sample_id}_R1.clean.fastq.gz -O {output_dir}/{sample_id}_R2.clean.fastq.gz --thread {threads} --html {output_dir}/{sample_id}.fastp.html --json {output_dir}/{sample_id}.fastp.json"
+  command_template: fastp -i {read1} -I {read2} -o {output_dir}/{sample_id}_R1.clean.fastq.gz
+    -O {output_dir}/{sample_id}_R2.clean.fastq.gz --thread {threads} --html {output_dir}/{sample_id}.fastp.html
+    --json {output_dir}/{sample_id}.fastp.json
   network: false
   writes_output: true
 normalization:
   tables:
-    - qc_summary
+  - qc_summary
 failure_handling:
   missing_input:
-    hint: "Check sample sheet read1/read2 paths."
+    hint: Check sample sheet read1/read2 paths.
   tool_not_found:
-    hint: "Install fastp in the abi-qc environment."
+    hint: Install fastp in the abi-qc environment.
   nonzero_exit:
-    hint: "Read provenance/step_logs/{step_id}.stderr.log."
-
+    hint: Read provenance/step_logs/{step_id}.stderr.log.
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

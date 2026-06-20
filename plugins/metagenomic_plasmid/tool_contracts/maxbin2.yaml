@@ -30,7 +30,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: plasmid_binning
   executable: run_MaxBin.pl
   command_template: run_MaxBin.pl -contig {assembly} -reads {read1} -reads2 {read2}
     -out {output_dir}/{sample_id}.maxbin2 -thread {threads}
@@ -43,8 +42,7 @@ failure_handling:
     hint: Install maxbin2 in the autoplasm-stats environment.
   nonzero_exit:
     hint: Inspect MaxBin2 stderr log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

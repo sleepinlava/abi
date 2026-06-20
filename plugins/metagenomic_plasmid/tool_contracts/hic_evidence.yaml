@@ -18,7 +18,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-stats
   executable: python
   command_template: python -c "import pandas as pd; links = pd.read_csv('{host_plasmid_links}',
     sep='\t'); links.to_csv('{output_dir}/{sample_id}.hic_linked.tsv', sep='\t', index=False)"
@@ -31,8 +30,7 @@ failure_handling:
     hint: Install pandas in the autoplasm-stats environment.
   nonzero_exit:
     hint: Inspect Python stderr log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

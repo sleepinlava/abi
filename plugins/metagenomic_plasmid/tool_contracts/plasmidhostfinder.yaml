@@ -22,15 +22,15 @@ outputs:
   output_dir:
     type: path
 execution:
-  env_name: autoplasm-annotation
   executable: plasmidhostfinder.py
   command_template: plasmidhostfinder.py -i {plasmid_contigs} -o {output_dir} -l {level}
     -t {threshold} -p {database}
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_plasmidhostfinder"
-  tables: [host_predictions]
+  parser: abi.autoplasm.parsers:parse_plasmidhostfinder
+  tables:
+  - host_predictions
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.
@@ -39,8 +39,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 8
-  memory: "32GB"
-  walltime: "04:00:00"
+  memory: 32GB
+  walltime: 04:00:00

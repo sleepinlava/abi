@@ -16,15 +16,15 @@ outputs:
   output_dir:
     type: path
 execution:
-  env_name: autoplasm-assembly
   executable: flye
   command_template: flye --meta --nano-raw {long_reads} --out-dir {output_dir} --threads
     {threads}
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_metaflye"
-  tables: [assembly_summary]
+  parser: abi.autoplasm.parsers:parse_metaflye
+  tables:
+  - assembly_summary
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.
@@ -33,8 +33,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 16
-  memory: "64GB"
-  walltime: "08:00:00"
+  memory: 64GB
+  walltime: 08:00:00

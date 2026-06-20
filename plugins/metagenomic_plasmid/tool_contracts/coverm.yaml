@@ -1,34 +1,41 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: coverm
 name: CoverM
 category: abundance
 purpose: Estimate coverage and abundance for plasmid contigs.
 when_to_use:
-  - sorted_bam_available
-  - abundance_estimation_required
+- sorted_bam_available
+- abundance_estimation_required
 inputs:
-  bam: {type: file, format: bam, required: true}
-  threads: {type: integer, minimum: 1}
+  bam:
+    type: file
+    format: bam
+    required: true
+  threads:
+    type: integer
+    minimum: 1
 outputs:
-  abundance: {type: file, format: tsv}
+  abundance:
+    type: file
+    format: tsv
 execution:
-  env_name: autoplasm-abundance
   executable: coverm
-  command_template: "coverm contig --bam-files {bam} --output-file {abundance} --threads {threads}"
+  command_template: coverm contig --bam-files {bam} --output-file {abundance} --threads
+    {threads}
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_coverm"
-  tables: [abundance]
+  parser: abi.autoplasm.parsers:parse_coverm
+  tables:
+  - abundance
 failure_handling:
   missing_input:
-    hint: "Check sorted BAM path."
+    hint: Check sorted BAM path.
   tool_not_found:
-    hint: "Install coverm in the autoplasm-abundance environment."
+    hint: Install coverm in the autoplasm-abundance environment.
   parse_failed:
-    hint: "Check CoverM TSV output."
-
+    hint: Check CoverM TSV output.
 resources:
   cpu: 8
-  memory: "16GB"
-  walltime: "02:00:00"
+  memory: 16GB
+  walltime: 02:00:00

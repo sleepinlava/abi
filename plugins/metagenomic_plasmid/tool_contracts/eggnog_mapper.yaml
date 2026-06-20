@@ -21,7 +21,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-annotation
   executable: emapper.py
   command_template: emapper.py -i {plasmid_contigs} --output {output_dir}/{sample_id}.eggnog
     --cpu {threads}
@@ -36,8 +35,7 @@ failure_handling:
     hint: Install eggnog-mapper in the autoplasm-annotation environment.
   nonzero_exit:
     hint: Inspect eggNOG-mapper stderr log in provenance/step_logs.
-
 resources:
   cpu: 8
-  memory: "16GB"
-  walltime: "04:00:00"
+  memory: 16GB
+  walltime: 04:00:00

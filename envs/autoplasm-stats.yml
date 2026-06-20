@@ -1,0 +1,21 @@
+name: autoplasm-stats
+channel_priority: strict
+channels:
+- conda-forge
+- bioconda
+- defaults
+dependencies:
+- python=3.10
+- scipy
+- statsmodels
+- scikit-bio
+- pandas
+- numpy
+- fastspar
+- kraken2
+- metaphlan
+- checkm2
+- gtdbtk
+- r-base
+- r-vegan
+- bioconductor-deseq2

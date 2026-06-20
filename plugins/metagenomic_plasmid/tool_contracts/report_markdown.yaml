@@ -14,9 +14,8 @@ outputs:
     type: file
     format: markdown
 execution:
-  env_name: autoplasm-base
   executable: autoplasm
-  command_template: "autoplasm report --result-dir {project_outdir}"
+  command_template: autoplasm report --result-dir {project_outdir}
   network: false
   writes_output: true
 failure_handling:
@@ -24,8 +23,7 @@ failure_handling:
     hint: Run plan or dry-run before report generation.
   nonzero_exit:
     hint: Check report inputs under tables/ and provenance/.
-
 resources:
   cpu: 1
-  memory: "2GB"
-  walltime: "00:30:00"
+  memory: 2GB
+  walltime: 00:30:00

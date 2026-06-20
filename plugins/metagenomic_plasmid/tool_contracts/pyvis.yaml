@@ -18,7 +18,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-visualization
   executable: python
   command_template: python -c "from pyvis.network import Network; import pandas as
     pd; links = pd.read_csv('{host_plasmid_links}', sep='\t'); net = Network(height='750px',
@@ -32,8 +31,7 @@ failure_handling:
     hint: Install pyvis in the autoplasm-visualization environment.
   nonzero_exit:
     hint: Inspect Python stderr log in provenance/step_logs.
-
 resources:
   cpu: 2
-  memory: "4GB"
-  walltime: "00:30:00"
+  memory: 4GB
+  walltime: 00:30:00

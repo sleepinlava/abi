@@ -1,60 +1,73 @@
 tools:
-  - id: fastp
-    name: fastp
-    category: qc
-    env_name: rnaseq
-    executable: fastp
-    default_enabled: true
-    required: true
-    command_template: "fastp -i {read1} -I {read2} -o {output_dir}/{sample_id}_R1.clean.fastq.gz -O {output_dir}/{sample_id}_R2.clean.fastq.gz --thread {threads} --html {output_dir}/{sample_id}.fastp.html --json {output_dir}/{sample_id}.fastp.json"
-    inputs: [read1, read2]
-
-  - id: star
-    name: STAR
-    category: alignment
-    env_name: rnaseq
-    executable: STAR
-    default_enabled: true
-    required: true
-    command_template: "STAR --runThreadN {threads} --genomeDir {genome_index} --readFilesIn {read1} {read2} --readFilesCommand zcat --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {output_prefix}"
-    inputs: [read1, read2, genome_index]
-
-  - id: featurecounts
-    name: featureCounts
-    category: expression
-    env_name: rnaseq
-    executable: featureCounts
-    default_enabled: true
-    required: true
-    command_template: "featureCounts -T {threads} -p -a {annotation_gtf} -o {counts} {bam}"
-    inputs: [bam, annotation_gtf]
-
-  - id: build_count_matrix
-    name: Build Count Matrix
-    category: preprocessing
-    env_name: rnaseq
-    executable: python
-    default_enabled: true
-    required: true
-    command_template: "python {count_matrix_script} --expression-dir {expression_dir} --sample-sheet {sample_sheet} --output-dir {output_dir}"
-    inputs: [expression_dir, sample_sheet, count_matrix_script]
-
-  - id: deseq2
-    name: DESeq2
-    category: differential_expression
-    env_name: rnaseq
-    executable: Rscript
-    default_enabled: true
-    required: true
-    command_template: "Rscript {deseq2_script} --counts {count_matrix} --metadata {sample_metadata} --output {output_dir} --comparison {comparison} --alpha {alpha}"
-    inputs: [count_matrix, sample_metadata, deseq2_script]
-
-  - id: clusterprofiler
-    name: clusterProfiler
-    category: enrichment
-    env_name: rnaseq
-    executable: Rscript
-    default_enabled: false
-    required: false
-    command_template: "Rscript {enrichment_script} --genes {gene_list} --org {org_db} --output {output_dir} --pvalue {pvalue_cutoff} --qvalue {qvalue_cutoff}"
-    inputs: [gene_list, org_db, enrichment_script]
+- id: fastp
+  name: fastp
+  category: qc
+  executable: fastp
+  default_enabled: true
+  required: true
+  command_template: fastp -i {read1} -I {read2} -o {output_dir}/{sample_id}_R1.clean.fastq.gz
+    -O {output_dir}/{sample_id}_R2.clean.fastq.gz --thread {threads} --html {output_dir}/{sample_id}.fastp.html
+    --json {output_dir}/{sample_id}.fastp.json
+  inputs:
+  - read1
+  - read2
+- id: star
+  name: STAR
+  category: alignment
+  executable: STAR
+  default_enabled: true
+  required: true
+  command_template: STAR --runThreadN {threads} --genomeDir {genome_index} --readFilesIn
+    {read1} {read2} --readFilesCommand zcat --outSAMtype BAM SortedByCoordinate --outFileNamePrefix
+    {output_prefix}
+  inputs:
+  - read1
+  - read2
+  - genome_index
+- id: featurecounts
+  name: featureCounts
+  category: expression
+  executable: featureCounts
+  default_enabled: true
+  required: true
+  command_template: featureCounts -T {threads} -p -a {annotation_gtf} -o {counts}
+    {bam}
+  inputs:
+  - bam
+  - annotation_gtf
+- id: build_count_matrix
+  name: Build Count Matrix
+  category: preprocessing
+  executable: python
+  default_enabled: true
+  required: true
+  command_template: python {count_matrix_script} --expression-dir {expression_dir}
+    --sample-sheet {sample_sheet} --output-dir {output_dir}
+  inputs:
+  - expression_dir
+  - sample_sheet
+  - count_matrix_script
+- id: deseq2
+  name: DESeq2
+  category: differential_expression
+  executable: Rscript
+  default_enabled: true
+  required: true
+  command_template: Rscript {deseq2_script} --counts {count_matrix} --metadata {sample_metadata}
+    --output {output_dir} --comparison {comparison} --alpha {alpha}
+  inputs:
+  - count_matrix
+  - sample_metadata
+  - deseq2_script
+- id: clusterprofiler
+  name: clusterProfiler
+  category: enrichment
+  executable: Rscript
+  default_enabled: false
+  required: false
+  command_template: Rscript {enrichment_script} --genes {gene_list} --org {org_db}
+    --output {output_dir} --pvalue {pvalue_cutoff} --qvalue {qvalue_cutoff}
+  inputs:
+  - gene_list
+  - org_db
+  - enrichment_script

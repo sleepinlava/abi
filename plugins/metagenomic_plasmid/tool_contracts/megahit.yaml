@@ -23,7 +23,6 @@ outputs:
     type: file
     format: fasta
 execution:
-  env_name: autoplasm-assembly
   executable: megahit
   command_template: bash -c "rm -rf {output_dir} && megahit -1 {read1} -2 {read2}
     -o {output_dir} -t {threads}"

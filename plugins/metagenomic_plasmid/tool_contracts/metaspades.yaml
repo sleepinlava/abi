@@ -19,7 +19,6 @@ outputs:
   output_dir:
     type: path
 execution:
-  env_name: autoplasm-assembly
   executable: metaspades.py
   command_template: metaspades.py -1 {read1} -2 {read2} -o {output_dir} -t {threads}
   network: false
@@ -32,8 +31,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 16
-  memory: "64GB"
-  walltime: "08:00:00"
+  memory: 64GB
+  walltime: 08:00:00

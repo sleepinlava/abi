@@ -1,0 +1,12 @@
+name: autoplasm-plasmid-detect
+channel_priority: strict
+channels:
+- conda-forge
+- bioconda
+- defaults
+dependencies:
+- python=3.10
+- genomad
+- blast
+- hmmer
+- mmseqs2

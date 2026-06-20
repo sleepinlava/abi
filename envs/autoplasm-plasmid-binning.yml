@@ -1,0 +1,12 @@
+name: autoplasm-plasmid-binning
+channel_priority: strict
+channels:
+- conda-forge
+- bioconda
+- defaults
+dependencies:
+- python=3.10
+- metabat2
+- maxbin2
+- concoct
+- semibin

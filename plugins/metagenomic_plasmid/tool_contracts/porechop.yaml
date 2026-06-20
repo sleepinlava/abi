@@ -21,7 +21,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-qc
   executable: porechop
   command_template: porechop -i {long_reads} -o {output_dir}/{sample_id}.porechop.fastq
     --threads {threads}
@@ -34,8 +33,7 @@ failure_handling:
     hint: Install porechop in the autoplasm-qc environment.
   nonzero_exit:
     hint: Inspect Porechop stderr log in provenance/step_logs.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

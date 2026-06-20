@@ -16,7 +16,6 @@ outputs:
   output_dir:
     type: path
 execution:
-  env_name: autoplasm-qc
   executable: hifiadapterfilt.sh
   command_template: sh -c 'mkdir -p "$1" && input=$(cd "$(dirname "$2")" && pwd -P)/$(basename
     "$2") && cd "$1" && hifiadapterfilt.sh -p "$3" "$input" && sh "$4/scripts/normalize_hifiadapterfilt_output.sh"
@@ -25,8 +24,9 @@ execution:
   network: false
   writes_output: true
 normalization:
-  parser: "abi.autoplasm.parsers:parse_hifiadapterfilt"
-  tables: [qc_summary]
+  parser: abi.autoplasm.parsers:parse_hifiadapterfilt
+  tables:
+  - qc_summary
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.
@@ -35,8 +35,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00

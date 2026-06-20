@@ -22,7 +22,6 @@ outputs:
   alignment:
     type: path
 execution:
-  env_name: autoplasm-abundance
   executable: minimap2
   command_template: minimap2 -t {threads} -ax {minimap2_preset} {plasmid_contigs}
     {long_reads} > {alignment}
@@ -36,8 +35,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 8
-  memory: "16GB"
-  walltime: "02:00:00"
+  memory: 16GB
+  walltime: 02:00:00

@@ -27,7 +27,6 @@ outputs:
   output_dir:
     type: directory
 execution:
-  env_name: autoplasm-visualization
   executable: python
   command_template: python -c "from pycirclize import Circos; import pandas as pd;
     ann = pd.read_csv('{annotations}', sep='\t'); typing = pd.read_csv('{typing}',
@@ -41,8 +40,7 @@ failure_handling:
     hint: Install pycirclize in the autoplasm-visualization environment.
   nonzero_exit:
     hint: Inspect Python stderr log in provenance/step_logs.
-
 resources:
   cpu: 2
-  memory: "4GB"
-  walltime: "00:30:00"
+  memory: 4GB
+  walltime: 00:30:00

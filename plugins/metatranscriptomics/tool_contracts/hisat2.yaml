@@ -1,11 +1,11 @@
-abi_version: "0.1"
+abi_version: '0.1'
 tool_id: hisat2
 name: HISAT2
 category: alignment
 purpose: Align RNA-seq reads to a HISAT2 genome index.
 when_to_use:
-  - rna_seq_alignment
-  - hisat2_index_available
+- rna_seq_alignment
+- hisat2_index_available
 inputs:
   read1:
     type: file
@@ -29,23 +29,22 @@ outputs:
     type: file
     format: sam
 execution:
-  env_name: abi-stats
   executable: hisat2
-  command_template: "hisat2 -p {threads} -x {genome_index} -1 {read1} -2 {read2} -S {output_dir}/{sample_id}.sam"
+  command_template: hisat2 -p {threads} -x {genome_index} -1 {read1} -2 {read2} -S
+    {output_dir}/{sample_id}.sam
   network: false
   writes_output: true
 normalization:
   tables:
-    - alignment_summary
+  - alignment_summary
 failure_handling:
   missing_resource:
-    hint: "Configure resources.genome_index to a prepared HISAT2 index prefix."
+    hint: Configure resources.genome_index to a prepared HISAT2 index prefix.
   tool_not_found:
-    hint: "Install hisat2 in the abi-stats environment."
+    hint: Install hisat2 in the abi-stats environment.
   nonzero_exit:
-    hint: "Inspect the HISAT2 stderr log under provenance/step_logs."
-
+    hint: Inspect the HISAT2 stderr log under provenance/step_logs.
 resources:
   cpu: 8
-  memory: "32GB"
-  walltime: "04:00:00"
+  memory: 32GB
+  walltime: 04:00:00

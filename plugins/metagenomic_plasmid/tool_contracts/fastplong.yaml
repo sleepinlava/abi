@@ -19,7 +19,6 @@ outputs:
   output_dir:
     type: path
 execution:
-  env_name: autoplasm-qc
   executable: fastplong
   command_template: fastplong --in1 {long_reads} --out1 {output_dir}/{sample_id}.long.clean.fastq.gz
     --thread {threads}
@@ -33,8 +32,7 @@ failure_handling:
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.
-
 resources:
   cpu: 4
-  memory: "4GB"
-  walltime: "01:00:00"
+  memory: 4GB
+  walltime: 01:00:00
