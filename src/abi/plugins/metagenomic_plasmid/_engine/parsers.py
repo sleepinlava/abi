@@ -78,6 +78,7 @@ def parse_genomad(output_dir: Path, sample_id: str) -> StandardRows:
 def parse_plasmidfinder(output_dir: Path, sample_id: str) -> StandardRows:
     prediction_rows = []
     annotation_rows = []
+    typing_rows = []
     for path in _candidate_files(output_dir, ("*result*.tsv", "*tab*.tsv", "*.tsv", "*.txt")):
         for row in _read_table(path):
             contig = _get(
@@ -129,13 +130,32 @@ def parse_plasmidfinder(output_dir: Path, sample_id: str) -> StandardRows:
                     "source_file": str(path),
                 }
             )
-    return {"plasmid_predictions": prediction_rows, "annotations": annotation_rows}
+            if replicon:
+                typing_rows.append(
+                    {
+                        "sample_id": sample_id,
+                        "contig_id": contig,
+                        "typing_scheme": "PlasmidFinder",
+                        "type_id": replicon,
+                        "mobility": "",
+                        "confidence": _confidence(score),
+                        "tool": "plasmidfinder",
+                        "evidence": _join_evidence({"identity": identity, "coverage": coverage}),
+                        "source_file": str(path),
+                    }
+                )
+    return {
+        "plasmid_predictions": prediction_rows,
+        "annotations": annotation_rows,
+        "plasmid_typing": typing_rows,
+    }
 
 
 def parse_mob_suite(output_dir: Path, sample_id: str) -> StandardRows:
     prediction_rows = []
     annotation_rows = []
     host_rows = []
+    typing_rows = []
     for path in _candidate_files(
         output_dir,
         ("contig_report.txt", "mobtyper_results.txt", "*.tsv", "*.txt"),
@@ -162,6 +182,7 @@ def parse_mob_suite(output_dir: Path, sample_id: str) -> StandardRows:
                     "source_file": str(path),
                 }
             )
+            mobility = _get(row, "predicted_mobility", "mobility")
             for key, category in [
                 ("replicon_type", "replicon"),
                 ("relaxase_type", "MOB"),
@@ -187,6 +208,52 @@ def parse_mob_suite(output_dir: Path, sample_id: str) -> StandardRows:
                             "source_file": str(path),
                         }
                     )
+            # ── plasmon typing rows ──
+            replicon_type = _get(row, "replicon_type")
+            relaxase_type = _get(row, "relaxase_type")
+            mpf_type = _get(row, "mpf_type")
+            if replicon_type:
+                typing_rows.append(
+                    {
+                        "sample_id": sample_id,
+                        "contig_id": contig,
+                        "typing_scheme": "MOB-typer",
+                        "type_id": replicon_type,
+                        "mobility": mobility or "",
+                        "confidence": _confidence(score or "0.7"),
+                        "tool": "mob_suite",
+                        "evidence": _evidence(row, ["primary_cluster_id"]),
+                        "source_file": str(path),
+                    }
+                )
+            if relaxase_type:
+                typing_rows.append(
+                    {
+                        "sample_id": sample_id,
+                        "contig_id": contig,
+                        "typing_scheme": "MOB-typer",
+                        "type_id": f"relaxase:{relaxase_type}",
+                        "mobility": mobility or "",
+                        "confidence": _confidence(score or "0.7"),
+                        "tool": "mob_suite",
+                        "evidence": _evidence(row, ["primary_cluster_id"]),
+                        "source_file": str(path),
+                    }
+                )
+            if mpf_type:
+                typing_rows.append(
+                    {
+                        "sample_id": sample_id,
+                        "contig_id": contig,
+                        "typing_scheme": "MOB-typer",
+                        "type_id": f"MPF:{mpf_type}",
+                        "mobility": mobility or "",
+                        "confidence": _confidence(score or "0.7"),
+                        "tool": "mob_suite",
+                        "evidence": _evidence(row, ["primary_cluster_id"]),
+                        "source_file": str(path),
+                    }
+                )
             host = _get(row, "host_range", "predicted_host", "host")
             if host:
                 host_rows.append(
@@ -205,6 +272,7 @@ def parse_mob_suite(output_dir: Path, sample_id: str) -> StandardRows:
         "plasmid_predictions": prediction_rows,
         "annotations": annotation_rows,
         "host_predictions": host_rows,
+        "plasmid_typing": typing_rows,
     }
 
 

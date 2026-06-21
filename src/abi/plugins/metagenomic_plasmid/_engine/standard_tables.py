@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import csv
+import logging
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence
+
+logger = logging.getLogger(__name__)
 
 TABLE_SCHEMAS: Dict[str, List[str]] = {
     "plasmid_predictions": [
@@ -279,6 +282,10 @@ def write_consensus_table(
         consensus_source = [row for row in predictions if row.get("tool") in configured_tools]
     else:
         consensus_source = predictions
+    logger.info(
+        "write_consensus_table: %d predictions, %d configured_tools=%s, %d consensus_source",
+        len(predictions), len(configured_tools), configured_tools, len(consensus_source),
+    )
 
     # Normalise weights: fill defaults for unlisted tools
     resolved_weights: Dict[str, float] = {}
@@ -354,6 +361,11 @@ def write_consensus_table(
             )
         consensus_rows.append(row_data)
 
+    logger.info(
+        "write_consensus_table: %d groups → %d consensus_rows, strategy=%s, append=False → %s",
+        len(by_sample_contig), len(consensus_rows), strategy,
+        table_path(tables_dir, "plasmid_consensus"),
+    )
     return write_standard_table(tables_dir, "plasmid_consensus", consensus_rows, append=False)
 
 

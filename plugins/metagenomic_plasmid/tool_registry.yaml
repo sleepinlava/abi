@@ -22,7 +22,7 @@ tools:
   executable: fastqc
   default_enabled: true
   required: false
-  command_template: fastqc --threads {threads} --outdir {output_dir} {read1} {read2}
+  command_template: fastqc --threads {threads} --extract --outdir {output_dir} {read1} {read2}
 - id: multiqc
   name: MultiQC
   category: qc

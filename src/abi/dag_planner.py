@@ -843,15 +843,22 @@ def _resolve_cross_sample_inputs(
 
         aggregate = spec.get("aggregate")
         if aggregate == "per_sample_outputs":
-            # Collect all per-sample outputs from the depends_on upstream node
-            # whose output key matches *key*.  If only one sample, use scalar.
+            # Collect all per-sample outputs from the depends_on upstream node.
+            # Use the source field (NODE_ID.OUTPUT_KEY) when available to
+            # determine the upstream output key; otherwise fall back to the
+            # input key name.
             values: List[str] = []
+            upstream_key = key
+            source = spec.get("source")
+            if source is not None and "." in str(source):
+                parts = str(source).split(".", 1)
+                upstream_key = parts[1]  # OUTPUT_KEY from "NODE_ID.OUTPUT_KEY"
             node_deps = dag.node_depends_on(node_id)
             for dep_id in node_deps:
                 for sample in sample_context.samples:
                     sid = sample.sample_id
                     dep_outputs = sample_outputs.get(sid, {}).get(dep_id, {})
-                    val = dep_outputs.get(key)
+                    val = dep_outputs.get(upstream_key)
                     if val:
                         values.append(str(val))
             if len(sample_context.samples) == 1 and values:

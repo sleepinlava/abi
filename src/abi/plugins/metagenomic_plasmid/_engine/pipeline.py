@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping
+
+logger = logging.getLogger(__name__)
 
 from abi._shared import _display_command
 from abi.errors import ToolError as ABIToolError
@@ -148,6 +151,10 @@ class PipelineExecutor:
             if step.step_id in command_rows_by_step
         ]
 
+        logger.info(
+            "_run_plan: refreshing consensus table (post-execution) at %s",
+            tables_dir,
+        )
         fasta_outputs = self._refresh_consensus_and_fastas(
             plan,
             tables_dir,
@@ -156,6 +163,10 @@ class PipelineExecutor:
             write_fastas=not dry_run,
         )
         table_summary = summarize_standard_tables(tables_dir)
+        logger.info(
+            "_run_plan: consensus rows after refresh: %d",
+            table_summary.get("plasmid_consensus", {}).get("rows", -1),
+        )
         commands_path = write_commands_tsv(command_rows, provenance / "commands.tsv")
         versions_path = self._write_tool_versions(provenance / "tool_versions.tsv")
         resources_path = write_resources_provenance(config, outdir)

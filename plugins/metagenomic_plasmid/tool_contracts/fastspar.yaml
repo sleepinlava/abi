@@ -9,7 +9,7 @@ inputs:
   abundance_table:
     type: file
     format: tsv
-    required: true
+    required: false  # resolved at runtime from tables/abundance.tsv
   threads:
     type: integer
     minimum: 1
@@ -24,8 +24,26 @@ outputs:
     format: tsv
 execution:
   executable: fastspar
-  command_template: fastspar --otu_table {abundance_table} --correlation {output_dir}/correlation.tsv
-    --covariance {output_dir}/covariance.tsv --threads {threads}
+  command_template: |
+    python -c "
+    import pandas as pd, sys, os
+    # Read abundance standard table and pivot to OTU matrix
+    # (rows=contigs, columns=samples, values=coverage)
+    abundance_tsv = '{project_outdir}/tables/abundance.tsv'
+    df = pd.read_csv(abundance_tsv, sep='\t')
+    # Use coverage for correlation; fall back to any numeric column
+    value_col = 'coverage' if 'coverage' in df.columns else None
+    if value_col is None:
+        for col in ['tpm', 'rpkm', 'mapped_reads']:
+            if col in df.columns:
+                value_col = col
+                break
+    if value_col is None:
+        sys.exit('No numeric abundance column found in ' + abundance_tsv)
+    otu = df.pivot_table(index='contig_id', columns='sample_id', values=value_col, aggfunc='sum').fillna(0)
+    otu.to_csv('{output_dir}/merged_abundance.tsv', sep='\t')
+    print(f'OTU table: {otu.shape[0]} contigs x {otu.shape[1]} samples')
+    " && fastspar --otu_table {output_dir}/merged_abundance.tsv --correlation {output_dir}/correlation.tsv --covariance {output_dir}/covariance.tsv --threads {threads}
   network: false
   writes_output: true
 normalization:

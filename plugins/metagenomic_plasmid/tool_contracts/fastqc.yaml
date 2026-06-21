@@ -21,7 +21,7 @@ outputs:
     type: directory
 execution:
   executable: fastqc
-  command_template: fastqc --threads {threads} --outdir {output_dir} {read1} {read2}
+  command_template: fastqc --threads {threads} --extract --outdir {output_dir} {read1} {read2}
   network: false
   writes_output: true
 normalization:

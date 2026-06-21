@@ -1,0 +1,4 @@
+sample_id	read1	read2	platform	group
+SRR1952439	/root/autodl-tmp/abi-databases/real_data/metagenomic/SRR1952439_1.fastq.gz	/root/autodl-tmp/abi-databases/real_data/metagenomic/SRR1952439_2.fastq.gz	illumina	control
+SRR1952517	/root/autodl-tmp/abi-databases/real_data/metagenomic/SRR1952517_1.fastq.gz	/root/autodl-tmp/abi-databases/real_data/metagenomic/SRR1952517_2.fastq.gz	illumina	control
+SRR1952519	/root/autodl-tmp/abi-databases/real_data/metagenomic/SRR1952519_1.fastq.gz	/root/autodl-tmp/abi-databases/real_data/metagenomic/SRR1952519_2.fastq.gz	illumina	treatment

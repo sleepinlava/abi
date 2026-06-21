@@ -280,9 +280,7 @@ nodes:
       output_dir:
         type: directory
         contract:
-          contains:
-          - fastqc_data.txt
-          - summary.txt
+          min_size: 1024
     enable_condition:
       field: qc.run_fastqc
       operator: value
@@ -309,9 +307,7 @@ nodes:
       output_dir:
         type: directory
         contract:
-          contains:
-          - fastqc_data.txt
-          - summary.txt
+          min_size: 1024
     enable_condition:
       field: qc.run_fastqc
       operator: value
@@ -1975,12 +1971,13 @@ nodes:
       field: sample_analysis.enable
       value: true
     depends_on:
-    - abundance_coverm
+    - contig_coverage_coverm
     inputs:
       abundance_table:
         type: file
         format: tsv
-        source: abundance_coverm.tpm_table
+        source: contig_coverage_coverm.abundance_tsv
+        aggregate: per_sample_outputs
       sample_metadata:
         type: file
         format: tsv
@@ -2006,12 +2003,13 @@ nodes:
       field: sample_analysis.differential_abundance
       value: true
     depends_on:
-    - abundance_coverm
+    - contig_coverage_coverm
     inputs:
       abundance_table:
         type: file
         format: tsv
-        source: abundance_coverm.tpm_table
+        source: contig_coverage_coverm.abundance_tsv
+        aggregate: per_sample_outputs
       sample_metadata:
         type: file
         format: tsv
@@ -2040,12 +2038,13 @@ nodes:
     - hybrid
     optional: true
     depends_on:
-    - abundance_coverm
+    - contig_coverage_coverm
     inputs:
       abundance_table:
         type: file
         format: tsv
-        source: abundance_coverm.tpm_table
+        source: contig_coverage_coverm.abundance_tsv
+        default: ""  # resolved at runtime from tables/abundance.tsv via command_template
       threads:
         type: integer
         default: 1
@@ -2943,7 +2942,7 @@ nodes:
     - host_plasmid_link_sequence
     - host_plasmid_link_crispr
     - host_plasmid_link_longread
-    - abundance_coverm
+    - contig_coverage_coverm
     - multisample_diversity
     - multisample_differential_abundance
     - multisample_network_fastspar

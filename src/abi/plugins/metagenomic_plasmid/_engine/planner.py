@@ -826,7 +826,6 @@ def build_plan_from_dag(
         "project_outdir": str(outdir),
         "output_dir": str(outdir / "report"),
         "sample_count": len(context.samples),
-        "abundance_table": str(outdir / "10_abundance" / "plasmid_abundance_tpm.tsv"),
     }
     for node_id in project_node_ids:
         node = dag.get_node(node_id)
