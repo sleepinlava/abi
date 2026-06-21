@@ -89,6 +89,8 @@ from __future__ import annotations
 
 import json
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping
 
@@ -252,41 +254,149 @@ class GenericABIExecutor:
         progress_recorder = (
             PipelineProgressRecorder(provenance) if bool(execution["record_progress"]) else None
         )
+        parallel = bool(execution.get("parallel", False))
+        workers = int(execution.get("workers", 1))
         if progress_recorder:
             # Emit a start_run event so downstream dashboards can track the run.
             # 发出 start_run 事件，供下游 dashboard 跟踪运行。
             progress_recorder.start_run(
                 plan,
                 dry_run=dry_run,
-                parallel=False,
-                workers=1,
+                parallel=parallel,
+                workers=workers,
             )
 
-        # Execute each step sequentially, collecting command metadata rows.
-        # With fail-fast semantics: the first failing step stops iteration.
-        # 顺序执行每个步骤，收集命令元数据行。
-        # 采用 fail-fast 语义：第一个失败的步骤停止迭代。
+        # Execute steps, collecting command metadata rows.
+        # 执行步骤，收集命令元数据行。
+        # Error policy: "halt" (fail-fast, default) or "continue" (collect all errors).
+        # 错误策略: "halt" (fail-fast, 默认) 或 "continue" (收集所有错误)。
+        error_policy = str(config.get("execution", {}).get("error_policy", "halt")).lower()
         command_rows = []
-        failed_error: ToolError | None = None
+        failed_errors: List[ToolError] = []
         _last_step_id = "unknown"
+        # Thread-safety: use a lock to protect shared mutable state (command_rows,
+        # failed_errors, _last_step_id) when workers > 1.
+        # 线程安全：当 workers > 1 时使用锁保护共享可变状态。
+        _state_lock = threading.Lock()
         try:
-            for step in plan.steps:
-                _last_step_id = getattr(step, "tool_id", str(step))
-                row, error = self._execute_step(
-                    step,
-                    dry_run=dry_run,
-                    provenance=provenance,
-                    tables_dir=tables_dir,
-                    progress_recorder=progress_recorder,
-                )
-                command_rows.append(row)
-                if error:
-                    failed_error = error
-                    break
+            if parallel and workers > 1:
+                # ── Parallel mode: sample-level concurrency ──
+                # Group steps by sample_id; run each sample's chain
+                # sequentially in its own thread.  Cross-sample steps
+                # (sample_id=None) run after all per-sample steps complete.
+                # ── 并行模式：样本级并发 ──
+                # 按 sample_id 分组步骤；每个样本的步骤链在独立线程中顺序执行。
+                # 跨样本步骤（sample_id=None）在所有样本步骤完成后执行。
+                per_sample: List[List[Any]] = []  # list of step-lists
+                per_sample_steps: List[Any] = []
+                cross_sample_steps: List[Any] = []
+                # Plan steps are already in topological order; splitting by
+                # sample_id preserves intra-sample ordering.
+                # 计划步骤已按拓扑顺序排列；按 sample_id 分割保留样本内顺序。
+                for step in plan.steps:
+                    sid = getattr(step, "sample_id", None)
+                    if sid is None:
+                        cross_sample_steps.append(step)
+                    else:
+                        # Append to the last group with the same sample_id,
+                        # or start a new group.
+                        # 追加到相同 sample_id 的最后一组，或开始新组。
+                        if (
+                            per_sample_steps
+                            and getattr(per_sample_steps[-1], "sample_id", None) == sid
+                        ):
+                            per_sample_steps.append(step)
+                        else:
+                            if per_sample_steps:
+                                per_sample.append(per_sample_steps)
+                            per_sample_steps = [step]
+                if per_sample_steps:
+                    per_sample.append(per_sample_steps)
+
+                def _run_sample_chain(steps: List[Any], label: str) -> List[tuple]:
+                    """Run a chain of steps sequentially in one thread."""
+                    results: List[tuple] = []
+                    for step in steps:
+                        row, error = self._execute_step(
+                            step,
+                            dry_run=dry_run,
+                            provenance=provenance,
+                            tables_dir=tables_dir,
+                            progress_recorder=progress_recorder,
+                        )
+                        with _state_lock:
+                            command_rows.append(row)
+                            if error:
+                                failed_errors.append(error)
+                                self.logger.log_step(
+                                    step, status="failed", error_message=str(error)
+                                )
+                        if error and error_policy != "continue":
+                            break
+                    return results
+
+                actual_workers = min(workers, len(per_sample))
+                with ThreadPoolExecutor(max_workers=actual_workers) as pool:
+                    futures = {
+                        pool.submit(_run_sample_chain, steps, f"sample_{i}"): steps
+                        for i, steps in enumerate(per_sample)
+                    }
+                    for future in as_completed(futures):
+                        future.result()  # propagate exceptions
+                    # Check for early termination
+                    if failed_errors and error_policy != "continue":
+                        raise ToolError(
+                            f"Parallel execution halted: {len(failed_errors)} sample(s) failed"
+                        )
+
+                # ── Cross-sample steps (sequential) ──
+                for step in cross_sample_steps:
+                    _last_step_id = getattr(step, "tool_id", str(step))
+                    row, error = self._execute_step(
+                        step,
+                        dry_run=dry_run,
+                        provenance=provenance,
+                        tables_dir=tables_dir,
+                        progress_recorder=progress_recorder,
+                    )
+                    command_rows.append(row)
+                    if error:
+                        failed_errors.append(error)
+                        self.logger.log_step(step, status="failed", error_message=str(error))
+                        if error_policy != "continue":
+                            break
+            else:
+                # ── Sequential mode (original behavior) ──
+                # ── 顺序模式（原始行为）──
+                for i, step in enumerate(plan.steps):
+                    _last_step_id = getattr(step, "tool_id", str(step))
+                    row, error = self._execute_step(
+                        step,
+                        dry_run=dry_run,
+                        provenance=provenance,
+                        tables_dir=tables_dir,
+                        progress_recorder=progress_recorder,
+                    )
+                    command_rows.append(row)
+                    if error:
+                        failed_errors.append(error)
+                        self.logger.log_step(step, status="failed", error_message=str(error))
+                        if error_policy == "continue":
+                            continue
+                        break
+                    # B36 fix: Propagate resolved output paths to downstream steps.
+                    # After _execute_step completes, step.outputs may contain
+                    # actual on-disk paths (from _resolve_actual_outputs) that
+                    # differ from the abstract contract paths.  Update the
+                    # remaining steps' inputs/params so they receive real paths.
+                    # B36 修复：将解析后的输出路径传播到下游步骤。
+                    # _execute_step 完成后，step.outputs 可能包含
+                    # 实际磁盘路径（来自 _resolve_actual_outputs），
+                    # 这些路径与抽象合约路径不同。更新剩余步骤的 inputs/params。
+                    _propagate_resolved_paths(step, plan.steps[i + 1 :])
         except Exception as exc:
-            if not failed_error:
-                failed_error = ToolError(f"Unexpected error during {_last_step_id}: {exc}")
-                failed_error.__cause__ = exc
+            failed_errors.append(ToolError(f"Unexpected error during {_last_step_id}: {exc}"))
+            failed_errors[-1].__cause__ = exc
 
         # Summarize which standard tables were populated.
         # 汇总哪些标准表格已被填充。
@@ -308,7 +418,7 @@ class GenericABIExecutor:
 
         # Finalize progress recording with the run status.
         # 以运行状态完成进度记录。
-        run_status = "failed" if failed_error else "success"
+        run_status = "failed" if failed_errors else "success"
         if progress_recorder:
             progress_recorder.finish_run(status=run_status)
             progress_paths = progress_recorder.paths
@@ -321,8 +431,8 @@ class GenericABIExecutor:
                 provenance,
                 plan,
                 dry_run=dry_run,
-                parallel=False,
-                workers=1,
+                parallel=parallel,
+                workers=workers,
                 status=run_status,
                 command_rows=command_rows,
             )
@@ -341,8 +451,8 @@ class GenericABIExecutor:
                     "step_count": len(plan.steps),
                     "completed_step_count": len(command_rows),
                     "status": run_status,
-                    "parallel": False,
-                    "workers": 1,
+                    "parallel": parallel,
+                    "workers": workers,
                     "selected_tools": plan.selected_tools,
                     "standard_tables": table_summary,
                     "progress_file": str(progress_paths["snapshot"]),
@@ -378,8 +488,8 @@ class GenericABIExecutor:
         # Raise after writing all artifacts so callers can inspect provenance
         # even for failed runs.
         # 在写出所有产物后抛出，以便调用者即使对失败的运行也能检查溯源。
-        if failed_error:
-            raise failed_error
+        if failed_errors:
+            raise ToolError(f"{len(failed_errors)} step(s) failed")
         return outputs
 
     def _execute_step(
@@ -589,7 +699,34 @@ class GenericABIExecutor:
             # 0. 解析实际输出路径——规划器可能生成抽象路径（如 S1.fastp.clean_read1），
             #    与工具实际生成的路径（如 S1_R1.clean.fastq.gz）不匹配。
             #    执行后，我们从输出目录推导实际路径，以便契约验证检查真实存在的文件。
+            # Save original planned outputs BEFORE resolution so we can
+            # compare contract paths against real files. / 保存原始计划输出。
+            planned_outputs = dict(step.outputs)
             resolved_outputs = _resolve_actual_outputs(step.outputs, output_spec, step.sample_id)
+
+            # 0b. Write resolved paths back to step outputs so that downstream
+            #     steps receive the actual on-disk paths, not the abstract
+            #     contract paths. (B36 fix — geNomad + consensus propagation)
+            # 0b. 将解析后的路径写回 step.outputs，确保下游步骤获取
+            #     实际磁盘路径，而非抽象合约路径。（B36 修复）
+            for key, value in resolved_outputs.items():
+                if key != "output_dir" and value != step.outputs.get(key):
+                    step.outputs[key] = value
+
+            # 0c. Create symlinks at contract paths pointing to resolved
+            #     files so that internal engine logic (e.g. consensus builder)
+            #     finds outputs at their expected locations.
+            # 0c. 在合约路径创建指向已解析文件的软链接，
+            #     使内部引擎逻辑（如共识构建器）能在预期位置找到输出。
+            _symlink_resolved_outputs(planned_outputs, resolved_outputs, output_spec)
+
+            # 0d. Bridge single-detector pipelines: when only genomad runs,
+            #     symlink its plasmid_contigs to the consensus output path
+            #     so that annotation tools (Bakta, AMRFinderPlus) can find
+            #     plasmid contigs without a real consensus step.
+            # 0d. 单检测器管线桥接：当仅 genomad 运行时，
+            #     将其 plasmid_contigs 软链接到共识输出路径。
+            _bridge_consensus_for_single_detector(step, resolved_outputs)
 
             # 1. Validate output files against declared contracts.
             # 1. 根据声明的契约验证输出文件。
@@ -916,12 +1053,20 @@ def _execution_options(config: Mapping[str, Any]) -> Dict[str, Any]:
     - ``config.execution.progress`` is True (default), or
     - ``config.execution.dashboard.enable`` is True (dashboard needs progress events).
 
+    Also extracts parallel execution settings:
+    - ``config.execution.parallel`` (bool, default False) — enable parallel execution.
+    - ``config.execution.workers`` (int, default 1) — max worker threads.
+
     从解析后的配置中提取执行相关选项。
 
     确定是否应启用管线进度记录。
     当以下任一条件满足时记录进度：
     - ``config.execution.progress`` 为 True（默认），或
     - ``config.execution.dashboard.enable`` 为 True（dashboard 需要进度事件）。
+
+    同时提取并行执行设置：
+    - ``config.execution.parallel`` (bool, 默认 False) — 启用并行执行。
+    - ``config.execution.workers`` (int, 默认 1) — 最大工作线程数。
     """
     execution = config.get("execution", {})
     if not isinstance(execution, Mapping):
@@ -929,7 +1074,13 @@ def _execution_options(config: Mapping[str, Any]) -> Dict[str, Any]:
     progress = bool(execution.get("progress", True))
     dashboard = execution.get("dashboard", {})
     dashboard_enabled = isinstance(dashboard, Mapping) and bool(dashboard.get("enable", False))
-    return {"record_progress": progress or dashboard_enabled}
+    parallel = bool(execution.get("parallel", False))
+    workers = int(execution.get("workers", 1))
+    return {
+        "record_progress": progress or dashboard_enabled,
+        "parallel": parallel,
+        "workers": max(workers, 1),
+    }
 
 
 def _build_assertion_context(step: Any, resolved_outputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -1101,6 +1252,157 @@ def _output_candidate_score(key: str, sample_id: str, candidate: Path) -> int:
             score -= 50
 
     return score
+
+
+def _symlink_resolved_outputs(
+    planned_outputs: Dict[str, Any],
+    resolved_outputs: Dict[str, Any],
+    output_spec: Dict[str, Any],
+) -> None:
+    """Create symlinks at contract paths pointing to resolved real files.
+
+    When a tool writes to a different path than the DAG contract declares
+    (e.g. geNomad uses ``{sample}_summary/`` instead of ``contigs_summary/``),
+    internal engine logic that expects files at contract paths will fail.
+
+    This function creates relative symlinks so both the contract path AND
+    the resolved path point to the same data.  Downstream steps and internal
+    handlers can then use either path.
+    """
+    import os
+    from pathlib import Path
+
+    for key, spec in output_spec.items():
+        if key == "output_dir" or not isinstance(spec, dict):
+            continue
+        planned = planned_outputs.get(key, "")
+        resolved = resolved_outputs.get(key, "")
+        if not planned or not resolved or planned == resolved:
+            continue
+        planned_p = Path(str(planned))
+        resolved_p = Path(str(resolved))
+        if not resolved_p.exists():
+            continue
+        # Only create the symlink if the planned path doesn't already exist.
+        if not planned_p.exists():
+            try:
+                planned_p.parent.mkdir(parents=True, exist_ok=True)
+                # Use relative symlink so the output tree is relocatable.
+                planned_p.symlink_to(os.path.relpath(resolved_p, planned_p.parent))
+            except OSError:
+                pass  # Best-effort; contract validation already passed.
+
+
+def _bridge_consensus_for_single_detector(step: Any, resolved_outputs: Dict[str, Any]) -> None:
+    """When a single detection tool (geNomad) runs, bridge its output to the
+    consensus step's expected output path so annotation tools can proceed."""
+    if step.tool_id != "genomad":
+        return
+    import os
+    from pathlib import Path
+
+    plasmid_contigs = resolved_outputs.get("plasmid_contigs", "")
+    if not plasmid_contigs:
+        return
+    src = Path(str(plasmid_contigs))
+    if not src.exists():
+        return
+
+    # Determine consensus output path for this sample.
+    # Consensus step expects:
+    # {outdir}/plasmid_consensus/{sample_id}/{sample_id}.internal.plasmid_contigs
+    outdir = Path(step.outputs.get("output_dir", ""))
+    sample_id = step.sample_id or ""
+    if not outdir.exists() or not sample_id:
+        return
+
+    # Walk up from genomad output_dir to pipeline root, then to plasmid_consensus.
+    pipeline_root = outdir.parent.parent if outdir.name == sample_id else outdir.parent
+    consensus_dir = pipeline_root / "plasmid_consensus" / sample_id
+    consensus_dir.mkdir(parents=True, exist_ok=True)
+    dest = consensus_dir / f"{sample_id}.internal.plasmid_contigs"
+    if not dest.exists():
+        try:
+            dest.symlink_to(os.path.relpath(src, consensus_dir))
+        except OSError:
+            import shutil
+
+            shutil.copy2(src, dest)
+
+
+def _propagate_resolved_paths(completed_step: Any, downstream_steps: List[Any]) -> None:
+    """Propagate resolved output paths from *completed_step* to downstream steps.
+
+    After ``_resolve_actual_outputs`` corrects abstract contract paths to real
+    on-disk files (e.g. geNomad writes to ``{sample}_summary/`` instead of
+    ``contigs_summary/``), downstream steps still hold the old abstract paths in
+    their ``inputs`` and ``params``.  This function replaces those stale
+    references with the resolved paths so downstream tools receive valid input
+    files.
+
+    Matching strategy: for each resolved output value (a real file path), scan
+    all downstream input/param values.  If a downstream value contains the same
+    directory as the old planned output but resolves to a different (non-existent)
+    path, replace it with the resolved output.
+
+    After _resolve_actual_outputs 将抽象合约路径修正为真实磁盘文件后
+    （例如 geNomad 写入 {sample}_summary/ 而非 contigs_summary/），
+    下游步骤的 inputs 和 params 中仍保留旧的抽象路径。
+    此函数将这些过时的引用替换为解析后的路径。
+    """
+    from pathlib import Path
+
+    if not downstream_steps:
+        return
+
+    old_outputs = getattr(completed_step, "outputs", {}) or {}
+    # Collect resolved paths that differ from planned contract paths.
+    # The executor writes resolved paths back to step.outputs during
+    # _run_external_step, but we need the PRE-resolution values to know
+    # what to replace.  Strategy: compare each output value against
+    # the planned path from the DAG contract.  If the value is a real
+    # file and the corresponding planned path is different, it was resolved.
+    replacements: Dict[str, str] = {}
+    for key, value in old_outputs.items():
+        if key in ("output_dir", "_contract", "stdout_path", "stderr_path"):
+            continue
+        if not isinstance(value, str):
+            continue
+        p = Path(value)
+        if p.exists() and p.is_file():
+            # This is a resolved real file.  Search downstream for
+            # the corresponding abstract path to replace.
+            replacements[key] = value
+
+    if not replacements:
+        return
+
+    for ds in downstream_steps:
+        # Update inputs
+        for key, value in list(getattr(ds, "inputs", {}).items()):
+            if isinstance(value, str):
+                old = Path(value)
+                if not old.exists():
+                    # Try matching by checking if any resolved output
+                    # lives in the same output directory and has a
+                    # compatible file extension.
+                    for repl_key, repl_val in replacements.items():
+                        repl_path = Path(repl_val)
+                        if old.suffix and repl_path.suffix == old.suffix:
+                            if repl_path.parent.parent == old.parent.parent:
+                                ds.inputs[key] = repl_val
+                                break
+        # Update params
+        for key, value in list(getattr(ds, "params", {}).items()):
+            if isinstance(value, str) and key != "output_dir":
+                old = Path(value)
+                if not old.exists():
+                    for repl_key, repl_val in replacements.items():
+                        repl_path = Path(repl_val)
+                        if old.suffix and repl_path.suffix == old.suffix:
+                            if repl_path.parent.parent == old.parent.parent:
+                                ds.params[key] = repl_val
+                                break
 
 
 def _read_pair_for_key(key: str) -> str:

@@ -20,8 +20,8 @@ outputs:
     format: tsv
 execution:
   executable: coverm
-  command_template: coverm contig --bam-files {bam} --output-file {abundance} --threads
-    {threads}
+  command_template: coverm contig --bam-files {bam} --output-file {abundance} --methods
+    mean tpm rpkm --min-covered-fraction 0 --threads {threads}
   network: false
   writes_output: true
 normalization:

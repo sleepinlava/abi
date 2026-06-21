@@ -391,16 +391,26 @@ def parse_coverm(output_dir: Path, sample_id: str) -> StandardRows:
             contig = _get(row, "contig", "genome", "feature_id", "name")
             if not contig:
                 continue
+            # CoverM uses column names like "SRR2241213.samtools Mean"
+            # which normalize to "srr2241213_samtools_mean" — the
+            # standard _get() exact-match lookup fails because the
+            # column prefix varies per sample.  Fall back to a
+            # contains-match on the normalized key space.
+            coverage = _get_contains(row, "mean", "coverage", "covered_fraction")
+            tpm_val = _get_contains(row, "tpm")
+            rpkm_val = _get_contains(row, "rpkm")
+            mapped = _get_contains(row, "reads", "mapped_reads", "read_count")
+            length_val = _get_contains(row, "length", "length_bp", "contig_length")
             rows.append(
                 {
                     "sample_id": sample_id,
                     "feature_id": contig,
                     "contig_id": contig,
-                    "coverage": _get(row, "mean", "coverage", "covered_fraction"),
-                    "tpm": _get(row, "tpm"),
-                    "rpkm": _get(row, "rpkm"),
-                    "mapped_reads": _get(row, "reads", "mapped_reads", "read_count"),
-                    "length_bp": _get(row, "length", "length_bp", "contig_length"),
+                    "coverage": coverage,
+                    "tpm": tpm_val,
+                    "rpkm": rpkm_val,
+                    "mapped_reads": mapped,
+                    "length_bp": length_val,
                     "tool": "coverm",
                     "source_file": str(path),
                 }
@@ -1202,6 +1212,24 @@ def _get(row: Mapping[str, str], *keys: str) -> str:
         value = row.get(_normalize_key(key), "")
         if value not in {"", "-", "NA", "N/A", "nan", "None"}:
             return value
+    return ""
+
+
+def _get_contains(row: Mapping[str, str], *keys: str) -> str:
+    """Like ``_get``, but also matches when any *normalized* column name
+    **contains** one of the requested keys.  This is necessary for tools
+    like CoverM whose column names embed dynamic sample-name prefixes
+    (e.g. ``SRR2241213.samtools Mean``), making an exact-match lookup
+    impossible.
+
+    Returns the first value whose normalized column name contains any of
+    the given keys.  Excludes sentinel / missing values (empty, dash, NA).
+    """
+    for key in keys:
+        nkey = _normalize_key(key)
+        for col, value in row.items():
+            if nkey in _normalize_key(col) and value not in {"", "-", "NA", "N/A", "nan", "None"}:
+                return value
     return ""
 
 

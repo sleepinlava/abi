@@ -1,74 +1,142 @@
 # Figure specifications for the metagenomic_plasmid plugin.
-# Each figure is rendered from a standard table by abi_sciplot.
-# See: docs/en/abi_sciplot_design.md
+# Rendered by abi_sciplot — PDF+SVG+PNG+provenance+lint.
 #
-# Note: qc_summary and assembly_summary use key-value schema (metric/value columns).
-# Bar charts render metric names on the x-axis and values on the y-axis.
+# Type reference:
+#   Legacy (mapped via adapters.py): bar→barplot, scatter→scatterplot,
+#     heatmap→heatmap, stacked_bar→stacked_barplot, boxplot→boxplot_with_points,
+#     volcano→volcano_plot, pca→ordination_plot
+#   Biological (sciplot-native): stacked_barplot, barplot, scatterplot,
+#     heatmap, boxplot_with_points, violin_with_box, ordination_plot,
+#     phylum_stacked_bar, genus_heatmap, pcoa_plot, differential_volcano,
+#     alpha_stats_boxplot, phylogenetic_heatmap
+#
+# Each figure is marked `required: false` so that missing/empty source
+# tables are skipped gracefully instead of halting the pipeline.
+#
+# Data tables use the standard_tables.yaml schema — table paths are
+# resolved relative to <outdir>/tables/<source_table>.tsv
 
 figures:
-  # ── QC ──
-  - id: qc_read_retention
-    type: bar
+  # ── QC ──────────────────────────────────────────────────────────────────
+  - id: qc_read_metrics
+    type: barplot
     source_table: qc_summary
     x: metric
     y: value
-    title: "Reads Retained After QC"
+    color: sample_id
+    title: "Quality Control Metrics by Sample"
     xlabel: "Metric"
     ylabel: "Value"
     required: false
 
-  # ── Assembly ──
-  - id: assembly_n50
-    type: bar
+  # ── Assembly ────────────────────────────────────────────────────────────
+  - id: assembly_metrics_by_sample
+    type: barplot
     source_table: assembly_summary
     x: metric
     y: value
-    title: "Assembly Metrics per Sample"
+    color: sample_id
+    title: "Assembly Metrics by Sample"
     xlabel: "Metric"
     ylabel: "Value"
     sort_by: value
     ascending: false
     required: false
 
-  # ── Plasmid detection ──
+  # ── Plasmid detection ──────────────────────────────────────────────────
   - id: plasmid_length_distribution
-    type: bar
+    type: barplot
     source_table: plasmid_predictions
     x: contig_id
     y: contig_length
+    color: sample_id
     title: "Plasmid Contig Length Distribution"
     xlabel: "Contig"
     ylabel: "Length (bp)"
     sort_by: contig_length
     ascending: false
+    top_n: 30
     required: false
 
-  - id: plasmid_score_distribution
-    type: scatter
+  - id: plasmid_score_vs_length
+    type: scatterplot
     source_table: plasmid_predictions
     x: contig_length
     y: score
+    color: sample_id
     title: "Plasmid Score vs Contig Length"
     xlabel: "Contig Length (bp)"
     ylabel: "Plasmid Score"
     required: false
 
-  # ── AMR annotations ──
-  - id: amr_heatmap
+  # ── Host taxonomy ───────────────────────────────────────────────────────
+  # Stacked bar showing phylum-level host composition per sample.
+  # host_predictions evidence column contains clade=... taxonomy string
+  # that phylum_stacked_bar can parse.
+  - id: host_taxonomy_stacked
+    type: stacked_barplot
+    source_table: host_predictions
+    x: sample_id
+    title: "Host Taxonomy Composition by Sample"
+    xlabel: "Sample"
+    ylabel: "Relative Abundance (%)"
+    required: false
+
+  # ── Annotations ────────────────────────────────────────────────────────
+  - id: annotation_category_counts
     type: heatmap
     source_table: annotations
     x: sample_id
-    title: "AMR Gene Presence Heatmap"
-    colormap: "Reds"
-    top_n: 50
+    title: "Annotation Feature Distribution by Sample"
+    colormap: "Blues"
+    top_n: 20
     required: false
 
-  # ── Plasmid abundance ──
+  - id: amr_gene_heatmap
+    type: heatmap
+    source_table: annotations
+    x: sample_id
+    title: "AMR Gene Distribution"
+    colormap: "RdBu_r"
+    top_n: 30
+    required: false
+
+  # ── Plasmid abundance ─────────────────────────────────────────────────
+  # Requires abundance table with numeric coverage/tpm/rpkm columns.
+  # Currently (2026-06-21) these columns are empty — will render once
+  # CoverM parser is fixed.
   - id: plasmid_abundance_heatmap
     type: heatmap
     source_table: abundance
-    x: feature_id
-    title: "Plasmid Abundance Heatmap"
+    x: sample_id
+    title: "Plasmid Abundance Heatmap (TPM)"
     colormap: "viridis"
     top_n: 50
     required: false
+
+  # ── Future (requires upstream table population) ────────────────────────
+  # Uncomment and enable when corresponding pipeline modules produce data:
+  #
+  # - id: differential_abundance_volcano
+  #   type: differential_volcano
+  #   source_table: differential_abundance
+  #   x: log2_fold_change
+  #   y: adjusted_pvalue
+  #   label: contig_id
+  #   title: "Differential Plasmid Abundance"
+  #   required: false
+  #
+  # - id: sample_alpha_diversity
+  #   type: alpha_stats_boxplot
+  #   source_table: sample_diversity
+  #   x: sample_id
+  #   y: shannon_entropy
+  #   title: "Alpha Diversity by Sample"
+  #   required: false
+  #
+  # - id: plasmid_typing_composition
+  #   type: stacked_barplot
+  #   source_table: plasmid_typing
+  #   x: sample_id
+  #   title: "Plasmid Typing Composition"
+  #   required: false

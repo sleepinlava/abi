@@ -407,12 +407,12 @@ def test_checkm2_env_var_injection(tmp_path):
 
 
 def test_all_28_resources_in_check_resources(tmp_path):
-    """check_resources returns all 28 registered resources (16 DB + 12 tool)."""
+    """check_resources returns all 29 registered resources (17 DB + 12 tool)."""
     config = {"resources": {"root": str(tmp_path / "resources")}}
     rows = check_resources(config)
     ids = {row["resource_id"] for row in rows}
 
-    assert len(ids) == 28
+    assert len(ids) == 29
     expected_db = {
         "genomad",
         "bakta",
@@ -420,6 +420,7 @@ def test_all_28_resources_in_check_resources(tmp_path):
         "plasmidfinder",
         "metaphlan",
         "amrfinderplus",
+        "mmseqs2",
         "kraken2",
         "gtdbtk",
         "checkm2",

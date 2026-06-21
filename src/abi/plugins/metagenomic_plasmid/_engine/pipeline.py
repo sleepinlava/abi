@@ -272,6 +272,7 @@ class PipelineExecutor:
         sample_steps = _steps_by_sample(plan.steps)
         global_steps = [step for step in plan.steps if not step.sample_id]
         failed_error: ToolError | None = None
+        error_policy = str(config.get("execution", {}).get("error_policy", "halt")).lower()
         if sample_steps:
             max_workers = min(workers, len(sample_steps))
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -294,8 +295,9 @@ class PipelineExecutor:
                     error = future.result()
                     if error and not failed_error:
                         failed_error = error
-                        stop_event.set()
-        if failed_error:
+                        if error_policy != "continue":
+                            stop_event.set()
+        if failed_error and error_policy != "continue":
             return failed_error
         return self._run_steps_sequential(
             global_steps,
@@ -322,9 +324,12 @@ class PipelineExecutor:
         stop_event: threading.Event,
         record_row: Callable[[Mapping[str, Any]], None],
     ) -> ToolError | None:
+        error_policy = str(config.get("execution", {}).get("error_policy", "halt")).lower()
+        failed_errors: list = []
         for step in steps:
             if stop_event.is_set():
-                break
+                if error_policy != "continue":
+                    break
             row, error = self._execute_step(
                 step,
                 plan,
@@ -336,8 +341,13 @@ class PipelineExecutor:
             )
             record_row(row)
             if error:
+                failed_errors.append(error)
+                if error_policy == "continue":
+                    continue
                 stop_event.set()
                 return error
+        if failed_errors:
+            return ToolError(f"{len(failed_errors)} step(s) failed")
         return None
 
     def _execute_step(
