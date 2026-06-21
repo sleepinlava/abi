@@ -48,6 +48,7 @@ abi export-tools --type metagenomic_plasmid --format openai --provider deepseek 
 abi export-tools --type metagenomic_plasmid --format anthropic  # Anthropic Claude tool_use
 abi export-tools --type metagenomic_plasmid --format gemini     # Google Gemini function_declarations
 abi contract-lint --type metagenomic_plasmid [--strict]  # Static DAG/contract validation
+abi check-resources --type metagenomic_plasmid           # Check resource/database availability
 abi setup-resources --type metagenomic_plasmid --confirm  # Resource setup (confirmation required)
 
 # Figure compiler (v1.3.3)
@@ -134,10 +135,13 @@ src/abi/
   jobs/service.py     HTTP Job Service with subprocess force-kill (SIGTERM → SIGKILL)
   json_utils.py       JSON file/payload loading with ABIJSONError wrapping
   timeouts.py         Timeout parsing: parse_timeout_seconds, timeout_from_env_or_value
+  resources.py        Resource discovery + auto-install: check_resources, setup_resources,
+                      ResourceSpec with install_post hooks (e.g. makeblastdb)
   cli.py              Typer CLI: abi + autoplasm entry points
   skills/             Agent skill files (abi_agent + per-tool), installed via ``abi install-skills``
 
 environments.yaml      Single source of truth: 16 conda envs + 93 tool→env assignments
+                      (2026-06-21: fixed metaphlan/kraken2 env_name from broken ``autoplasm-stats`` → ``stats``)
 scripts/emit_env_yamls.py  Generates per-environment ``envs/*.yml`` from environments.yaml
 ```
 
@@ -178,7 +182,7 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 
 All five plugins have complete tool chains, parsers, report generation, tests, benchmark datasets, and Docker images. All use DAG-driven plan generation via `UniversalDAG`. All 4 inline plugins verified via end-to-end real execution with 16-thread demo data.
 
-- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (40 modules, 9,195 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 3,025 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner using `UniversalDAG` with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments.
+- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (40 modules, 9,195 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 3,025 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner using `UniversalDAG` with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments. **Assembly platform verified**: 19/19 steps passed (3 samples, NC_002127_1/NC_002483_1/NC_011977_1). **Illumina platform planned**: 33 unique tools, 71 steps across 2 samples. 7 real databases available (genomad 2.9GB, bakta 4.2GB, mob_suite 3.0GB, plasmidfinder, amrfinderplus 251MB, platon, macsyfinder).
 - **`rnaseq_expression`**: 6-tool standard RNA-seq. fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. All 6 parsers working. Uses `build_plan_from_dag()` with TSVMapper for featureCounts. DESeq2 R script bundled, automated conda+BiocManager install.
 - **`wgs_bacteria`**: 5-tool bacterial isolate analysis. fastp → SPAdes → Prokka → MLST → AMRFinderPlus. All 5 parsers working. Uses `build_plan_from_dag()` with TSVMapper for AMRFinderPlus + MLST.
 - **`amplicon_16s`**: 8-tool microbial community analysis. cutadapt → vsearch_mergepairs → vsearch_derep → UNOISE3 denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta via `scripts/amplicon_diversity.py`). All 8 tools have parsers. Uses `build_plan_from_dag()`.

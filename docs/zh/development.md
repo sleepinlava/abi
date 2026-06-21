@@ -13,6 +13,8 @@ src/abi/
   workflow/           ResourceManifest、工作流验证、figure_specs 加载
   plugins/            内置分析类型插件
     metagenomic_plasmid/   自包含插件包（引擎在 _engine/ 中，67 工具，84+ 节点）
+                          Assembly 平台：19/19 步骤通过（3 RefSeq 质粒）
+                          Illumina 平台：33 工具，71 步骤（121 真实样本）
     rnaseq_expression.py   批量 RNA-seq（6 工具）
     wgs_bacteria.py        细菌 WGS（5 工具）
     amplicon_16s.py        16S 微生物组（8 工具）
@@ -35,7 +37,8 @@ src/abi/
   interfaces.py       ABIPlugin、ABIDryRunPlugin、ABIInitializablePlugin 协议
   json_utils.py       带 ABIJSONError 封装的 JSON 文件/负载加载
   timeouts.py         超时解析：parse_timeout_seconds、timeout_from_env_or_value
-  resources.py        资源状态检查（磁盘存在性验证）
+  resources.py        资源发现 + 自动安装：check_resources、setup_resources、
+                      ResourceSpec、install_post hooks（例如 makeblastdb）
   tables.py           StandardTableManager
   tool_descriptors.py 统一工具描述符单点真相（3 格式家族、7+ LLM 提供商）
   jobs/               HTTP Job Service（服务端、客户端，force-kill 支持）
@@ -136,6 +139,8 @@ pytest tests/ -v --tb=short
 4. ``PROJECT_ROOT.parent / "abi-envs"``（同级目录）
 每个工具的 ``env_name`` 在运行时从 ``environments.yaml`` 解析
 （所有 16 个 conda 环境和 93 个工具→环境映射的单一事实来源）。
+（2026-06-21 修复：metaPhlAn/kraken2 的 env_name 从错误的 ``autoplasm-stats`` 更正为 ``stats``）。
+（2026-06-21 pm 三维修复：图表系统从旧 FigureEngine 迁移至 abi-sciplot（8 张科学图表，PDF+SVG+PNG）；GenericABIExecutor 支持样本级并行执行（ThreadPoolExecutor）；CoverM 解析器修复动态列名匹配）。
 
 ## Agent 接口
 
@@ -151,6 +156,8 @@ pytest tests/ -v --tb=short
 | `abi query --type <plugin> --what stages` | 轻量级流水线元数据查询（~50ms） |
 | `abi export-agent-context --type <plugin>` | 机器可读的操作上下文 |
 | `abi doctor-agent --type <plugin>` | 人类可读的操作指南 |
+| `abi check-resources --type <plugin>` | 检查资源/数据库可用性 |
+| `abi setup-resources --type <plugin> --confirm` | 资源设置（需要确认） |
 | `abi install-skills` | 将 SKILL.md 文件安装到 `~/.claude/skills/abi/` |
 | `abi export-openai-tools --type <plugin>` | OpenAI 函数调用描述符 |
 | `abi-mcp` | 启动 MCP stdio 服务器 |
