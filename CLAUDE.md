@@ -116,7 +116,9 @@ src/abi/
   provenance.py       RunLogger, PipelineProgressRecorder, TSV writers (849 lines)
   tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1715 lines)
   schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
-  executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement
+  executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement.
+                      Supports sample-level parallel execution via ThreadPoolExecutor
+                      (config.execution.parallel + config.execution.workers).
   dag_planner.py      Universal DAG planner — generates ExecutionPlan from pipeline_dag.yaml
                       (replaces hand-written build_plan() boilerplate, added 2026-06-18)
   tsv_mapping.py      Declarative TSV column mapper — YAML-driven output parsing
@@ -124,8 +126,8 @@ src/abi/
                       Replaces ~14 csv.DictReader → remap columns parser functions. (added 2026-06-18)
   sciplot/            Publication-grade scientific figure compiler — FigureSpec →
                       Validate → Render → Export → Lint → Provenance.
-                      Pydantic schema, 9 plot types, 3 themes, 11 lint rules,
-                      SHA256 provenance. (added 2026-06-19, v1.3.3)
+                      Pydantic schema, 15 plot types, 3 themes, plotnine+seaborn
+                      backends, SHA256 provenance. (added 2026-06-19, v1.4.0)
   dag.py              DAG inference engine — L1 (literature) / L2 (path) / L3 (validation)
   contracts/          WorkflowSpec, step contract enforcement, checksum chaining, assertion eval
     __init__.py         WorkflowSpec, WorkflowStepSpec, load_workflow_spec, run_contract_lint
@@ -141,7 +143,8 @@ src/abi/
   skills/             Agent skill files (abi_agent + per-tool), installed via ``abi install-skills``
 
 environments.yaml      Single source of truth: 16 conda envs + 93 tool→env assignments
-                      (2026-06-21: fixed metaphlan/kraken2 env_name from broken ``autoplasm-stats`` → ``stats``)
+                      (2026-06-21: fixed stats env mapping; mmseqs2 ResourceSpec added;
+                      amrfinderplus install_post: makeblastdb; kraken2 aria2c S3 download)
 scripts/emit_env_yamls.py  Generates per-environment ``envs/*.yml`` from environments.yaml
 ```
 
@@ -182,7 +185,7 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 
 All five plugins have complete tool chains, parsers, report generation, tests, benchmark datasets, and Docker images. All use DAG-driven plan generation via `UniversalDAG`. All 4 inline plugins verified via end-to-end real execution with 16-thread demo data.
 
-- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (40 modules, 9,195 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 3,025 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner using `UniversalDAG` with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments. **Assembly platform verified**: 19/19 steps passed (3 samples, NC_002127_1/NC_002483_1/NC_011977_1). **Illumina platform planned**: 33 unique tools, 71 steps across 2 samples. 7 real databases available (genomad 2.9GB, bakta 4.2GB, mob_suite 3.0GB, plasmidfinder, amrfinderplus 251MB, platon, macsyfinder).
+- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (40 modules, 9,195 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 3,025 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner using `UniversalDAG` with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments. 8 sciplot figures (barplot × 3, scatterplot, stacked_barplot, heatmap × 5) with `abi_nature` theme + `colorblind_safe` palette. **Assembly platform verified**: 19/19 steps passed (3 samples, NC_002127_1/NC_002483_1/NC_011977_1). **Illumina platform planned**: 33 unique tools, 71 steps across 2 samples. **10 databases** (genomad 2.9GB, bakta 4.2GB, mob_suite 3.0GB, plasmidfinder, amrfinderplus 251MB, platon, macsyfinder, metaphlan 34GB, mmseqs2 1.6GB, kraken2 pending). 24/24 default_enabled tools confirmed working.
 - **`rnaseq_expression`**: 6-tool standard RNA-seq. fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. All 6 parsers working. Uses `build_plan_from_dag()` with TSVMapper for featureCounts. DESeq2 R script bundled, automated conda+BiocManager install.
 - **`wgs_bacteria`**: 5-tool bacterial isolate analysis. fastp → SPAdes → Prokka → MLST → AMRFinderPlus. All 5 parsers working. Uses `build_plan_from_dag()` with TSVMapper for AMRFinderPlus + MLST.
 - **`amplicon_16s`**: 8-tool microbial community analysis. cutadapt → vsearch_mergepairs → vsearch_derep → UNOISE3 denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta via `scripts/amplicon_diversity.py`). All 8 tools have parsers. Uses `build_plan_from_dag()`.

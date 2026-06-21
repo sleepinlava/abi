@@ -27,7 +27,9 @@ src/abi/
   provenance.py       RunLogger, PipelineProgressRecorder, TSV provenance writers
   tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult
   schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
-  executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement, provenance
+  executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement.
+                      Supports sample-level parallel execution via ThreadPoolExecutor
+                      (config.execution.parallel + config.execution.workers).
   dag.py              DAG inference engine — L1 (literature) / L2 (path) / L3 (validation)
   contracts/          WorkflowSpec, step contract enforcement, checksum chaining, assertion eval
   permissions.py      read_only / planning_write / execution levels
@@ -35,7 +37,8 @@ src/abi/
   interfaces.py       ABIPlugin, ABIDryRunPlugin, ABIInitializablePlugin protocols
   json_utils.py       JSON file/payload loading with ABIJSONError wrapping
   timeouts.py         Timeout parsing: parse_timeout_seconds, timeout_from_env_or_value
-  resources.py        Resource status checking (on-disk existence validation)
+  resources.py        Resource discovery + auto-install: check_resources, setup_resources,
+                      ResourceSpec with install_post hooks (e.g. makeblastdb)
   tables.py           StandardTableManager
   tool_descriptors.py Unified tool descriptor SSOT (3 format families, 7+ LLM providers)
   jobs/               HTTP Job Service (service, client, force-kill support)
@@ -150,6 +153,23 @@ with this priority:
 4. ``PROJECT_ROOT.parent / "abi-envs"`` (sibling dir)
 The ``env_name`` for each tool is resolved at runtime from ``environments.yaml``
 (single source of truth for all 16 conda environments and 93 tool→env assignments).
+(2026-06-21: fixed metaphlan/kraken2 env_name from ``autoplasm-stats`` → ``stats``;
+added mmseqs2 ResourceSpec; amrfinderplus install_post: makeblastdb; kraken2 S3 download).
+
+### Parallel Execution
+
+``GenericABIExecutor`` supports sample-level parallel execution via
+``ThreadPoolExecutor`` when ``config.execution.parallel`` is set to ``true``:
+
+```yaml
+execution:
+  parallel: true
+  workers: 8
+```
+
+Samples run concurrently; steps within each sample remain serial respecting
+DAG topological order. Thread safety is maintained via ``threading.Lock``
+for ``StandardTableManager``, ``PipelineProgressRecorder``, and ``RunLogger``.
 
 ## Agent Interfaces
 
@@ -169,6 +189,8 @@ is passed.
 | `abi query --type <plugin> --what stages` | Lightweight pipeline metadata (~50ms) |
 | `abi export-agent-context --type <plugin>` | Machine-readable operating context |
 | `abi doctor-agent --type <plugin>` | Human-readable operating guide |
+| `abi check-resources --type <plugin>` | Check resource/database availability |
+| `abi setup-resources --type <plugin> --confirm` | Auto-install/setup resources |
 | `abi install-skills` | Install SKILL.md files to `~/.claude/skills/abi/` |
 | `abi export-openai-tools --type <plugin>` | OpenAI function-calling descriptors |
 | `abi-mcp` | Start MCP stdio server |

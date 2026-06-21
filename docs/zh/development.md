@@ -29,7 +29,9 @@ src/abi/
   provenance.py       RunLogger、PipelineProgressRecorder、TSV 溯源写入器
   tools.py            ToolRegistry、ToolSkill、GenericCommandSkill、SafeFormatDict、RunResult
   schemas.py          规范类型：SampleInput、ExecutionPlan、PlanStep、SampleContext
-  executor.py         GenericABIExecutor — 步骤迭代、工具调用、合约执行、溯源
+  executor.py         GenericABIExecutor — 步骤迭代、工具调用、合约执行、溯源。
+                      支持样本级并行执行（ThreadPoolExecutor），
+                      通过 config.execution.parallel + config.execution.workers 配置。
   dag.py              DAG 推断引擎 — L1（文献）/ L2（路径）/ L3（验证）
   contracts/          WorkflowSpec、步骤合约执行、校验和链式追踪、断言评估
   permissions.py      read_only / planning_write / execution 级别
@@ -139,8 +141,24 @@ pytest tests/ -v --tb=short
 4. ``PROJECT_ROOT.parent / "abi-envs"``（同级目录）
 每个工具的 ``env_name`` 在运行时从 ``environments.yaml`` 解析
 （所有 16 个 conda 环境和 93 个工具→环境映射的单一事实来源）。
-（2026-06-21 修复：metaPhlAn/kraken2 的 env_name 从错误的 ``autoplasm-stats`` 更正为 ``stats``）。
+（2026-06-21 修复：metaPhlAn/kraken2 的 env_name 从错误的 ``autoplasm-stats`` 更正为 ``stats``；
+新增 mmseqs2 ResourceSpec；amrfinderplus install_post: makeblastdb；kraken2 S3 下载）。
 （2026-06-21 pm 三维修复：图表系统从旧 FigureEngine 迁移至 abi-sciplot（8 张科学图表，PDF+SVG+PNG）；GenericABIExecutor 支持样本级并行执行（ThreadPoolExecutor）；CoverM 解析器修复动态列名匹配）。
+
+### 并行执行
+
+``GenericABIExecutor`` 通过 ``ThreadPoolExecutor`` 支持样本级并行执行，
+通过设置 ``config.execution.parallel: true`` 和 ``config.execution.workers`` 启用：
+
+```yaml
+execution:
+  parallel: true
+  workers: 8
+```
+
+样本间并行运行；每个样本内的步骤保持 DAG 拓扑顺序串行执行。
+通过 ``threading.Lock`` 保证 ``StandardTableManager``、``PipelineProgressRecorder``
+和 ``RunLogger`` 的线程安全。
 
 ## Agent 接口
 
@@ -158,6 +176,8 @@ pytest tests/ -v --tb=short
 | `abi doctor-agent --type <plugin>` | 人类可读的操作指南 |
 | `abi check-resources --type <plugin>` | 检查资源/数据库可用性 |
 | `abi setup-resources --type <plugin> --confirm` | 资源设置（需要确认） |
+| `abi check-resources --type <plugin>` | 检查资源/数据库可用性 |
+| `abi setup-resources --type <plugin> --confirm` | 自动安装/设置资源 |
 | `abi install-skills` | 将 SKILL.md 文件安装到 `~/.claude/skills/abi/` |
 | `abi export-openai-tools --type <plugin>` | OpenAI 函数调用描述符 |
 | `abi-mcp` | 启动 MCP stdio 服务器 |

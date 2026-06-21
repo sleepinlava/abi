@@ -41,7 +41,9 @@ QC（fastp/FastQC/MultiQC）
 核心流程（QC → 组装 → 质粒检测 → 注释 → 丰度 → 群落分析 → 可视化）已通过真实数据验证。
 
 当前产出 16 张标准表（含 `sample_diversity`, `differential_abundance`, `network_edges` 等群落分析表），
-3 张 sciplot 图表。剩余的 48 个步骤大多因数据库未下载而被门控跳过 — 工具代码本身已就绪。
+8 张 sciplot 图表（barplot × 3, scatterplot, stacked_barplot, heatmap × 5），使用 `abi_nature` 主题 +
+`colorblind_safe` 调色板。10 个数据库可用；24/24 个 default_enabled 工具已确认可正常工作。
+支持通过 `config.execution.parallel` 实现样本级并行执行。
 
 ## 常用命令
 
@@ -65,15 +67,24 @@ autoplasm dry-run \
 
 | 数据库 | 大小 | 依赖工具 | 状态 |
 |--------|------|---------|:---:|
-| genomad_db | ~2GB | genomad | ✅ 可用 |
-| bakta_db | ~40GB | bakta | ✅ 可用 |
-| amrfinder_db | ~2GB | amrfinderplus | ✅ 已修复 — `-d {database}` 参数 + DAG 链路 (2026-06-20) |
-| plasmidfinder_db | ~100MB | plasmidfinder | ✅ 可用 |
-| mob_suite_db | ~200MB | mob_typer | ❌ 未下载 |
-| kraken2_db | ~50GB | kraken2 | ❌ 未下载 |
-| metaphlan_db | ~3GB | metaphlan | ❌ 未下载 |
-| checkm2_db | ~3GB | checkm2 | ❌ 未下载 |
-| gtdbtk_db | ~30GB | gtdbtk | ❌ 未下载 |
+| genomad_db | 2.9 GB | geNomad | ✅ 可用 |
+| bakta_db | 4.2 GB | Bakta | ✅ 可用（light DB，--skip-sorf 绕过） |
+| amrfinder_db | 251 MB | AMRFinderPlus | ✅ 可用（+ BLAST 索引自动构建） |
+| plasmidfinder_db | ~1 MB | PlasmidFinder | ✅ 可用 |
+| mob_suite_db | 3.0 GB | MOB-suite | ✅ 可用 |
+| platon_db | 55 MB | PLaton | ✅ 可用 |
+| macsyfinder_db | 180 MB | MacSyFinder | ✅ 可用（pip install） |
+| metaphlan_db | 34 GB | MetaPhlAn | ✅ 可用 |
+| mmseqs2_db | 1.6 GB | MMseqs2 | ✅ 可用（从 mob_suite 构建） |
+| kraken2_db | ~50 GB | Kraken2 | 🔄 待下载（S3） |
+| blast_db | ~10 GB | BLAST+ | ❌ 未构建 |
+| checkm2_db | ~100 GB | CheckM2 | ❌ 未下载（环境版本冲突） |
+| gtdbtk_db | ~100 GB | GTDB-Tk | ❌ 未下载（环境版本冲突） |
+
+**工具可用性**：24/24 个 `default_enabled: true` 工具已确认在其 conda 环境中可正常工作。
+11 个 `default_enabled: false` 工具（PlasmidHostFinder、pMLST、gplas2、Recycler、scapp、
+COPLA、conjscan、PLASMe、PlasX、plasmaag、plasmidhostfinder）缺少 git-clone 安装 —
+这些是第三梯队（实验性/非主流）工具，用于小众分析场景。
 
 ## 资源边界
 

@@ -44,8 +44,10 @@ The core pipeline (QC → Assembly → Detection → Annotation → Abundance �
 has been verified with real biological data.
 
 Currently produces all 16 standard tables (including `sample_diversity`, `differential_abundance`,
-`network_edges` for community analysis), and 3 sciplot figures. The remaining 48 of 62 steps
-are mostly gated behind database downloads — the tool code itself is ready.
+`network_edges` for community analysis), and 8 sciplot figures (barplot × 3, scatterplot,
+stacked_barplot, heatmap × 5) with `abi_nature` theme + `colorblind_safe` palette.
+10 databases available; 24/24 default_enabled tools confirmed working.
+Supports sample-level parallel execution via `config.execution.parallel`.
 
 ## Common Commands
 
@@ -71,15 +73,25 @@ bioinformatics tools or databases are production-ready.
 
 | Database | Size | Required By | Status |
 |----------|------|------------|:---:|
-| genomad_db | ~2GB | genomad | ✅ Available |
-| bakta_db | ~40GB | bakta | ✅ Available |
-| amrfinder_db | ~2GB | amrfinderplus | ✅ Fixed — `-d {database}` flag + DAG wiring (2026-06-20) |
-| plasmidfinder_db | ~100MB | plasmidfinder | ✅ Available |
-| mob_suite_db | ~200MB | mob_typer | ❌ Not downloaded |
-| kraken2_db | ~50GB | kraken2 | ❌ Not downloaded |
-| metaphlan_db | ~3GB | metaphlan | ❌ Not downloaded |
-| checkm2_db | ~3GB | checkm2 | ❌ Not downloaded |
-| gtdbtk_db | ~30GB | gtdbtk | ❌ Not downloaded |
+| genomad_db | 2.9 GB | geNomad | ✅ Available |
+| bakta_db | 4.2 GB | Bakta | ✅ Available (light DB, --skip-sorf workaround) |
+| amrfinder_db | 251 MB | AMRFinderPlus | ✅ Available (+ BLAST indexes auto-built) |
+| plasmidfinder_db | ~1 MB | PlasmidFinder | ✅ Available |
+| mob_suite_db | 3.0 GB | MOB-suite | ✅ Available |
+| platon_db | 55 MB | PLaton | ✅ Available |
+| macsyfinder_db | 180 MB | MacSyFinder | ✅ Available (pip install) |
+| metaphlan_db | 34 GB | MetaPhlAn | ✅ Available |
+| mmseqs2_db | 1.6 GB | MMseqs2 | ✅ Available (built from mob_suite) |
+| kraken2_db | ~50 GB | Kraken2 | 🔄 Pending download (S3) |
+| blast_db | ~10 GB | BLAST+ | ❌ Not built |
+| checkm2_db | ~100 GB | CheckM2 | ❌ Not downloaded (env conflict) |
+| gtdbtk_db | ~100 GB | GTDB-Tk | ❌ Not downloaded (env conflict) |
+
+**Tool availability**: 24/24 `default_enabled: true` tools confirmed working in
+their conda environments. 11 `default_enabled: false` tools (PlasmidHostFinder,
+pMLST, gplas2, Recycler, scapp, COPLA, conjscan, PLASMe, PlasX, plasmaag,
+plasmidhostfinder) are missing git-clone installations — these are Tier 3
+(experimental/non-mainstream) tools for niche analysis scenarios.
 
 ## Resource Boundaries
 
