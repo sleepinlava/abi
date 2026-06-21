@@ -18,7 +18,7 @@ src/abi/
     rnaseq_expression.py   批量 RNA-seq（6 工具）
     wgs_bacteria.py        细菌 WGS（5 工具）
     amplicon_16s.py        16S 微生物组（8 工具）
-    metatranscriptomics.py 宏转录组（4 工具）
+    metatranscriptomics.py 宏转录组（3 工具）
   autoplasm/          向后兼容的重导出垫片 → plugins/metagenomic_plasmid/_engine/
   sciplot/            论文级科研图形编译器 — FigureSpec → Validate → Render → Export →
                       Lint → Provenance。Pydantic schema，15 种图表类型，3 套主题，
@@ -113,6 +113,8 @@ pytest tests/ -v --tb=short
 - 实际输出解析是确定性的且能感知双端测序。如果工具写入 `S1_R1.clean.fastq.gz` 和 `S1_R2.clean.fastq.gz`，而计划中包含 `S1.fastp.clean_read1` 等抽象路径，合约检查将使用实际的 R1/R2 文件。
 
 回归测试覆盖位于 `tests/unit/test_executor.py` 和 `tests/unit/test_step_contract.py` 中。
+
+**当前测试状态 (2026-06-21)**: 723 通过, 4 跳过, 0 ruff 错误, 0 mypy 错误。
 
 ## 运行时资产
 

@@ -207,6 +207,39 @@ def _resolve_path(
     return path
 
 
+def _offline_sample_context(
+    *,
+    platform: str = "illumina",
+    condition: str | None = None,
+    group: str | None = None,
+) -> Any:
+    """Return an explicit unresolved sample for offline planning.
+
+    ``check_files=False`` permits plan inspection without a sample sheet.  The
+    sentinel values are machine-recognisable and cannot be mistaken for real
+    sample data; this avoids leaking fixed test samples and ``/tmp`` paths into
+    runtime plans.
+    """
+    from abi.schemas import ABISample, ABISampleContext
+
+    return ABISampleContext(
+        samples=[
+            ABISample(
+                sample_id="SAMPLE_NOT_CONFIGURED",
+                platform=platform,
+                read1="READ1_NOT_CONFIGURED",
+                read2="READ2_NOT_CONFIGURED",
+                condition=condition,
+                group=group,
+            )
+        ],
+        multi_sample=False,
+        has_groups=False,
+        enable_sample_analysis=False,
+        enable_differential_abundance=False,
+    )
+
+
 def _parse_fastp(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
     """Parse fastp JSON output → qc_summary rows.
 

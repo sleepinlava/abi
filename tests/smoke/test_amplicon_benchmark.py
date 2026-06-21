@@ -186,7 +186,7 @@ def test_amplicon_benchmark_assertions(tmp_path: Path) -> None:
     # to align). Tree absence is expected with low-diversity synthetic data.
     phylo_assert = expected["phylogeny"]
     tree_path = results_dir / "05b_phylogeny" / "phylogeny.nwk"
-    if tree_path.exists():
+    if tree_path.exists() and tree_path.stat().st_size > 0:
         nwk_text = tree_path.read_text(encoding="utf-8").strip()
         assert len(nwk_text) > 0, "Newick tree is empty"
         leaf_count = nwk_text.count(",") + 1

@@ -24,8 +24,7 @@ outputs:
     format: fasta
 execution:
   executable: megahit
-  command_template: bash -c "rm -rf {output_dir} && megahit -1 {read1} -2 {read2}
-    -o {output_dir} -t {threads}"
+  command_template: megahit -1 {read1} -2 {read2} -o {output_dir} -t {threads}
   network: false
   writes_output: true
 normalization:

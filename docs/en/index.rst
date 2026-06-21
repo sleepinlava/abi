@@ -4,7 +4,7 @@ ABI Documentation
 **Agent-Bioinformatics Interface** — a Python control plane between AI agents
 and bioinformatics tools.  Not a workflow engine, but a structured interface
 layer that provides standardized JSON envelopes, provenance tracking, tool
-contracts, and execution gating across five bioinformatics analysis types.
+contracts, and execution gating across five bioinformatics analysis types. (v1.4.0, 2026-06-21 — 723 tests, 0 ruff/mypy errors, 5/5 plugins real-execution verified)
 
 .. image:: https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=1e6fba
    :target: https://pypi.org/project/abi-agent/
@@ -97,8 +97,11 @@ Built-In Analysis Types
      - Metatranscriptomics: fastp → STAR/HISAT2 → featureCounts
    * - ``metagenomic_plasmid``
      - 67
-     - Flagship plasmid analysis: QC → assembly → plasmid detection →
-       annotation → abundance → statistics.  10 conda envs, 84-node DAG.
+       Flagship plasmid analysis: QC → assembly → plasmid detection →
+       annotation → abundance → statistics. DAG-driven planning (UniversalDAG),
+       parallel execution, 8 sciplot figures (barplot×3, scatterplot,
+       stacked_barplot, heatmap×5). 10 conda envs, 84-node DAG (3054 lines),
+       10 databases.
 
 Quick Start
 -----------
@@ -147,6 +150,7 @@ All agent-facing commands support ``--output-json``.
 
    development
    plugin_development_guide
+   testing
 
 .. toctree::
    :maxdepth: 1
@@ -179,6 +183,7 @@ All agent-facing commands support ``--output-json``.
    release
    devlog
    next_development_plan
+   paper_execution_plan
 
 Quick Links
 -----------
@@ -191,6 +196,8 @@ Quick Links
 - :doc:`openai_interface_standard` — Multi-LLM tool descriptor export
 - :doc:`agent_usage` — Agent integration guide (MCP, Skills, dispatch)
 - :doc:`devlog` — Development log
+- :doc:`paper_execution_plan` — Paper execution plan
+- :doc:`next_development_plan` — Next-stage development plan + Phase 1-3 fixes
 
 Indices and Tables
 ------------------

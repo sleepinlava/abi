@@ -9,12 +9,31 @@ from abi.provenance import (
     PipelineProgressRecorder,
     RunLogger,
     _tsv_value,
+    reset_run_provenance,
     write_commands_tsv,
     write_methods_md,
     write_minimal_progress_artifacts,
     write_resolved_inputs_tsv,
     write_tool_versions,
 )
+
+
+def test_reset_run_provenance_removes_stale_attempt_artifacts(tmp_path: Path) -> None:
+    provenance = tmp_path / "provenance"
+    step_logs = provenance / "step_logs"
+    step_logs.mkdir(parents=True)
+    (step_logs / "old.stderr.log").write_text("old")
+    for name in ("checksums.json", "progress.json", "progress.jsonl"):
+        (provenance / name).write_text("old")
+    (provenance / "commands.tsv").write_text("old")
+
+    reset_run_provenance(provenance)
+
+    assert not step_logs.exists()
+    assert not (provenance / "checksums.json").exists()
+    assert not (provenance / "progress.jsonl").exists()
+    assert not (provenance / "commands.tsv").exists()
+
 
 # ── _tsv_value ───────────────────────────────────────────────────────────
 

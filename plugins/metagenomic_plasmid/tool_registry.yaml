@@ -76,8 +76,8 @@ tools:
   executable: megahit
   default_enabled: true
   required: true
-  command_template: bash -c "rm -rf {output_dir} && megahit -1 {read1} -2 {read2}
-    -o {output_dir} -t {threads}"
+  output_dir_policy: must_not_exist
+  command_template: megahit -1 {read1} -2 {read2} -o {output_dir} -t {threads}
 - id: metaspades
   name: metaSPAdes
   category: assembly

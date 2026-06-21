@@ -83,6 +83,23 @@ def test_abi_metatranscriptomics_dry_run_writes_portability_artifacts(tmp_path):
     assert summary["progress_events"] == str(progress_events)
     events = [json.loads(line) for line in progress_events.read_text(encoding="utf-8").splitlines()]
     assert [event["event"] for event in events] == ["run_started", "run_completed"]
+    resources = json.loads((outdir / "provenance" / "resources.json").read_text(encoding="utf-8"))[
+        "resources"
+    ]
+    required_resource_fields = {
+        "resource_id",
+        "path",
+        "status",
+        "version",
+        "source",
+        "checksum",
+        "license",
+        "validated_at",
+    }
+    assert resources
+    assert all(required_resource_fields <= set(resource) for resource in resources)
+    version_rows = (outdir / "provenance" / "tool_versions.tsv").read_text(encoding="utf-8")
+    assert "\tnot_captured\n" in version_rows
 
 
 def test_abi_inspect_reports_placeholder_inputs(tmp_path):
@@ -374,6 +391,26 @@ def test_abi_metagenomic_plasmid_no_progress_writes_progress_artifacts(tmp_path)
     assert snapshot["record_progress"] is False
     plan = json.loads((outdir / "execution_plan.json").read_text(encoding="utf-8"))
     assert plan["analysis_type"] == "metagenomic_plasmid"
+    version_lines = (
+        (outdir / "provenance" / "tool_versions.tsv").read_text(encoding="utf-8").splitlines()
+    )
+    assert len(version_lines) >= 68  # header + at least 67 registered tools
+    assert all(line.endswith("\tnot_captured") for line in version_lines[1:])
+    resources = json.loads((outdir / "provenance" / "resources.json").read_text(encoding="utf-8"))[
+        "resources"
+    ]
+    required_resource_fields = {
+        "resource_id",
+        "path",
+        "status",
+        "version",
+        "source",
+        "checksum",
+        "license",
+        "validated_at",
+    }
+    assert resources
+    assert all(required_resource_fields <= set(resource) for resource in resources)
 
     validation = runner.invoke(
         app,
@@ -509,6 +546,17 @@ def test_abi_doctor_agent_outputs_short_operating_guide():
     assert "ABI agent guide for metatranscriptomics" in result.output
     assert "Safe call order" in result.output
     assert "gene_expression" in result.output
+
+
+def test_abi_doctor_agent_output_json_uses_agent_envelope():
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["doctor-agent", "--type", "metatranscriptomics", "--output-json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "success"
+    assert payload["command"] == "doctor_agent"
 
 
 def test_abi_check_resources_reports_generic_plugin_placeholders():

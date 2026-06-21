@@ -236,6 +236,199 @@ def parse_outputs(self, tool_id, output_dir, sample_id):
     ...
 ```
 
+## Testing Plugins
+
+Every plugin must include tests. The minimal test suite for a new plugin covers
+three areas: contract compliance, registry loading, and plan generation.
+
+### Minimum test file (`tests/test_my_plugin.py`)
+
+```python
+import pytest
+from abi.testing import assert_plugin_contract
+from abi.plugins.my_analysis import MyPlugin
+
+
+def test_plugin_contract():
+    """Plugin satisfies the ABIPlugin protocol."""
+    plugin = MyPlugin()
+    assert_plugin_contract(plugin)
+
+
+def test_registry_loads():
+    """Tool registry YAML parses without error."""
+    plugin = MyPlugin()
+    registry = plugin.registry()
+    assert len(registry.tools) > 0
+    # Verify expected tools are registered
+    tool_ids = [t.tool_id for t in registry.tools]
+    assert "fastp" in tool_ids
+
+
+def test_build_plan(mock_sample_context, tmp_path):
+    """build_plan() returns valid ExecutionPlan for default config."""
+    plugin = MyPlugin()
+    config = plugin.load_config()
+    config["outdir"] = str(tmp_path)
+    plan = plugin.build_plan(config)
+    assert len(plan.steps) > 0
+    # QC step always comes first
+    assert plan.steps[0].step_id.startswith("qc_")
+
+
+def test_parse_outputs_handles_missing_files(tmp_path):
+    """Parsers return empty results (not errors) for missing output files."""
+    plugin = MyPlugin()
+    result = plugin.parse_outputs("fastp", tmp_path, "S1")
+    assert isinstance(result, dict)
+
+
+@pytest.mark.smoke
+@pytest.mark.requires_tools
+def test_real_execution_smoke(tmp_path):
+    """Full pipeline executes with synthetic data."""
+    # Generate minimal test data, run real tools, verify outputs...
+    pass
+```
+
+### Fixtures available to plugin tests
+
+All fixtures from `tests/conftest.py` are available without import:
+
+| Fixture | Type | Use |
+|---------|------|-----|
+| `mock_sample` | `ABISample` | Single-sample input with illumina platform |
+| `mock_sample_context` | `ABISampleContext` | Single-sample context with two groups |
+| `mock_contract_dict` | `dict` | Minimal valid tool contract for scaffolding |
+| `tmp_project` | `Path` | Temporary dir with results/logs/provenance/tables/ |
+
+### Benchmark tests
+
+For value-level validation, use `run_benchmark()`:
+
+```python
+from abi.testing.benchmark import run_benchmark
+
+@pytest.mark.smoke
+@pytest.mark.requires_tools
+def test_my_plugin_benchmark(tmp_path):
+    result = run_benchmark(
+        plugin_id="my_analysis",
+        dataset_path=Path("data/benchmarks/my_analysis"),
+        outdir=tmp_path / "results",
+    )
+    assert result.total > 0
+    assert result.passed >= result.total * 0.7  # development threshold
+```
+
+See `docs/en/testing.md` for the complete testing guide.
+
+## Resource Management
+
+ABI provides a resource discovery and auto-install system for bioinformatics databases.
+Plugin authors declare resource requirements; ABI handles checking, downloading, and
+post-install hooks.
+
+### Declaring resources
+
+Resources are declared in `plugins/<name>/abi-plugin.yaml`:
+
+```yaml
+resources:
+  my_database:
+    name: "My Database"
+    description: "Reference database for MyTool"
+    url: "https://example.com/my_database.tar.gz"
+    size_gb: 2.5
+    required_by: [my_tool]
+    install_post: "makeblastdb -in {resource_dir}/sequences.fasta -dbtype nucl"
+    env_name: my_env
+```
+
+### ResourceSpec fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `str` | Human-readable name |
+| `description` | `str` | What the resource provides |
+| `url` | `str` | Download URL (supports http/https/S3) |
+| `size_gb` | `float` | Approximate download size |
+| `required_by` | `list[str]` | Tool IDs that depend on this resource |
+| `install_post` | `str` or `None` | Shell command to run after download (e.g., `makeblastdb`) |
+| `env_name` | `str` | Conda environment that provides the post-install tool |
+
+### CLI commands
+
+```bash
+# Check which resources are available/missing
+abi check-resources --type my_analysis
+
+# Download and install missing resources (requires confirmation)
+abi setup-resources --type my_analysis --confirm
+```
+
+### Environment resolution
+
+Tool → environment assignments live in `environments.yaml`, not in individual tool
+contracts. When registering a tool, add its env assignment to `environments.yaml`:
+
+```yaml
+tool_assignments:
+  my_analysis:
+    my_tool: my_env
+```
+
+The `ToolRegistry` injects the correct `env_name` at runtime. Run
+`scripts/emit_env_yamls.py` to regenerate per-environment `envs/*.yml` files.
+
+## Assertion Expression Reference
+
+Step contracts support assertions written in a simple expression language.
+Assertions are evaluated after tool execution against resolved outputs.
+
+### Variables
+
+| Variable | Type | Example |
+|----------|------|---------|
+| `output_json.<key>` | Any | `output_json.summary.after_filtering.total_reads` |
+| `output_files.<name>` | Path | `output_files.clean_read1` |
+| `output_dir` | Path | `output_dir` |
+| `return_code` | int | `return_code` |
+
+### Operators
+
+| Operator | Example | Meaning |
+|----------|---------|---------|
+| `>` | `output_json.total > 0` | Greater than |
+| `>=` | `output_json.qual >= 30` | Greater than or equal |
+| `<` | `output_json.errors < 10` | Less than |
+| `<=` | `return_code <= 0` | Less than or equal |
+| `==` | `output_json.status == "complete"` | Equal |
+| `!=` | `return_code != 1` | Not equal |
+| `exists` | `output_files.clean_read1 exists` | File/directory exists |
+| `contains` | `output_json.log contains "done"` | String contains |
+
+### Writing assertions in pipeline_dag.yaml
+
+```yaml
+nodes:
+  qc_fastp:
+    tool_id: fastp
+    # ...
+    assertions:
+      - "output_json.summary.after_filtering.total_reads > 0"
+      - "output_json.summary.after_filtering.q30_rate >= 0.8"
+      - "output_files.clean_read1 exists"
+      - "output_files.clean_read2 exists"
+      - "return_code == 0"
+```
+
+### Assertion evaluation
+
+Assertions are evaluated after output validation. If any assertion fails, the
+step is marked as failed and a `ContractViolationError` is raised with the
+failed assertion details. All assertions must pass for the step to succeed.
+
 ## Execution Safety
 
 Plugins should make `plan` and `dry_run` safe for agents. Real external tool

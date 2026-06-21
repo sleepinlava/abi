@@ -1,0 +1,33 @@
+abi_version: "0.1"
+tool_id: phylogeny_mafft
+name: Phylogeny Alignment (MAFFT)
+category: phylogeny
+purpose: Align combined ASV sequences for phylogenetic tree inference.
+inputs:
+  combined_fasta:
+    type: file
+    format: fasta
+    required: true
+  threads:
+    type: integer
+    minimum: 1
+outputs:
+  aligned_fasta:
+    type: file
+    format: fasta
+execution:
+  executable: mafft
+  command_template: mafft --auto --thread {threads} {combined_fasta} > {output_dir}/aligned.fasta
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Verify that phylogeny_combine produced combined.fasta.
+  tool_not_found:
+    hint: Install MAFFT in the amplicon environment.
+  nonzero_exit:
+    hint: Inspect the phylogeny_mafft stderr log.
+resources:
+  cpu: 4
+  memory: 4GB
+  walltime: 01:00:00

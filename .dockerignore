@@ -25,3 +25,7 @@ abi-databases/
 *.log
 progress.json
 progress.jsonl
+# Generated env YAMLs (derived from environments.yaml)
+envs/*.yml
+# SciPlot test artifacts
+src/abi/sciplot/tests/_output/

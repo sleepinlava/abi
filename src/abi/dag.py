@@ -202,6 +202,12 @@ def _resolve_declared_edges(
 
     # Build workflow_step_id → workflow_step mapping
     wf_by_id: Dict[str, Any] = {s.id: s for s in workflow_spec.steps}
+    for wf_step in workflow_spec.steps:
+        missing = [dependency for dependency in wf_step.after if dependency not in wf_by_id]
+        if missing:
+            raise ABIError(
+                f"Workflow step {wf_step.id!r} references undefined dependencies: {missing}"
+            )
 
     declared: Dict[str, List[str]] = {}
     for wf_step in workflow_spec.steps:

@@ -1,0 +1,19 @@
+project_name: metatranscriptomics_demo
+mode: auto
+threads: 2
+outdir: results/metatranscriptomics_demo
+log_dir: results/metatranscriptomics_demo/logs
+mock_tools: false
+
+execution:
+  progress: true
+
+input:
+  sample_sheet: examples/sample_sheet_transcriptomics.tsv
+
+alignment:
+  tool: star
+
+resources:
+  genome_index: GENOME_INDEX_NOT_CONFIGURED
+  annotation_gtf: ANNOTATION_GTF_NOT_CONFIGURED

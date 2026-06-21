@@ -187,6 +187,87 @@ abi query --type metagenomic_plasmid --step qc_fastp --what outputs
 
 All `abi query` commands support `--output-json` for agent consumption.
 
+## `run` vs `dispatch`
+
+Both execute real tools, but differ in invocation model:
+
+| Aspect | `run` | `dispatch` |
+|--------|-------|------------|
+| Invocation | CLI command | HTTP endpoint (Job Service) |
+| Blocking | Yes (synchronous) | Returns immediately (async) |
+| Confirmation | `--confirm-execution` flag | Job queue with `confirm_execution` in payload |
+| Progress | Inline progress bars / logs | `GET /jobs/{id}` polling |
+| Cancel | Ctrl+C (SIGINT, best-effort) | `POST /jobs/{id}/cancel` (SIGTERM → SIGKILL) |
+| Use case | Interactive agent calls | Long-running batch jobs, remote execution |
+
+Prefer `run` for interactive sessions. Use `dispatch` when execution time exceeds
+agent timeout or when running on remote machines via Job Service.
+
+## Troubleshooting Common Failures
+
+### Tool not found (`TOOL_NOT_FOUND`)
+
+The tool executable is not on PATH. Check:
+
+```bash
+# Verify conda environment is activated
+conda activate <env_name>
+
+# Or list which tools are available
+abi check-resources --type <analysis_type>
+```
+
+### Missing resource (`MISSING_RESOURCE`)
+
+A required database or reference file is missing:
+
+```bash
+# See what's missing
+abi check-resources --type <analysis_type>
+
+# Install missing resources
+abi setup-resources --type <analysis_type> --confirm
+```
+
+### Contract violation (`CONTRACT_VIOLATION`)
+
+A tool's output didn't match the expected contract:
+
+1. Check `provenance/step_logs/<step_id>.stderr.log` for tool errors
+2. Verify input files exist and are not empty
+3. Check if the tool version changed — output formats may differ
+4. If the contract is too strict, adjust `min_size` or `assertions` in the tool contract
+
+### Dry-run succeeds but real execution fails
+
+1. Verify conda environments are installed: `ls envs/`
+2. Check if required databases are downloaded: `abi check-resources --type <analysis_type>`
+3. Ensure input FASTQ files exist and are readable
+4. Check disk space and memory: some tools need 16GB+ RAM
+
+### Permission denied
+
+ABI enforces a 3-tier permission model:
+
+- `read_only` operations (`list_types`, `query`, `inspect`) — always allowed
+- `planning_write` operations (`plan`, `dry_run`, `report`) — write plans/provenance only
+- `execution` (`run`) — **requires `confirm_execution=true`**
+
+If `run` returns `confirmation_required`, re-invoke with `--confirm-execution`.
+
+### Parallel execution not speeding up
+
+Check `config.execution.parallel` and `config.execution.workers` in your config:
+
+```yaml
+execution:
+  parallel: true
+  workers: 8
+```
+
+Parallel execution is sample-level. Single-sample pipelines with few steps won't
+benefit. Multi-sample pipelines will see near-linear speedup up to worker count.
+
 ## Golden Traces
 
 Known-good agent call sequences are stored in `golden_traces/` and replayed by

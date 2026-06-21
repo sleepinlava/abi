@@ -801,7 +801,7 @@ ruff format --check src/ tests/  # 0 files would be reformatted
 
 ### P1-1: Reproducible DESeq2/R Environment Setup
 
-**Problem**: DESeq2 was installed manually in system R (`/home/bker/R/x86_64-pc-linux-gnu-library/4.3/`).
+**Problem**: DESeq2 was installed manually in a user-specific system R library (`~/R/<platform>/<version>/`).
 No automated setup existed — new machines would fail at the DESeq2 step with
 cryptic R package errors.
 

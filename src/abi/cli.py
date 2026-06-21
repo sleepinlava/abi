@@ -83,20 +83,16 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import typer
 
-from abi._shared import _common_overrides, _plan_dict, _read_tsv
+from abi._shared import _common_overrides
 from abi.agent import ABIAgentInterface
 from abi.agent.context import build_agent_context, render_doctor_agent
-from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
 from abi.json_utils import load_json_object, loads_json
 from abi.openai_contracts import export_openai_tools  # backward compat
 from abi.plugins import get_plugin, list_plugins
-from abi.provenance import RunLogger
 from abi.resources import check_resources, setup_resources
 from abi.results import validate_abi_result_dir
-from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
 from abi.schemas import ABIError
-from abi.tables import StandardTableManager
 from abi.tool_descriptors import (
     PROVIDER_PROFILES,
     export_anthropic,
@@ -192,6 +188,23 @@ def _emit_agent_json(payload: str) -> None:
         raise typer.Exit(code=1)
     if status == "confirmation_required":
         raise typer.Exit(code=2)
+
+
+def _agent_result(payload: str) -> Dict[str, Any]:
+    """Unwrap an agent envelope for the human-readable CLI transport."""
+    data = loads_json(payload, label="agent response")
+    if not isinstance(data, dict):
+        raise ABIError("Agent response must be a JSON object")
+    status = data.get("status")
+    if status == "confirmation_required":
+        raise typer.Exit(code=2)
+    if status == "error":
+        code = data.get("error_code", "internal_error")
+        raise ABIError(f"{code}: {data.get('error', 'ABI command failed')}")
+    result = data.get("result")
+    if status != "success" or not isinstance(result, dict):
+        raise ABIError("Agent response is missing a success result")
+    return result
 
 
 def _emit_json_payload(payload: Any) -> None:
@@ -363,27 +376,22 @@ def plan_command(
         )
         return
     try:
-        plugin = get_plugin(analysis_type)
-        cfg = plugin.load_config(
-            config,
-            profile=profile,
-            overrides=_common_overrides(
+        result = _agent_result(
+            ABIAgentInterface().plan(
+                analysis_type=analysis_type,
+                config_path=config,
+                sample_sheet=sample_sheet,
+                profile=profile,
                 mode=mode,
                 threads=threads,
                 outdir=outdir,
                 log_dir=log_dir,
-                sample_sheet=sample_sheet,
-            ),
+                check_files=check_files,
+            )
         )
-        plan = plugin.build_plan(cfg, check_files=check_files)
-        outdir_path = Path(str(cfg["outdir"]))
-        outdir_path.mkdir(parents=True, exist_ok=True)
-        plan_path = outdir_path / "execution_plan.json"
-        plan_path.write_text(
-            json.dumps(_plan_dict(plan, analysis_type), indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
+        typer.echo(
+            json.dumps({"plan": str(result["plan_path"]), "steps": result["steps"]}, indent=2)
         )
-        typer.echo(json.dumps({"plan": str(plan_path), "steps": len(plan.steps)}, indent=2))
     except Exception as exc:
         _fail(exc)
 
@@ -468,49 +476,39 @@ def dry_run_command(
                 log_dir=log_dir,
                 progress=progress,
                 check_files=check_files,
-            )
-        )
-        return
-    try:
-        plugin = get_plugin(analysis_type)
-        cfg = plugin.load_config(
-            config,
-            profile=profile,
-            overrides=_common_overrides(
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-                sample_sheet=sample_sheet,
-                dry_run=True,
-                progress=progress,
                 resource_profile=resource_profile,
                 cpu_override=cpu_override,
                 memory_override=memory_override,
                 walltime_override=walltime_override,
                 accelerator_override=accelerator_override,
+                container_image=container_image,
+                container_runtime=container_runtime,
             )
-            | {"mock_tools": True},  # Force mock tools / 强制 mock 工具以确保不执行真实计算
         )
-        plan = plugin.build_plan(cfg, check_files=check_files)
-        if hasattr(plugin, "execute_dry_run"):
-            # Plugin provides its own dry-run logic (e.g., for custom output parsing).
-            # 插件提供自己的 dry-run 逻辑（例如自定义输出解析）。
-            outputs = plugin.execute_dry_run(plan, cfg)
-        else:
-            # Fall back to the generic executor in dry_run mode.
-            # 回退到 dry_run 模式下的通用执行器。
-            table_manager = StandardTableManager(plugin.table_schemas())
-            executor = GenericABIExecutor(
-                plugin.registry(),
-                RunLogger(str(cfg["log_dir"])),
-                table_manager=table_manager,
-                parse_outputs=plugin.parse_outputs,
-                report_title=plugin.report_title,
-                mock_tools=True,
+        return
+    try:
+        result = _agent_result(
+            ABIAgentInterface().dry_run(
+                analysis_type=analysis_type,
+                config_path=config,
+                sample_sheet=sample_sheet,
+                profile=profile,
+                mode=mode,
+                threads=threads,
+                outdir=outdir,
+                log_dir=log_dir,
+                progress=progress,
+                check_files=check_files,
+                resource_profile=resource_profile,
+                cpu_override=cpu_override,
+                memory_override=memory_override,
+                walltime_override=walltime_override,
+                accelerator_override=accelerator_override,
+                container_image=container_image,
+                container_runtime=container_runtime,
             )
-            outputs = executor.dry_run(plan, cfg)
-        typer.echo(json.dumps({key: str(value) for key, value in outputs.items()}, indent=2))
+        )
+        typer.echo(json.dumps(result["outputs"], indent=2))
     except Exception as exc:
         _fail(exc)
 
@@ -545,35 +543,8 @@ def inspect_command(
         _emit_agent_json(ABIAgentInterface().inspect(result_dir=result_dir))
         return
     try:
-        provenance = result_dir / "provenance"
-        commands = _read_tsv(provenance / "commands.tsv")
-        resolved_inputs = _read_tsv(provenance / "resolved_inputs.tsv")
-        failed = [row for row in commands if row.get("status") == "failed"]
-        skipped = [row for row in commands if row.get("status") == "skipped"]
-        # Identify inputs that are missing (doesn't exist) or are placeholders.
-        # 识别缺失的输入（不存在）或是占位符。
-        missing_inputs = [
-            row
-            for row in resolved_inputs
-            if str(row.get("exists", "")).lower() == "false"
-            or "NOT_CONFIGURED" in row.get("path", "")
-        ]
-        summary_path = provenance / "run_summary.json"
-        summary = load_json_object(summary_path) if summary_path.exists() else {}
-        typer.echo(
-            json.dumps(
-                {
-                    "result_dir": str(result_dir),
-                    "status": summary.get("status", "unknown"),
-                    "step_count": len(commands),
-                    "failed_steps": failed,
-                    "skipped_steps": skipped,
-                    "missing_or_placeholder_inputs": missing_inputs,
-                },
-                indent=2,
-                ensure_ascii=False,
-            )
-        )
+        result = _agent_result(ABIAgentInterface().inspect(result_dir=result_dir))
+        typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
     except Exception as exc:
         _fail(exc)
 
@@ -666,19 +637,10 @@ def report_command(
         )
         return
     try:
-        plan_path = result_dir / "execution_plan.json"
-        if not plan_path.exists():
-            raise ABIError(f"Missing execution plan: {plan_path}")
-        plan_data = load_json_object(plan_path)
-        plugin_id = analysis_type or str(plan_data.get("analysis_type") or "")
-        if not plugin_id:
-            raise ABIError(
-                "No analysis type specified. Pass --type or ensure the execution plan "
-                "contains an analysis_type field."
-            )
-        plugin = get_plugin(plugin_id)
-        outputs = plugin.write_report(plan_data, result_dir)
-        typer.echo(json.dumps({key: str(value) for key, value in outputs.items()}, indent=2))
+        result = _agent_result(
+            ABIAgentInterface().report(result_dir=result_dir, analysis_type=analysis_type)
+        )
+        typer.echo(json.dumps(result["outputs"], indent=2))
     except Exception as exc:
         _fail(exc)
 
@@ -943,6 +905,13 @@ def run_command(
                 smoke=smoke,
                 check_files=check_files,
                 confirm_execution=False,
+                resource_profile=resource_profile,
+                cpu_override=cpu_override,
+                memory_override=memory_override,
+                walltime_override=walltime_override,
+                accelerator_override=accelerator_override,
+                container_image=container_image,
+                container_runtime=container_runtime,
             )
         )
         return
@@ -972,39 +941,49 @@ def run_command(
                 smoke=smoke,
                 check_files=check_files,
                 confirm_execution=confirm_execution,
+                resource_profile=resource_profile,
+                cpu_override=cpu_override,
+                memory_override=memory_override,
+                walltime_override=walltime_override,
+                accelerator_override=accelerator_override,
+                container_image=container_image,
+                container_runtime=container_runtime,
             )
         )
         return
     try:
-        result = _run_with_runtime(
-            analysis_type=analysis_type,
-            engine=engine,
-            config=config,
-            sample_sheet=sample_sheet,
-            profile=profile,
-            mode=mode,
-            threads=threads,
-            outdir=outdir,
-            log_dir=log_dir,
-            workflow=workflow,
-            work_dir=work_dir,
-            nxf_home=nxf_home,
-            nextflow_bin=nextflow_bin,
-            nextflow_profile=nextflow_profile,
-            executor=executor,
-            resume=resume,
-            mamba_root=mamba_root,
-            smoke=smoke,
-            check_files=check_files,
-            resource_profile=resource_profile,
-            cpu_override=cpu_override,
-            memory_override=memory_override,
-            walltime_override=walltime_override,
-            accelerator_override=accelerator_override,
-            container_image=container_image,
-            container_runtime=container_runtime,
+        result = _agent_result(
+            ABIAgentInterface().run(
+                analysis_type=analysis_type,
+                engine=engine,
+                config_path=config,
+                sample_sheet=sample_sheet,
+                profile=profile,
+                mode=mode,
+                threads=threads,
+                outdir=outdir,
+                log_dir=log_dir,
+                workflow=workflow,
+                work_dir=work_dir,
+                nxf_home=nxf_home,
+                nextflow_bin=nextflow_bin,
+                nextflow_profile=nextflow_profile,
+                executor=executor,
+                resume=resume,
+                mamba_root=mamba_root,
+                smoke=smoke,
+                check_files=check_files,
+                confirm_execution=True,
+                resource_profile=resource_profile,
+                cpu_override=cpu_override,
+                memory_override=memory_override,
+                walltime_override=walltime_override,
+                accelerator_override=accelerator_override,
+                container_image=container_image,
+                container_runtime=container_runtime,
+            )
         )
-        typer.echo(json.dumps({key: str(value) for key, value in result.outputs.items()}, indent=2))
+        typer.echo(json.dumps(result["outputs"], indent=2))
     except Exception as exc:
         _fail(exc)
 
@@ -1117,28 +1096,31 @@ def run_nextflow_command(
         )
         return
     try:
-        result = _run_with_runtime(
-            analysis_type=analysis_type,
-            engine="nextflow",
-            config=config,
-            sample_sheet=sample_sheet,
-            profile=profile,
-            mode=mode,
-            threads=threads,
-            outdir=outdir,
-            log_dir=log_dir,
-            workflow=workflow,
-            work_dir=work_dir,
-            nxf_home=nxf_home,
-            nextflow_bin=nextflow_bin,
-            nextflow_profile=nextflow_profile,
-            executor=executor,
-            resume=resume,
-            mamba_root=mamba_root,
-            smoke=smoke,
-            check_files=check_files,
+        result = _agent_result(
+            ABIAgentInterface().run(
+                analysis_type=analysis_type,
+                engine="nextflow",
+                config_path=config,
+                sample_sheet=sample_sheet,
+                profile=profile,
+                mode=mode,
+                threads=threads,
+                outdir=outdir,
+                log_dir=log_dir,
+                workflow=workflow,
+                work_dir=work_dir,
+                nxf_home=nxf_home,
+                nextflow_bin=nextflow_bin,
+                nextflow_profile=nextflow_profile,
+                executor=executor,
+                resume=resume,
+                mamba_root=mamba_root,
+                smoke=smoke,
+                check_files=check_files,
+                confirm_execution=True,
+            )
         )
-        typer.echo(json.dumps({key: str(value) for key, value in result.outputs.items()}, indent=2))
+        typer.echo(json.dumps(result["outputs"], indent=2))
     except Exception as exc:
         _fail(exc)
 
@@ -1413,6 +1395,11 @@ def setup_resources_command(
 @app.command("doctor-agent")
 def doctor_agent_command(
     analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
+    output_json: bool = typer.Option(
+        False,
+        "--output-json",
+        help="Emit the agent JSON envelope.",
+    ),
 ) -> None:
     """Print the shortest safe operating guide for ABI agent callers.
 
@@ -1426,6 +1413,9 @@ def doctor_agent_command(
     （plan -> dry-run -> 确认后 run）以及常见的陷阱和建议的后续步骤。
     设计用于粘贴到 LLM 系统提示中，使 agent 知道如何正确使用 ABI 工具。
     """
+    if output_json:
+        _emit_agent_json(ABIAgentInterface().doctor_agent(analysis_type=analysis_type))
+        return
     try:
         plugin = get_plugin(analysis_type)
         typer.echo(render_doctor_agent(plugin), nl=False)
@@ -1973,102 +1963,6 @@ def _path_string(path: Optional[Path]) -> Optional[str]:
     将 Path 转换为字符串，保留 None。
     """
     return str(path) if path is not None else None
-
-
-def _run_with_runtime(
-    *,
-    analysis_type: str,
-    engine: str,
-    config: Optional[Path],
-    sample_sheet: Optional[Path],
-    profile: str,
-    mode: Optional[str],
-    threads: Optional[int],
-    outdir: Optional[str],
-    log_dir: Optional[str],
-    workflow: Optional[Path],
-    work_dir: Optional[Path],
-    nxf_home: Optional[Path],
-    nextflow_bin: Optional[Path],
-    nextflow_profile: Optional[str],
-    executor: Optional[str],
-    resume: bool,
-    mamba_root: Optional[Path],
-    smoke: bool,
-    check_files: bool,
-    resource_profile: Optional[str] = None,
-    cpu_override: Optional[int] = None,
-    memory_override: Optional[str] = None,
-    walltime_override: Optional[str] = None,
-    accelerator_override: Optional[str] = None,
-    container_image: Optional[str] = None,
-    container_runtime: Optional[str] = None,
-) -> Any:
-    """Resolve config, build plan, select runtime, and execute.
-
-    Shared implementation between ``run`` and ``run-nextflow`` commands.
-    Validates the engine type, applies overrides (including mock_tools for
-    local smoke mode), builds the plan, instantiates the appropriate runtime
-    (LocalRuntime or NextflowRuntime), and calls ``runtime.run()``.
-
-    ``run`` 和 ``run-nextflow`` 命令之间的共享实现。
-    验证引擎类型，应用覆盖项，构建计划，实例化适当的运行时并执行。
-    """
-    runtime_engine = engine.lower().strip()
-    if runtime_engine not in {"local", "nextflow", "hpc"}:
-        raise ABIError(f"Unsupported runtime engine: {engine}. Expected local, nextflow, or hpc.")
-
-    overrides = _common_overrides(
-        mode=mode,
-        threads=threads,
-        outdir=outdir,
-        log_dir=log_dir,
-        sample_sheet=sample_sheet,
-        resource_profile=resource_profile,
-        cpu_override=cpu_override,
-        memory_override=memory_override,
-        walltime_override=walltime_override,
-        accelerator_override=accelerator_override,
-        container_image=container_image,
-        container_runtime=container_runtime,
-    )
-    # For local smoke runs, force mock tools to avoid requiring real installations.
-    # 对于本地 smoke 运行，强制使用 mock 工具以避免需要真实安装。
-    if runtime_engine == "local" and smoke:
-        overrides = overrides | {"mock_tools": True}
-
-    plugin = get_plugin(analysis_type)
-    cfg = plugin.load_config(config, profile=profile, overrides=overrides)
-    plan = plugin.build_plan(cfg, check_files=check_files)
-    options = RuntimeOptions(
-        engine=runtime_engine,
-        smoke=smoke,
-        nextflow_bin=nextflow_bin,
-        work_dir=work_dir,
-        workflow=workflow,
-        nxf_home=nxf_home,
-        mamba_root=mamba_root,
-        profile=nextflow_profile,
-        executor=executor,
-        resume=resume,
-        resource_profile=resource_profile,
-        cpu_override=cpu_override,
-        memory_override=memory_override,
-        walltime_override=walltime_override,
-        accelerator_override=accelerator_override,
-        container_image=container_image,
-        container_runtime=container_runtime,
-    )
-    runtime: Any
-    if runtime_engine == "local":
-        runtime = LocalRuntime(plugin, options=options)
-    elif runtime_engine == "hpc":
-        from abi.runtimes import HpcRuntime
-
-        runtime = HpcRuntime(plugin, options=options)
-    else:
-        runtime = NextflowRuntime(plugin, options=options)
-    return runtime.run(plan, cfg)
 
 
 @app.command("dispatch")

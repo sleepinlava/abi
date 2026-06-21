@@ -213,6 +213,191 @@ def parse_outputs(self, tool_id, output_dir, sample_id):
     ...
 ```
 
+## 测试插件
+
+每个插件必须包含测试。新插件的最小测试套件覆盖三个方面：合约合规、注册表加载和计划生成。
+
+### 最小测试文件 (`tests/test_my_plugin.py`)
+
+```python
+import pytest
+from abi.testing import assert_plugin_contract
+from abi.plugins.my_analysis import MyPlugin
+
+
+def test_plugin_contract():
+    """插件满足 ABIPlugin 协议。"""
+    plugin = MyPlugin()
+    assert_plugin_contract(plugin)
+
+
+def test_registry_loads():
+    """工具注册表 YAML 解析无错误。"""
+    plugin = MyPlugin()
+    registry = plugin.registry()
+    assert len(registry.tools) > 0
+    # 验证预期工具已注册
+    tool_ids = [t.tool_id for t in registry.tools]
+    assert "fastp" in tool_ids
+
+
+def test_build_plan(mock_sample_context, tmp_path):
+    """build_plan() 对默认配置返回有效的 ExecutionPlan。"""
+    plugin = MyPlugin()
+    config = plugin.load_config()
+    config["outdir"] = str(tmp_path)
+    plan = plugin.build_plan(config)
+    assert len(plan.steps) > 0
+    # QC 步骤始终最先
+    assert plan.steps[0].step_id.startswith("qc_")
+
+
+def test_parse_outputs_handles_missing_files(tmp_path):
+    """解析器对缺失文件返回空结果（而非错误）。"""
+    plugin = MyPlugin()
+    result = plugin.parse_outputs("fastp", tmp_path, "S1")
+    assert isinstance(result, dict)
+
+
+@pytest.mark.smoke
+@pytest.mark.requires_tools
+def test_real_execution_smoke(tmp_path):
+    """使用合成数据执行完整管线。"""
+    # 生成最小测试数据，运行真实工具，验证输出……
+    pass
+```
+
+### 插件测试可用的 Fixtures
+
+`tests/conftest.py` 中的所有 fixtures 无需导入即可使用：
+
+| Fixture | 类型 | 用途 |
+|---------|------|------|
+| `mock_sample` | `ABISample` | 带有 illumina 平台的单样本输入 |
+| `mock_sample_context` | `ABISampleContext` | 包含两个分组的单样本上下文 |
+| `mock_contract_dict` | `dict` | 用于脚手架的最小有效工具合约 |
+| `tmp_project` | `Path` | 包含 results/logs/provenance/tables/ 的临时目录 |
+
+### 基准测试
+
+对于数值级验证，使用 `run_benchmark()`：
+
+```python
+from abi.testing.benchmark import run_benchmark
+
+@pytest.mark.smoke
+@pytest.mark.requires_tools
+def test_my_plugin_benchmark(tmp_path):
+    result = run_benchmark(
+        plugin_id="my_analysis",
+        dataset_path=Path("data/benchmarks/my_analysis"),
+        outdir=tmp_path / "results",
+    )
+    assert result.total > 0
+    assert result.passed >= result.total * 0.7  # 开发阶段阈值
+```
+
+参见 `docs/zh/testing.md` 获取完整测试指南。
+
+## 资源管理
+
+ABI 为生物信息学数据库提供资源发现和自动安装系统。插件作者声明资源需求；ABI 负责检查、下载和安装后钩子。
+
+### 声明资源
+
+资源在 `plugins/<name>/abi-plugin.yaml` 中声明：
+
+```yaml
+resources:
+  my_database:
+    name: "My Database"
+    description: "MyTool 的参考数据库"
+    url: "https://example.com/my_database.tar.gz"
+    size_gb: 2.5
+    required_by: [my_tool]
+    install_post: "makeblastdb -in {resource_dir}/sequences.fasta -dbtype nucl"
+    env_name: my_env
+```
+
+### ResourceSpec 字段
+
+| 字段 | 类型 | 描述 |
+|------|------|------|
+| `name` | `str` | 人类可读的名称 |
+| `description` | `str` | 资源提供的内容 |
+| `url` | `str` | 下载 URL（支持 http/https/S3） |
+| `size_gb` | `float` | 大约下载大小 |
+| `required_by` | `list[str]` | 依赖此资源的工具 ID |
+| `install_post` | `str` 或 `None` | 下载后运行的 shell 命令（如 `makeblastdb`） |
+| `env_name` | `str` | 提供安装后工具的 conda 环境 |
+
+### CLI 命令
+
+```bash
+# 检查哪些资源可用/缺失
+abi check-resources --type my_analysis
+
+# 下载并安装缺失的资源（需要确认）
+abi setup-resources --type my_analysis --confirm
+```
+
+### 环境解析
+
+工具 → 环境分配在 `environments.yaml` 中，而非在单个工具合约中。注册工具时，将其环境分配添加到 `environments.yaml`：
+
+```yaml
+tool_assignments:
+  my_analysis:
+    my_tool: my_env
+```
+
+`ToolRegistry` 在运行时注入正确的 `env_name`。运行 `scripts/emit_env_yamls.py` 重新生成每个环境的 `envs/*.yml` 文件。
+
+## 断言表达式参考
+
+步骤合约支持以简单表达式语言编写的断言。断言在工具执行后根据解析后的输出进行评估。
+
+### 变量
+
+| 变量 | 类型 | 示例 |
+|------|------|------|
+| `output_json.<key>` | Any | `output_json.summary.after_filtering.total_reads` |
+| `output_files.<name>` | Path | `output_files.clean_read1` |
+| `output_dir` | Path | `output_dir` |
+| `return_code` | int | `return_code` |
+
+### 运算符
+
+| 运算符 | 示例 | 含义 |
+|--------|------|------|
+| `>` | `output_json.total > 0` | 大于 |
+| `>=` | `output_json.qual >= 30` | 大于等于 |
+| `<` | `output_json.errors < 10` | 小于 |
+| `<=` | `return_code <= 0` | 小于等于 |
+| `==` | `output_json.status == "complete"` | 等于 |
+| `!=` | `return_code != 1` | 不等于 |
+| `exists` | `output_files.clean_read1 exists` | 文件/目录存在 |
+| `contains` | `output_json.log contains "done"` | 字符串包含 |
+
+### 在 pipeline_dag.yaml 中编写断言
+
+```yaml
+nodes:
+  qc_fastp:
+    tool_id: fastp
+    # ...
+    assertions:
+      - "output_json.summary.after_filtering.total_reads > 0"
+      - "output_json.summary.after_filtering.q30_rate >= 0.8"
+      - "output_files.clean_read1 exists"
+      - "output_files.clean_read2 exists"
+      - "return_code == 0"
+```
+
+### 断言评估
+
+断言在输出验证之后进行评估。如果任何断言失败，步骤将被标记为失败，并抛出包含失败断言详情的 `ContractViolationError`。所有断言必须通过步骤才能成功。
+
 ## 执行安全
 
 插件应使 `plan` 和 `dry_run` 对 Agent 安全。真实的外部工具执行只能在显式确认后通过 `run` 进行。

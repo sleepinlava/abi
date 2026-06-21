@@ -155,6 +155,22 @@ class TestTopologicalSort:
         # neither depends on the other within the subset (b is excluded).
         assert set(order) == {"a", "c"}
 
+    def test_resolved_fallback_edges_drive_topological_order(self) -> None:
+        spec = {
+            "nodes": {
+                "qc": {"depends_on": []},
+                "assembly": {
+                    "depends_on": ["host_removal"],
+                    "fallback_depends": ["qc"],
+                },
+            }
+        }
+        dag = UniversalDAG(spec)
+        resolved = dag.resolve_dependencies(["qc", "assembly"], "illumina")
+
+        assert resolved["assembly"] == ["qc"]
+        assert dag.topological_order(resolved) == ["qc", "assembly"]
+
 
 # ── Active node filtering ─────────────────────────────────────────────────
 
@@ -212,6 +228,20 @@ class TestActiveNodeFiltering:
         active = dag.active_node_ids("illumina", {"differential_expression": {"enable": False}})
         assert "required_qc" in active  # always active
         assert "optional_de" not in active  # filtered by category disable
+
+    def test_workflow_include_nodes_selects_auditable_subpath(self) -> None:
+        spec = {"nodes": {"qc": {}, "assembly": {}, "report": {}}}
+        dag = UniversalDAG(spec)
+
+        active = dag.active_node_ids("illumina", {"workflow": {"include_nodes": ["qc", "report"]}})
+
+        assert active == ["qc", "report"]
+
+    def test_workflow_include_nodes_rejects_unknown_node(self) -> None:
+        dag = UniversalDAG({"nodes": {"qc": {}}})
+
+        with pytest.raises(ValueError, match="unknown nodes"):
+            dag.active_node_ids("illumina", {"workflow": {"include_nodes": ["missing"]}})
 
 
 # ── Scope and category ────────────────────────────────────────────────────

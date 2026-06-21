@@ -1,5 +1,6 @@
 import pytest
 
+from abi.contracts import WorkflowSpec, WorkflowStepSpec, load_workflow_spec
 from abi.dag import infer_dag, process_name
 from abi.plugins import get_plugin
 from abi.schemas import ABIError, ABIPlanStep
@@ -156,3 +157,102 @@ def test_infer_dag_ignores_structured_non_path_values():
 
 def test_process_name_is_nextflow_safe():
     assert process_name("1 sample/qc-fastp") == "STEP_1_SAMPLE_QC_FASTP"
+
+
+def test_metatranscriptomics_declared_workflow_is_golden_dag(tmp_path):
+    plugin = get_plugin("metatranscriptomics")
+    config = plugin.load_config(
+        overrides={"outdir": str(tmp_path / "results"), "log_dir": str(tmp_path / "logs")}
+    )
+    plan = plugin.build_plan(config)
+    workflow = load_workflow_spec(plugin.root)
+
+    dag = infer_dag(plan.steps, workflow_spec=workflow)
+
+    assert dag.edges["RNA1_alignment_star"] == ["RNA1_qc_fastp"]
+    assert dag.edges["RNA1_expression_featurecounts"] == ["RNA1_alignment_star"]
+
+
+def test_metagenomic_plasmid_core_declared_workflow_is_golden_dag():
+    plugin = get_plugin("metagenomic_plasmid")
+    config = plugin.load_config("examples/metagenomic_plasmid/config_core_demo.yaml")
+    plan = plugin.build_plan(config)
+    workflow = load_workflow_spec(plugin.root)
+
+    dag = infer_dag(plan.steps, workflow_spec=workflow)
+    positions = {step_id: index for index, step_id in enumerate(dag.topological_order)}
+
+    assert positions["S1_qc_fastp"] < positions["S1_assembly_megahit"]
+    assert positions["S1_assembly_megahit"] < positions["S1_plasmid_detect_genomad"]
+    assert positions["S1_plasmid_detect_genomad"] < positions["S1_annotation_bakta"]
+    assert positions["S1_plasmid_detect_genomad"] < positions["S1_typing_plasmidfinder"]
+    assert positions["S1_plasmid_detect_genomad"] < positions["S1_abundance_coverm"]
+    assert positions["S1_abundance_coverm"] < positions["report_markdown"]
+
+
+def test_declared_workflow_path_mismatch_emits_warning(caplog):
+    steps = [
+        ABIPlanStep(
+            step_id="qc",
+            sample_id="S1",
+            step_name="qc",
+            tool_id="fastp",
+            category="qc",
+            outputs={"reads": "trimmed.fastq.gz"},
+        ),
+        ABIPlanStep(
+            step_id="alignment",
+            sample_id="S1",
+            step_name="alignment",
+            tool_id="star",
+            category="alignment",
+            inputs={"reads": "different.fastq.gz"},
+        ),
+    ]
+    workflow = WorkflowSpec(
+        name="mismatch",
+        steps=[
+            WorkflowStepSpec(id="qc", tool="fastp", after=[]),
+            WorkflowStepSpec(id="alignment", tool="star", after=["qc"]),
+        ],
+    )
+
+    infer_dag(steps, workflow_spec=workflow)
+
+    assert "declared-but-not-inferred=['qc']" in caplog.text
+
+
+def test_declared_workflow_missing_node_fails():
+    step = ABIPlanStep(
+        step_id="qc",
+        sample_id="S1",
+        step_name="qc",
+        tool_id="fastp",
+        category="qc",
+    )
+    workflow = WorkflowSpec(
+        name="broken",
+        steps=[WorkflowStepSpec(id="qc", tool="fastp", after=["undefined"])],
+    )
+
+    with pytest.raises(ABIError, match="undefined dependencies"):
+        infer_dag([step], workflow_spec=workflow)
+
+
+def test_declared_workflow_cycle_fails():
+    steps = [
+        ABIPlanStep(step_id="a", sample_id=None, step_name="a", tool_id="a", category="test"),
+        ABIPlanStep(step_id="b", sample_id=None, step_name="b", tool_id="b", category="test"),
+        ABIPlanStep(step_id="c", sample_id=None, step_name="c", tool_id="c", category="test"),
+    ]
+    workflow = WorkflowSpec(
+        name="cycle",
+        steps=[
+            WorkflowStepSpec(id="a", tool="a", after=["c"]),
+            WorkflowStepSpec(id="b", tool="b", after=["a"]),
+            WorkflowStepSpec(id="c", tool="c", after=["b"]),
+        ],
+    )
+
+    with pytest.raises(ABIError, match="Cycle detected"):
+        infer_dag(steps, workflow_spec=workflow)

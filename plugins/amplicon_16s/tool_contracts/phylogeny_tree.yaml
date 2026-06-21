@@ -1,0 +1,30 @@
+abi_version: "0.1"
+tool_id: phylogeny_tree
+name: Phylogeny Tree (FastTree)
+category: phylogeny
+purpose: Infer a nucleotide phylogeny from the aligned ASV sequences.
+inputs:
+  aligned_fasta:
+    type: file
+    format: fasta
+    required: true
+outputs:
+  phylogeny_tree:
+    type: file
+    format: nwk
+execution:
+  executable: fasttree
+  command_template: fasttree -nt {aligned_fasta} > {output_dir}/phylogeny.nwk
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Verify that MAFFT produced aligned.fasta.
+  tool_not_found:
+    hint: Install FastTree in the amplicon environment.
+  nonzero_exit:
+    hint: Inspect the phylogeny_tree stderr log.
+resources:
+  cpu: 2
+  memory: 4GB
+  walltime: 01:00:00

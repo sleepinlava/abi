@@ -146,6 +146,14 @@ tmp/
 temp/
 scratch/
 
+# SciPlot generated figures / test artifacts
+src/abi/sciplot/tests/_output/
+src/abi/sciplot/tests/_render_check/
+
+# Generated env YAMLs (derived from environments.yaml)
+envs/*.yml
+!envs/.gitkeep
+
 # Container / environment
 *.sif
 *.img
@@ -161,6 +169,8 @@ conda.lock
 !.claude/skills/**
 !.claude/workflows/
 !.claude/workflows/**
+!.claude/scheduled_tasks.json
+.claude/worktrees/
 docs/_build/
 .readthedocs-cache/
 .codex/

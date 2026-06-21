@@ -1,0 +1,63 @@
+project_name: plasmid_core_demo
+mode: auto
+threads: 2
+outdir: results/plasmid_core_demo
+log_dir: results/plasmid_core_demo/logs
+mock_tools: false
+
+input:
+  sample_sheet: examples/sample_sheet_illumina.tsv
+
+workflow:
+  data_profile: short_read_metagenome
+  include_nodes:
+    - qc_fastp
+    - assembly_megahit
+    - plasmid_detect_genomad
+    - plasmid_consensus
+    - annotation_bakta
+    - typing_plasmidfinder
+    - abundance_bowtie2
+    - abundance_samtools
+    - abundance_coverm
+    - report_markdown
+
+qc:
+  enable: true
+  run_fastqc: false
+  run_multiqc: false
+  tool: fastp
+
+assembly:
+  enable: true
+  tool: megahit
+
+plasmid_detection:
+  enable: true
+  tools: [genomad]
+  strategy: single_tool
+
+annotation:
+  enable: true
+  general_annotator: bakta
+
+typing:
+  enable: true
+  tools: [plasmidfinder]
+
+abundance:
+  enable: true
+  tool: coverm
+
+sample_analysis:
+  enable: false
+
+resources:
+  root: resources/autoplasm
+  auto_download: false
+  genomad:
+    database: GENOMAD_DB_NOT_CONFIGURED
+  bakta:
+    database: BAKTA_DB_NOT_CONFIGURED
+  plasmidfinder:
+    database: PLASMIDFINDER_DB_NOT_CONFIGURED

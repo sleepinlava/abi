@@ -91,6 +91,7 @@ import json
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping
 
@@ -109,6 +110,8 @@ from abi.filesystem import ensure_directory
 from abi.provenance import (
     PipelineProgressRecorder,
     RunLogger,
+    capture_tool_version,
+    reset_run_provenance,
     write_commands_tsv,
     write_minimal_progress_artifacts,
     write_resolved_inputs_tsv,
@@ -218,11 +221,12 @@ class GenericABIExecutor:
         # 创建三层输出目录结构。
         outdir = ensure_directory(plan.outdir, label="Output directory")
         provenance = ensure_directory(outdir / "provenance", label="Provenance directory")
+        reset_run_provenance(provenance)
         tables_dir = ensure_directory(outdir / "tables", label="Standard tables directory")
         self.table_manager.ensure_tables(tables_dir)
         # Pre-create per-step output directories so tools don't fail on missing dirs.
         # 预先创建每个步骤的输出目录，避免工具因缺少目录而失败。
-        self._ensure_step_output_dirs(plan.steps)
+        self._ensure_step_output_dirs(plan.steps, registry=self.registry)
 
         # Persist the plan so it can be inspected later (e.g., by `abi inspect`).
         # 持久化计划，以便后续检查（例如通过 `abi inspect`）。
@@ -329,7 +333,10 @@ class GenericABIExecutor:
                             if error:
                                 failed_errors.append(error)
                                 self.logger.log_step(
-                                    step, status="failed", error_message=str(error)
+                                    step,
+                                    command=row.get("command", ""),
+                                    status="failed",
+                                    error_message=str(error),
                                 )
                         if error and error_policy != "continue":
                             break
@@ -362,7 +369,12 @@ class GenericABIExecutor:
                     command_rows.append(row)
                     if error:
                         failed_errors.append(error)
-                        self.logger.log_step(step, status="failed", error_message=str(error))
+                        self.logger.log_step(
+                            step,
+                            command=row.get("command", ""),
+                            status="failed",
+                            error_message=str(error),
+                        )
                         if error_policy != "continue":
                             break
             else:
@@ -380,7 +392,12 @@ class GenericABIExecutor:
                     command_rows.append(row)
                     if error:
                         failed_errors.append(error)
-                        self.logger.log_step(step, status="failed", error_message=str(error))
+                        self.logger.log_step(
+                            step,
+                            command=row.get("command", ""),
+                            status="failed",
+                            error_message=str(error),
+                        )
                         if error_policy == "continue":
                             continue
                         break
@@ -489,7 +506,10 @@ class GenericABIExecutor:
         # even for failed runs.
         # 在写出所有产物后抛出，以便调用者即使对失败的运行也能检查溯源。
         if failed_errors:
-            raise ToolError(f"{len(failed_errors)} step(s) failed")
+            details = "; ".join(str(error) for error in failed_errors[:3])
+            if len(failed_errors) > 3:
+                details += f"; +{len(failed_errors) - 3} more"
+            raise ToolError(f"{len(failed_errors)} step(s) failed: {details}")
         return outputs
 
     def _execute_step(
@@ -635,6 +655,7 @@ class GenericABIExecutor:
         # 创建 ToolSkill 实例。mock_tools=True 表示使用 smoke/mock 包装器。
         skill = self.registry.create(step.tool_id, mock_tools=self.mock_tools)
         step_log_dir = provenance / "step_logs"
+        step_log_dir.mkdir(parents=True, exist_ok=True)
         # Merge step inputs, params, and outputs into a single parameter dict.
         # 将步骤的 inputs、params 和 outputs 合并为单个参数字典。
         params = self._params_for_step(step, dry_run=False)
@@ -669,6 +690,7 @@ class GenericABIExecutor:
                 stderr_path=params["stderr_path"],
                 message=str(exc),
             )
+            Path(params["stderr_path"]).write_text(str(exc) + "\n", encoding="utf-8")
             return {"status": "failed", "return_code": "", "reason": reason}
         if result.return_code != 0:
             # The tool ran but exited with a non-zero code.
@@ -884,8 +906,23 @@ class GenericABIExecutor:
             "alignment",
             "counts",
         }
+        sample_paths = {
+            str(value)
+            for sample in getattr(plan, "samples", [])
+            for value in (
+                getattr(sample, "read1", None),
+                getattr(sample, "read2", None),
+                getattr(sample, "long_reads", None),
+                getattr(sample, "assembly", None),
+                getattr(sample, "host_reference", None),
+            )
+            if value
+        }
         for step in plan.steps:
-            params = self._params_for_step(step, dry_run=dry_run)
+            params = dict(step.inputs)
+            for name in path_fields:
+                if name not in params and name in step.params:
+                    params[name] = step.params[name]
             for name in sorted(path_fields):
                 value = params.get(name)
                 if not value:
@@ -901,11 +938,7 @@ class GenericABIExecutor:
                         "exists": path.exists(),
                         # Tag the origin so users can trace where each path came from.
                         # 标记来源，以便用户可以追踪每个路径的来源。
-                        "source": (
-                            "sample"
-                            if name in step.inputs and str(step.inputs.get(name)) == str(value)
-                            else "config_or_plan"
-                        ),
+                        "source": "sample" if str(value) in sample_paths else "config_or_plan",
                     }
                 )
         return rows
@@ -929,21 +962,14 @@ class GenericABIExecutor:
         rows = []
         for tool in self.registry.list_tools():
             skill = self.registry.create(str(tool.get("id")), mock_tools=self.mock_tools)
-            installed = skill.check_installation()
-            version = ""
-            if installed and not self.mock_tools:
-                # B5/B2 fix: capture actual version string (non-fatal)
-                try:
-                    version = skill.capture_version()
-                except Exception:
-                    version = "capture_failed"
+            version, status = capture_tool_version(skill, mock_tools=self.mock_tools)
             rows.append(
                 {
                     "tool_id": tool.get("id"),
                     "executable": tool.get("executable", ""),
                     "env_name": tool.get("env_name", ""),
                     "version": version,
-                    "status": "ok" if installed else "missing",
+                    "status": status,
                 }
             )
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -968,10 +994,34 @@ class GenericABIExecutor:
         委托给 ``ToolRegistry.check_tools()``，后者检查每个工具所需的数据库、
         索引和模型资源。
         """
-        rows = self.registry.check_tools(mock_tools=self.mock_tools, config=config)
+        analysis_type = str(config.get("analysis_type", ""))
+        if analysis_type:
+            from abi.resources import check_resources
+
+            rows = check_resources(analysis_type=analysis_type, config=config)
+        else:
+            rows = self.registry.check_tools(mock_tools=self.mock_tools, config=config)
+        validated_at = datetime.now().isoformat(timespec="seconds")
+        normalized = []
+        for row in rows:
+            item = dict(row)
+            item.setdefault("resource_id", str(item.get("tool_id", "")))
+            item.setdefault("path", "")
+            item.setdefault("status", "not_configured")
+            item.setdefault("version", "")
+            item.setdefault("source", str(item.get("source_url", "")))
+            item.setdefault("checksum", "")
+            item.setdefault("license", "")
+            item.setdefault("validated_at", str(item.get("last_checked_at", validated_at)))
+            normalized.append(item)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            json.dumps({"resources": rows}, indent=2, ensure_ascii=False) + "\n",
+            json.dumps(
+                {"generated_at": validated_at, "resources": normalized},
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n",
             encoding="utf-8",
         )
         return path
@@ -1002,7 +1052,11 @@ class GenericABIExecutor:
         return write_yaml(environment, path)
 
     @staticmethod
-    def _ensure_step_output_dirs(steps: Iterable[Any]) -> None:
+    def _ensure_step_output_dirs(
+        steps: Iterable[Any],
+        *,
+        registry: ToolRegistry | None = None,
+    ) -> None:
         """Pre-create output directories for all steps.
 
         For each step's outputs, if the output path has a file extension suffix,
@@ -1019,11 +1073,23 @@ class GenericABIExecutor:
         这在任何步骤执行之前调用，因此工具不会因其预期的输出目录尚不存在而失败。
         """
         for step in steps:
+            metadata: Mapping[str, Any] = {}
+            if registry is not None and registry.has(step.tool_id):
+                metadata = registry.get(step.tool_id)
+            must_not_exist = str(metadata.get("output_dir_policy", "create")) == "must_not_exist"
+            declared_output_dir = step.outputs.get("output_dir")
+            output_dir_path = Path(str(declared_output_dir)) if declared_output_dir else None
             for key, output_path in step.outputs.items():
                 if output_path is None:
                     continue
                 path = Path(str(output_path))
                 if key == "output_dir":
+                    if must_not_exist:
+                        ensure_directory(
+                            path.parent.resolve(),
+                            label=f"Output parent directory for {step.step_id}",
+                        )
+                        continue
                     # Create the output directory so tools that don't mkdir -p
                     # internally (fastp, STAR, featureCounts) work. Tools that
                     # reject pre-existing dirs (megahit, metaflye) are handled
@@ -1034,6 +1100,17 @@ class GenericABIExecutor:
                     )
                     continue
                 if path.suffix:
+                    if must_not_exist and output_dir_path is not None:
+                        try:
+                            path.resolve().relative_to(output_dir_path.resolve())
+                        except ValueError:
+                            pass
+                        else:
+                            ensure_directory(
+                                output_dir_path.parent.resolve(),
+                                label=f"Output parent directory for {step.step_id}",
+                            )
+                            continue
                     # Create the parent directory even if it overlaps with
                     # another step's output_dir — tools like fastp and STAR
                     # need it to exist before they write to it.
@@ -1042,7 +1119,13 @@ class GenericABIExecutor:
                         label=f"Output parent directory for {step.step_id}",
                     )
                 else:
-                    ensure_directory(path, label=f"Output directory for {step.step_id}")
+                    if must_not_exist:
+                        ensure_directory(
+                            path.parent.resolve(),
+                            label=f"Output parent directory for {step.step_id}",
+                        )
+                    else:
+                        ensure_directory(path, label=f"Output directory for {step.step_id}")
 
 
 def _execution_options(config: Mapping[str, Any]) -> Dict[str, Any]:

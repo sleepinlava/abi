@@ -37,7 +37,7 @@ import csv
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from abi._shared import _clean, _parse_fastp, _parse_star, _resolve_path
+from abi._shared import _clean, _offline_sample_context, _parse_fastp, _parse_star, _resolve_path
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
 from abi.report import write_plugin_report
 from abi.schemas import ABIExecutionPlan, ABISample, ABISampleContext
@@ -189,22 +189,7 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
     if not sample_sheet.exists():
         if check_files:
             raise ValueError(f"Sample sheet does not exist: {sample_sheet}")
-        # Return a minimal synthetic context for dry-run / testing
-        return ABISampleContext(
-            samples=[
-                ABISample(
-                    sample_id="S1",
-                    platform="illumina",
-                    read1="/tmp/R1.fq",
-                    read2="/tmp/R2.fq",
-                    condition="untreated",
-                )
-            ],
-            multi_sample=False,
-            has_groups=False,
-            enable_sample_analysis=False,
-            enable_differential_abundance=False,
-        )
+        return _offline_sample_context(condition="CONDITION_NOT_CONFIGURED")
     with sample_sheet.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
         if reader.fieldnames is None:

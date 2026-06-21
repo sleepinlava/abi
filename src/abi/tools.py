@@ -969,6 +969,7 @@ class GenericCommandSkill(ToolSkill):
         upstream steps), so validation is skipped. / 试运行时上游输出可能还不存在。
         """
         missing: List[str] = []
+        resource_placeholders: List[str] = []
         for key in self.metadata.get("inputs", []):
             value = params.get(key)
             if not value:
@@ -980,8 +981,17 @@ class GenericCommandSkill(ToolSkill):
             else:
                 candidates = [str(value)]
             for cand in candidates:
+                if key in RESOURCE_FIELDS and any(
+                    marker in cand for marker in ("NOT_CONFIGURED", "PLACEHOLDER", "TODO")
+                ):
+                    resource_placeholders.append(f"{key}={cand}")
+                    continue
                 if _looks_like_path(cand) and not Path(cand).exists():
                     missing.append(f"{key}={cand}")
+        if resource_placeholders and not params.get("dry_run", False):
+            raise ToolError(
+                f"{self.name}: Resource NOT_CONFIGURED: {', '.join(resource_placeholders)}"
+            )
         if missing and not params.get("dry_run", False):
             raise ToolError(f"{self.name}: input files do not exist: {', '.join(missing)}")
 

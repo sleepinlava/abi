@@ -213,6 +213,37 @@ def classify_exception(exc: Exception, *, command: str) -> tuple[str, List[Dict[
             "Run plan or dry-run first, or pass the correct result_dir.",
             artifact=_extract_path(message),
         )
+    if "tool not found" in lowered or "executable" in lowered:
+        # Tool failures often include generic resource-check advice; classify
+        # the explicit executable failure before those broader words.
+        return _diagnosis(
+            "tool_not_found",
+            "A registered external tool executable could not be found.",
+            "Install the tool in the configured environment or update the tool registry.",
+        )
+    if "not_configured" in lowered:
+        # Classify resource placeholders before generic missing-file phrases.
+        return _diagnosis(
+            "missing_resource",
+            "A required resource is missing or still set to a placeholder.",
+            "Configure the resource path or run a dry-run with --no-check-files if only planning.",
+            artifact=_extract_path(message),
+        )
+    if "database" in lowered or "db_path" in lowered or "db_dir" in lowered:
+        # Classify database failures before generic missing-file phrases.
+        return _diagnosis(
+            "missing_database",
+            "A required bioinformatics database is not configured or unavailable.",
+            "Run the resource checker or configure a valid local database path.",
+            artifact=_extract_path(message),
+        )
+    if "resource" in lowered:
+        return _diagnosis(
+            "missing_resource",
+            "A required resource is missing or still set to a placeholder.",
+            "Configure the resource path or run a dry-run with --no-check-files if only planning.",
+            artifact=_extract_path(message),
+        )
     if error_type in {"FileNotFoundError"} or _looks_like_missing_input(lowered):
         # The OS can't find a file or path — check config and sample sheet paths.
         # 操作系统找不到文件或路径 — 检查配置和 sample sheet 中的路径。
@@ -234,17 +265,6 @@ def classify_exception(exc: Exception, *, command: str) -> tuple[str, List[Dict[
             "Fix the sample sheet columns and paths, then rerun plan or dry-run.",
             artifact=_extract_path(message),
         )
-    if "database" in lowered or "db_path" in lowered or "db_dir" in lowered:
-        # A bioinformatics reference database (BLAST, Kraken2, etc.) is missing.
-        # Must check before "config" since ConfigError often wraps database errors.
-        # 生物信息学参考数据库 (BLAST, Kraken2 等) 缺失。
-        # 必须在 "config" 之前检查，因为 ConfigError 经常包装数据库错误。
-        return _diagnosis(
-            "missing_database",
-            "A required bioinformatics database is not configured or unavailable.",
-            "Run the resource checker or configure a valid local database path.",
-            artifact=_extract_path(message),
-        )
     if "config" in lowered or error_type in {"ConfigError"}:
         # Config loading/validation failed — probably a YAML schema mismatch.
         # 配置加载/验证失败 — 可能是 YAML schema 不匹配。
@@ -253,24 +273,6 @@ def classify_exception(exc: Exception, *, command: str) -> tuple[str, List[Dict[
             "The ABI configuration could not be loaded or validated.",
             "Check the YAML file and plugin config schema, then retry.",
             artifact=_extract_path(message),
-        )
-    if "resource" in lowered or "not_configured" in lowered:
-        # A resource path is still the placeholder (NOT_CONFIGURED) or doesn't
-        # exist on disk — needs real configuration before execution.
-        # 资源路径仍为占位符 (NOT_CONFIGURED) 或磁盘上不存在 — 执行前需配置真实路径。
-        return _diagnosis(
-            "missing_resource",
-            "A required resource is missing or still set to a placeholder.",
-            "Configure the resource path or run a dry-run with --no-check-files if only planning.",
-            artifact=_extract_path(message),
-        )
-    if "tool not found" in lowered or "executable" in lowered:
-        # A registered external tool (bwa, samtools, etc.) is not on PATH.
-        # 注册的外部工具 (bwa, samtools 等) 不在 PATH 中。
-        return _diagnosis(
-            "tool_not_found",
-            "A registered external tool executable could not be found.",
-            "Install the tool in the configured environment or update the tool registry.",
         )
     if "nonzero" in lowered or "return code" in lowered:
         # An external subprocess exited with a non-zero status — check stderr.

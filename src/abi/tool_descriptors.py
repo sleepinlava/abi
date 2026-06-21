@@ -95,6 +95,16 @@ COMMON_PLAN_PROPERTIES: Dict[str, Mapping[str, Any]] = {
     "check_files": _boolean("Check input paths when planning."),
 }
 
+RESOURCE_RUNTIME_PROPERTIES: Dict[str, Mapping[str, Any]] = {
+    "resource_profile": _string("Optional resource profile preset."),
+    "cpu_override": _integer("Optional CPU override for every step.", minimum=1),
+    "memory_override": _string("Optional memory override, for example 16GB."),
+    "walltime_override": _string("Optional walltime override, for example 04:00:00."),
+    "accelerator_override": _string("Optional accelerator override."),
+    "container_image": _string("Optional default container image."),
+    "container_runtime": _string("Optional container runtime."),
+}
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Data types
@@ -133,6 +143,7 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
         "description": "Render commands and provenance without executing external tools.",
         "properties": {
             **COMMON_PLAN_PROPERTIES,
+            **RESOURCE_RUNTIME_PROPERTIES,
             "progress": _boolean("Write live progress artifacts when supported."),
         },
         "required": ["analysis_type", "outdir"],
@@ -205,9 +216,10 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
             "log_dir": _string("Optional log directory override."),
             "engine": {
                 "type": "string",
-                "enum": ["local", "nextflow"],
+                "enum": ["local", "nextflow", "hpc"],
                 "description": "Runtime backend.",
             },
+            **RESOURCE_RUNTIME_PROPERTIES,
             "workflow": _string("Optional workflow path to write or run."),
             "work_dir": _string("Optional Nextflow work directory."),
             "nxf_home": _string("Optional Nextflow home directory."),

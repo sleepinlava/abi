@@ -37,6 +37,7 @@ events concurrently without corruption.
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -46,14 +47,64 @@ from abi._shared import _display_command
 from abi.filesystem import ensure_directory
 
 __all__ = [
+    "capture_tool_version",
     "PipelineProgressRecorder",
     "RunLogger",
+    "reset_run_provenance",
     "write_commands_tsv",
     "write_methods_md",
     "write_minimal_progress_artifacts",
     "write_resolved_inputs_tsv",
     "write_tool_versions",
 ]
+
+
+def capture_tool_version(skill: Any, *, mock_tools: bool = False) -> tuple[str, str]:
+    """Capture one tool version without allowing probe failures to abort a run.
+
+    Returns ``(version, status)`` where status is one of ``captured``,
+    ``not_configured``, ``not_found``, ``timeout``, ``failed``, or
+    ``not_captured``.
+    """
+    try:
+        installed = skill.check_installation()
+    except Exception:
+        return "", "not_captured"
+    if mock_tools:
+        return "", "not_captured"
+    if not installed:
+        return "", "not_found"
+    try:
+        version = skill.capture_version()
+    except Exception:
+        return "", "failed"
+    if not version:
+        return "", "not_configured"
+    if version == "version_command_timeout":
+        return version, "timeout"
+    if version.startswith(("version_command_", "regex_unmatched:", "capture_failed")):
+        return version, "failed"
+    return version, "captured"
+
+
+def reset_run_provenance(provenance_dir: str | Path) -> None:
+    """Remove artifacts that cannot be safely carried into a new local run."""
+    root = Path(provenance_dir)
+    for name in (
+        "checksums.json",
+        "commands.tsv",
+        "config.resolved.yaml",
+        "environment.yml",
+        "progress.json",
+        "progress.jsonl",
+        "resolved_inputs.tsv",
+        "resources.json",
+        "run_summary.json",
+        "tool_versions.tsv",
+    ):
+        (root / name).unlink(missing_ok=True)
+    shutil.rmtree(root / "step_logs", ignore_errors=True)
+
 
 # ── RunLogger ──────────────────────────────────────────────────────────
 # Structured JSON-line log for human post-mortem debugging.

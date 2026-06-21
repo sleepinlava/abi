@@ -1,0 +1,32 @@
+# Repository Guidelines
+
+## Project Structure & Module Organization
+
+Core Python code lives in `src/abi/`. Keep transport-neutral behavior in the core; CLI, MCP, HTTP, and provider integrations should remain thin adapters. Built-in workflow implementations are split between Python entry points in `src/abi/plugins/` and declarative definitions in `plugins/<analysis_type>/` (`pipeline_dag.yaml`, tool registries, schemas, and report metadata). Tests are organized under `tests/unit/`, `tests/integration/`, and `tests/smoke/`; SciPlot also has focused tests in `src/abi/sciplot/tests/`. Use `examples/` for runnable configuration samples, `docs/en/` and `docs/zh/` for documentation, `envs/` for Conda environments, `environments.yaml` for tool→env assignments (20 envs, 93 tools), and `scripts/` for maintenance utilities.
+
+Current codebase (2026-06-21): 174 Python source files (~39k lines), 40-module plasmid engine (9,859 lines), 32-file sciplot module (4,516 lines), 62 test files (723 passed, 4 skipped).
+
+## Build, Test, and Development Commands
+
+- `pip install -e ".[dev]"` installs ABI and development tools in editable mode.
+- `pytest tests/ -v --tb=short` runs the main test suite.
+- `pytest tests/unit/test_dag.py -q` runs a focused test module.
+- `pytest tests/ --cov=src/abi --cov-fail-under=60` checks the CI coverage floor.
+- `ruff check src/ tests/` checks lint and import rules.
+- `ruff format --check src/ tests/` verifies formatting; omit `--check` to format locally.
+- `mypy src/abi/ --ignore-missing-imports` performs static type checking.
+- `python -m build` creates wheel and source distributions.
+- `abi query --type metagenomic_plasmid --what stages` lightweight metadata query (~50ms).
+- `abi-sciplot validate --spec figure.yaml` validates a FigureSpec before rendering.
+
+## Coding Style & Naming Conventions
+
+Target Python 3.10 and use four-space indentation with a 100-character line limit. Ruff enforces `E`, `F`, `I`, and `W` rules and supplies formatting. Use `snake_case` for modules, functions, fixtures, and YAML analysis types; use `PascalCase` for classes and `UPPER_SNAKE_CASE` for constants. Add type annotations to public APIs and preserve the "thick core, thin transport, clean plugin" architecture. Run `pre-commit install` to apply Ruff, mypy, YAML/TOML, whitespace, and large-file checks before commits.
+
+## Testing Guidelines
+
+Name test files `test_<feature>.py` and test functions `test_<behavior>`. Add fast isolated checks to `tests/unit/`, cross-component checks to `tests/integration/`, and tool-dependent workflows to `tests/smoke/`. Mark real-tool tests with `@pytest.mark.smoke` and/or `@pytest.mark.requires_tools`. Include regression tests with every behavior change; keep total coverage at or above 60%.
+
+## Commit & Pull Request Guidelines
+
+History uses concise imperative subjects prefixed by scope, such as `feat:`, `fix:`, and `docs:`. Keep each commit focused. Pull requests should explain the problem and solution, list validation commands, link relevant issues, and note configuration or compatibility effects. Include screenshots or generated artifacts for report, documentation, or figure changes. Ensure lint, formatting, typing, tests, and bilingual documentation updates (when applicable) pass before review.

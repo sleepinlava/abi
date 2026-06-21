@@ -72,7 +72,11 @@ class ResourceStatus:
     last_checked_at: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        data["source"] = self.source_url
+        data["license"] = ""
+        data["validated_at"] = self.last_checked_at
+        return data
 
 
 EXAMPLE_ACCESSIONS = {
@@ -608,7 +612,11 @@ def write_resource_manifest(statuses: Iterable[ResourceStatus], path: str | Path
 
 def write_resources_provenance(config: Mapping[str, Any], outdir: str | Path) -> Path:
     path = Path(outdir) / "provenance" / "resources.json"
-    statuses = [ResourceStatus(**row) for row in check_resources(config)]
+    allowed = set(ResourceStatus.__dataclass_fields__)
+    statuses = [
+        ResourceStatus(**{key: value for key, value in row.items() if key in allowed})
+        for row in check_resources(config)
+    ]
     return write_resource_manifest(statuses, path)
 
 
@@ -758,6 +766,8 @@ def _status_for_spec(
     path = _configured_resource_path(config, spec)
     if status_override:
         status = status_override
+    elif any(marker in str(path) for marker in ("NOT_CONFIGURED", "PLACEHOLDER", "TODO")):
+        status = "not_configured"
     elif _resource_path_ready(path, spec):
         status = "ok"
     else:

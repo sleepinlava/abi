@@ -172,6 +172,85 @@ abi query --type metagenomic_plasmid --step qc_fastp --what outputs
 
 所有 `abi query` 命令均支持 `--output-json` 供 Agent 使用。
 
+## `run` vs `dispatch`
+
+两者都执行真实工具，但调用模型不同：
+
+| 方面 | `run` | `dispatch` |
+|------|-------|------------|
+| 调用方式 | CLI 命令 | HTTP 端点 (Job Service) |
+| 阻塞 | 是（同步） | 立即返回（异步） |
+| 确认 | `--confirm-execution` 标志 | 作业队列 + payload 中的 `confirm_execution` |
+| 进度 | 内联进度条/日志 | `GET /jobs/{id}` 轮询 |
+| 取消 | Ctrl+C (SIGINT, 尽力而为) | `POST /jobs/{id}/cancel` (SIGTERM → SIGKILL) |
+| 适用场景 | 交互式 Agent 调用 | 长时间运行的批处理作业、远程执行 |
+
+交互式会话优先使用 `run`。当执行时间超过 Agent 超时或在远程机器上运行时使用 `dispatch`。
+
+## 常见故障排查
+
+### 工具未找到 (`TOOL_NOT_FOUND`)
+
+工具可执行文件不在 PATH 上。检查：
+
+```bash
+# 验证 conda 环境已激活
+conda activate <env_name>
+
+# 或列出哪些工具可用
+abi check-resources --type <analysis_type>
+```
+
+### 资源缺失 (`MISSING_RESOURCE`)
+
+缺少必需的数据库或参考文件：
+
+```bash
+# 查看缺失项
+abi check-resources --type <analysis_type>
+
+# 安装缺失的资源
+abi setup-resources --type <analysis_type> --confirm
+```
+
+### 合约违规 (`CONTRACT_VIOLATION`)
+
+工具输出与预期合约不匹配：
+
+1. 检查 `provenance/step_logs/<step_id>.stderr.log` 获取工具错误
+2. 验证输入文件存在且非空
+3. 检查工具版本是否变更 — 输出格式可能不同
+4. 如果合约过于严格，调整工具合约中的 `min_size` 或 `assertions`
+
+### Dry-run 成功但真实执行失败
+
+1. 验证 conda 环境已安装：`ls envs/`
+2. 检查所需数据库是否已下载：`abi check-resources --type <analysis_type>`
+3. 确保输入 FASTQ 文件存在且可读
+4. 检查磁盘空间和内存：某些工具需要 16GB+ RAM
+
+### 权限拒绝
+
+ABI 实施三级权限模型：
+
+- `read_only` 操作 (`list_types`、`query`、`inspect`) — 始终允许
+- `planning_write` 操作 (`plan`、`dry_run`、`report`) — 仅写入计划/溯源
+- `execution` (`run`) — **需要 `confirm_execution=true`**
+
+如果 `run` 返回 `confirmation_required`，使用 `--confirm-execution` 重新调用。
+
+### 并行执行未加速
+
+检查配置中的 `config.execution.parallel` 和 `config.execution.workers`：
+
+```yaml
+execution:
+  parallel: true
+  workers: 8
+```
+
+并行执行是样本级别的。步骤较少的单样本管线不会受益。多样本管线将达到 worker 数量以内的近线性加速。
+
 ## Golden Trace
 
 已知良好的 Agent 调用序列存储在 `golden_traces/` 中，由 `tests/integration/test_golden_traces.py` 回放。

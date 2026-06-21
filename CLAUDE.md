@@ -51,7 +51,7 @@ abi contract-lint --type metagenomic_plasmid [--strict]  # Static DAG/contract v
 abi check-resources --type metagenomic_plasmid           # Check resource/database availability
 abi setup-resources --type metagenomic_plasmid --confirm  # Resource setup (confirmation required)
 
-# Figure compiler (v1.3.3)
+# Figure compiler (v1.4.0)
 abi-sciplot validate --spec figure.yaml   # Validate a FigureSpec
 abi-sciplot render --spec figure.yaml     # Render a figure (PDF+SVG+PNG+TIFF)
 abi-sciplot lint --spec figure.yaml       # Lint a rendered figure
@@ -75,12 +75,12 @@ ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch / query
 ABI Core            schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
                     contracts│  dag         │  figures      │  dag_planner
-                    tsv_mapping  │  sciplot
+                    tsv_mapping  │  sciplot  │  resources
         │
 Plugins             metagenomic_plasmid/  rnaseq_expression/  wgs_bacteria/
                     amplicon_16s/  metatranscriptomics/
         │
-Runtimes            local  │  Docker  │  Nextflow  │  HPC  │  cloud
+Runtimes            local  │  Docker  │  Nextflow  │  HPC  │  cloud  │  Job Service
 ```
 
 ### Design Principles
@@ -112,37 +112,37 @@ src/abi/
   autoplasm/          Backward-compatible re-export shim → metagenomic_plasmid/_engine/
   _shared.py          Shared utilities: _read_tsv, _display_command, _plan_dict,
                       _common_overrides, _clean, _resolve_path,
-                      _parse_fastp, _parse_star (340 lines)
-  provenance.py       RunLogger, PipelineProgressRecorder, TSV writers (849 lines)
-  tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1715 lines)
-  schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext
+                      _parse_fastp, _parse_star (373 lines)
+  provenance.py       RunLogger, PipelineProgressRecorder, TSV writers (900 lines)
+  tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1858 lines)
+  schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext (511 lines)
   executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement.
                       Supports sample-level parallel execution via ThreadPoolExecutor
-                      (config.execution.parallel + config.execution.workers).
+                      (config.execution.parallel + config.execution.workers). (1551 lines)
   dag_planner.py      Universal DAG planner — generates ExecutionPlan from pipeline_dag.yaml
-                      (replaces hand-written build_plan() boilerplate, added 2026-06-18)
+                      (replaces hand-written build_plan() boilerplate, added 2026-06-18) (1106 lines)
   tsv_mapping.py      Declarative TSV column mapper — YAML-driven output parsing
                       with 3 source types (tsv_mapping, json_mapping, key_value_log).
-                      Replaces ~14 csv.DictReader → remap columns parser functions. (added 2026-06-18)
+                      Replaces ~14 csv.DictReader → remap columns parser functions. (added 2026-06-18) (446 lines)
   sciplot/            Publication-grade scientific figure compiler — FigureSpec →
                       Validate → Render → Export → Lint → Provenance.
                       Pydantic schema, 15 plot types, 3 themes, plotnine+seaborn
-                      backends, SHA256 provenance. (added 2026-06-19, v1.4.0)
-  dag.py              DAG inference engine — L1 (literature) / L2 (path) / L3 (validation)
+                      backends, SHA256 provenance. (32 files, 4516 lines, added 2026-06-19, v1.4.0)
+  dag.py              DAG inference engine — L1 (literature) / L2 (path) / L3 (validation) (316 lines)
   contracts/          WorkflowSpec, step contract enforcement, checksum chaining, assertion eval
-    __init__.py         WorkflowSpec, WorkflowStepSpec, load_workflow_spec, run_contract_lint
-    step_contract.py    ContractViolation, validate_output_contract, evaluate_assertions
+    __init__.py         WorkflowSpec, WorkflowStepSpec, load_workflow_spec, run_contract_lint (468 lines)
+    step_contract.py    ContractViolation, validate_output_contract, evaluate_assertions (961 lines)
   permissions.py      read_only / planning_write / execution levels
-  diagnostics.py      Error taxonomy + DiagnosticHint + classify_exception (400 lines)
-  jobs/service.py     HTTP Job Service with subprocess force-kill (SIGTERM → SIGKILL)
+  diagnostics.py      Error taxonomy + DiagnosticHint + classify_exception (402 lines)
+  jobs/service.py     HTTP Job Service with subprocess force-kill (SIGTERM → SIGKILL) (1397 lines)
   json_utils.py       JSON file/payload loading with ABIJSONError wrapping
   timeouts.py         Timeout parsing: parse_timeout_seconds, timeout_from_env_or_value
   resources.py        Resource discovery + auto-install: check_resources, setup_resources,
-                      ResourceSpec with install_post hooks (e.g. makeblastdb)
-  cli.py              Typer CLI: abi + autoplasm entry points
+                      ResourceSpec with install_post hooks (e.g. makeblastdb) (484 lines)
+  cli.py              Typer CLI: abi + autoplasm entry points (2163 lines)
   skills/             Agent skill files (abi_agent + per-tool), installed via ``abi install-skills``
 
-environments.yaml      Single source of truth: 16 conda envs + 93 tool→env assignments
+environments.yaml      Single source of truth: 20 conda envs + 93 tool→env assignments
                       (2026-06-21: fixed stats env mapping; mmseqs2 ResourceSpec added;
                       amrfinderplus install_post: makeblastdb; kraken2 aria2c S3 download)
 scripts/emit_env_yamls.py  Generates per-environment ``envs/*.yml`` from environments.yaml
@@ -161,7 +161,8 @@ scripts/emit_env_yamls.py  Generates per-environment ``envs/*.yml`` from environ
 | `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with L1 (literature) / L2 (path) / L3 (validation) |
 | `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation from `pipeline_dag.yaml`. Replaces all hand-written `build_plan()`; plasmid planner also migrated to UniversalDAG. (added 2026-06-18) |
 | `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML-driven TSV/JSON/log column mapping with 3 source types (tsv_mapping, json_mapping, key_value_log), replaces ~14 boilerplate parsers (added 2026-06-18) |
-| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure`, `load_spec` — scientific figure compiler (Pydantic schema, 9 plot types, PDF/SVG/PNG/TIFF, lint, provenance). (added 2026-06-19, v1.3.3) |
+| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure`, `load_spec` — scientific figure compiler (Pydantic schema, 15 plot types, 3 themes, PDF/SVG/PNG/TIFF, lint, provenance). (32 files, 4516 lines, added 2026-06-19, v1.4.0) |
+| `abi.resources` | `check_resources`, `setup_resources`, `ResourceSpec` — resource discovery + auto-install with install_post hooks (e.g. makeblastdb) |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
 | `abi.config` | `resolved_mamba_root()`, `PROJECT_ROOT`, `load_yaml`, `deep_merge` — env resolution with 4-level priority (ABI_MAMBA_ROOT > AUTOPLASM_MAMBA_ROOT > .mamba > abi-envs) |
 | `abi.testing` | `assert_plugin_contract` |
@@ -181,11 +182,11 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 - `planning_write`: `plan`, `dry_run`, `report`, `export_nextflow` — writes plans/provenance, no tool execution
 - `execution`: `run` — **requires `confirm_execution=true`**, writes provenance, executes real tools
 
-### The five plugins (v1.3.3, 2026-06-20)
+### The five plugins (v1.4.0, 2026-06-21)
 
-All five plugins have complete tool chains, parsers, report generation, tests, benchmark datasets, and Docker images. All use DAG-driven plan generation via `UniversalDAG`. All 4 inline plugins verified via end-to-end real execution with 16-thread demo data.
+All five plugins have complete tool chains, parsers, report generation, tests, benchmark datasets, and Docker images. All use DAG-driven plan generation via `UniversalDAG`. All 4 inline plugins verified via end-to-end real execution with 16-thread demo data. **723 tests passing, 4 skipped, 0 ruff errors, 0 mypy errors.**
 
-- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (40 modules, 9,195 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 3,025 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner using `UniversalDAG` with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments. 8 sciplot figures (barplot × 3, scatterplot, stacked_barplot, heatmap × 5) with `abi_nature` theme + `colorblind_safe` palette. **Assembly platform verified**: 19/19 steps passed (3 samples, NC_002127_1/NC_002483_1/NC_011977_1). **Illumina platform planned**: 33 unique tools, 71 steps across 2 samples. **10 databases** (genomad 2.9GB, bakta 4.2GB, mob_suite 3.0GB, plasmidfinder, amrfinderplus 251MB, platon, macsyfinder, metaphlan 34GB, mmseqs2 1.6GB, kraken2 pending). 24/24 default_enabled tools confirmed working.
+- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (40 modules, 9,859 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 3,054 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner using `UniversalDAG` with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments. 8 sciplot figures (barplot × 3, scatterplot, stacked_barplot, heatmap × 5) with `abi_nature` theme + `colorblind_safe` palette. **Assembly platform verified**: 19/19 steps passed (3 samples, NC_002127_1/NC_002483_1/NC_011977_1). **Illumina platform planned**: 33 unique tools, 71 steps across 2 samples. **10 databases** (genomad 2.9GB, bakta 4.2GB, mob_suite 3.0GB, plasmidfinder, amrfinderplus 251MB, platon, macsyfinder, metaphlan 34GB, mmseqs2 1.6GB, kraken2 pending). 24/24 default_enabled tools confirmed working.
 - **`rnaseq_expression`**: 6-tool standard RNA-seq. fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. All 6 parsers working. Uses `build_plan_from_dag()` with TSVMapper for featureCounts. DESeq2 R script bundled, automated conda+BiocManager install.
 - **`wgs_bacteria`**: 5-tool bacterial isolate analysis. fastp → SPAdes → Prokka → MLST → AMRFinderPlus. All 5 parsers working. Uses `build_plan_from_dag()` with TSVMapper for AMRFinderPlus + MLST.
 - **`amplicon_16s`**: 8-tool microbial community analysis. cutadapt → vsearch_mergepairs → vsearch_derep → UNOISE3 denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta via `scripts/amplicon_diversity.py`). All 8 tools have parsers. Uses `build_plan_from_dag()`.
@@ -254,8 +255,8 @@ literature-backed, reproducible scientific workflow.
 
 | Document | Purpose |
 | --- | --- |
-| `docs/en/` | English documentation (Sphinx source, 16 files) |
-| `docs/zh/` | Chinese documentation (Sphinx source, 9 files) |
+| `docs/en/` | English documentation (Sphinx source, 19 files) |
+| `docs/zh/` | Chinese documentation (Sphinx source, 10 files) |
 | `docs/_base.py` | Shared Sphinx config for both language builds |
 | `docs/build_docs.sh` | One-command bilingual docs build |
 | `docs/en/next_development_plan.md` | Full 15-section development plan + implementation status |
@@ -265,6 +266,8 @@ literature-backed, reproducible scientific workflow.
 | `docs/en/hpc_development.md` | HPC deployment guide (SLURM, Nextflow, databases, benchmarks) |
 | `docs/en/workflow_validation.md` | Biological validation methodology |
 | `docs/en/plugin_development_guide.md` | How to add a new analysis type |
+| `docs/en/devlog.md` | Daily development log — engineering fixes, features, status |
+| `docs/en/paper_execution_plan.md` | Paper execution stratification — Tier 1/2/3 hardware, local/cloud/HPC |
 
 ### Shared utilities (`_shared.py`)
 
@@ -294,6 +297,7 @@ Every run writes to `<outdir>/provenance/`: `commands.tsv`, `resolved_inputs.tsv
 - `tests/unit/test_job_service.py` — thread synchronization via `threading.Event` for worker state control.
 - `tests/integration/test_dry_run.py` — end-to-end dry runs against real plugin configuration.
 - Fixtures live in `tests/fixtures/`; curated example data in `data/examples/`.
+- Current suite: **723 passed, 4 skipped, 62 test files** (2026-06-21).
 
 ## Adding a new analysis type
 

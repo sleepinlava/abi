@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping
 
 from abi._shared import _display_command
 from abi.errors import ToolError as ABIToolError
+from abi.executor import GenericABIExecutor
 from abi.plugins.metagenomic_plasmid._engine.config import write_resolved_config
 from abi.plugins.metagenomic_plasmid._engine.filesystem import ensure_directory
 from abi.plugins.metagenomic_plasmid._engine.parsers import (
@@ -41,6 +42,8 @@ from abi.plugins.metagenomic_plasmid._engine.statistics import (
 from abi.plugins.metagenomic_plasmid._engine.timeouts import mapping_block
 from abi.provenance import (
     RunLogger,
+    capture_tool_version,
+    reset_run_provenance,
     write_commands_tsv,
     write_resolved_inputs_tsv,
     write_tool_versions,
@@ -82,18 +85,10 @@ class PipelineExecutor:
     ) -> Dict[str, Path]:
         outdir = ensure_directory(plan.outdir, label="Output directory")
         provenance = ensure_directory(outdir / "provenance", label="Provenance directory")
+        reset_run_provenance(provenance)
         tables_dir = ensure_directory(outdir / "tables", label="Standard tables directory")
         ensure_standard_tables(tables_dir)
-        for step in plan.steps:
-            for output_path in step.outputs.values():
-                path = Path(str(output_path))
-                if path.suffix:
-                    ensure_directory(
-                        path.parent,
-                        label=f"Output parent directory for {step.step_id}",
-                    )
-                else:
-                    ensure_directory(path, label=f"Output directory for {step.step_id}")
+        GenericABIExecutor._ensure_step_output_dirs(plan.steps, registry=self.registry)
 
         plan_path = outdir / "execution_plan.json"
         ensure_directory(plan_path.parent, label="Execution plan directory")
@@ -612,8 +607,23 @@ class PipelineExecutor:
             "refgraph",
             "reflist",
         }
+        sample_paths = {
+            str(value)
+            for sample in plan.samples
+            for value in (
+                sample.read1,
+                sample.read2,
+                sample.long_reads,
+                sample.assembly,
+                sample.host_reference,
+            )
+            if value
+        }
         for step in plan.steps:
-            params = self._params_for_step(step, dry_run=dry_run)
+            params = dict(step.inputs)
+            for name in path_fields:
+                if name not in params and name in step.params:
+                    params[name] = step.params[name]
             for name in sorted(path_fields):
                 value = params.get(name)
                 if not value:
@@ -627,11 +637,7 @@ class PipelineExecutor:
                         "input_name": name,
                         "path": str(path),
                         "exists": path.exists(),
-                        "source": (
-                            "sample"
-                            if name in step.inputs and str(step.inputs.get(name)) == str(value)
-                            else "config_or_plan"
-                        ),
+                        "source": "sample" if str(value) in sample_paths else "config_or_plan",
                     }
                 )
         return rows
@@ -641,6 +647,7 @@ class PipelineExecutor:
     ) -> Dict[str, Any]:
         skill = self.registry.create(step.tool_id, mock_tools=self.mock_tools)
         step_log_dir = provenance / "step_logs"
+        step_log_dir.mkdir(parents=True, exist_ok=True)
         params = self._params_for_step(step, dry_run=False)
         params["stdout_path"] = str(step_log_dir / f"{step.step_id}.stdout.log")
         params["stderr_path"] = str(step_log_dir / f"{step.step_id}.stderr.log")
@@ -653,6 +660,7 @@ class PipelineExecutor:
                 stderr_path=params["stderr_path"],
                 message=str(exc),
             )
+            Path(params["stderr_path"]).write_text(str(exc) + "\n", encoding="utf-8")
             return {"status": "failed", "return_code": "", "reason": reason}
         except Exception as exc:
             # Catch unexpected failures (OSError, FileNotFoundError, etc.)
@@ -664,6 +672,10 @@ class PipelineExecutor:
                 return_code="",
                 stderr_path=params["stderr_path"],
                 message=f"Unexpected error: {exc.__class__.__name__}: {exc}",
+            )
+            Path(params["stderr_path"]).write_text(
+                f"Unexpected error: {exc.__class__.__name__}: {exc}\n",
+                encoding="utf-8",
             )
             return {"status": "failed", "return_code": "", "reason": reason}
         if result.return_code != 0:
@@ -721,16 +733,14 @@ class PipelineExecutor:
         rows = []
         for tool in self.registry.list_tools():
             skill = self.registry.create(str(tool.get("id")), mock_tools=self.mock_tools)
-            installed = skill.check_installation()
+            version, status = capture_tool_version(skill, mock_tools=self.mock_tools)
             rows.append(
                 {
                     "tool_id": tool.get("id"),
                     "executable": tool.get("executable"),
                     "env_name": tool.get("env_name"),
-                    "version": "not_checked",
-                    "status": (
-                        "mock" if self.mock_tools else ("installed" if installed else "missing")
-                    ),
+                    "version": version,
+                    "status": status,
                 }
             )
         return write_tool_versions(rows, path)

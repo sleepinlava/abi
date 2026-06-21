@@ -268,6 +268,19 @@ class UniversalDAG:
                 continue
 
             active.append(node_id)
+
+        workflow = config.get("workflow", {})
+        include_nodes = workflow.get("include_nodes") if isinstance(workflow, Mapping) else None
+        if include_nodes is not None:
+            if not isinstance(include_nodes, list) or not all(
+                isinstance(node_id, str) and node_id for node_id in include_nodes
+            ):
+                raise ValueError("workflow.include_nodes must be a list of non-empty node IDs")
+            unknown = sorted(set(include_nodes) - set(self._nodes))
+            if unknown:
+                raise ValueError(f"workflow.include_nodes references unknown nodes: {unknown}")
+            requested = set(include_nodes)
+            active = [node_id for node_id in active if node_id in requested]
         return active
 
     @staticmethod
@@ -336,10 +349,11 @@ class UniversalDAG:
         Raises:
             ValueError: If a required dependency cannot be resolved.
         """
-        active_set = set(active_ids)
+        active_list = list(active_ids)
+        active_set = set(active_list)
         resolved: Dict[str, List[str]] = {}
 
-        for node_id in active_set:
+        for node_id in active_list:
             node_data = self._nodes.get(node_id, {})
             deps: List[str] = list(node_data.get("depends_on", []))
             fallbacks: List[str] = list(node_data.get("fallback_depends", []))
@@ -370,7 +384,10 @@ class UniversalDAG:
 
         return resolved
 
-    def topological_order(self, node_ids: Iterable[str]) -> List[str]:
+    def topological_order(
+        self,
+        node_ids: Iterable[str] | Mapping[str, List[str]],
+    ) -> List[str]:
         """Return *node_ids* in topological order (Kahn's algorithm).
 
         Nodes listed first in ``depends_on`` will appear earlier in the result.
@@ -388,6 +405,7 @@ class UniversalDAG:
         """
         # Preserve input order for deterministic output (important for golden-trace
         # parity when two nodes have the same dependency level).
+        resolved_edges = node_ids if isinstance(node_ids, Mapping) else None
         node_list = list(node_ids)
         node_set = set(node_list)
         in_degree: Dict[str, int] = {}
@@ -397,15 +415,20 @@ class UniversalDAG:
             in_degree[nid] = 0
             successors[nid] = []
 
-        for nid in node_set:
+        for nid in node_list:
             node = self._nodes.get(nid, {})
-            for dep in node.get("depends_on", []):
+            dependencies = (
+                resolved_edges.get(nid, [])
+                if resolved_edges is not None
+                else node.get("depends_on", [])
+            )
+            for dep in dependencies:
                 dep = str(dep)
                 if dep in node_set:
                     in_degree[nid] = in_degree.get(nid, 0) + 1
                     successors.setdefault(dep, []).append(nid)
 
-        queue: deque[str] = deque(nid for nid in node_set if in_degree.get(nid, 0) == 0)
+        queue: deque[str] = deque(nid for nid in node_list if in_degree.get(nid, 0) == 0)
         result: List[str] = []
 
         while queue:

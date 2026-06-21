@@ -932,7 +932,12 @@ nodes:
     - assembly
     optional: false
     depends_on:
-    - assembly_qc_quast
+    - assembly_megahit
+    - assembly_metaspades
+    - assembly_metaflye
+    - assembly_hifiasm
+    - assembly_opera_ms
+    - assembly_provided
     inputs:
       assembly:
         type: file

@@ -202,7 +202,16 @@ def test_amplicon_real_execution(tmp_path: Path) -> None:
         },
     )
     plan = plugin.build_plan(config, check_files=True)
-    assert len(plan.steps) == 3 * 5 + 2  # 3 samples × 5 steps + phylogeny + diversity
+    cross_tool_ids = {
+        "phylogeny_combine",
+        "phylogeny_mafft",
+        "phylogeny_tree",
+        "diversity_metrics",
+    }
+    per_sample_steps = [step for step in plan.steps if step.tool_id not in cross_tool_ids]
+    cross_sample_tools = {step.tool_id for step in plan.steps if step.tool_id in cross_tool_ids}
+    assert len(per_sample_steps) == 3 * 5
+    assert cross_sample_tools == cross_tool_ids
     assert "vsearch_mergepairs" in {s.tool_id for s in plan.steps}
 
     # 4. Execute pipeline via CLI (uses amplicon conda env on PATH)

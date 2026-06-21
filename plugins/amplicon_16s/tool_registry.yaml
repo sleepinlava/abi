@@ -42,7 +42,7 @@ tools:
   default_enabled: true
   required: true
   command_template: vsearch --cluster_unoise {derep_fasta} --centroids {output_dir}/asvs.fasta
-    --uc {output_dir}/denoise.uc --minsize 1
+    --uc {output_dir}/denoise.uc --minsize 8
   inputs:
   - derep_fasta
 - id: vsearch_otu

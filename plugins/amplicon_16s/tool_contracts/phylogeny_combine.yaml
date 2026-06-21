@@ -1,0 +1,28 @@
+abi_version: "0.1"
+tool_id: phylogeny_combine
+name: Combine ASV FASTA files
+category: phylogeny
+purpose: Combine per-sample ASV FASTA files before cross-sample phylogeny construction.
+inputs:
+  asv_fasta:
+    type: file
+    format: fasta
+    required: true
+outputs:
+  combined_fasta:
+    type: file
+    format: fasta
+execution:
+  executable: cat
+  command_template: cat {asv_fasta} > {output_dir}/combined.fasta
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Verify that each denoising step produced an ASV FASTA file.
+  nonzero_exit:
+    hint: Inspect the phylogeny_combine stderr log.
+resources:
+  cpu: 1
+  memory: 1GB
+  walltime: 00:10:00

@@ -187,6 +187,13 @@ class ABIAgentInterface:
         log_dir: Optional[str] = None,
         progress: Optional[bool] = None,
         check_files: bool = True,
+        resource_profile: Optional[str] = None,
+        cpu_override: Optional[int] = None,
+        memory_override: Optional[str] = None,
+        walltime_override: Optional[str] = None,
+        accelerator_override: Optional[str] = None,
+        container_image: Optional[str] = None,
+        container_runtime: Optional[str] = None,
     ) -> str:
         """Render commands and provenance artifacts without executing real tools.
 
@@ -219,6 +226,13 @@ class ABIAgentInterface:
             log_dir=log_dir,
             progress=progress,
             check_files=check_files,
+            resource_profile=resource_profile,
+            cpu_override=cpu_override,
+            memory_override=memory_override,
+            walltime_override=walltime_override,
+            accelerator_override=accelerator_override,
+            container_image=container_image,
+            container_runtime=container_runtime,
         )
 
     def inspect(self, *, result_dir: Union[str, Path]) -> str:
@@ -296,6 +310,13 @@ class ABIAgentInterface:
         smoke: bool = False,
         check_files: bool = True,
         confirm_execution: bool = False,
+        resource_profile: Optional[str] = None,
+        cpu_override: Optional[int] = None,
+        memory_override: Optional[str] = None,
+        walltime_override: Optional[str] = None,
+        accelerator_override: Optional[str] = None,
+        container_image: Optional[str] = None,
+        container_runtime: Optional[str] = None,
     ) -> str:
         """Run an ABI plan through a runtime backend after explicit confirmation.
 
@@ -354,6 +375,13 @@ class ABIAgentInterface:
             smoke=smoke,
             check_files=check_files,
             confirm_execution=confirm_execution,
+            resource_profile=resource_profile,
+            cpu_override=cpu_override,
+            memory_override=memory_override,
+            walltime_override=walltime_override,
+            accelerator_override=accelerator_override,
+            container_image=container_image,
+            container_runtime=container_runtime,
         )
 
     def export_nextflow(
@@ -718,6 +746,13 @@ class ABIAgentInterface:
         log_dir: Optional[str],
         progress: Optional[bool],
         check_files: bool,
+        resource_profile: Optional[str],
+        cpu_override: Optional[int],
+        memory_override: Optional[str],
+        walltime_override: Optional[str],
+        accelerator_override: Optional[str],
+        container_image: Optional[str],
+        container_runtime: Optional[str],
     ) -> Dict[str, Any]:
         """Execute a mock run: render commands + provenance, no external tools.
 
@@ -740,6 +775,13 @@ class ABIAgentInterface:
                 sample_sheet=sample_sheet,
                 dry_run=True,
                 progress=progress,
+                resource_profile=resource_profile,
+                cpu_override=cpu_override,
+                memory_override=memory_override,
+                walltime_override=walltime_override,
+                accelerator_override=accelerator_override,
+                container_image=container_image,
+                container_runtime=container_runtime,
             )
             | {"mock_tools": True},
         )
@@ -848,6 +890,13 @@ class ABIAgentInterface:
         smoke: bool,
         check_files: bool,
         confirm_execution: bool,
+        resource_profile: Optional[str],
+        cpu_override: Optional[int],
+        memory_override: Optional[str],
+        walltime_override: Optional[str],
+        accelerator_override: Optional[str],
+        container_image: Optional[str],
+        container_runtime: Optional[str],
     ) -> Dict[str, Any]:
         """Execute the plan on a real runtime (local or Nextflow).
 
@@ -859,8 +908,10 @@ class ABIAgentInterface:
         # 立即返回 confirmation_required 字典, 无任何副作用。
         """
         runtime_engine = engine.lower().strip()
-        if runtime_engine not in {"local", "nextflow"}:
-            raise ABIError(f"Unsupported runtime engine: {engine}. Expected local or nextflow.")
+        if runtime_engine not in {"local", "nextflow", "hpc"}:
+            raise ABIError(
+                f"Unsupported runtime engine: {engine}. Expected local, nextflow, or hpc."
+            )
         # Safety gate: require explicit user confirmation before execution.
         # 安全闸门: 执行前需要显式用户确认。
         if not confirm_execution:
@@ -879,6 +930,13 @@ class ABIAgentInterface:
             outdir=outdir,
             log_dir=log_dir,
             sample_sheet=sample_sheet,
+            resource_profile=resource_profile,
+            cpu_override=cpu_override,
+            memory_override=memory_override,
+            walltime_override=walltime_override,
+            accelerator_override=accelerator_override,
+            container_image=container_image,
+            container_runtime=container_runtime,
         )
         # Smoke mode with local engine: force mock_tools so no real tools run.
         # Smoke 模式 + local 引擎: 强制 mock_tools, 不执行真实工具。
@@ -899,15 +957,26 @@ class ABIAgentInterface:
             profile=nextflow_profile,
             executor=executor,
             resume=resume,
+            resource_profile=resource_profile,
+            cpu_override=cpu_override,
+            memory_override=memory_override,
+            walltime_override=walltime_override,
+            accelerator_override=accelerator_override,
+            container_image=container_image,
+            container_runtime=container_runtime,
         )
         # Select runtime backend: LocalRuntime for subprocess execution,
         # NextflowRuntime for DSL2 pipeline orchestration.
         # 选择运行时后端: LocalRuntime 用于子进程执行, NextflowRuntime 用于 DSL2 管道编排。
-        runtime = (
-            LocalRuntime(plugin, options=options)
-            if runtime_engine == "local"
-            else NextflowRuntime(plugin, options=options)
-        )
+        runtime: Any
+        if runtime_engine == "local":
+            runtime = LocalRuntime(plugin, options=options)
+        elif runtime_engine == "hpc":
+            from abi.runtimes import HpcRuntime
+
+            runtime = HpcRuntime(plugin, options=options)
+        else:
+            runtime = NextflowRuntime(plugin, options=options)
         result = runtime.run(plan, cfg)
         return {
             "analysis_type": analysis_type,
