@@ -149,7 +149,7 @@ def default_resource_specs(config: Mapping[str, Any]) -> List[ResourceSpec]:
             resource_id="metaphlan",
             tool_id="metaphlan",
             field="database",
-            env_name="autoplasm-stats",
+            env_name="stats",
             executable="metaphlan",
             default_subdir="metaphlan",
             source_url="https://github.com/biobakery/MetaPhlAn",
@@ -173,28 +173,50 @@ def default_resource_specs(config: Mapping[str, Any]) -> List[ResourceSpec]:
                 "-d",
                 str(root / "amrfinderplus"),
             ],
+            install_post="makeblastdb -in latest/AMRProt.fa -dbtype prot -out latest/AMRProt.fa",
+        ),
+        ResourceSpec(
+            resource_id="mmseqs2",
+            tool_id="mmseqs2",
+            field="database",
+            env_name="autoplasm-annotation",
+            executable="mmseqs",
+            default_subdir="mmseqs2",
+            source_url="https://github.com/soedinglab/MMseqs2",
+            command_template=[
+                "bash",
+                "-c",
+                "mmseqs createdb "
+                f"{root / 'mob_suite' / 'ncbi_plasmid_full_seqs.fas'} "
+                f"{root / 'mmseqs2' / 'plasmid_db'}",
+            ],
+            version="ncbi_plasmids",
+            auto_setup=False,
         ),
         ResourceSpec(
             resource_id="kraken2",
             tool_id="kraken2",
             field="database",
-            env_name="autoplasm-stats",
+            env_name="stats",
             executable="kraken2-build",
             default_subdir="kraken2",
             source_url="https://benlangmead.github.io/aws-indexes/k2",
             command_template=[
                 "kraken2-build",
                 "--standard",
+                "--use-ftp",
                 "--db",
                 str(root / "kraken2"),
+                "--threads",
+                "8",
             ],
-            version="standard",
+            version="standard_20260226",
         ),
         ResourceSpec(
             resource_id="gtdbtk",
             tool_id="gtdbtk",
             field="database",
-            env_name="autoplasm-stats",
+            env_name="stats",
             executable="gtdbtk",
             default_subdir="gtdbtk",
             source_url="https://data.gtdb.ecogenomic.org/",
@@ -209,7 +231,7 @@ def default_resource_specs(config: Mapping[str, Any]) -> List[ResourceSpec]:
             resource_id="checkm2",
             tool_id="checkm2",
             field="database",
-            env_name="autoplasm-stats",
+            env_name="stats",
             executable="checkm2",
             default_subdir="checkm2",
             source_url="https://github.com/chklovski/CheckM2",
@@ -817,7 +839,16 @@ def _resolved_resource_command(
     if spec.resource_id == "amrfinderplus":
         return ["amrfinder_update", "-d", str(target_path)]
     if spec.resource_id == "kraken2":
-        return ["kraken2-build", "--standard", "--db", str(target_path)]
+        return [
+            "bash",
+            "-c",
+            f"mkdir -p {target_path} && "
+            f"aria2c -x 8 -s 8 "
+            f"https://genome-idx.s3.amazonaws.com/kraken/k2_standard_20260226.tar.gz "
+            f"-d {target_path.parent} -o kraken2.tar.gz && "
+            f"tar xzf {target_path.parent / 'kraken2.tar.gz'} -C {target_path} && "
+            f"rm -f {target_path.parent / 'kraken2.tar.gz'}",
+        ]
     if spec.resource_id == "gtdbtk":
         return ["gtdbtk", "db", "download"]
     if spec.resource_id == "checkm2":
@@ -962,9 +993,13 @@ def _resolve_executable(config: Mapping[str, Any], env_name: str, executable: st
     resolved = shutil.which(executable, path=str(env_bin))
     if resolved:
         return Path(resolved)
+    # Fall back to system PATH (needed for bash, aria2c, tar, mkdir, etc.)
+    system_resolved = shutil.which(executable)
+    if system_resolved:
+        return Path(system_resolved)
     if config.get("mock_tools"):
         return Path(executable)
-    raise ResourceError(f"Executable {executable!r} was not found in {env_bin}")
+    raise ResourceError(f"Executable {executable!r} was not found in {env_bin} or system PATH")
 
 
 def _resource_runtime_env(

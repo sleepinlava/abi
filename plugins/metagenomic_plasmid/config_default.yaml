@@ -94,7 +94,9 @@ resources:
   metaphlan:
     database: METAPHLAN_DB_NOT_CONFIGURED
   amrfinderplus:
-    database: AMRFINDERPLUS_DB_NOT_CONFIGURED
+    database: AMRFINDERPLUS_DB_NOT_CONFIGURED/latest
+  mmseqs2:
+    database: MMSEQS2_DB_NOT_CONFIGURED
   kraken2:
     database: KRAKEN2_DB_NOT_CONFIGURED
   gtdbtk:

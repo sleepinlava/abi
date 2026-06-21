@@ -221,7 +221,7 @@ tools:
   default_enabled: true
   required: false
   command_template: bakta --db {database} --output {output_dir} --threads {threads}
-    {plasmid_contigs}
+    --force --skip-sorf {plasmid_contigs}
 - id: abricate
   name: ABRicate
   category: annotation
@@ -321,7 +321,7 @@ tools:
   default_enabled: false
   required: false
   command_template: metaphlan {metaphlan_input} --input_type fastq {metaphlan_long_reads_flag}
-    --nproc {threads} --db_dir {database} -o {output_dir}/{sample_id}.metaphlan.tsv
+    --nproc {threads} --db_dir {database} -o {output_dir}/{sample_id}.metaphlan.tsv --mapout {output_dir}/{sample_id}.map.bowtie2out.txt
 - id: fastspar
   name: FastSpar
   category: network

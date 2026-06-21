@@ -142,7 +142,7 @@ environments:
     - python=3.10
     - integron_finder
     - biopython>=1.77
-  autoplasm-stats:
+  stats:
     channels:
     - conda-forge
     - bioconda
@@ -323,13 +323,13 @@ tool_assignments:
     gplas2: autoplasm-plasmid-binning
     scapp: autoplasm-plasmid-binning
     recycler: autoplasm-plasmid-binning
-    kraken2: autoplasm-stats
-    metaphlan: autoplasm-stats
-    fastspar: autoplasm-stats
-    checkm2: autoplasm-stats
-    gtdbtk: autoplasm-stats
-    das_tool: autoplasm-stats
-    hic_evidence: autoplasm-stats
+    kraken2: stats
+    metaphlan: stats
+    fastspar: stats
+    checkm2: stats
+    gtdbtk: stats
+    das_tool: stats
+    hic_evidence: stats
     clinker: autoplasm-visualization
     pycirclize: autoplasm-visualization
     pyvis: autoplasm-visualization

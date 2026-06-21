@@ -23,7 +23,7 @@ outputs:
 execution:
   executable: bakta
   command_template: bakta --db {database} --output {output_dir} --threads {threads}
-    {plasmid_contigs}
+    --force --skip-sorf {plasmid_contigs}
   network: false
   writes_output: true
 normalization:

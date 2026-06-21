@@ -76,7 +76,43 @@ __all__ = [
 # Template fields that are allowed to be empty without causing validation errors.
 # These represent optional pipeline features (e.g. abundance estimation, long-read
 # Metaphlan) that may legitimately be unset for some analyses. / 允许为空的模板字段
-OPTIONAL_TEMPLATE_FIELDS = {"abundance_label", "metaphlan_long_reads_flag"}
+OPTIONAL_TEMPLATE_FIELDS = {
+    "abundance_label",
+    "metaphlan_long_reads_flag",
+    # Cross-sample visualization parameters — legitimately empty for single-sample runs
+    "reference_plasmids",
+    "host_plasmid_links",
+    "annotations",
+    "typing",
+    "genbank_files",
+}
+
+
+def _derive_composite_params(params: Dict[str, Any]) -> None:
+    """Auto-construct composite template parameters from granular inputs.
+
+    Some tool contracts declare abstract input parameters (e.g.
+    ``metaphlan_input``) that represent a combination of concrete inputs the
+    DAG provides (``read1``, ``read2``).  Rather than requiring every DAG
+    node or tool contract to duplicate this composition logic, we derive the
+    composite parameter here when the pieces are available.
+
+    Derivation rules (all use ``setdefault`` — never overwrite):
+    - ``metaphlan_input`` ← ``{read1},{read2}`` (paired-end) or ``{read1}``
+      (single-end) or ``{long_reads}`` (long-read).
+    """
+    if "metaphlan_input" not in params:
+        r1 = params.get("read1")
+        r2 = params.get("read2")
+        lr = params.get("long_reads")
+        if r1 and r2:
+            params["metaphlan_input"] = f"{r1},{r2}"
+        elif r1:
+            params["metaphlan_input"] = str(r1)
+        elif lr:
+            params["metaphlan_input"] = str(lr)
+
+
 # Template fields that represent external resource files (databases, models, indexes).
 # These are checked by _resource_status() to verify they exist on disk before the
 # pipeline runs. / 表示外部资源文件的模板字段，运行前由 _resource_status() 检查
@@ -720,8 +756,12 @@ class SafeFormatDict(dict):
 
         In strict mode, raises ``MissingTemplateParamError``.
         In lenient mode, logs a WARNING and returns ``""``.
+        Keys registered in OPTIONAL_TEMPLATE_FIELDS are silently defaulted to ``""``.
         """
         self.missing_keys.append(key)
+        # Fields registered as optional are legitimately absent — no warning needed.
+        if key in OPTIONAL_TEMPLATE_FIELDS:
+            return ""
         if self.strict:
             tool_label = self.tool_name or "unknown"
             raise MissingTemplateParamError(
@@ -977,6 +1017,12 @@ class GenericCommandSkill(ToolSkill):
             selected.setdefault("alignment", str(output_dir / f"{sample_id}{label}.sam"))
             selected.setdefault("bam", str(output_dir / f"{sample_id}{label}.bam"))
             selected.setdefault("abundance", str(output_dir / f"{sample_id}{label}.coverm.tsv"))
+        # ── Auto-derive composite inputs from granular fields / 从细粒度字段自动推导复合输入 ──
+        # Some tool contracts declare abstract input parameters (e.g. metaphlan_input)
+        # that must be assembled from the concrete inputs the DAG provides
+        # (read1, read2).  This avoids requiring every DAG node to duplicate
+        # the composition logic. / 工具合约中的抽象参数从 DAG 提供的具体输入自动组装
+        _derive_composite_params(selected)
         selected.setdefault(
             "auto_selection_reason",
             f"{self.name} parameters selected by {mode} mode",

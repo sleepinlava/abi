@@ -1371,7 +1371,6 @@ nodes:
         format: tsv
     enable_condition:
       field: host_prediction.enable
-      operator: value
       value: true
   host_prediction_plasmidhostfinder:
     tool_id: plasmidhostfinder
