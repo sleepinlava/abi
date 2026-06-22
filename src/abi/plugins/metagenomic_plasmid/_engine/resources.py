@@ -64,6 +64,8 @@ class ResourceStatus:
     version: str
     source_url: str
     checksum: str = ""
+    checksum_method: str = ""
+    date: str = ""
     command: List[str] | None = None
     ready_check: str = ""
     directory_file_count: int = 0
@@ -73,8 +75,10 @@ class ResourceStatus:
 
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
+        data["id"] = self.resource_id
         data["source"] = self.source_url
         data["license"] = ""
+        data["checksum_sha256"] = self.checksum
         data["validated_at"] = self.last_checked_at
         return data
 
@@ -180,21 +184,14 @@ def default_resource_specs(config: Mapping[str, Any]) -> List[ResourceSpec]:
             install_post="makeblastdb -in latest/AMRProt.fa -dbtype prot -out latest/AMRProt.fa",
         ),
         ResourceSpec(
-            resource_id="mmseqs2",
-            tool_id="mmseqs2",
+            resource_id="card",
+            tool_id="rgi",
             field="database",
             env_name="autoplasm-annotation",
-            executable="mmseqs",
-            default_subdir="mmseqs2",
-            source_url="https://github.com/soedinglab/MMseqs2",
-            command_template=[
-                "bash",
-                "-c",
-                "mmseqs createdb "
-                f"{root / 'mob_suite' / 'ncbi_plasmid_full_seqs.fas'} "
-                f"{root / 'mmseqs2' / 'plasmid_db'}",
-            ],
-            version="ncbi_plasmids",
+            executable="rgi",
+            default_subdir="card",
+            source_url="https://card.mcmaster.ca/download",
+            command_template=[],
             auto_setup=False,
         ),
         ResourceSpec(
@@ -603,6 +600,7 @@ def write_resource_manifest(statuses: Iterable[ResourceStatus], path: str | Path
     manifest_path = Path(path)
     ensure_directory(manifest_path.parent, label="Resource manifest directory")
     data = {
+        "analysis_type": "metagenomic_plasmid",
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "resources": [status.to_dict() for status in statuses],
     }
@@ -611,12 +609,14 @@ def write_resource_manifest(statuses: Iterable[ResourceStatus], path: str | Path
 
 
 def write_resources_provenance(config: Mapping[str, Any], outdir: str | Path) -> Path:
-    path = Path(outdir) / "provenance" / "resources.json"
+    provenance_dir = Path(outdir) / "provenance"
+    path = provenance_dir / "resources.json"
     allowed = set(ResourceStatus.__dataclass_fields__)
     statuses = [
         ResourceStatus(**{key: value for key, value in row.items() if key in allowed})
         for row in check_resources(config)
     ]
+    write_resource_manifest(statuses, provenance_dir / "resource_manifest.json")
     return write_resource_manifest(statuses, path)
 
 
@@ -772,28 +772,77 @@ def _status_for_spec(
         status = "ok"
     else:
         status = "incomplete" if path.exists() else "missing"
-    checksum = ""
-    if path.is_file():
+    resource_block = _resource_block(config, spec.resource_id)
+    checksum = str(resource_block.get("checksum", ""))
+    checksum_method = "configured" if checksum else ""
+    if not checksum and path.is_file():
         checksum = sha256_path(path)
+        checksum_method = "sha256:file-content"
+    elif not checksum and path.is_dir():
+        checksum = _directory_manifest_checksum(path)
+        checksum_method = "sha256:directory-manifest-v1"
     file_count, size_bytes = _directory_summary(path)
+    checked_at = datetime.now().isoformat(timespec="seconds")
     return ResourceStatus(
         resource_id=spec.resource_id,
         tool_id=spec.tool_id,
         field=spec.field,
         path=str(path),
         status=status,
-        version=str(_resource_block(config, spec.resource_id).get("version", spec.version)),
-        source_url=str(
-            _resource_block(config, spec.resource_id).get("source_url", spec.source_url)
-        ),
+        version=str(resource_block.get("version", spec.version)),
+        source_url=str(resource_block.get("source_url", spec.source_url)),
         checksum=checksum,
+        checksum_method=checksum_method,
+        date=str(resource_block.get("date", checked_at[:10])),
         command=command or _resolved_resource_command(config, spec, path),
         ready_check=_resource_ready_check(path, spec),
         directory_file_count=file_count,
         directory_size_bytes=size_bytes,
         message=message,
-        last_checked_at=datetime.now().isoformat(timespec="seconds"),
+        last_checked_at=checked_at,
     )
+
+
+def _directory_manifest_checksum(path: Path) -> str:
+    """Return a bounded, deterministic fingerprint for a database directory.
+
+    Hashing multi-hundred-GB databases at every run is not operationally
+    acceptable.  This manifest checksum covers relative paths and file sizes,
+    plus the content of small version/manifest metadata files.  A provider
+    archive checksum can still be supplied in config and should be preferred
+    when available.
+    """
+    digest = hashlib.sha256()
+    entries = 0
+    metadata_names = {
+        "version",
+        "version.txt",
+        "manifest.json",
+        "metadata.json",
+        RESOURCE_READY_SENTINEL,
+    }
+    truncated = False
+    for root, dirnames, filenames in os.walk(path):
+        dirnames.sort()
+        filenames.sort()
+        for filename in filenames:
+            if entries >= MAX_DIRECTORY_SUMMARY_ENTRIES:
+                truncated = True
+                break
+            child = Path(root) / filename
+            relative = child.relative_to(path).as_posix()
+            stat = child.stat()
+            digest.update(relative.encode("utf-8", errors="surrogateescape"))
+            digest.update(b"\0")
+            digest.update(str(stat.st_size).encode("ascii"))
+            digest.update(b"\0")
+            if child.name.lower() in metadata_names and stat.st_size <= 1024 * 1024:
+                digest.update(child.read_bytes())
+            entries += 1
+        if truncated:
+            digest.update(b"TRUNCATED")
+            break
+    return digest.hexdigest()
 
 
 def _configured_resource_path(config: Mapping[str, Any], spec: ResourceSpec) -> Path:

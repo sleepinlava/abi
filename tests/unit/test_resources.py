@@ -406,7 +406,7 @@ def test_checkm2_env_var_injection(tmp_path):
     assert env["CHECKM2DB"] == str(db_path)
 
 
-def test_all_28_resources_in_check_resources(tmp_path):
+def test_all_resources_in_check_resources(tmp_path):
     """check_resources returns all 29 registered resources (17 DB + 12 tool)."""
     config = {"resources": {"root": str(tmp_path / "resources")}}
     rows = check_resources(config)
@@ -420,7 +420,7 @@ def test_all_28_resources_in_check_resources(tmp_path):
         "plasmidfinder",
         "metaphlan",
         "amrfinderplus",
-        "mmseqs2",
+        "card",
         "kraken2",
         "gtdbtk",
         "checkm2",

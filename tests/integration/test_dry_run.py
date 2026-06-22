@@ -34,6 +34,38 @@ def test_dry_run_writes_provenance(tmp_path):
     assert "genomad" in outputs["commands"].read_text(encoding="utf-8")
 
 
+def test_repeated_dry_run_replaces_analysis_status_rows(tmp_path):
+    outdir = tmp_path / "results" / "project"
+    log_dir = tmp_path / "log"
+    config = load_config(
+        "examples/config_minimal.yaml",
+        profile="dry_run",
+        overrides={"outdir": str(outdir), "log_dir": str(log_dir), "mock_tools": True},
+    )
+    plan = build_plan(config)
+    plan.skipped_steps.append(
+        PlanStep(
+            step_id="diversity_not_run",
+            step_name="diversity",
+            tool_id="internal",
+            category="statistics",
+            sample_id=None,
+            params={"sample_count": 1, "threshold": 3},
+            reason="requires at least 3 samples",
+            skipped=True,
+        )
+    )
+    executor = PipelineExecutor(ToolRegistry.from_path(), RunLogger(log_dir), mock_tools=True)
+
+    executor.dry_run(plan, config)
+    first_rows = read_standard_table(outdir / "tables", "analysis_status")
+    executor.dry_run(plan, config)
+    second_rows = read_standard_table(outdir / "tables", "analysis_status")
+
+    assert len(first_rows) == 1
+    assert second_rows == first_rows
+
+
 def test_dry_run_uses_existing_output_directory(tmp_path):
     outdir = tmp_path / "results"
     log_dir = tmp_path / "log"

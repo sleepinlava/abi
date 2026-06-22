@@ -131,7 +131,11 @@ def test_infer_dag_accepts_metagenomic_plasmid_shared_output_dirs(tmp_path):
     # host_prediction、assembly 或 fastp。验证 DAG 结构正确即可。
     assert len(dag.roots) >= 1, f"Expected at least 1 root, got {dag.roots}"
     assert "S1_qc_fastp" in dag.topological_order
-    assert "S2_qc_fastp" in dag.topological_order
+    # S2 is assembly-only in examples/sample_sheet.tsv, so the planner must
+    # preserve its own platform route instead of forcing the first sample's
+    # Illumina route onto the whole project.
+    assert "S2_assembly_provided" in dag.topological_order
+    assert "S2_qc_fastp" not in dag.topological_order
     # Verify the plasmid detection chain is intact
     assert "S1_plasmid_detect_genomad" in dag.topological_order
     assert "S1_plasmid_consensus" in dag.topological_order

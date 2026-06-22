@@ -120,6 +120,12 @@ include = [
     "metrics.tsv",
 ]
 
+# Hatch treats directories named ``envs`` as virtual-environment artifacts by
+# default. These are tracked Conda specifications required by the packaged
+# workflow, so force them into the sdist as well as the wheel.
+[tool.hatch.build.targets.sdist.force-include]
+"envs" = "envs"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

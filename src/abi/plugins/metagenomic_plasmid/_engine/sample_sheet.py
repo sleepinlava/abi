@@ -22,6 +22,8 @@ SUPPORTED_COLUMNS = {
     "read1",
     "read2",
     "long_reads",
+    "pod5",
+    "bam",
     "assembly",
     "contigs",
     "technology",
@@ -94,6 +96,8 @@ def _sample_from_row(row: Mapping[str, str], row_number: int, sample_sheet: Path
         read1=_clean(row.get("read1")),
         read2=_clean(row.get("read2")),
         long_reads=_clean(row.get("long_reads")),
+        pod5=_clean(row.get("pod5")),
+        bam=_clean(row.get("bam")),
         assembly=assembly,
         technology=_clean(row.get("technology")),
         host_reference=_clean(row.get("host_reference")),
@@ -117,7 +121,15 @@ def _resolve_sample_sheet(path: str | Path) -> Path:
 
 
 def _resolve_sample_paths(sample: SampleInput, sample_sheet: Path) -> None:
-    for attr in ("read1", "read2", "long_reads", "assembly", "host_reference"):
+    for attr in (
+        "read1",
+        "read2",
+        "long_reads",
+        "pod5",
+        "bam",
+        "assembly",
+        "host_reference",
+    ):
         value = getattr(sample, attr)
         if not value:
             continue
@@ -154,10 +166,14 @@ def validate_sample_requirements(sample: SampleInput, row_number: int | None = N
     )
     if sample.platform == "illumina" and not sample.read1:
         raise SampleSheetError(f"{prefix}: illumina samples require read1")
-    if sample.platform in {"ont", "pacbio_hifi"} and not sample.long_reads:
-        raise SampleSheetError(f"{prefix}: {sample.platform} samples require long_reads")
-    if sample.platform == "hybrid" and not (sample.read1 and sample.long_reads):
-        raise SampleSheetError(f"{prefix}: hybrid samples require read1 and long_reads")
+    if sample.platform in {"ont", "pacbio_hifi"} and not sample.has_long_reads:
+        raise SampleSheetError(
+            f"{prefix}: {sample.platform} samples require long_reads, pod5, or bam"
+        )
+    if sample.platform == "hybrid" and not (sample.read1 and sample.has_long_reads):
+        raise SampleSheetError(
+            f"{prefix}: hybrid samples require read1 and long_reads, pod5, or bam"
+        )
     if sample.platform == "assembly" and not sample.assembly:
         raise SampleSheetError(f"{prefix}: assembly samples require assembly FASTA")
 
@@ -165,7 +181,15 @@ def validate_sample_requirements(sample: SampleInput, row_number: int | None = N
 def validate_sample_files(samples: Iterable[SampleInput]) -> None:
     missing: List[str] = []
     for sample in samples:
-        for attr in ["read1", "read2", "long_reads", "assembly", "host_reference"]:
+        for attr in [
+            "read1",
+            "read2",
+            "long_reads",
+            "pod5",
+            "bam",
+            "assembly",
+            "host_reference",
+        ]:
             value = getattr(sample, attr)
             if not _path_exists(value):
                 missing.append(f"{sample.sample_id}:{attr}={value}")
@@ -192,6 +216,8 @@ def single_sample_context(
     read1: Optional[str] = None,
     read2: Optional[str] = None,
     long_reads: Optional[str] = None,
+    pod5: Optional[str] = None,
+    bam: Optional[str] = None,
     assembly: Optional[str] = None,
     group: Optional[str] = None,
     technology: Optional[str] = None,
@@ -205,6 +231,8 @@ def single_sample_context(
         read1=read1,
         read2=read2,
         long_reads=long_reads,
+        pod5=pod5,
+        bam=bam,
         assembly=assembly,
         technology=technology,
         host_reference=host_reference,

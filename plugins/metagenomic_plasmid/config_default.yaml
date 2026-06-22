@@ -11,12 +11,18 @@ log_dir: logs/plasmid_analysis
 # Input section — reference a sample sheet or single-input path
 input:
   sample_sheet: sample_sheet.tsv
+  pod5: null
+  bam: null
+
+basecalling:
+  enable: true
 
 # QC: fastp trimming + optional fastqc/multiqc
 qc:
   enable: auto
   run_fastqc: false
-  run_multiqc: false
+  run_multiqc: true
+  optional_tools: []
   tool: fastp
 
 # Assembly: megahit (Illumina) / metaflye (ONT/HiFi) / hybridspades (hybrid)
@@ -24,6 +30,10 @@ assembly:
   enable: true
   tool: auto
   min_contig_length: 500
+
+polishing:
+  enable: false
+  tools: []
 
 # Assembly QC: QUAST evaluation
 assembly_qc:
@@ -36,12 +46,18 @@ plasmid_detection:
   enable: true
   tools:
     - genomad
-  strategy: single_tool
+  strategy: weighted_vote
+  tool_weights:
+    genomad: 0.6
+    platon: 0.15
+    plasme: 0.15
+    plasx: 0.1
 
 # Host removal (optional — enabled in auto mode for samples with reads)
 host_removal:
   enable: auto
   tool: bowtie2
+  host_reference: null
 
 # Host taxonomy (optional — enabled in auto mode)
 host_prediction:
@@ -50,20 +66,24 @@ host_prediction:
 # Plasmid annotation
 annotation:
   enable: true
-  general_annotator: bakta
-  enable_isescan: false
-  enable_integronfinder: false
+  tools:
+    - bakta
+    - amrfinderplus
+    - isescan
+    - integronfinder
+  optional_tools: []
 
 # AMR / virulence gene detection
 typing:
   enable: auto
   tools:
-    - amrfinderplus
-    - abricate
+    - plasmidfinder
+    - mob_typer
+  optional_tools: []
 
 # Plasmid abundance estimation
 abundance:
-  enable: auto
+  enable: true
   tool: coverm
 
 # Plasmid typing (MOB-suite, PlasmidFinder)
@@ -73,6 +93,38 @@ plasmid_typing:
 # Comparative genomics / cross-sample analysis
 sample_analysis:
   enable: auto
+  differential_abundance: auto
+  differential_method: deseq2
+  min_diversity_samples: 3
+  min_group_replicates: 3
+
+diversity:
+  enable: true
+
+statistics:
+  enable: true
+
+network:
+  enable: auto
+  min_samples: 20
+
+comparative_genomics:
+  enable: true
+  tools:
+    - mmseqs2
+  optional_tools: []
+
+contig_coverage:
+  enable: false
+
+mag_host_genomes:
+  enable: false
+  tools: []
+
+host_plasmid_linking:
+  enable: false
+  methods:
+    - co_abundance
 
 # Resource paths — each resource block holds a path that can be overridden.
 # Level 1 resources (auto_setup=true) can be downloaded via:
@@ -95,8 +147,8 @@ resources:
     database: METAPHLAN_DB_NOT_CONFIGURED
   amrfinderplus:
     database: AMRFINDERPLUS_DB_NOT_CONFIGURED/latest
-  mmseqs2:
-    database: MMSEQS2_DB_NOT_CONFIGURED
+  card:
+    database: CARD_DB_NOT_CONFIGURED
   kraken2:
     database: KRAKEN2_DB_NOT_CONFIGURED
   gtdbtk:

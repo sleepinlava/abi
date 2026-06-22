@@ -1,102 +1,118 @@
-# Metagenomic Plasmid 集成
+# 宏基因组质粒分析
 
-`metagenomic_plasmid` ABI 插件使用捆绑的 `abi.autoplasm` 管线
-（位于 `plugins/metagenomic_plasmid/_engine/` 中的 40 个 Python 文件）。这是 ABI 的旗舰质粒分析工作流，
-支持从原始测序数据到群落分析可视化的完整分析链路。此插件取代了之前由外部 `autoplasm` 包提供质粒工作流的分离开发模式。
+`metagenomic_plasmid` 是 ABI 面向 Illumina、ONT、PacBio HiFi、二代+三代
+混合数据和 assembly-only 项目的平台感知质粒工作流。规范拓扑位于
+`plugins/metagenomic_plasmid/pipeline_dag.yaml`；Python 引擎负责解析逐样本输入、
+条件节点、输出路径、provenance 和标准结果表。
 
-## 公开形态
+## 默认路径
 
-- PyPI 包：`abi-agent`
-- ABI 插件 ID：`metagenomic_plasmid`
-- 内部 Python 命名空间：`abi.autoplasm`
-- 兼容命令：`autoplasm`
-- 工具合约：67 个（质粒管线中的所有生物信息学工具，涵盖 11 个分析类别）
-- 引擎：`_engine/` 下的 40 个文件（pipeline、planner、DAG、parsers、normalize、report、statistics、skills 等）
-- 管线 DAG：`pipeline_dag.yaml`（84+ 节点，5 个平台，16 张标准表）— 唯一真相来源
-- 步骤合约执行：`contracts/step_contract.py` — 输出验证、实际输出解析、断言以及校验和链式追踪
-- 10 个 conda 环境：qc, assembly, plasmid_detection, plasmid_binning, annotation, typing, abundance, comparative_genomics, visualization, statistics
+### Illumina
 
-## 完整分析链路
-
-```
-QC（fastp/FastQC/MultiQC）
-  → 组装（MEGAHIT/SPAdes/Canu）
-    → 组装质控（QUAST/Bandage）
-      → 质粒检测（geNomad/Plasme/PlasX/Platon）
-        → 质粒分箱（MetaBAT2/MaxBin2/CONCOCT/SemiBin）
-          → 质粒共识（plasmid_consensus）
-            → 注释（Bakta/Prodigal/AMRFinder/ISEScan）
-              → 分型（PlasmidFinder/MOB-typer）
-                → 丰度计算（bowtie2/coverm）
-                  → 群落分析（alpha/beta 多样性 + 差异丰度）
-                    → 比较基因组学（BLAST/MUMmer/MMseqs2/clinker）
-                      → 可视化（pyCirclize/DNA Features Viewer/pyvis）
-                        → 共现网络（FastSpar）
-                          → 报告生成（Markdown + sciplot 图表）
+```text
+FASTQ → fastp → MultiQC → 可选 Bowtie2 去宿主 → MEGAHIT → QUAST
+      → geNomad → 环状/结构判定 → PlasmidFinder + MOB-typer
+      → Bakta + AMRFinderPlus + ISEScan + IntegronFinder
+      → MMseqs2 catalog → Bowtie2 + samtools + CoverM → 报告
 ```
 
-## 高性能服务器运行
+### ONT
 
-在配备 16 核 CPU、1TB RAM 的服务器上，metagenomic_plasmid 插件可在 16 线程下稳定运行。
-核心流程（QC → 组装 → 质粒检测 → 注释 → 丰度 → 群落分析 → 可视化）已通过真实数据验证。
+```text
+FASTQ/POD5/BAM → 可选 Dorado 或 BAM 转 FASTQ → NanoPlot → Filtlong
+               → 可选 minimap2 去宿主 → metaFlye
+               → 可选 Medaka → QUAST → 共用下游路径
+```
 
-当前产出 16 张标准表（含 `sample_diversity`, `differential_abundance`, `network_edges` 等群落分析表），
-8 张 sciplot 图表（barplot × 3, scatterplot, stacked_barplot, heatmap × 5），使用 `abi_nature` 主题 +
-`colorblind_safe` 调色板。10 个数据库可用；24/24 个 default_enabled 工具已确认可正常工作。
-支持通过 `config.execution.parallel` 实现样本级并行执行。
+### PacBio HiFi
+
+```text
+FASTQ/BAM → 可选 BAM 转 FASTQ → NanoPlot + HiFiAdapterFilt
+          → 可选 minimap2 去宿主 → hifiasm-meta → QUAST
+          → 共用下游路径
+```
+
+### 二代+三代混合数据
+
+```text
+Illumina + ONT/HiFi → fastp + NanoPlot/Filtlong
+                    → 按平台可选去宿主
+                    → OPERA-MS → QUAST → 共用下游路径
+```
+
+`hybridSPAdes` 和 `metaSPAdes` 是显式替代方案。选择替代 assembler 时会替换平台
+默认工具，不会隐式双跑多个 assembler。
+
+## 工具策略
+
+默认主路径保持收敛：
+
+- geNomad 是主质粒检测工具；Platon、PLASMe、PlasX 只提供可选 consensus 证据。
+  默认加权投票中 geNomad 权重为 0.60，三个辅助检测器合计为 0.40，因此辅助工具不能在
+  geNomad 无支持时单独产生阳性质粒判定。
+- PlasmidFinder 和 MOB-typer 是默认分型工具。
+- AMRFinderPlus 是默认 AMR 路径；ABRicate 和 RGI 为可选补充。
+- ISEScan 和 IntegronFinder 默认启用；eggNOG-mapper 为可选项。
+- MMseqs2 用于跨样本 catalog 聚类；BLAST、MUMmer、clinker 只用于代表序列验证或展示。
+- MetaBAT2、MaxBin2、CONCOCT、SemiBin 位于可选 MAG 宿主基因组分支，不属于质粒分箱。
+- BWA、KneadData、Hi-C 占位节点、pMLST 和批量 Bandage 节点已从工作流 DAG 移除。
+
+FastQC 默认关闭，因为 fastp 已输出 HTML/JSON QC 报告；只有发表附件或 QC 审计需要时
+再启用。MultiQC 保持开启，用于项目级汇总。
+
+## 跨样本条件节点
+
+ABI 根据真实 sample sheet 计算是否满足运行条件：
+
+| 模块 | 默认门槛 |
+|---|---|
+| alpha/beta 多样性 | 至少 3 个具有 reads 丰度的样本 |
+| 差异丰度 | 至少 2 组，且每组至少 3 个有效重复 |
+| FastSpar 网络 | 至少 20 个具有 reads 丰度的样本 |
+
+不满足门槛时不会启动节点，原因会写入 `tables/analysis_status.tsv` 和序列化执行计划。
+assembly-only 行不会被计作丰度分析重复。
+
+满足门槛的差异分析默认使用 DESeq2 和原始 mapped counts。缺少原始 counts 时，会把
+取整 coverage 明确标记为 count proxy。`internal_effect_size` 仅作为描述性回退，不输出
+推断性 p value。
+
+## 稳定结果契约
+
+执行前会为每张声明表创建表头。因此合法的零命中运行会产生空 TSV，而不是缺文件。
+核心公开结果包括：
+
+- `sample_qc.tsv`、`assembly_qc.tsv`
+- `plasmid_predictions.tsv`、`plasmid_consensus.tsv`、
+  `plasmid_structure.tsv`、`plasmid_catalog.tsv`
+- `plasmid_abundance.tsv`、`plasmid_annotation.tsv`、`amr_genes.tsv`、
+  `mge_elements.tsv`、`plasmid_typing.tsv`
+- `host_profile.tsv`、`host_plasmid_links.tsv`
+- `differential_plasmids.tsv`、`network_edges.tsv`、`network_nodes.tsv`
+- `analysis_status.tsv`
+
+旧版标准化表仍保留，用于兼容已有消费者。
+
+## 可复现性
+
+每次运行都会写出 `provenance/resource_manifest.json`，并保留兼容文件
+`provenance/resources.json`。数据库条目包含资源 ID、路径、版本、日期、来源、状态和
+checksum。普通文件使用内容 SHA-256；数据库目录使用有上限的目录清单指纹，除非配置中
+提供了上游发布方 checksum。
+
+工具版本、解析后的输入、命令、日志和最终配置分别记录。以 `NOT_CONFIGURED` 结尾的
+占位路径会明确标记为未配置；dry-run 通过不能证明外部工具或数据库已经安装。
 
 ## 常用命令
 
 ```bash
 abi plan --type metagenomic_plasmid \
-  --config examples/config_minimal.yaml \
-  --profile dry_run
+  --config examples/config_minimal.yaml --profile dry_run
 
 abi dry-run --type metagenomic_plasmid \
-  --config examples/config_minimal.yaml \
-  --profile dry_run
+  --config examples/config_minimal.yaml --profile dry_run
 
-autoplasm dry-run \
-  --config examples/config_minimal.yaml \
-  --profile dry_run
+abi check-resources --type metagenomic_plasmid
 ```
 
-对于真实执行，请先准备仓库本地的 mamba 环境和所需数据库。Dry-run 输出是规划证据，而非外部生物信息学工具或数据库已可投入生产的证明。
-
-## 数据库依赖
-
-| 数据库 | 大小 | 依赖工具 | 状态 |
-|--------|------|---------|:---:|
-| genomad_db | 2.9 GB | geNomad | ✅ 可用 |
-| bakta_db | 4.2 GB | Bakta | ✅ 可用（light DB，--skip-sorf 绕过） |
-| amrfinder_db | 251 MB | AMRFinderPlus | ✅ 可用（+ BLAST 索引自动构建） |
-| plasmidfinder_db | ~1 MB | PlasmidFinder | ✅ 可用 |
-| mob_suite_db | 3.0 GB | MOB-suite | ✅ 可用 |
-| platon_db | 55 MB | PLaton | ✅ 可用 |
-| macsyfinder_db | 180 MB | MacSyFinder | ✅ 可用（pip install） |
-| metaphlan_db | 34 GB | MetaPhlAn | ✅ 可用 |
-| mmseqs2_db | 1.6 GB | MMseqs2 | ✅ 可用（从 mob_suite 构建） |
-| kraken2_db | ~50 GB | Kraken2 | 🔄 待下载（S3） |
-| blast_db | ~10 GB | BLAST+ | ❌ 未构建 |
-| checkm2_db | ~100 GB | CheckM2 | ❌ 未下载（环境版本冲突） |
-| gtdbtk_db | ~100 GB | GTDB-Tk | ❌ 未下载（环境版本冲突） |
-
-**工具可用性**：24/24 个 `default_enabled: true` 工具已确认在其 conda 环境中可正常工作。
-11 个 `default_enabled: false` 工具（PlasmidHostFinder、pMLST、gplas2、Recycler、scapp、
-COPLA、conjscan、PLASMe、PlasX、plasmaag、plasmidhostfinder）缺少 git-clone 安装 —
-这些是第三梯队（实验性/非主流）工具，用于小众分析场景。
-
-## 资源边界
-
-该包包含小型配置、工具合约、测试 fixtures 和示例。不包含真实数据库、mamba 环境或用户结果。
-
-使用 `resources/` 存放本地数据库，并将这些文件保持在 git 之外。
-
-## 验证定位
-
-metagenomic plasmid 路线现已结构化为受约束的工作流：
-`pipeline_dag.yaml` 定义节点顺序、输出、合约和断言；
-通用执行器写入溯源信息并在每个外部命令成功后执行合约检查。
-
-这尚不等同于经过充分验证的生物学工作流。当前代码库提供了验证所需的控制层，而剩余工作包括固定环境、版本化数据库、整理正/负基准数据集，以及将路线级报告连接到方法引用。详见
-[工作流验证与科学证据计划](workflow_validation_zh.md)。
+生产运行前应填写数据库路径和版本、验证 sample sheet，并先执行资源与工作流检查。

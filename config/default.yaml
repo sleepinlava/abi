@@ -26,9 +26,59 @@ workflow:
   plasmid_contigs_source: auto
   data_profile: null
 
+basecalling:
+  enable: true
+
 resources:
   root: resources/autoplasm
   auto_download: false
+  genomad:
+    database: GENOMAD_DB_NOT_CONFIGURED
+    version: ""
+  bakta:
+    database: BAKTA_DB_NOT_CONFIGURED
+    version: ""
+  mob_suite:
+    database: MOB_SUITE_DB_NOT_CONFIGURED
+    version: ""
+  plasmidfinder:
+    database: PLASMIDFINDER_DB_NOT_CONFIGURED
+    version: ""
+  metaphlan:
+    database: METAPHLAN_DB_NOT_CONFIGURED
+    version: ""
+  amrfinderplus:
+    database: AMRFINDERPLUS_DB_NOT_CONFIGURED/latest
+    version: ""
+  card:
+    database: CARD_DB_NOT_CONFIGURED
+    version: ""
+  kraken2:
+    database: KRAKEN2_DB_NOT_CONFIGURED
+    version: ""
+  gtdbtk:
+    database: GTDBTK_DB_NOT_CONFIGURED
+    version: ""
+  checkm2:
+    database: CHECKM2_DB_NOT_CONFIGURED
+    version: ""
+  plasme:
+    database: PLASME_DB_NOT_CONFIGURED
+    version: ""
+  plasx:
+    annotations: PLASX_DATA_NOT_CONFIGURED
+    model: PLASX_MODEL_NOT_CONFIGURED
+    version: ""
+  copla:
+    refgraph: COPLA_REFGRAPH_NOT_CONFIGURED
+    reflist: COPLA_REFLIST_NOT_CONFIGURED
+    version: ""
+  blast:
+    database: BLAST_DB_NOT_CONFIGURED
+    version: ""
+  plasmidhostfinder:
+    database: PLASMIDHOSTFINDER_DB_NOT_CONFIGURED
+    version: ""
 tool_params: {}
 
 input:
@@ -36,6 +86,8 @@ input:
   single_input: null
   read2: null
   long_reads: null
+  pod5: null
+  bam: null
   assembly: null
   platform: null
   sample_id: single_sample
@@ -46,8 +98,14 @@ qc:
   short_read_tool: fastp
   long_read_tool: filtlong
   run_fastqc: false
-  run_multiqc: false
+  run_multiqc: true
+  optional_tools: []
   avoid_duplicate_qc: true
+
+# Host removal is activated per sample only when host_reference is present.
+host_removal:
+  enable: auto
+  host_reference: null
 
 assembly:
   enable: true
@@ -58,12 +116,21 @@ assembly:
   hybrid_assembler: opera_ms
   assembly_qc: true
 
+polishing:
+  enable: false
+  tools: []
+
 plasmid_detection:
   enable: true
   tools:
     - genomad
   default_tool: genomad
-  strategy: single_tool
+  strategy: weighted_vote
+  tool_weights:
+    genomad: 0.6
+    platon: 0.15
+    plasme: 0.15
+    plasx: 0.1
   min_contig_length: 1000
   output_uncertain: true
 
@@ -74,11 +141,16 @@ plasmid_binning:
 
 typing:
   enable: true
-  tools: auto
+  tools:
+    - plasmidfinder
+    - mob_typer
+  optional_tools: []
 
 host_prediction:
   enable: false
-  tools: auto
+  tools:
+    - metaphlan
+  optional_tools: []
   use_abundance_correlation: true
   use_crispr_spacer: false
   use_methylation: false
@@ -86,22 +158,21 @@ host_prediction:
 
 annotation:
   enable: true
-  general_annotator: bakta
-  arg_tools:
+  tools:
+    - bakta
     - amrfinderplus
-    - abricate
-  vf_tools:
-    - abricate
-  mobile_element_tools:
     - isescan
     - integronfinder
+  optional_tools: []
 
 comparative_genomics:
-  enable: false
-  tools: auto
+  enable: true
+  tools:
+    - mmseqs2
+  optional_tools: []
 
 abundance:
-  enable: false
+  enable: true
   mapper_short: bowtie2
   mapper_long: minimap2
   calculator: coverm
@@ -120,13 +191,41 @@ abundance:
     - tpm
 
 sample_analysis:
-  enable: false
+  enable: auto
   alpha_diversity: true
   beta_diversity: true
-  differential_abundance: true
-  network: true
+  differential_abundance: auto
+  differential_method: deseq2
+  min_diversity_samples: 3
+  min_group_replicates: 3
+
+diversity:
+  enable: true
+
+statistics:
+  enable: true
+
+network:
+  enable: auto
+  min_samples: 20
+
+# Assembly-contig coverage is only needed by the optional MAG branch.  The
+# main plasmid path maps reads after plasmid detection via abundance.
+contig_coverage:
+  enable: false
+
+mag_host_genomes:
+  enable: false
+  tools: []
+
+host_plasmid_linking:
+  enable: false
+  methods:
+    - co_abundance
 
 visualization:
   enable: false
+  tools: []
+  optional_tools: []
   html_report: true
   markdown_report: true

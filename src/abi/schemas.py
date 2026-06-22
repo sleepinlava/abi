@@ -156,6 +156,12 @@ class SampleInput:
     # Path to long-read FASTQ (ONT / PacBio). Mutually independent of short reads.
     # 长读长 FASTQ 文件路径（ONT/PacBio）。与短读独立。
 
+    pod5: Optional[str] = None
+    # Path to an ONT POD5 file or directory requiring basecalling.
+
+    bam: Optional[str] = None
+    # Path to an ONT/PacBio BAM that must be converted to FASTQ for read workflows.
+
     assembly: Optional[str] = None
     # Path to a pre-computed assembly FASTA. Bypasses read-based tools.
     # 预组装 FASTA 文件路径。可跳过基于 reads 的工具直接分析。
@@ -215,7 +221,7 @@ class SampleInput:
     @property
     def has_long_reads(self) -> bool:
         """True when ``long_reads`` is set (ONT / PacBio)."""
-        return bool(self.long_reads)
+        return bool(self.long_reads or self.pod5 or self.bam)
 
     @property
     def has_assembly(self) -> bool:

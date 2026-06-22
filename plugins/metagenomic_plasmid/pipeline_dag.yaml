@@ -174,22 +174,105 @@ standard_tables:
     - gc_content
     - read_length_mean
 category_dirs:
+  basecalling: 00_input_validation/basecalling
   abundance: 10_abundance
   annotation: 08_annotation
   assembly: 02_assembly
   assembly_qc: 03_assembly_qc
   comparative_genomics: 09_comparative_genomics
   diversity: 11_diversity
+  statistics: 11_diversity
   host_prediction: 07_host_prediction
+  host_plasmid_linking: 07_host_prediction
+  mag_host_genomes: 07_host_prediction/mag
+  host_removal: 01_qc/host_removal
   input_validation: 00_input_validation
   network: 12_network
+  polishing: 03_assembly_qc/polishing
+  contig_coverage: 02_assembly/coverage
   plasmid_binning: 05_plasmid_binning
+  plasmid_consensus: 04_plasmid_detection
   plasmid_detection: 04_plasmid_detection
   qc: 01_qc
   report: report
   typing: 06_plasmid_typing
   visualization: 13_visualization
 nodes:
+  long_reads_provided:
+    tool_id: internal
+    category: basecalling
+    scope: per_sample
+    name: Use provided long-read FASTQ
+    platforms:
+    - ont
+    - pacbio_hifi
+    - hybrid
+    optional: true
+    enable_condition:
+      field: input.long_reads
+      operator: not_empty
+    depends_on: []
+    inputs:
+      long_reads:
+        type: file
+        format: fastq
+        source: sample_sheet
+    outputs:
+      long_reads:
+        type: file
+        format: fastq
+  basecalling_dorado:
+    tool_id: dorado
+    category: basecalling
+    scope: per_sample
+    name: Dorado basecalling from ONT POD5
+    platforms:
+    - ont
+    - hybrid
+    optional: true
+    enable_condition:
+      field: input.pod5
+      operator: not_empty
+    depends_on: []
+    inputs:
+      pod5:
+        type: path
+        source: sample_sheet
+      threads:
+        type: integer
+        default: 1
+    outputs:
+      long_reads:
+        type: file
+        format: fastq
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.dorado.fastq'
+  long_read_bam_to_fastq:
+    tool_id: samtools_fastq
+    category: basecalling
+    scope: per_sample
+    name: Convert long-read BAM to FASTQ
+    platforms:
+    - ont
+    - pacbio_hifi
+    - hybrid
+    optional: true
+    enable_condition:
+      field: input.bam
+      operator: not_empty
+    depends_on: []
+    inputs:
+      bam:
+        type: file
+        format: bam
+        source: sample_sheet
+      threads:
+        type: integer
+        default: 1
+    outputs:
+      long_reads:
+        type: file
+        format: fastq
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.bam.fastq'
   qc_fastp:
     tool_id: fastp
     category: qc
@@ -233,19 +316,23 @@ nodes:
       clean_read1:
         type: file
         format: fastq.gz
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}_R1.clean.fastq.gz'
         contract:
           min_size: 1KB
       clean_read2:
         type: file
         format: fastq.gz
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}_R2.clean.fastq.gz'
         contract:
           min_size: 1KB
       html_report:
         type: file
         format: html
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.fastp.html'
       json_report:
         type: file
         format: json
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.fastp.json'
         contract:
           required_keys:
           - summary
@@ -315,7 +402,7 @@ nodes:
   qc_multiqc_illumina:
     tool_id: multiqc
     category: qc
-    scope: per_sample
+    scope: cross_sample
     name: MultiQC aggregation (Illumina)
     platforms:
     - illumina
@@ -331,12 +418,16 @@ nodes:
       output_dir:
         type: directory
         source: '{project_outdir}/01_qc'
+      multiqc_filename:
+        type: string
+        default: multiqc_illumina_report.html
     outputs:
       output_dir:
         type: directory
       multiqc_report:
         type: file
         format: html
+        path: '{outdir}/{category_dir}/multiqc_illumina_report.html'
     enable_condition:
       field: qc.run_multiqc
       operator: value
@@ -348,16 +439,20 @@ nodes:
     name: NanoPlot quality report (ONT)
     platforms:
     - ont
+    - pacbio_hifi
     - hybrid
     optional: false
-    depends_on: []
+    depends_on:
+    - long_reads_provided
+    - basecalling_dorado
+    - long_read_bam_to_fastq
     inputs:
       long_reads:
         type: file
         format: fastq
         contract:
           min_size: 1KB
-        source: sample_sheet
+        source: '{active_long_read_input}.long_reads'
     outputs:
       output_dir:
         type: directory
@@ -370,28 +465,35 @@ nodes:
     - ont
     - hybrid
     optional: false
-    depends_on: []
+    depends_on:
+    - long_reads_provided
+    - basecalling_dorado
+    - long_read_bam_to_fastq
     inputs:
       long_reads:
         type: file
         format: fastq
         contract:
           min_size: 1KB
-        source: sample_sheet
+        source: '{active_long_read_input}.long_reads'
     outputs:
       filtered_long_reads:
         type: file
         format: fastq
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.filtlong.fastq'
         contract:
           min_size: 1KB
+      analysis_long_reads:
+        type: file
+        format: fastq
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.filtlong.fastq'
   qc_multiqc_ont:
     tool_id: multiqc
     category: qc
-    scope: per_sample
+    scope: cross_sample
     name: MultiQC aggregation (ONT)
     platforms:
     - ont
-    - hybrid
     optional: true
     depends_on:
     - qc_nanoplot
@@ -402,9 +504,16 @@ nodes:
       output_dir:
         type: directory
         source: '{project_outdir}/01_qc'
+      multiqc_filename:
+        type: string
+        default: multiqc_ont_report.html
     outputs:
       output_dir:
         type: directory
+      multiqc_report:
+        type: file
+        format: html
+        path: '{outdir}/{category_dir}/multiqc_ont_report.html'
     enable_condition:
       field: qc.run_multiqc
       operator: value
@@ -417,24 +526,35 @@ nodes:
     platforms:
     - pacbio_hifi
     optional: false
-    depends_on: []
+    depends_on:
+    - long_reads_provided
+    - long_read_bam_to_fastq
     inputs:
       long_reads:
         type: file
         format: fastq
         contract:
           min_size: 1KB
-        source: sample_sheet
+        source: '{active_long_read_input}.long_reads'
     outputs:
       filtered_hifi_reads:
         type: file
         format: fastq.gz
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.hifiadapterfilt.fastq.gz'
         contract:
           min_size: 1KB
+      filtered_long_reads:
+        type: file
+        format: fastq.gz
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.hifiadapterfilt.fastq.gz'
+      analysis_long_reads:
+        type: file
+        format: fastq.gz
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.hifiadapterfilt.fastq.gz'
   qc_multiqc_hifi:
     tool_id: multiqc
     category: qc
-    scope: per_sample
+    scope: cross_sample
     name: MultiQC aggregation (HiFi)
     platforms:
     - pacbio_hifi
@@ -445,15 +565,22 @@ nodes:
       output_dir:
         type: directory
         source: '{project_outdir}/01_qc'
+      multiqc_filename:
+        type: string
+        default: multiqc_hifi_report.html
     outputs:
       output_dir:
         type: directory
+      multiqc_report:
+        type: file
+        format: html
+        path: '{outdir}/{category_dir}/multiqc_hifi_report.html'
     enable_condition:
       field: qc.run_multiqc
       operator: value
       value: true
   host_removal_bowtie2:
-    tool_id: bowtie2
+    tool_id: bowtie2_host_removal
     category: host_removal
     scope: per_sample
     name: Bowtie2 host read removal (short reads)
@@ -482,7 +609,7 @@ nodes:
           extensions:
           - .bt2
           min_files: 4
-        source: config.resources.host_reference
+        source: sample_sheet
       threads:
         type: integer
         default: 1
@@ -490,11 +617,13 @@ nodes:
       clean_read1:
         type: file
         format: fastq.gz
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.host_removed.1.fastq.gz'
         contract:
           min_size: 1KB
       clean_read2:
         type: file
         format: fastq.gz
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.host_removed.2.fastq.gz'
         contract:
           min_size: 1KB
       host_reads:
@@ -507,7 +636,7 @@ nodes:
     - output_files.clean_read1 exists
     - output_files.clean_read2 exists
   host_removal_minimap2_long:
-    tool_id: minimap2
+    tool_id: minimap2_host_removal
     category: host_removal
     scope: per_sample
     name: minimap2 host read removal (long reads)
@@ -521,19 +650,18 @@ nodes:
       operator: not_empty
     depends_on:
     - qc_filtlong
+    - qc_hifiadapterfilt
     inputs:
       long_reads:
         type: file
         format: fastq
-        source: qc_filtlong.filtered_long_reads
+        source: '{active_long_read_qc}.filtered_long_reads'
       host_reference:
         type: file
-        format: fasta_index
+        format: fasta
         contract:
-          extensions:
-          - .mmi
-          min_files: 1
-        source: config.resources.host_reference
+          min_size: 1KB
+        source: sample_sheet
       threads:
         type: integer
         default: 1
@@ -541,8 +669,13 @@ nodes:
       clean_long_reads:
         type: file
         format: fastq
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.host_removed.fastq'
         contract:
           min_size: 1KB
+      analysis_long_reads:
+        type: file
+        format: fastq
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.host_removed.fastq'
       host_reads:
         type: file
         format: fastq
@@ -554,6 +687,10 @@ nodes:
     platforms:
     - illumina
     optional: false
+    enable_condition:
+      field: assembly.short_read_assembler
+      operator: value
+      value: megahit
     depends_on:
     - host_removal_bowtie2
     fallback_depends:
@@ -615,6 +752,7 @@ nodes:
       assembly:
         type: file
         format: fasta
+        path: '{outdir}/{category_dir}/{sample_id}/contigs.fasta'
         contract:
           min_size: 500B
           min_contigs: 1
@@ -628,6 +766,10 @@ nodes:
     platforms:
     - ont
     optional: false
+    enable_condition:
+      field: assembly.long_read_assembler
+      operator: value
+      value: metaflye
     depends_on:
     - host_removal_minimap2_long
     fallback_depends:
@@ -645,6 +787,7 @@ nodes:
       assembly:
         type: file
         format: fasta
+        path: '{outdir}/{category_dir}/{sample_id}/assembly.fasta'
         contract:
           min_size: 500B
           min_contigs: 1
@@ -658,6 +801,10 @@ nodes:
     platforms:
     - pacbio_hifi
     optional: false
+    enable_condition:
+      field: assembly.pacbio_hifi_assembler
+      operator: value
+      value: hifiasm_meta
     depends_on:
     - host_removal_minimap2_long
     fallback_depends:
@@ -675,6 +822,7 @@ nodes:
       assembly:
         type: file
         format: fasta
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.hifiasm.fasta'
         contract:
           min_size: 500B
           min_contigs: 1
@@ -691,6 +839,10 @@ nodes:
     platforms:
     - hybrid
     optional: false
+    enable_condition:
+      field: assembly.hybrid_assembler
+      operator: value
+      value: opera_ms
     depends_on:
     - host_removal_bowtie2
     - host_removal_minimap2_long
@@ -720,6 +872,7 @@ nodes:
       assembly:
         type: file
         format: fasta
+        path: '{outdir}/{category_dir}/{sample_id}/contigs.fasta'
         contract:
           min_size: 500B
           min_contigs: 1
@@ -746,6 +899,40 @@ nodes:
       assembly:
         type: file
         format: fasta
+  polishing_medaka:
+    tool_id: medaka
+    category: polishing
+    scope: per_sample
+    name: Optional ONT Medaka consensus polishing
+    platforms:
+    - ont
+    optional: true
+    enable_condition:
+      field: polishing.tools
+      operator: list_contains
+      value: medaka
+    depends_on:
+    - assembly_metaflye
+    inputs:
+      assembly:
+        type: file
+        format: fasta
+        source: assembly_metaflye.assembly
+      long_reads:
+        type: file
+        format: fastq
+        source: host_removal_minimap2_long.clean_long_reads
+        fallback: qc_filtlong.filtered_long_reads
+      threads:
+        type: integer
+        default: 1
+    outputs:
+      assembly:
+        type: file
+        format: fasta
+        path: '{outdir}/{category_dir}/{sample_id}/consensus.fasta'
+      output_dir:
+        type: directory
   assembly_qc_quast:
     tool_id: quast
     category: assembly_qc
@@ -765,6 +952,7 @@ nodes:
     - assembly_hifiasm
     - assembly_opera_ms
     - assembly_provided
+    - polishing_medaka
     inputs:
       assembly:
         type: file
@@ -836,6 +1024,7 @@ nodes:
     - assembly_metaflye
     - assembly_hifiasm
     - assembly_opera_ms
+    - polishing_medaka
     inputs:
       plasmid_contigs:
         type: file
@@ -844,8 +1033,7 @@ nodes:
       long_reads:
         type: file
         format: fastq
-        source: host_removal_minimap2_long.clean_long_reads
-        fallback: qc_filtlong.filtered_long_reads
+        source: '{active_long_read_source}.analysis_long_reads'
       threads:
         type: integer
         default: 1
@@ -934,6 +1122,7 @@ nodes:
     - assembly_hifiasm
     - assembly_opera_ms
     - assembly_provided
+    - polishing_medaka
     inputs:
       assembly:
         type: file
@@ -944,7 +1133,7 @@ nodes:
         contract:
           contains:
           - version.txt
-        source: config.resources.genomad_database
+        source: config.resources.genomad.database
       threads:
         type: integer
         default: 1
@@ -990,7 +1179,7 @@ nodes:
         source: '{active_assembly_node}.assembly'
       database:
         type: directory
-        source: config.resources.plasme_database
+        source: config.resources.plasme.database
       threads:
         type: integer
         default: 1
@@ -1023,10 +1212,10 @@ nodes:
         source: '{active_assembly_node}.assembly'
       annotations:
         type: file
-        source: config.resources.plasx_annotations
+        source: config.resources.plasx.annotations
       model:
         type: file
-        source: config.resources.plasx_model
+        source: config.resources.plasx.model
     outputs:
       plasx_predictions:
         type: file
@@ -1035,6 +1224,35 @@ nodes:
       field: plasmid_detection.tools
       operator: list_contains
       value: plasx
+  plasmid_detect_platon:
+    tool_id: platon
+    category: plasmid_detection
+    scope: per_sample
+    name: Platon plasmid detection and typing (optional consensus evidence)
+    platforms:
+    - illumina
+    - ont
+    - pacbio_hifi
+    - hybrid
+    - assembly
+    optional: true
+    depends_on:
+    - assembly_qc_quast
+    inputs:
+      assembly:
+        type: file
+        format: fasta
+        source: '{active_assembly_node}.assembly'
+      threads:
+        type: integer
+        default: 1
+    outputs:
+      output_dir:
+        type: directory
+    enable_condition:
+      field: plasmid_detection.tools
+      operator: list_contains
+      value: platon
   plasmid_consensus:
     tool_id: internal
     category: plasmid_consensus
@@ -1051,10 +1269,9 @@ nodes:
     - plasmid_detect_genomad
     - plasmid_detect_plasme
     - plasmid_detect_plasx
-    - contig_coverage_coverm
+    - plasmid_detect_platon
     fallback_depends:
     - plasmid_detect_genomad
-    - contig_coverage_coverm
     inputs:
       genomad_summary:
         type: file
@@ -1070,10 +1287,10 @@ nodes:
         format: tsv
         source: plasmid_detect_plasx.plasx_predictions
         required: false
-      coverage_table:
-        type: file
-        format: tsv
-        source: contig_coverage_coverm.coverage_table
+      platon_predictions:
+        type: directory
+        source: plasmid_detect_platon.output_dir
+        required: false
       consensus_method:
         type: string
         default: intersection
@@ -1095,14 +1312,33 @@ nodes:
       plasmid_contigs:
         type: file
         format: fasta
+        path: '{outdir}/04_plasmid_detection/{sample_id}/plasmid_contigs.fasta'
         contract:
           min_size: 100B
-      consensus_table:
-        type: file
-        format: tsv
     standard_tables:
     - plasmid_predictions
     - plasmid_consensus
+  plasmid_structure:
+    tool_id: internal
+    category: plasmid_detection
+    scope: per_sample
+    name: Detect plasmid circularity and terminal overlap
+    platforms:
+    - illumina
+    - ont
+    - pacbio_hifi
+    - hybrid
+    - assembly
+    optional: false
+    depends_on:
+    - plasmid_consensus
+    inputs:
+      plasmid_contigs:
+        type: file
+        format: fasta
+        source: plasmid_consensus.plasmid_contigs
+    standard_tables:
+    - plasmid_structure
   plasmid_binning_plasmaag:
     tool_id: plasmaag
     category: plasmid_binning
@@ -1193,7 +1429,7 @@ nodes:
         source: plasmid_consensus.plasmid_contigs
       database:
         type: directory
-        source: config.resources.mob_suite_database
+        source: config.resources.mob_suite.database
       threads:
         type: integer
         default: 1
@@ -1225,7 +1461,7 @@ nodes:
         source: plasmid_consensus.plasmid_contigs
       database:
         type: directory
-        source: config.resources.plasmidfinder_database
+        source: config.resources.plasmidfinder.database
     outputs:
       typing_results:
         type: file
@@ -1278,18 +1514,18 @@ nodes:
         source: plasmid_consensus.plasmid_contigs
       refgraph:
         type: file
-        source: config.resources.copla_refgraph
+        source: config.resources.copla.refgraph
       reflist:
         type: file
-        source: config.resources.copla_reflist
+        source: config.resources.copla.reflist
     outputs:
       typing_results:
         type: file
         format: tsv
     enable_condition:
-      field: typing.enable_optional
-      operator: value
-      value: true
+      field: typing.optional_tools
+      operator: list_contains
+      value: copla
   host_prediction_metaphlan:
     tool_id: metaphlan
     category: host_prediction
@@ -1300,7 +1536,11 @@ nodes:
     - ont
     - pacbio_hifi
     - hybrid
-    optional: false
+    optional: true
+    enable_condition:
+      field: host_prediction.tools
+      operator: list_contains
+      value: metaphlan
     depends_on:
     - host_removal_bowtie2
     - host_removal_minimap2_long
@@ -1324,12 +1564,11 @@ nodes:
       long_reads:
         type: file
         format: fastq
-        source: host_removal_minimap2_long.clean_long_reads
-        fallback: qc_filtlong.filtered_long_reads
+        source: '{active_long_read_source}.analysis_long_reads'
         required: false
       database:
         type: directory
-        source: config.resources.metaphlan_database
+        source: config.resources.metaphlan.database
       threads:
         type: integer
         default: 1
@@ -1362,7 +1601,7 @@ nodes:
         fallback: qc_fastp.clean_read2
       database:
         type: directory
-        source: config.resources.kraken2_database
+        source: config.resources.kraken2.database
       threads:
         type: integer
         default: 1
@@ -1371,8 +1610,9 @@ nodes:
         type: file
         format: tsv
     enable_condition:
-      field: host_prediction.enable
-      value: true
+      field: host_prediction.tools
+      operator: list_contains
+      value: kraken2
   host_prediction_plasmidhostfinder:
     tool_id: plasmidhostfinder
     category: host_prediction
@@ -1380,7 +1620,11 @@ nodes:
     name: PlasmidHostFinder assembly-based host prediction
     platforms:
     - assembly
-    optional: false
+    optional: true
+    enable_condition:
+      field: host_prediction.optional_tools
+      operator: list_contains
+      value: plasmidhostfinder
     depends_on:
     - plasmid_consensus
     inputs:
@@ -1390,7 +1634,7 @@ nodes:
         source: plasmid_consensus.plasmid_contigs
       database:
         type: directory
-        source: config.resources.plasmidhostfinder_database
+        source: config.resources.plasmidhostfinder.database
     outputs:
       host_predictions:
         type: file
@@ -1439,7 +1683,11 @@ nodes:
     - pacbio_hifi
     - hybrid
     - assembly
-    optional: true
+    optional: false
+    enable_condition:
+      field: annotation.tools
+      operator: list_contains
+      value: bakta
     depends_on:
     - plasmid_consensus
     inputs:
@@ -1449,7 +1697,7 @@ nodes:
         source: plasmid_consensus.plasmid_contigs
       database:
         type: directory
-        source: config.resources.bakta_database
+        source: config.resources.bakta.database
       threads:
         type: integer
         default: 1
@@ -1471,6 +1719,10 @@ nodes:
     - hybrid
     - assembly
     optional: false
+    enable_condition:
+      field: annotation.tools
+      operator: list_contains
+      value: amrfinderplus
     depends_on:
     - plasmid_consensus
     inputs:
@@ -1480,7 +1732,7 @@ nodes:
         source: plasmid_consensus.plasmid_contigs
       database:
         type: path
-        source: config.resources.amrfinder_database
+        source: config.resources.amrfinderplus.database
     outputs:
       arg_vf_results:
         type: file
@@ -1515,9 +1767,9 @@ nodes:
         type: file
         format: tsv
     enable_condition:
-      field: annotation.enable_optional
-      operator: value
-      value: true
+      field: annotation.optional_tools
+      operator: list_contains
+      value: abricate
   annotation_isescan:
     tool_id: isescan
     category: annotation
@@ -1542,9 +1794,9 @@ nodes:
         type: file
         format: tsv
     enable_condition:
-      field: annotation.enable_optional
-      operator: value
-      value: true
+      field: annotation.tools
+      operator: list_contains
+      value: isescan
   annotation_integronfinder:
     tool_id: integronfinder
     category: annotation
@@ -1568,9 +1820,9 @@ nodes:
       integron_results:
         type: directory
     enable_condition:
-      field: annotation.enable_optional
-      operator: value
-      value: true
+      field: annotation.tools
+      operator: list_contains
+      value: integronfinder
   annotation_mob_suite:
     tool_id: mob_suite
     category: annotation
@@ -1592,7 +1844,7 @@ nodes:
         source: plasmid_consensus.plasmid_contigs
       database:
         type: directory
-        source: config.resources.mob_suite_database
+        source: config.resources.mob_suite.database
       threads:
         type: integer
         default: 1
@@ -1600,9 +1852,9 @@ nodes:
       output_dir:
         type: directory
     enable_condition:
-      field: annotation.enable_optional
-      operator: value
-      value: true
+      field: annotation.optional_tools
+      operator: list_contains
+      value: mob_suite
   mag_metabat2:
     tool_id: metabat2
     category: mag_host_genomes
@@ -1679,7 +1931,7 @@ nodes:
         source: mag_metabat2.mag_bins
       database:
         type: directory
-        source: config.resources.gtdbtk_database
+        source: config.resources.gtdbtk.database
       threads:
         type: integer
         default: 1
@@ -1694,7 +1946,7 @@ nodes:
   host_plasmid_link_coabundance:
     tool_id: internal
     category: host_plasmid_linking
-    scope: per_sample
+    scope: cross_sample
     name: Co-abundance correlation host-plasmid linking
     platforms:
     - illumina
@@ -1702,6 +1954,10 @@ nodes:
     - pacbio_hifi
     - hybrid
     optional: true
+    enable_condition:
+      field: host_plasmid_linking.run_coabundance
+      operator: value
+      value: true
     depends_on:
     - plasmid_consensus
     - contig_coverage_coverm
@@ -1725,6 +1981,8 @@ nodes:
       coabundance_links:
         type: file
         format: tsv
+    standard_tables:
+    - host_plasmid_links
   host_plasmid_link_sequence:
     tool_id: internal
     category: host_plasmid_linking
@@ -1736,6 +1994,10 @@ nodes:
     - pacbio_hifi
     - hybrid
     optional: true
+    enable_condition:
+      field: host_plasmid_linking.methods
+      operator: list_contains
+      value: sequence
     depends_on:
     - plasmid_consensus
     - mag_gtdbtk
@@ -1788,9 +2050,9 @@ nodes:
         type: file
         format: tsv
     enable_condition:
-      field: host_plasmid_linking.enable
-      operator: value
-      value: true
+      field: host_plasmid_linking.optional_methods
+      operator: list_contains
+      value: crispr
   host_plasmid_link_longread:
     tool_id: internal
     category: host_plasmid_linking
@@ -1801,6 +2063,10 @@ nodes:
     - pacbio_hifi
     - hybrid
     optional: true
+    enable_condition:
+      field: host_plasmid_linking.methods
+      operator: list_contains
+      value: long_read
     depends_on:
     - plasmid_consensus
     - contig_coverage_coverm
@@ -1887,8 +2153,7 @@ nodes:
       long_reads:
         type: file
         format: fastq
-        source: host_removal_minimap2_long.clean_long_reads
-        fallback: qc_filtlong.filtered_long_reads
+        source: '{active_long_read_source}.analysis_long_reads'
       threads:
         type: integer
         default: 1
@@ -1968,7 +2233,7 @@ nodes:
     - hybrid
     optional: true
     enable_condition:
-      field: sample_analysis.enable
+      field: sample_analysis.run_diversity
       value: true
     depends_on:
     - contig_coverage_coverm
@@ -2000,7 +2265,8 @@ nodes:
     - hybrid
     optional: true
     enable_condition:
-      field: sample_analysis.differential_abundance
+      field: sample_analysis.run_differential_internal
+      operator: value
       value: true
     depends_on:
     - contig_coverage_coverm
@@ -2016,16 +2282,73 @@ nodes:
         source: sample_sheet
       method:
         type: string
-        default: deseq2
+        default: internal_effect_size
         enum:
-        - deseq2
-        - ancom_bc
+        - internal_effect_size
     outputs:
       differential_abundance_results:
         type: file
         format: tsv
     standard_tables:
     - differential_abundance
+  multisample_differential_deseq2:
+    tool_id: deseq2_plasmid
+    category: statistics
+    scope: cross_sample
+    name: DESeq2 differential plasmid abundance
+    platforms:
+    - illumina
+    - ont
+    - pacbio_hifi
+    - hybrid
+    optional: true
+    enable_condition:
+      field: sample_analysis.run_differential_deseq2
+      operator: value
+      value: true
+    depends_on:
+    - abundance_coverm
+    inputs:
+      abundance_table:
+        type: file
+        format: tsv
+        path: '{outdir}/tables/plasmid_abundance.tsv'
+      sample_metadata:
+        type: file
+        format: tsv
+        source: sample_sheet
+      threads:
+        type: integer
+        default: 1
+    outputs:
+      differential_plasmids:
+        type: file
+        format: tsv
+        path: '{outdir}/{category_dir}/differential_plasmids.tsv'
+    standard_tables:
+    - differential_plasmids
+  multisample_network_prepare:
+    tool_id: internal
+    category: network
+    scope: cross_sample
+    name: Prepare compositional abundance matrix for FastSpar
+    platforms:
+    - illumina
+    - ont
+    - pacbio_hifi
+    - hybrid
+    optional: true
+    enable_condition:
+      field: network.run_network
+      operator: value
+      value: true
+    depends_on:
+    - abundance_coverm
+    outputs:
+      network_input:
+        type: file
+        format: tsv
+        path: '{outdir}/{category_dir}/fastspar_input.tsv'
   multisample_network_fastspar:
     tool_id: fastspar
     category: network
@@ -2038,13 +2361,12 @@ nodes:
     - hybrid
     optional: true
     depends_on:
-    - contig_coverage_coverm
+    - multisample_network_prepare
     inputs:
       abundance_table:
         type: file
         format: tsv
-        source: contig_coverage_coverm.abundance_tsv
-        default: ""  # resolved at runtime from tables/abundance.tsv via command_template
+        source: multisample_network_prepare.network_input
       threads:
         type: integer
         default: 1
@@ -2059,14 +2381,33 @@ nodes:
     - network_edges
     - network_nodes
     enable_condition:
-      field: network.enable
+      field: network.run_network
       operator: value
       value: true
+  plasmid_catalog_prepare:
+    tool_id: internal
+    category: comparative_genomics
+    scope: cross_sample
+    name: Prepare non-redundant plasmid catalog input
+    platforms:
+    - illumina
+    - ont
+    - pacbio_hifi
+    - hybrid
+    - assembly
+    optional: false
+    depends_on:
+    - plasmid_consensus
+    outputs:
+      combined_plasmids:
+        type: file
+        format: fasta
+        path: '{outdir}/{category_dir}/plasmid_catalog_input.fasta'
   comparative_mmseqs2:
     tool_id: mmseqs2
     category: comparative_genomics
-    scope: per_sample
-    name: MMseqs2 plasmid sequence clustering
+    scope: cross_sample
+    name: MMseqs2 cross-sample plasmid catalog clustering
     platforms:
     - illumina
     - ont
@@ -2075,18 +2416,16 @@ nodes:
     - assembly
     optional: true
     enable_condition:
-      field: comparative_genomics.enable
-      value: true
+      field: comparative_genomics.tools
+      operator: list_contains
+      value: mmseqs2
     depends_on:
-    - plasmid_consensus
+    - plasmid_catalog_prepare
     inputs:
       plasmid_contigs:
         type: file
         format: fasta
-        source: plasmid_consensus.plasmid_contigs
-      database:
-        type: directory
-        source: config.resources.mmseqs2_database
+        source: plasmid_catalog_prepare.combined_plasmids
       threads:
         type: integer
         default: 1
@@ -2094,6 +2433,11 @@ nodes:
       clusters:
         type: file
         format: tsv
+        path: '{outdir}/{category_dir}/plasmid_catalog_cluster.tsv'
+      representatives:
+        type: file
+        format: fasta
+        path: '{outdir}/{category_dir}/plasmid_catalog_rep_seq.fasta'
   comparative_blast:
     tool_id: blast
     category: comparative_genomics
@@ -2116,7 +2460,7 @@ nodes:
       database:
         type: file
         format: blast_db
-        source: config.resources.blast_database
+        source: config.resources.blast.database
       threads:
         type: integer
         default: 1
@@ -2125,9 +2469,9 @@ nodes:
         type: file
         format: tsv
     enable_condition:
-      field: comparative_genomics.enable
-      operator: value
-      value: true
+      field: comparative_genomics.optional_tools
+      operator: list_contains
+      value: blast
   comparative_mummer:
     tool_id: mummer
     category: comparative_genomics
@@ -2156,9 +2500,9 @@ nodes:
         type: file
         format: tsv
     enable_condition:
-      field: comparative_genomics.enable
-      operator: value
-      value: true
+      field: comparative_genomics.optional_tools
+      operator: list_contains
+      value: mummer
   comparative_clinker:
     tool_id: clinker
     category: comparative_genomics
@@ -2182,9 +2526,9 @@ nodes:
         type: file
         format: html
     enable_condition:
-      field: comparative_genomics.enable
-      operator: value
-      value: true
+      field: comparative_genomics.optional_tools
+      operator: list_contains
+      value: clinker
   visualization_clinker_gene_maps:
     tool_id: clinker
     category: visualization
@@ -2209,9 +2553,9 @@ nodes:
         type: file
         format: html
     enable_condition:
-      field: visualization.enable
-      operator: value
-      value: true
+      field: visualization.optional_tools
+      operator: list_contains
+      value: clinker
   visualization_pycirclize:
     tool_id: pycirclize
     category: visualization
@@ -2242,9 +2586,9 @@ nodes:
         type: file
         format: png
     enable_condition:
-      field: visualization.enable
-      operator: value
-      value: true
+      field: visualization.tools
+      operator: list_contains
+      value: pycirclize
   visualization_network:
     tool_id: pyvis
     category: visualization
@@ -2274,140 +2618,9 @@ nodes:
         type: file
         format: html
     enable_condition:
-      field: visualization.enable
+      field: network.run_network
       operator: value
       value: true
-  qc_chopper:
-    tool_id: chopper
-    category: qc
-    scope: per_sample
-    name: Chopper long-read QC (ONT alternative)
-    platforms:
-    - ont
-    - hybrid
-    optional: true
-    depends_on: []
-    inputs:
-      long_reads:
-        type: file
-        format: fastq
-        contract:
-          min_size: 1KB
-        source: sample_sheet
-      threads:
-        type: integer
-        default: 1
-    outputs:
-      output_dir:
-        type: directory
-      filtered_long_reads:
-        type: file
-        format: fastq
-        contract:
-          min_size: 1KB
-    enable_condition:
-      field: qc.enable
-      operator: value
-      value: true
-  qc_porechop:
-    tool_id: porechop
-    category: qc
-    scope: per_sample
-    name: Porechop adapter trimming (ONT alternative)
-    platforms:
-    - ont
-    - hybrid
-    optional: true
-    depends_on: []
-    inputs:
-      long_reads:
-        type: file
-        format: fastq
-        contract:
-          min_size: 1KB
-        source: sample_sheet
-      threads:
-        type: integer
-        default: 1
-    outputs:
-      output_dir:
-        type: directory
-      trimmed_long_reads:
-        type: file
-        format: fastq
-        contract:
-          min_size: 1KB
-    enable_condition:
-      field: qc.enable
-      operator: value
-      value: true
-  host_removal_bwa:
-    tool_id: bwa
-    category: host_removal
-    scope: per_sample
-    name: BWA-MEM host read removal (short-read alternative)
-    platforms:
-    - illumina
-    - hybrid
-    optional: true
-    enable_condition:
-      field: host_removal.host_reference
-      operator: not_empty
-    depends_on:
-    - qc_fastp
-    inputs:
-      read1:
-        type: file
-        format: fastq.gz
-        source: qc_fastp.clean_read1
-      read2:
-        type: file
-        format: fastq.gz
-        source: qc_fastp.clean_read2
-      host_reference:
-        type: file
-        format: fasta
-        contract:
-          min_size: 1KB
-        source: config.resources.host_reference
-      threads:
-        type: integer
-        default: 1
-    outputs:
-      output_dir:
-        type: directory
-  host_removal_kneaddata:
-    tool_id: kneaddata
-    category: host_removal
-    scope: per_sample
-    name: KneadData host decontamination (short-read alternative)
-    platforms:
-    - illumina
-    - hybrid
-    optional: true
-    enable_condition:
-      field: host_removal.host_reference
-      operator: not_empty
-    depends_on:
-    - qc_fastp
-    inputs:
-      read1:
-        type: file
-        format: fastq.gz
-        source: qc_fastp.clean_read1
-      read2:
-        type: file
-        format: fastq.gz
-        source: qc_fastp.clean_read2
-      host_reference:
-        type: directory
-        source: config.resources.host_reference
-      threads:
-        type: integer
-        default: 1
-    outputs:
-      output_dir:
-        type: directory
   assembly_hybridspades:
     tool_id: hybridspades
     category: assembly
@@ -2448,70 +2661,12 @@ nodes:
       assembly:
         type: file
         format: fasta
+        path: '{outdir}/{category_dir}/{sample_id}/contigs.fasta'
         contract:
           min_size: 500B
           min_contigs: 1
       output_dir:
         type: directory
-  assembly_qc_bandage:
-    tool_id: bandage
-    category: assembly_qc
-    scope: per_sample
-    name: Bandage assembly graph visualization
-    platforms:
-    - illumina
-    - ont
-    - pacbio_hifi
-    - hybrid
-    optional: true
-    depends_on:
-    - assembly_hifiasm
-    - assembly_opera_ms
-    fallback_depends:
-    - assembly_megahit
-    - assembly_metaflye
-    inputs:
-      assembly_graph:
-        type: file
-        format: gfa
-        source: '{active_assembly_node}.assembly_graph'
-        required: false
-    outputs:
-      output_dir:
-        type: directory
-    enable_condition:
-      field: assembly_qc.tools
-      operator: list_contains
-      value: bandage
-  plasmid_detect_platon:
-    tool_id: platon
-    category: plasmid_detection
-    scope: per_sample
-    name: Platon plasmid detection and typing (recommended additional)
-    platforms:
-    - illumina
-    - ont
-    - pacbio_hifi
-    - hybrid
-    - assembly
-    optional: true
-    depends_on:
-    - assembly_qc_quast
-    inputs:
-      assembly:
-        type: file
-        format: fasta
-        source: '{active_assembly_node}.assembly'
-      threads:
-        type: integer
-        default: 1
-    outputs:
-      output_dir:
-        type: directory
-    enable_condition:
-      field: plasmid_detection.tools
-      operator: list_contains
-      value: platon
   plasmid_binning_scapp:
     tool_id: scapp
     category: plasmid_binning
@@ -2580,35 +2735,6 @@ nodes:
     outputs:
       output_dir:
         type: directory
-  typing_pmlst:
-    tool_id: pmlst
-    category: typing
-    scope: per_sample
-    name: pMLST plasmid multi-locus sequence typing
-    platforms:
-    - illumina
-    - ont
-    - pacbio_hifi
-    - hybrid
-    - assembly
-    optional: true
-    depends_on:
-    - plasmid_consensus
-    inputs:
-      plasmid_contigs:
-        type: file
-        format: fasta
-        source: plasmid_consensus.plasmid_contigs
-      threads:
-        type: integer
-        default: 1
-    outputs:
-      output_dir:
-        type: directory
-    enable_condition:
-      field: typing.enable_optional
-      operator: value
-      value: true
   typing_conjscan:
     tool_id: conjscan
     category: typing
@@ -2635,9 +2761,9 @@ nodes:
       output_dir:
         type: directory
     enable_condition:
-      field: typing.enable_optional
-      operator: value
-      value: true
+      field: typing.optional_tools
+      operator: list_contains
+      value: conjscan
   typing_macsyfinder:
     tool_id: macsyfinder
     category: typing
@@ -2664,9 +2790,9 @@ nodes:
       output_dir:
         type: directory
     enable_condition:
-      field: typing.enable_optional
-      operator: value
-      value: true
+      field: typing.optional_tools
+      operator: list_contains
+      value: macsyfinder
   annotation_rgi:
     tool_id: rgi
     category: annotation
@@ -2686,6 +2812,9 @@ nodes:
         type: file
         format: fasta
         source: plasmid_consensus.plasmid_contigs
+      database:
+        type: directory
+        source: config.resources.card.database
       threads:
         type: integer
         default: 1
@@ -2693,9 +2822,9 @@ nodes:
       output_dir:
         type: directory
     enable_condition:
-      field: annotation.enable_optional
-      operator: value
-      value: true
+      field: annotation.optional_tools
+      operator: list_contains
+      value: rgi
   annotation_eggnog_mapper:
     tool_id: eggnog_mapper
     category: annotation
@@ -2722,9 +2851,9 @@ nodes:
       output_dir:
         type: directory
     enable_condition:
-      field: annotation.enable_optional
-      operator: value
-      value: true
+      field: annotation.optional_tools
+      operator: list_contains
+      value: eggnog_mapper
   mag_maxbin2:
     tool_id: maxbin2
     category: mag_host_genomes
@@ -2855,36 +2984,6 @@ nodes:
     outputs:
       output_dir:
         type: directory
-  host_plasmid_link_hic:
-    tool_id: hic_evidence
-    category: host_plasmid_linking
-    scope: per_sample
-    name: Hi-C / meta3C host-plasmid linkage evidence
-    platforms:
-    - illumina
-    - ont
-    - pacbio_hifi
-    - hybrid
-    optional: true
-    depends_on:
-    - plasmid_consensus
-    - mag_gtdbtk
-    fallback_depends:
-    - plasmid_consensus
-    - plasmid_consensus
-    inputs:
-      host_plasmid_links:
-        type: file
-        format: tsv
-        source: host_plasmid_link_coabundance.coabundance_links
-        required: false
-    outputs:
-      output_dir:
-        type: directory
-    enable_condition:
-      field: host_plasmid_linking.enable
-      operator: value
-      value: true
   visualization_dna_features:
     tool_id: dna_features_viewer
     category: visualization
@@ -2908,9 +3007,9 @@ nodes:
       output_dir:
         type: directory
     enable_condition:
-      field: visualization.enable
-      operator: value
-      value: true
+      field: visualization.tools
+      operator: list_contains
+      value: dna_features_viewer
   report_markdown:
     tool_id: report_markdown
     category: report
@@ -2925,6 +3024,7 @@ nodes:
     optional: false
     depends_on:
     - plasmid_consensus
+    - plasmid_structure
     - plasmid_binning_plasmaag
     - plasmid_binning_gplas2
     - plasmid_binning_mob_recon
@@ -2945,6 +3045,7 @@ nodes:
     - contig_coverage_coverm
     - multisample_diversity
     - multisample_differential_abundance
+    - multisample_differential_deseq2
     - multisample_network_fastspar
     - comparative_mmseqs2
     - comparative_blast

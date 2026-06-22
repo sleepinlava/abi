@@ -10,6 +10,30 @@ from typing import Any, Dict, Iterable, List, Mapping, Sequence
 logger = logging.getLogger(__name__)
 
 TABLE_SCHEMAS: Dict[str, List[str]] = {
+    # Canonical result contract from the metagenomic-plasmid workflow plan.
+    # These files are always created, even when a tool finds no records.
+    "sample_qc": [
+        "sample_id",
+        "tool",
+        "raw_reads",
+        "clean_reads",
+        "q30",
+        "gc_content",
+        "filter_rate",
+        "source_file",
+        "warnings",
+    ],
+    "assembly_qc": [
+        "sample_id",
+        "assembler",
+        "contig_count",
+        "n50",
+        "total_length",
+        "max_contig",
+        "gc_content",
+        "source_file",
+        "warnings",
+    ],
     "plasmid_predictions": [
         "sample_id",
         "contig_id",
@@ -38,6 +62,109 @@ TABLE_SCHEMAS: Dict[str, List[str]] = {
         "contig_length",
         "evidence",
         "warnings",
+    ],
+    "plasmid_catalog": [
+        "cluster_id",
+        "representative_id",
+        "member_id",
+        "sample_id",
+        "length_bp",
+        "circularity",
+        "identity",
+        "coverage",
+        "method",
+        "source_file",
+    ],
+    "plasmid_structure": [
+        "sample_id",
+        "plasmid_id",
+        "length_bp",
+        "is_circular",
+        "terminal_overlap_bp",
+        "method",
+        "warnings",
+        "source_file",
+    ],
+    "plasmid_abundance": [
+        "sample_id",
+        "plasmid_id",
+        "coverage",
+        "rpkm",
+        "tpm",
+        "raw_count",
+        "mapper",
+        "source_file",
+    ],
+    "plasmid_annotation": [
+        "sample_id",
+        "contig_id",
+        "gene_id",
+        "start",
+        "end",
+        "strand",
+        "gene",
+        "product",
+        "functional_label",
+        "tool",
+        "source_file",
+    ],
+    "amr_genes": [
+        "sample_id",
+        "contig_id",
+        "gene",
+        "drug_class",
+        "identity",
+        "coverage",
+        "tool",
+        "source_file",
+    ],
+    "mge_elements": [
+        "sample_id",
+        "contig_id",
+        "element_id",
+        "element_type",
+        "start",
+        "end",
+        "tool",
+        "source_file",
+    ],
+    "host_profile": [
+        "sample_id",
+        "taxon_name",
+        "taxon_id",
+        "rank",
+        "relative_abundance",
+        "tool",
+        "source_file",
+    ],
+    "host_plasmid_links": [
+        "sample_id",
+        "plasmid_id",
+        "host_id",
+        "evidence_type",
+        "evidence_level",
+        "score",
+        "is_prediction",
+        "source_file",
+    ],
+    "differential_plasmids": [
+        "plasmid_id",
+        "group_a",
+        "group_b",
+        "log2_fold_change",
+        "p_value",
+        "q_value",
+        "method",
+        "warnings",
+    ],
+    "analysis_status": [
+        "module",
+        "status",
+        "reason",
+        "sample_count",
+        "eligible_sample_count",
+        "group_counts",
+        "threshold",
     ],
     "annotations": [
         "sample_id",
@@ -225,12 +352,200 @@ def append_standard_rows(
 ) -> Dict[str, Path]:
     written = {}
     ensure_standard_tables(tables_dir)
-    for table_name, rows in rows_by_table.items():
-        rows = list(rows)
+    expanded: Dict[str, List[Mapping[str, Any]]] = {}
+    for table_name, source_rows in rows_by_table.items():
+        rows = list(source_rows)
+        expanded.setdefault(table_name, []).extend(rows)
+        for canonical_name, canonical_rows in _canonical_result_rows(table_name, rows).items():
+            expanded.setdefault(canonical_name, []).extend(canonical_rows)
+    for table_name, rows in expanded.items():
         if not rows:
             continue
         written[table_name] = write_standard_table(tables_dir, table_name, rows, append=True)
     return written
+
+
+def _canonical_result_rows(
+    table_name: str, rows: Sequence[Mapping[str, Any]]
+) -> Dict[str, List[Mapping[str, Any]]]:
+    """Mirror legacy normalized rows into the public workflow result contract."""
+    if table_name == "qc_summary":
+        grouped: Dict[tuple[str, str], Dict[str, Any]] = {}
+        for row in rows:
+            key = (str(row.get("sample_id", "")), str(row.get("tool", "")))
+            target = grouped.setdefault(
+                key,
+                {
+                    "sample_id": key[0],
+                    "tool": key[1],
+                    "source_file": row.get("source_file", ""),
+                },
+            )
+            metric = str(row.get("metric", "")).lower().replace(" ", "_")
+            value = row.get("value", "")
+            if "before_filtering.total_reads" in metric or metric in {
+                "input_reads",
+                "total_sequences",
+                "number_of_reads",
+            }:
+                target["raw_reads"] = value
+            elif "after_filtering.total_reads" in metric or metric in {
+                "output_reads",
+                "clean_reads",
+            }:
+                target["clean_reads"] = value
+            elif "q30" in metric:
+                target["q30"] = value
+            elif "gc" in metric:
+                target["gc_content"] = value
+            elif "filter" in metric and ("rate" in metric or "percent" in metric):
+                target["filter_rate"] = value
+        return {"sample_qc": list(grouped.values())}
+
+    if table_name == "assembly_summary":
+        grouped = {}
+        for row in rows:
+            key = (str(row.get("sample_id", "")), str(row.get("tool", "")))
+            target = grouped.setdefault(
+                key,
+                {
+                    "sample_id": key[0],
+                    "assembler": key[1],
+                    "source_file": row.get("source_file", ""),
+                },
+            )
+            metric = str(row.get("metric", "")).lower().replace(" ", "_")
+            value = row.get("value", "")
+            metric_map = {
+                "n50": "n50",
+                "total_contigs": "contig_count",
+                "contigs": "contig_count",
+                "total_length": "total_length",
+                "max_contig": "max_contig",
+                "largest_contig": "max_contig",
+                "gc": "gc_content",
+                "gc_content": "gc_content",
+            }
+            if metric in metric_map:
+                target[metric_map[metric]] = value
+        return {"assembly_qc": list(grouped.values())}
+
+    if table_name == "abundance":
+        return {
+            "plasmid_abundance": [
+                {
+                    "sample_id": row.get("sample_id", ""),
+                    "plasmid_id": row.get("feature_id") or row.get("contig_id", ""),
+                    "coverage": row.get("coverage", ""),
+                    "rpkm": row.get("rpkm", ""),
+                    "tpm": row.get("tpm", ""),
+                    "raw_count": row.get("mapped_reads", ""),
+                    "mapper": row.get("tool", ""),
+                    "source_file": row.get("source_file", ""),
+                }
+                for row in rows
+            ]
+        }
+
+    if table_name == "annotations":
+        annotation_rows: List[Mapping[str, Any]] = [
+            {
+                "sample_id": row.get("sample_id", ""),
+                "contig_id": row.get("contig_id", ""),
+                "gene_id": row.get("gene", ""),
+                "start": row.get("start", ""),
+                "end": row.get("end", ""),
+                "strand": row.get("strand", ""),
+                "gene": row.get("gene", ""),
+                "product": row.get("product", ""),
+                "functional_label": row.get("category", ""),
+                "tool": row.get("tool", ""),
+                "source_file": row.get("source_file", ""),
+            }
+            for row in rows
+        ]
+        amr_rows: List[Mapping[str, Any]] = [
+            {
+                "sample_id": row.get("sample_id", ""),
+                "contig_id": row.get("contig_id", ""),
+                "gene": row.get("gene", ""),
+                "drug_class": row.get("product", ""),
+                "identity": row.get("identity", ""),
+                "coverage": row.get("coverage", ""),
+                "tool": row.get("tool", ""),
+                "source_file": row.get("source_file", ""),
+            }
+            for row in rows
+            if str(row.get("category", "")).upper() in {"AMR", "ARG"}
+        ]
+        mge_rows: List[Mapping[str, Any]] = [
+            {
+                "sample_id": row.get("sample_id", ""),
+                "contig_id": row.get("contig_id", ""),
+                "element_id": row.get("gene", ""),
+                "element_type": row.get("category", ""),
+                "start": row.get("start", ""),
+                "end": row.get("end", ""),
+                "tool": row.get("tool", ""),
+                "source_file": row.get("source_file", ""),
+            }
+            for row in rows
+            if str(row.get("category", "")).lower()
+            in {"is", "integron", "mge", "mobile_element", "transposase"}
+        ]
+        return {
+            "plasmid_annotation": annotation_rows,
+            "amr_genes": amr_rows,
+            "mge_elements": mge_rows,
+        }
+
+    if table_name == "host_predictions":
+        profiles: List[Mapping[str, Any]] = []
+        links: List[Mapping[str, Any]] = []
+        for row in rows:
+            if not row.get("contig_id"):
+                profiles.append(
+                    {
+                        "sample_id": row.get("sample_id", ""),
+                        "taxon_name": row.get("host_taxon", ""),
+                        "relative_abundance": row.get("confidence", ""),
+                        "tool": row.get("tool", ""),
+                        "source_file": row.get("source_file", ""),
+                    }
+                )
+            else:
+                links.append(
+                    {
+                        "sample_id": row.get("sample_id", ""),
+                        "plasmid_id": row.get("contig_id", ""),
+                        "host_id": row.get("host_taxon", ""),
+                        "evidence_type": row.get("method", ""),
+                        "evidence_level": row.get("evidence", ""),
+                        "score": row.get("confidence", ""),
+                        "is_prediction": "true",
+                        "source_file": row.get("source_file", ""),
+                    }
+                )
+        return {"host_profile": profiles, "host_plasmid_links": links}
+
+    if table_name == "differential_abundance":
+        return {
+            "differential_plasmids": [
+                {
+                    "plasmid_id": row.get("feature_id") or row.get("contig_id", ""),
+                    "group_a": row.get("group_a", ""),
+                    "group_b": row.get("group_b", ""),
+                    "log2_fold_change": row.get("log2_fold_change", ""),
+                    "p_value": row.get("p_value", ""),
+                    "q_value": row.get("q_value", ""),
+                    "method": row.get("method", ""),
+                    "warnings": row.get("warnings", ""),
+                }
+                for row in rows
+            ]
+        }
+
+    return {}
 
 
 def read_standard_table(tables_dir: str | Path, table_name: str) -> List[Dict[str, str]]:
@@ -320,6 +635,11 @@ def write_consensus_table(
                 sum(resolved_weights.values()) if resolved_weights else float(total_tools)
             )
             final_call = weighted_score >= (total_weight / 2.0)
+        elif strategy == "single_tool" and configured_tools:
+            # The first configured detector is authoritative. Additional tools
+            # enrich the evidence columns but cannot create a positive call on
+            # their own; metagenomic_plasmid config places geNomad first.
+            final_call = configured_tools[0] in support_tools
         else:
             final_call = _consensus_call(strategy, support_count, total_tools)
 

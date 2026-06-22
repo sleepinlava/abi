@@ -26,6 +26,10 @@ execution:
     {assembly}
   network: false
   writes_output: true
+normalization:
+  parser: abi.autoplasm.parsers:parse_platon
+  standard_tables:
+  - plasmid_predictions
 failure_handling:
   missing_input:
     hint: Check assembly FASTA path.

@@ -1,0 +1,34 @@
+abi_version: '0.1'
+tool_id: samtools_fastq
+name: samtools fastq
+category: basecalling
+purpose: Convert a supplied long-read BAM into FASTQ for the read workflow.
+when_to_use:
+- ont_bam
+- pacbio_bam
+inputs:
+  bam:
+    type: path
+    required: true
+  threads:
+    type: integer
+    required: true
+outputs:
+  long_reads:
+    type: path
+execution:
+  executable: samtools
+  command_template: samtools fastq -@ {threads} -o {long_reads} {bam}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check the BAM input path.
+  tool_not_found:
+    hint: Install samtools in the autoplasm-abundance environment.
+  nonzero_exit:
+    hint: Validate the BAM with samtools quickcheck and inspect stderr.
+resources:
+  cpu: 4
+  memory: 8GB
+  walltime: 04:00:00

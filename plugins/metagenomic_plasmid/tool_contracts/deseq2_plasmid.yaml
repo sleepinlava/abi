@@ -1,0 +1,38 @@
+abi_version: '0.1'
+tool_id: deseq2_plasmid
+name: DESeq2 plasmid differential abundance
+category: statistics
+purpose: Test plasmid count differences between adequately replicated sample groups.
+when_to_use:
+- at_least_two_groups
+- at_least_three_replicates_per_group
+inputs:
+  abundance_table:
+    type: path
+    required: true
+  sample_metadata:
+    type: path
+    required: true
+outputs:
+  differential_plasmids:
+    type: path
+execution:
+  executable: Rscript
+  command_template: Rscript {project_root}/plugins/metagenomic_plasmid/scripts/deseq2_plasmid.R --abundance {abundance_table} --metadata {sample_metadata} --output {differential_plasmids}
+  network: false
+  writes_output: true
+normalization:
+  parser: abi.autoplasm.parsers:parse_deseq2_plasmid
+  tables:
+  - differential_plasmids
+failure_handling:
+  missing_input:
+    hint: Check plasmid_abundance.tsv and the sample-sheet group column.
+  tool_not_found:
+    hint: Install R, DESeq2, and Rscript in the stats environment.
+  nonzero_exit:
+    hint: Inspect stderr and verify integer-like raw counts and group replication.
+resources:
+  cpu: 4
+  memory: 16GB
+  walltime: 04:00:00

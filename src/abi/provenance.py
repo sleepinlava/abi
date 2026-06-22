@@ -99,6 +99,7 @@ def reset_run_provenance(provenance_dir: str | Path) -> None:
         "progress.jsonl",
         "resolved_inputs.tsv",
         "resources.json",
+        "resource_manifest.json",
         "run_summary.json",
         "tool_versions.tsv",
     ):

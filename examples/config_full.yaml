@@ -10,11 +10,43 @@ input:
 plasmid_detection:
   tools:
     - genomad
+    - platon
     - plasme
     - plasx
-    - plasmidfinder
-  strategy: majority_vote
+  strategy: weighted_vote
+  tool_weights:
+    genomad: 0.6
+    platon: 0.15
+    plasme: 0.15
+    plasx: 0.1
 host_prediction:
+  enable: true
+  tools:
+    - metaphlan
   use_abundance_correlation: true
   use_crispr_spacer: false
   use_methylation: false
+typing:
+  enable: true
+  tools:
+    - plasmidfinder
+    - mob_typer
+  optional_tools: []
+annotation:
+  enable: true
+  tools:
+    - bakta
+    - amrfinderplus
+    - isescan
+    - integronfinder
+  optional_tools: []
+comparative_genomics:
+  enable: true
+  tools:
+    - mmseqs2
+  optional_tools: []
+sample_analysis:
+  enable: auto
+  differential_abundance: auto
+network:
+  enable: auto

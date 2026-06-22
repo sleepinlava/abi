@@ -133,6 +133,54 @@ def compute_network_fallback(
     return rows
 
 
+def compute_host_plasmid_coabundance(
+    plan: ExecutionPlan,
+    tables_dir: str | Path,
+) -> List[Dict[str, Any]]:
+    """Compute explicitly predictive host-plasmid links from matched abundance profiles."""
+    plasmids = _abundance_matrix(tables_dir)
+    hosts: Matrix = {}
+    for row in read_standard_table(tables_dir, "host_predictions"):
+        sample_id = row.get("sample_id", "")
+        host_id = row.get("host_taxon", "")
+        if not sample_id or not host_id or row.get("contig_id"):
+            continue
+        value = _coerce_float(row.get("confidence", ""))
+        hosts.setdefault(sample_id, {})[host_id] = value
+
+    sample_ids = [
+        sample.sample_id
+        for sample in plan.samples
+        if sample.sample_id in plasmids and sample.sample_id in hosts
+    ]
+    if len(sample_ids) < 3:
+        return []
+
+    plasmid_ids = sorted({key for sample in sample_ids for key in plasmids[sample]})
+    host_ids = sorted({key for sample in sample_ids for key in hosts[sample]})
+    rows = []
+    for plasmid_id in plasmid_ids:
+        plasmid_values = [plasmids[sample].get(plasmid_id, 0.0) for sample in sample_ids]
+        for host_id in host_ids:
+            host_values = [hosts[sample].get(host_id, 0.0) for sample in sample_ids]
+            score = _spearman(plasmid_values, host_values)
+            if score is None:
+                continue
+            rows.append(
+                {
+                    "sample_id": "ALL",
+                    "plasmid_id": plasmid_id,
+                    "host_id": host_id,
+                    "evidence_type": "co_abundance",
+                    "evidence_level": f"samples={len(sample_ids)}",
+                    "score": _fmt(score),
+                    "is_prediction": "true",
+                    "source_file": "tables/abundance.tsv;tables/host_predictions.tsv",
+                }
+            )
+    return rows
+
+
 def _abundance_matrix(tables_dir: str | Path) -> Matrix:
     matrix: Matrix = {}
     for row in read_standard_table(tables_dir, "abundance"):
@@ -287,6 +335,13 @@ def _first_float(row: Mapping[str, str], fields: Iterable[str]) -> float:
         except (TypeError, ValueError):
             continue
     return 0.0
+
+
+def _coerce_float(value: Any) -> float:
+    try:
+        return float(str(value).rstrip("%"))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _mean(values: Sequence[float]) -> float:

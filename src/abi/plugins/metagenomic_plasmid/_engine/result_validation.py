@@ -11,13 +11,16 @@ from abi._shared import _read_tsv
 from abi.plugins.metagenomic_plasmid._engine.standard_tables import TABLE_SCHEMAS
 
 CORE_TABLES = {
+    "sample_qc",
+    "assembly_qc",
     "plasmid_predictions",
     "plasmid_consensus",
-    "annotations",
-    "host_predictions",
-    "abundance",
-    "qc_summary",
-    "assembly_summary",
+    "plasmid_structure",
+    "plasmid_catalog",
+    "plasmid_abundance",
+    "plasmid_annotation",
+    "amr_genes",
+    "plasmid_typing",
 }
 
 

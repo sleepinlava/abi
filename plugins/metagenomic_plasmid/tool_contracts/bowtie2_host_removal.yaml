@@ -1,0 +1,38 @@
+abi_version: '0.1'
+tool_id: bowtie2_host_removal
+name: Bowtie2 host removal
+category: host_removal
+purpose: Remove host-mapping Illumina read pairs when a host reference is supplied.
+when_to_use:
+- illumina_with_host_reference
+inputs:
+  host_reference:
+    type: path
+    required: true
+  read1:
+    type: path
+    required: true
+  read2:
+    type: path
+    required: true
+outputs:
+  clean_read1:
+    type: path
+  clean_read2:
+    type: path
+execution:
+  executable: bowtie2
+  command_template: sh -c 'bowtie2-build "$1" "$2/host_index" >/dev/null && bowtie2 -x "$2/host_index" -1 "$3" -2 "$4" -p "$5" --un-conc-gz "$2/$6.host_removed.%.fastq.gz" -S "$2/$6.host.sam"' autoplasm "{host_reference}" "{output_dir}" "{read1}" "{read2}" "{threads}" "{sample_id}"
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check paired reads and the host reference FASTA.
+  tool_not_found:
+    hint: Install Bowtie2 in the autoplasm-abundance environment.
+  nonzero_exit:
+    hint: Inspect stderr and the generated host index files.
+resources:
+  cpu: 8
+  memory: 16GB
+  walltime: 08:00:00

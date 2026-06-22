@@ -114,17 +114,20 @@ figures:
     top_n: 50
     required: false
 
-  # ── Future (requires upstream table population) ────────────────────────
-  # Uncomment and enable when corresponding pipeline modules produce data:
-  #
-  # - id: differential_abundance_volcano
-  #   type: differential_volcano
-  #   source_table: differential_abundance
-  #   x: log2_fold_change
-  #   y: adjusted_pvalue
-  #   label: contig_id
-  #   title: "Differential Plasmid Abundance"
-  #   required: false
+  # ── Conditional cross-sample figures ──────────────────────────────────
+  - id: differential_abundance_volcano
+    type: differential_volcano
+    source_table: differential_plasmids
+    x: log2_fold_change
+    y: q_value
+    label: plasmid_id
+    title: "Differential Plasmid Abundance"
+    xlabel: "log2 fold change"
+    ylabel: "-log10 FDR"
+    required: false
+
+  # Future renderers can consume the remaining long-format diversity and
+  # typing tables once their filtering/grouping contracts are explicit:
   #
   # - id: sample_alpha_diversity
   #   type: alpha_stats_boxplot

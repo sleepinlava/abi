@@ -1,0 +1,30 @@
+abi_version: '0.1'
+tool_id: dorado
+name: Dorado
+category: basecalling
+purpose: Basecall ONT POD5 signal into FASTQ before downstream read analysis.
+when_to_use:
+- ont_pod5
+inputs:
+  pod5:
+    type: path
+    required: true
+outputs:
+  long_reads:
+    type: path
+execution:
+  executable: dorado
+  command_template: sh -c 'dorado basecaller hac "$1" --emit-fastq > "$2"' autoplasm "{pod5}" "{long_reads}"
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check the POD5 file or directory path.
+  tool_not_found:
+    hint: Install Dorado in the autoplasm-qc environment.
+  nonzero_exit:
+    hint: Inspect stderr and verify the selected model is available.
+resources:
+  cpu: 8
+  memory: 16GB
+  walltime: 24:00:00

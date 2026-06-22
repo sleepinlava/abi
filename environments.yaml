@@ -52,6 +52,7 @@ environments:
     - chopper
     - porechop
     - hifiadapterfilt
+    - ont-dorado
     - kneaddata
   autoplasm-assembly:
     channels:
@@ -69,6 +70,7 @@ environments:
     - quast
     - bandage
     - perl-opera-ms
+    - medaka
   autoplasm-annotation:
     channels:
     - conda-forge
@@ -276,6 +278,8 @@ tool_assignments:
     nanoplot: autoplasm-qc
     filtlong: autoplasm-qc
     hifiadapterfilt: autoplasm-qc
+    dorado: autoplasm-qc
+    samtools_fastq: autoplasm-abundance
     chopper: autoplasm-qc
     porechop: autoplasm-qc
     kneaddata: autoplasm-qc
@@ -285,6 +289,7 @@ tool_assignments:
     hifiasm_meta: autoplasm-assembly
     opera_ms: autoplasm-assembly
     quast: autoplasm-assembly
+    medaka: autoplasm-assembly
     hybridspades: autoplasm-assembly
     bandage: autoplasm-assembly
     bakta: autoplasm-annotation
@@ -307,7 +312,9 @@ tool_assignments:
     conjscan: autoplasm-annotation
     macsyfinder: autoplasm-annotation
     bowtie2: autoplasm-abundance
+    bowtie2_host_removal: autoplasm-abundance
     minimap2: autoplasm-abundance
+    minimap2_host_removal: autoplasm-abundance
     samtools: autoplasm-abundance
     coverm: autoplasm-abundance
     bwa: autoplasm-abundance
@@ -326,6 +333,7 @@ tool_assignments:
     kraken2: stats
     metaphlan: stats
     fastspar: stats
+    deseq2_plasmid: stats
     checkm2: stats
     gtdbtk: stats
     das_tool: stats

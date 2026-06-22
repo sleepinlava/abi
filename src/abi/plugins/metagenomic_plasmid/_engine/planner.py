@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import Counter
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
@@ -20,17 +22,24 @@ from abi.plugins.metagenomic_plasmid._engine.schemas import (
 
 STEP_DIRS = {
     "input_validation": "00_input_validation",
+    "basecalling": "00_input_validation/basecalling",
     "qc": "01_qc",
+    "host_removal": "01_qc/host_removal",
     "assembly": "02_assembly",
+    "contig_coverage": "02_assembly/coverage",
     "assembly_qc": "03_assembly_qc",
     "plasmid_detection": "04_plasmid_detection",
+    "plasmid_consensus": "04_plasmid_detection",
     "plasmid_binning": "05_plasmid_binning",
     "typing": "06_plasmid_typing",
     "host_prediction": "07_host_prediction",
+    "host_plasmid_linking": "07_host_prediction",
+    "mag_host_genomes": "07_host_prediction/mag",
     "annotation": "08_annotation",
     "comparative_genomics": "09_comparative_genomics",
     "abundance": "10_abundance",
     "diversity": "11_diversity",
+    "statistics": "11_diversity",
     "network": "12_network",
     "visualization": "13_visualization",
     "report": "report",
@@ -55,8 +64,12 @@ def context_from_config(config: Mapping[str, Any], check_files: bool = True) -> 
 
     single_input = input_config.get("single_input")
     platform = input_config.get("platform")
-    if not single_input and not input_config.get("assembly"):
-        raise ValueError("No sample_sheet or single_input/assembly is configured")
+    if not single_input and not any(
+        input_config.get(key) for key in ("assembly", "long_reads", "pod5", "bam")
+    ):
+        raise ValueError(
+            "No sample_sheet or single_input/assembly/long_reads/pod5/bam is configured"
+        )
     if platform not in VALID_PLATFORMS:
         raise ValueError(f"Single-sample input requires platform in {sorted(VALID_PLATFORMS)}")
 
@@ -71,6 +84,8 @@ def context_from_config(config: Mapping[str, Any], check_files: bool = True) -> 
         read1=read1,
         read2=input_config.get("read2"),
         long_reads=long_reads,
+        pod5=input_config.get("pod5"),
+        bam=input_config.get("bam"),
         assembly=assembly,
         group=input_config.get("group"),
         check_files=check_files,
@@ -780,25 +795,32 @@ def build_plan_from_dag(
 
     dag = UniversalDAG.from_yaml(PLUGIN_ROOT / "metagenomic_plasmid" / "pipeline_dag.yaml")
     context = sample_context or context_from_config(config, check_files=check_files)
-    platform = _resolve_platform(context, config)
+    resolved_config, eligibility = _resolve_context_conditions(config, context)
     outdir = Path(str(config["outdir"]))
     threads = int(config["threads"])
 
-    # Resolve which nodes are active for this platform + config
-    active_ids = dag.active_node_ids(platform, config)
-    resolved_deps = dag.resolve_dependencies(active_ids, platform)
-    order = dag.topological_order(resolved_deps)
-
-    # Separate project-level from sample-level nodes
-    project_node_ids = [nid for nid in order if dag.scope_for(nid) == "cross_sample"]
-    sample_node_ids = [nid for nid in order if dag.scope_for(nid) == "per_sample"]
-
     steps: List[PlanStep] = []
-    skipped: List[PlanStep] = []
+    skipped: List[PlanStep] = _analysis_skip_steps(eligibility)
+    project_node_ids: List[str] = []
+    project_node_seen: set[str] = set()
+    project_platform = "mixed"
 
-    # Generate per-sample steps with upstream output tracking
+    # Resolve platform and sample-dependent conditions independently.  A sample
+    # sheet may legitimately mix Illumina, ONT, HiFi, hybrid, and assembly-only
+    # inputs, and host removal is enabled only for rows with host_reference.
     for sample in context.samples:
-        sample_params = _dag_sample_base_params(sample, config, platform)
+        platform = sample.platform
+        sample_config = _config_for_sample(resolved_config, sample)
+        active_ids = dag.active_node_ids(platform, sample_config)
+        resolved_deps = dag.resolve_dependencies(active_ids, platform)
+        order = dag.topological_order(resolved_deps)
+        sample_node_ids = [nid for nid in order if dag.scope_for(nid) == "per_sample"]
+        for node_id in order:
+            if dag.scope_for(node_id) == "cross_sample" and node_id not in project_node_seen:
+                project_node_ids.append(node_id)
+                project_node_seen.add(node_id)
+
+        sample_params = _dag_sample_base_params(sample, sample_config, platform)
         upstream_outputs: Dict[str, Dict[str, Any]] = {}
         for node_id in sample_node_ids:
             node = dag.get_node(node_id)
@@ -806,7 +828,7 @@ def build_plan_from_dag(
                 node_id=node_id,
                 node=node,
                 sample=sample,
-                config=config,
+                config=sample_config,
                 platform=platform,
                 base_params=sample_params,
                 resolved_deps=resolved_deps,
@@ -819,27 +841,38 @@ def build_plan_from_dag(
                 # Track this step's outputs for downstream nodes
                 upstream_outputs[node_id] = dict(step.outputs)
 
-    # Generate project-level steps (report, multi-sample analysis)
+    # Order the union of cross-sample nodes deterministically across mixed
+    # platforms.  Dependencies on per-sample nodes are deliberately omitted
+    # here because their steps have already been emitted above.
+    project_order = [
+        node_id
+        for node_id in dag.topological_order(project_node_ids)
+        if node_id in project_node_ids
+    ]
     project_params = {
         "threads": threads,
-        "mode": config.get("mode", "auto"),
+        "mode": resolved_config.get("mode", "auto"),
         "project_outdir": str(outdir),
         "output_dir": str(outdir / "report"),
         "sample_count": len(context.samples),
+        "abundance_table": str(outdir / "tables" / "plasmid_abundance.tsv"),
     }
-    for node_id in project_node_ids:
+    project_outputs: Dict[str, Dict[str, Any]] = {}
+    for node_id in project_order:
         node = dag.get_node(node_id)
         step = _dag_project_step(
             node_id=node_id,
             node=node,
-            config=config,
-            platform=platform,
+            config=resolved_config,
+            platform=project_platform,
             params=project_params,
+            upstream_outputs=project_outputs,
         )
         if step.skipped:
             skipped.append(step)
         else:
             steps.append(step)
+            project_outputs[node_id] = dict(step.outputs)
 
     selected_tools = sorted({step.tool_id for step in steps if step.tool_id != "internal"})
 
@@ -856,6 +889,184 @@ def build_plan_from_dag(
         skipped_steps=skipped,
         provenance_dir=str(outdir / "provenance"),
     )
+
+
+def _resolve_context_conditions(
+    config: Mapping[str, Any], context: SampleContext
+) -> tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
+    """Resolve auto/conditional downstream settings from actual sample metadata."""
+    resolved = deepcopy(dict(config))
+    sample_count = len(context.samples)
+    abundance_samples = [sample for sample in context.samples if sample.platform != "assembly"]
+    abundance_sample_count = len(abundance_samples)
+    group_counts = Counter(sample.group for sample in abundance_samples if sample.group)
+    has_read_inputs = abundance_sample_count > 0
+
+    sample_analysis = resolved.setdefault("sample_analysis", {})
+    if not isinstance(sample_analysis, dict):
+        sample_analysis = {}
+        resolved["sample_analysis"] = sample_analysis
+    analysis_requested = _requested(sample_analysis.get("enable", "auto"))
+    min_diversity = int(sample_analysis.get("min_diversity_samples", 3))
+    min_replicates = int(sample_analysis.get("min_group_replicates", 3))
+    run_diversity = (
+        analysis_requested and has_read_inputs and abundance_sample_count >= min_diversity
+    )
+    differential_requested = analysis_requested and _requested(
+        sample_analysis.get("differential_abundance", "auto")
+    )
+    run_differential = (
+        differential_requested
+        and has_read_inputs
+        and len(group_counts) >= 2
+        and all(count >= min_replicates for count in group_counts.values())
+    )
+    sample_analysis["enable"] = run_diversity
+    sample_analysis["run_diversity"] = run_diversity
+    sample_analysis["differential_abundance"] = run_differential
+    sample_analysis["run_differential"] = run_differential
+    differential_method = str(sample_analysis.get("differential_method", "deseq2"))
+    sample_analysis["run_differential_deseq2"] = (
+        run_differential and differential_method == "deseq2"
+    )
+    sample_analysis["run_differential_internal"] = (
+        run_differential and differential_method == "internal_effect_size"
+    )
+
+    network = resolved.setdefault("network", {})
+    if not isinstance(network, dict):
+        network = {}
+        resolved["network"] = network
+    network_requested = _requested(network.get("enable", "auto"))
+    min_network = int(network.get("min_samples", 20))
+    run_network = network_requested and has_read_inputs and abundance_sample_count >= min_network
+    network["enable"] = run_network
+    network["run_network"] = run_network
+
+    host_linking = resolved.setdefault("host_plasmid_linking", {})
+    if not isinstance(host_linking, dict):
+        host_linking = {}
+        resolved["host_plasmid_linking"] = host_linking
+    methods = host_linking.get("methods", [])
+    host_linking_enabled = _requested(host_linking.get("enable", False))
+    coabundance_requested = (
+        host_linking_enabled and isinstance(methods, list) and "co_abundance" in methods
+    )
+    host_prediction = resolved.get("host_prediction", {})
+    host_profile_enabled = isinstance(host_prediction, Mapping) and _requested(
+        host_prediction.get("enable", False)
+    )
+    run_coabundance = (
+        coabundance_requested and host_profile_enabled and abundance_sample_count >= min_diversity
+    )
+    host_linking["enable"] = host_linking_enabled
+    host_linking["run_coabundance"] = run_coabundance
+
+    eligibility = {
+        "diversity": {
+            "run": run_diversity,
+            "sample_count": sample_count,
+            "eligible_sample_count": abundance_sample_count,
+            "threshold": min_diversity,
+            "reason": (
+                "eligible"
+                if run_diversity
+                else f"requires at least {min_diversity} samples with read-based abundance"
+            ),
+        },
+        "differential_abundance": {
+            "run": run_differential,
+            "sample_count": sample_count,
+            "eligible_sample_count": abundance_sample_count,
+            "group_counts": dict(sorted(group_counts.items())),
+            "threshold": min_replicates,
+            "reason": (
+                "eligible"
+                if run_differential
+                else (
+                    "requires at least two groups and "
+                    f"{min_replicates} biological replicates per group"
+                )
+            ),
+        },
+        "network": {
+            "run": run_network,
+            "sample_count": sample_count,
+            "eligible_sample_count": abundance_sample_count,
+            "threshold": min_network,
+            "reason": (
+                "eligible"
+                if run_network
+                else f"requires at least {min_network} samples with read-based abundance"
+            ),
+        },
+        "host_plasmid_coabundance": {
+            "run": run_coabundance,
+            "report_skip": coabundance_requested,
+            "sample_count": sample_count,
+            "eligible_sample_count": abundance_sample_count,
+            "threshold": min_diversity,
+            "reason": (
+                "eligible"
+                if run_coabundance
+                else (
+                    "requires host profiling and at least "
+                    f"{min_diversity} samples with read-based abundance"
+                )
+            ),
+        },
+    }
+    return resolved, eligibility
+
+
+def _requested(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() not in {"false", "no", "0", "off", "disabled"}
+    return value is not False
+
+
+def _config_for_sample(config: Mapping[str, Any], sample: SampleInput) -> Dict[str, Any]:
+    resolved = deepcopy(dict(config))
+    input_config = resolved.setdefault("input", {})
+    if not isinstance(input_config, dict):
+        input_config = {}
+        resolved["input"] = input_config
+    input_config.update(
+        {
+            "long_reads": sample.long_reads,
+            "pod5": sample.pod5,
+            "bam": sample.bam,
+        }
+    )
+    host_removal = resolved.setdefault("host_removal", {})
+    if not isinstance(host_removal, dict):
+        host_removal = {}
+        resolved["host_removal"] = host_removal
+    host_removal["host_reference"] = sample.host_reference or host_removal.get("host_reference")
+    return resolved
+
+
+def _analysis_skip_steps(
+    eligibility: Mapping[str, Mapping[str, Any]],
+) -> List[PlanStep]:
+    skipped: List[PlanStep] = []
+    for module, status in eligibility.items():
+        if status.get("run") or status.get("report_skip") is False:
+            continue
+        reason = str(status.get("reason", "eligibility requirements were not met"))
+        skipped.append(
+            PlanStep(
+                step_id=f"{module}_not_run",
+                sample_id=None,
+                step_name=module,
+                tool_id="internal",
+                category="network" if module == "network" else "statistics",
+                params=dict(status),
+                reason=reason,
+                skipped=True,
+            )
+        )
+    return skipped
 
 
 def _resolve_platform(sample_context: SampleContext, config: Mapping[str, Any]) -> str:
@@ -963,11 +1174,14 @@ def _resolve_node_inputs(
             # Handle template source like "{active_assembly_node}.assembly"
             if upstream_id.startswith("{") and upstream_id.endswith("}"):
                 # Template reference — try each upstream node
-                for uid, uouts in upstream_outputs.items():
+                val = None
+                for uid, uouts in reversed(list(upstream_outputs.items())):
                     val = uouts.get(upstream_key)
                     if val:
                         resolved[key] = str(val)
                         break
+                if val:
+                    continue
             else:
                 val = upstream_outputs.get(upstream_id, {}).get(upstream_key)
                 if val is not None:
@@ -980,9 +1194,12 @@ def _resolve_node_inputs(
             parts = fallback.split(".", 1)
             fb_id, fb_key = parts[0], parts[1]
             val = upstream_outputs.get(fb_id, {}).get(fb_key)
-            if val is not None and key not in resolved:
+            if val is not None:
                 resolved[key] = str(val)
                 continue
+
+        if spec.get("default") is not None and not resolved.get(key):
+            resolved[key] = spec["default"]
 
     return resolved
 
@@ -1033,6 +1250,8 @@ def _dag_step_for_node(
     step_params.update(resolved_inputs)
     step_params["output_dir"] = str(outdir)
     step_params["sample_id"] = sample.sample_id
+    if tool_id == "metaphlan":
+        step_params.update(_metaphlan_params(step_params))
 
     # Resolve tool parameters from config
     tool_params = _tool_runtime_params(config, tool_id)
@@ -1069,6 +1288,7 @@ def _dag_project_step(
     config: Mapping[str, Any],
     platform: str,
     params: Dict[str, Any],
+    upstream_outputs: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> PlanStep:
     """Build a single ``PlanStep`` for one project-level DAG node."""
     tool_id = str(node.get("tool_id", "internal"))
@@ -1084,7 +1304,33 @@ def _dag_project_step(
             else:
                 outputs[key] = str(outdir / key)
 
+    resolved_inputs: Dict[str, Any] = {}
+    for key, spec in node.get("inputs", {}).items():
+        if not isinstance(spec, Mapping):
+            resolved_inputs[key] = spec
+            continue
+        source = spec.get("source")
+        if source == "sample_sheet":
+            input_config = config.get("input", {})
+            if isinstance(input_config, Mapping):
+                resolved_inputs[key] = input_config.get("sample_sheet", "")
+        elif isinstance(source, str) and "." in source:
+            source_node, source_key = source.split(".", 1)
+            if source_node == "config":
+                value: Any = config
+                for segment in source_key.split("."):
+                    value = value.get(segment) if isinstance(value, Mapping) else None
+                if value is not None:
+                    resolved_inputs[key] = value
+            else:
+                value = (upstream_outputs or {}).get(source_node, {}).get(source_key)
+                if value is not None:
+                    resolved_inputs[key] = value
+        if key not in resolved_inputs and spec.get("default") is not None:
+            resolved_inputs[key] = spec["default"]
+
     step_params = dict(params)
+    step_params.update(resolved_inputs)
     step_params["output_dir"] = str(outdir)
 
     return PlanStep(
@@ -1093,7 +1339,7 @@ def _dag_project_step(
         step_name=node.get("name", category),
         tool_id=tool_id,
         category=category,
-        inputs={},
+        inputs=resolved_inputs,
         outputs=outputs,
         params=step_params,
     )

@@ -1,4 +1,117 @@
 tables:
+  sample_qc:
+    - sample_id
+    - tool
+    - raw_reads
+    - clean_reads
+    - q30
+    - gc_content
+    - filter_rate
+    - source_file
+    - warnings
+  assembly_qc:
+    - sample_id
+    - assembler
+    - contig_count
+    - n50
+    - total_length
+    - max_contig
+    - gc_content
+    - source_file
+    - warnings
+  plasmid_catalog:
+    - cluster_id
+    - representative_id
+    - member_id
+    - sample_id
+    - length_bp
+    - circularity
+    - identity
+    - coverage
+    - method
+    - source_file
+  plasmid_structure:
+    - sample_id
+    - plasmid_id
+    - length_bp
+    - is_circular
+    - terminal_overlap_bp
+    - method
+    - warnings
+    - source_file
+  plasmid_abundance:
+    - sample_id
+    - plasmid_id
+    - coverage
+    - rpkm
+    - tpm
+    - raw_count
+    - mapper
+    - source_file
+  plasmid_annotation:
+    - sample_id
+    - contig_id
+    - gene_id
+    - start
+    - end
+    - strand
+    - gene
+    - product
+    - functional_label
+    - tool
+    - source_file
+  amr_genes:
+    - sample_id
+    - contig_id
+    - gene
+    - drug_class
+    - identity
+    - coverage
+    - tool
+    - source_file
+  mge_elements:
+    - sample_id
+    - contig_id
+    - element_id
+    - element_type
+    - start
+    - end
+    - tool
+    - source_file
+  host_profile:
+    - sample_id
+    - taxon_name
+    - taxon_id
+    - rank
+    - relative_abundance
+    - tool
+    - source_file
+  host_plasmid_links:
+    - sample_id
+    - plasmid_id
+    - host_id
+    - evidence_type
+    - evidence_level
+    - score
+    - is_prediction
+    - source_file
+  differential_plasmids:
+    - plasmid_id
+    - group_a
+    - group_b
+    - log2_fold_change
+    - p_value
+    - q_value
+    - method
+    - warnings
+  analysis_status:
+    - module
+    - status
+    - reason
+    - sample_count
+    - eligible_sample_count
+    - group_counts
+    - threshold
   plasmid_predictions:
     - sample_id
     - contig_id

@@ -37,9 +37,11 @@ from abi.plugins.metagenomic_plasmid._engine.standard_tables import (
     read_standard_table,
     summarize_standard_tables,
     write_consensus_table,
+    write_standard_table,
 )
 from abi.plugins.metagenomic_plasmid._engine.statistics import (
     compute_diversity_and_differential,
+    compute_host_plasmid_coabundance,
     compute_network_fallback,
 )
 from abi.plugins.metagenomic_plasmid._engine.timeouts import mapping_block
@@ -91,6 +93,28 @@ class PipelineExecutor:
         reset_run_provenance(provenance)
         tables_dir = ensure_directory(outdir / "tables", label="Standard tables directory")
         ensure_standard_tables(tables_dir)
+        write_standard_table(
+            tables_dir,
+            "analysis_status",
+            [
+                {
+                    "module": step.step_name,
+                    "status": "not_run",
+                    "reason": step.reason,
+                    "sample_count": step.params.get("sample_count", ""),
+                    "eligible_sample_count": step.params.get("eligible_sample_count", ""),
+                    "group_counts": json.dumps(
+                        step.params.get("group_counts", {}),
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    ),
+                    "threshold": step.params.get("threshold", ""),
+                }
+                for step in plan.skipped_steps
+                if step.step_id.endswith("_not_run")
+            ],
+            append=False,
+        )
         GenericABIExecutor._ensure_step_output_dirs(plan.steps, registry=self.registry)
 
         plan_path = outdir / "execution_plan.json"
@@ -234,6 +258,7 @@ class PipelineExecutor:
             "resolved_inputs": resolved_inputs_path,
             "tool_versions": versions_path,
             "resources": resources_path,
+            "resource_manifest": provenance / "resource_manifest.json",
             "environment": environment_path,
             "summary": summary_path,
             "tables": tables_dir,
@@ -397,6 +422,9 @@ class PipelineExecutor:
             result = self._run_internal_step(step, plan, tables_dir)
             parsed_status = str(result.get("parsed_status", ""))
             standard_tables = str(result.get("standard_tables", ""))
+        elif _empty_plasmid_input(step):
+            status = "skipped"
+            reason = "No plasmid sequences were detected; this downstream step was skipped."
         elif not self.registry.has(step.tool_id):
             status = "failed"
             reason = f"Tool {step.tool_id!r} is not registered"
@@ -463,10 +491,72 @@ class PipelineExecutor:
         tables_dir: Path,
     ) -> Dict[str, Any]:
         rows_by_table: Dict[str, Iterable[Mapping[str, Any]]] = {}
-        if step.step_name == "diversity":
+        if step.step_id.endswith("_plasmid_structure"):
+            source = Path(str(step.params.get("plasmid_contigs", "")))
+            structure_rows = []
+            if source.is_file():
+                for record in _read_fasta_records(source):
+                    sequence = record["sequence"].upper()
+                    overlap = _terminal_overlap_length(sequence)
+                    header_circular = any(
+                        marker in record["header"].lower()
+                        for marker in ("circular=true", "topology=circular", "_circular")
+                    )
+                    structure_rows.append(
+                        {
+                            "sample_id": step.sample_id or "",
+                            "plasmid_id": record["id"],
+                            "length_bp": len(sequence),
+                            "is_circular": str(bool(header_circular or overlap >= 20)).lower(),
+                            "terminal_overlap_bp": overlap,
+                            "method": "header_or_exact_terminal_overlap",
+                            "warnings": (
+                                "Sequence-based circularity is predictive and should be "
+                                "confirmed from the assembly graph or read support."
+                            ),
+                            "source_file": str(source),
+                        }
+                    )
+            rows_by_table = {"plasmid_structure": structure_rows}
+        elif step.step_id == "plasmid_catalog_prepare":
+            combined = Path(str(step.outputs["combined_plasmids"]))
+            records: List[Dict[str, str]] = []
+            for sample in plan.samples:
+                candidate = (
+                    Path(plan.outdir)
+                    / PLASMID_DETECTION_DIR
+                    / sample.sample_id
+                    / "plasmid_contigs.fasta"
+                )
+                if not candidate.exists():
+                    continue
+                for record in _read_fasta_records(candidate):
+                    record["header"] = f"{sample.sample_id}|{record['header']}"
+                    record["id"] = f"{sample.sample_id}|{record['id']}"
+                    records.append(record)
+            _write_fasta_records(combined, records)
+            return {
+                "parsed_status": "catalog_input_prepared",
+                "standard_tables": "",
+            }
+        elif step.step_id == "multisample_network_prepare":
+            _write_fastspar_input(
+                plan,
+                tables_dir,
+                Path(str(step.outputs["network_input"])),
+            )
+            return {
+                "parsed_status": "network_input_prepared",
+                "standard_tables": "",
+            }
+        elif step.step_id == "host_plasmid_link_coabundance":
+            rows_by_table = {
+                "host_plasmid_links": compute_host_plasmid_coabundance(plan, tables_dir)
+            }
+        if step.category == "diversity":
             computed = compute_diversity_and_differential(plan, tables_dir)
             rows_by_table = {"sample_diversity": computed.get("sample_diversity", [])}
-        elif step.step_name == "differential_abundance":
+        elif step.category == "statistics" and "differential" in step.step_id:
             computed = compute_diversity_and_differential(plan, tables_dir)
             rows_by_table = {"differential_abundance": computed.get("differential_abundance", [])}
 
@@ -488,7 +578,10 @@ class PipelineExecutor:
         return {
             "parsed_status": "parsed" if written else "no_standard_rows",
             "standard_tables": ",".join(sorted(written)),
-            "reason": "FastSpar executable unavailable; wrote internal Spearman fallback network.",
+            "reason": (
+                "FastSpar was unavailable or its matrix was insufficient; "
+                "wrote the internal Spearman fallback network."
+            ),
         }
 
     def _refresh_consensus_and_fastas(
@@ -605,6 +698,8 @@ class PipelineExecutor:
             "read1",
             "read2",
             "long_reads",
+            "pod5",
+            "bam",
             "assembly",
             "plasmid_contigs",
             "database",
@@ -625,6 +720,8 @@ class PipelineExecutor:
                 sample.read1,
                 sample.read2,
                 sample.long_reads,
+                sample.pod5,
+                sample.bam,
                 sample.assembly,
                 sample.host_reference,
             )
@@ -803,6 +900,8 @@ def _write_fasta_records(path: Path, records: Iterable[Mapping[str, str]]) -> No
 
 
 def _needs_plasmid_candidate_fasta(step: PlanStep) -> bool:
+    if step.step_id.endswith("_plasmid_structure"):
+        return True
     if step.skipped or step.category in {
         "plasmid_detection",
         "assembly_qc",
@@ -813,6 +912,23 @@ def _needs_plasmid_candidate_fasta(step: PlanStep) -> bool:
     plasmid_contigs = step.params.get("plasmid_contigs")
     assembly = step.params.get("assembly")
     return bool(plasmid_contigs and str(plasmid_contigs) != str(assembly or ""))
+
+
+def _empty_plasmid_input(step: PlanStep) -> bool:
+    value = step.params.get("plasmid_contigs") or step.inputs.get("plasmid_contigs")
+    if not value:
+        return False
+    path = Path(str(value))
+    return path.is_file() and path.stat().st_size == 0
+
+
+def _terminal_overlap_length(sequence: str, *, minimum: int = 20, maximum: int = 1000) -> int:
+    """Return the longest exact prefix/suffix overlap within conservative bounds."""
+    upper = min(maximum, len(sequence) // 2)
+    for size in range(upper, minimum - 1, -1):
+        if sequence[:size] == sequence[-size:]:
+            return size
+    return 0
 
 
 def _assembly_paths_by_sample(plan: ExecutionPlan) -> Dict[str, str]:
@@ -837,7 +953,12 @@ def _steps_by_sample(steps: Iterable[PlanStep]) -> Dict[str, List[PlanStep]]:
 def _network_fallback_needed(step: PlanStep, tables_dir: Path) -> bool:
     abundance_table = step.params.get("abundance_table", "")
     if abundance_table and Path(str(abundance_table)).exists():
-        return False
+        lines = [
+            line
+            for line in Path(str(abundance_table)).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        return len(lines) < 3 or len(lines[0].split("\t")) < 4
     rows = read_standard_table(tables_dir, "abundance")
     samples = {row.get("sample_id", "") for row in rows if row.get("sample_id")}
     features = {
@@ -846,6 +967,42 @@ def _network_fallback_needed(step: PlanStep, tables_dir: Path) -> bool:
         if row.get("feature_id") or row.get("contig_id")
     }
     return len(samples) < 3 or len(features) < 2
+
+
+def _write_fastspar_input(plan: ExecutionPlan, tables_dir: Path, path: Path) -> Path:
+    rows = read_standard_table(tables_dir, "abundance")
+    sample_ids = [sample.sample_id for sample in plan.samples]
+    features = sorted(
+        {
+            row.get("feature_id") or row.get("contig_id", "")
+            for row in rows
+            if row.get("feature_id") or row.get("contig_id")
+        }
+    )
+    matrix: Dict[tuple[str, str], float] = {}
+    for row in rows:
+        sample_id = row.get("sample_id", "")
+        feature_id = row.get("feature_id") or row.get("contig_id", "")
+        if not sample_id or not feature_id:
+            continue
+        value = 0.0
+        for field in ("mapped_reads", "tpm", "rpkm", "coverage"):
+            try:
+                value = float(row.get(field, ""))
+                break
+            except (TypeError, ValueError):
+                continue
+        matrix[(feature_id, sample_id)] = matrix.get((feature_id, sample_id), 0.0) + value
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["feature_id\t" + "\t".join(sample_ids)]
+    for feature_id in features:
+        values = [
+            str(max(matrix.get((feature_id, sample_id), 0.0), 0.0)) for sample_id in sample_ids
+        ]
+        lines.append(feature_id + "\t" + "\t".join(values))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
 
 
 def _progress_step_payload(step: PlanStep) -> Dict[str, Any]:

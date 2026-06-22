@@ -130,20 +130,19 @@ def parse_plasmidfinder(output_dir: Path, sample_id: str) -> StandardRows:
                     "source_file": str(path),
                 }
             )
-            if replicon:
-                typing_rows.append(
-                    {
-                        "sample_id": sample_id,
-                        "contig_id": contig,
-                        "typing_scheme": "PlasmidFinder",
-                        "type_id": replicon,
-                        "mobility": "",
-                        "confidence": _confidence(score),
-                        "tool": "plasmidfinder",
-                        "evidence": _join_evidence({"identity": identity, "coverage": coverage}),
-                        "source_file": str(path),
-                    }
-                )
+            typing_rows.append(
+                {
+                    "sample_id": sample_id,
+                    "contig_id": contig,
+                    "typing_scheme": "PlasmidFinder",
+                    "type_id": replicon,
+                    "mobility": "",
+                    "confidence": _confidence(score),
+                    "tool": "plasmidfinder",
+                    "evidence": _join_evidence({"identity": identity, "coverage": coverage}),
+                    "source_file": str(path),
+                }
+            )
     return {
         "plasmid_predictions": prediction_rows,
         "annotations": annotation_rows,
@@ -268,6 +267,22 @@ def parse_mob_suite(output_dir: Path, sample_id: str) -> StandardRows:
                         "source_file": str(path),
                     }
                 )
+            typing_rows.append(
+                {
+                    "sample_id": sample_id,
+                    "contig_id": contig,
+                    "typing_scheme": "MOB-typer",
+                    "type_id": _get(row, "replicon_type", "primary_cluster_id"),
+                    "mobility": _get(row, "predicted_mobility", "relaxase_type", "mpf_type"),
+                    "confidence": _get(row, "confidence") or "supporting",
+                    "tool": "mob_typer",
+                    "evidence": _evidence(
+                        row,
+                        ["relaxase_type", "mpf_type", "orit_type", "primary_cluster_id"],
+                    ),
+                    "source_file": str(path),
+                }
+            )
     return {
         "plasmid_predictions": prediction_rows,
         "annotations": annotation_rows,
@@ -396,6 +411,30 @@ def parse_bakta(output_dir: Path, sample_id: str) -> StandardRows:
                     "source_file": str(path),
                 }
             )
+    return {"annotations": rows}
+
+
+def parse_isescan(output_dir: Path, sample_id: str) -> StandardRows:
+    rows = []
+    for path in _candidate_files(output_dir, ("*.gff3", "*.gff")):
+        for row in _read_gff_features(path):
+            rows.append(_mge_annotation_row(row, sample_id, "isescan", "IS", path))
+    for path in _candidate_files(output_dir, ("*.tsv", "*.csv", "*.txt")):
+        for row in _read_table(path):
+            if _get(row, "contig", "contig_id", "seqid", "sequence"):
+                rows.append(_mge_annotation_row(row, sample_id, "isescan", "IS", path))
+    return {"annotations": rows}
+
+
+def parse_integronfinder(output_dir: Path, sample_id: str) -> StandardRows:
+    rows = []
+    for path in _candidate_files(output_dir, ("*.gff3", "*.gff")):
+        for row in _read_gff_features(path):
+            rows.append(_mge_annotation_row(row, sample_id, "integronfinder", "integron", path))
+    for path in _candidate_files(output_dir, ("*.integrons", "*.summary", "*.tsv", "*.txt")):
+        for row in _read_table(path):
+            if _get(row, "contig", "contig_id", "seqid", "replicon"):
+                rows.append(_mge_annotation_row(row, sample_id, "integronfinder", "integron", path))
     return {"annotations": rows}
 
 
@@ -765,6 +804,29 @@ def parse_plasx(output_dir: Path, sample_id: str) -> StandardRows:
     return {"plasmid_predictions": rows}
 
 
+def parse_platon(output_dir: Path, sample_id: str) -> StandardRows:
+    rows = []
+    for path in _candidate_files(
+        output_dir,
+        ("*plasmid*.tsv", "*platon*.tsv", "*.tsv", "*.txt", "*.csv"),
+    ):
+        for row in _read_table(path):
+            contig = _get(
+                row,
+                "id",
+                "contig",
+                "contig_id",
+                "sequence",
+                "seq_id",
+                "name",
+            )
+            if not contig:
+                continue
+            score = _get(row, "rds", "score", "plasmid_score", "probability")
+            rows.append(_prediction_row(sample_id, contig, "platon", score, row, path))
+    return {"plasmid_predictions": rows}
+
+
 def parse_copla(output_dir: Path, sample_id: str) -> StandardRows:
     rows = []
     for path in _candidate_files(output_dir, ("*.tsv", "*.txt", "*.csv")):
@@ -832,7 +894,52 @@ def parse_blast(output_dir: Path, sample_id: str) -> StandardRows:
 
 
 def parse_mmseqs2(output_dir: Path, sample_id: str) -> StandardRows:
+    catalog_rows = []
+    cluster_paths = _candidate_files(output_dir, ("*_cluster.tsv", "plasmid_catalog_cluster.tsv"))
+    for path in cluster_paths:
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                fields = line.rstrip("\n\r").split("\t")
+                if len(fields) < 2:
+                    continue
+                representative, member = fields[0], fields[1]
+                member_sample = member.split("|", 1)[0] if "|" in member else sample_id
+                catalog_rows.append(
+                    {
+                        "cluster_id": representative,
+                        "representative_id": representative,
+                        "member_id": member,
+                        "sample_id": member_sample,
+                        "method": "mmseqs2_easy_cluster",
+                        "source_file": str(path),
+                    }
+                )
+    if catalog_rows:
+        return {"plasmid_catalog": catalog_rows}
     return {"comparative_hits": _parse_tabular_hits(output_dir, sample_id, "mmseqs2")}
+
+
+def parse_deseq2_plasmid(output_dir: Path, sample_id: str) -> StandardRows:
+    del sample_id
+    rows = []
+    for path in _candidate_files(output_dir, ("differential_plasmids.tsv", "*.deseq2.tsv")):
+        for row in _read_table(path):
+            plasmid_id = _get(row, "plasmid_id", "feature_id", "contig_id")
+            if not plasmid_id:
+                continue
+            rows.append(
+                {
+                    "plasmid_id": plasmid_id,
+                    "group_a": _get(row, "group_a"),
+                    "group_b": _get(row, "group_b"),
+                    "log2_fold_change": _get(row, "log2_fold_change", "log2FoldChange"),
+                    "p_value": _get(row, "p_value", "pvalue"),
+                    "q_value": _get(row, "q_value", "padj"),
+                    "method": _get(row, "method") or "DESeq2",
+                    "warnings": _get(row, "warnings"),
+                }
+            )
+    return {"differential_plasmids": rows}
 
 
 def parse_mummer(output_dir: Path, sample_id: str) -> StandardRows:
@@ -925,6 +1032,7 @@ PARSERS: Dict[str, Parser] = {
     "genomad": parse_genomad,
     "plasme": parse_plasme,
     "plasx": parse_plasx,
+    "platon": parse_platon,
     "plasmidfinder": parse_plasmidfinder,
     "mob_suite": parse_mob_suite,
     "mob_typer": parse_mob_suite,
@@ -934,6 +1042,8 @@ PARSERS: Dict[str, Parser] = {
     "abricate": parse_abricate,
     "amrfinderplus": parse_amrfinderplus,
     "bakta": parse_bakta,
+    "isescan": parse_isescan,
+    "integronfinder": parse_integronfinder,
     "plasmidhostfinder": parse_plasmidhostfinder,
     "kraken2": parse_kraken2,
     "metaphlan": parse_metaphlan,
@@ -941,6 +1051,7 @@ PARSERS: Dict[str, Parser] = {
     "fastspar": parse_fastspar,
     "blast": parse_blast,
     "mmseqs2": parse_mmseqs2,
+    "deseq2_plasmid": parse_deseq2_plasmid,
     "mummer": parse_mummer,
     "clinker": parse_clinker,
     "fastp": parse_fastp,
@@ -976,6 +1087,30 @@ def _prediction_row(
         "circularity": _get(row, "circularity", "topology", "circular"),
         "evidence": _evidence(row, ["score", "probability", "prediction", "label"]),
         "warnings": f"{tool} evidence is supporting evidence and should be integrated.",
+        "source_file": str(path),
+    }
+
+
+def _mge_annotation_row(
+    row: Mapping[str, str],
+    sample_id: str,
+    tool: str,
+    category: str,
+    path: Path,
+) -> Dict[str, Any]:
+    return {
+        "sample_id": sample_id,
+        "contig_id": _get(row, "contig", "contig_id", "seqid", "sequence", "replicon"),
+        "start": _get(row, "start", "begin"),
+        "end": _get(row, "end", "stop"),
+        "strand": _get(row, "strand"),
+        "gene": _get(row, "gene", "name", "id", "locus_tag") or category,
+        "product": _get(row, "product", "type", "description") or category,
+        "category": category,
+        "tool": tool,
+        "evidence": _evidence(row, ["family", "type", "model", "calin", "complete"]),
+        "identity": _get(row, "identity", "percent_identity"),
+        "coverage": _get(row, "coverage", "percent_coverage"),
         "source_file": str(path),
     }
 

@@ -22,10 +22,12 @@ def test_core_parsers_emit_standard_rows(tmp_path):
     assert mob["plasmid_predictions"][0]["tool"] == "mob_suite"
     assert mob["plasmid_predictions"][0]["evidence_level"] == "supporting"
     assert mob["host_predictions"][0]["host_taxon"] == "Enterobacteriaceae"
+    assert mob["plasmid_typing"][0]["typing_scheme"] == "MOB-typer"
 
     plasmidfinder = parse_standard_outputs("plasmidfinder", FIXTURES / "plasmidfinder", "S1")
     assert plasmidfinder["plasmid_predictions"][0]["evidence_level"] == "supporting"
     assert plasmidfinder["annotations"][0]["category"] == "replicon"
+    assert plasmidfinder["plasmid_typing"][0]["typing_scheme"] == "PlasmidFinder"
 
     abricate = parse_standard_outputs("abricate", FIXTURES / "abricate", "S1")
     assert abricate["annotations"][0]["category"] == "ARG"
@@ -145,6 +147,59 @@ def test_bakta_parser_reads_gff_features(tmp_path):
     assert rows[0]["evidence"] == "RFAM:RF00001"
 
 
+def test_mmseqs2_parser_reads_cross_sample_cluster_membership(tmp_path):
+    output_dir = tmp_path / "mmseqs2"
+    output_dir.mkdir()
+    (output_dir / "plasmid_catalog_cluster.tsv").write_text(
+        "S1|rep_1\tS1|rep_1\nS1|rep_1\tS2|member_2\n",
+        encoding="utf-8",
+    )
+
+    rows = parse_standard_outputs("mmseqs2", output_dir, "")["plasmid_catalog"]
+
+    assert rows[0]["representative_id"] == "S1|rep_1"
+    assert rows[1]["member_id"] == "S2|member_2"
+    assert rows[1]["sample_id"] == "S2"
+
+
+def test_deseq2_plasmid_parser_reads_effects_and_fdr(tmp_path):
+    output_dir = tmp_path / "deseq2"
+    output_dir.mkdir()
+    (output_dir / "differential_plasmids.tsv").write_text(
+        "plasmid_id\tgroup_a\tgroup_b\tlog2_fold_change\tp_value\tq_value\tmethod\twarnings\n"
+        "p1\tcase\tcontrol\t2.5\t0.001\t0.01\tDESeq2\t\n",
+        encoding="utf-8",
+    )
+
+    rows = parse_standard_outputs("deseq2_plasmid", output_dir, "")["differential_plasmids"]
+
+    assert rows[0]["plasmid_id"] == "p1"
+    assert rows[0]["q_value"] == "0.01"
+
+
+def test_mobile_element_parsers_populate_normalized_annotations(tmp_path):
+    isescan_dir = tmp_path / "isescan"
+    integron_dir = tmp_path / "integron"
+    isescan_dir.mkdir()
+    integron_dir.mkdir()
+    (isescan_dir / "hits.gff").write_text(
+        "##gff-version 3\ncontig_1\tISEScan\tinsertion_sequence\t10\t100\t.\t+\t.\t"
+        "ID=IS1;family=IS3\n",
+        encoding="utf-8",
+    )
+    (integron_dir / "hits.gff").write_text(
+        "##gff-version 3\ncontig_2\tIntegronFinder\tintegron\t20\t200\t.\t-\t.\t"
+        "ID=integron_1;complete=true\n",
+        encoding="utf-8",
+    )
+
+    is_rows = parse_standard_outputs("isescan", isescan_dir, "S1")["annotations"]
+    integron_rows = parse_standard_outputs("integronfinder", integron_dir, "S1")["annotations"]
+
+    assert is_rows[0]["category"] == "IS"
+    assert integron_rows[0]["category"] == "integron"
+
+
 def test_standard_table_consensus_uses_configured_strategy(tmp_path):
     tables = tmp_path / "tables"
     append_standard_rows(
@@ -166,3 +221,44 @@ def test_standard_table_consensus_uses_configured_strategy(tmp_path):
     assert by_contig["contig_1"]["final_plasmid_call"] == "True"
     assert by_contig["contig_1"]["support_tools"] == "genomad,mob_suite"
     assert by_contig["contig_2"]["final_plasmid_call"] == "False"
+
+
+def test_platon_parser_contributes_supporting_predictions(tmp_path):
+    output_dir = tmp_path / "platon"
+    output_dir.mkdir()
+    (output_dir / "S1.plasmid.tsv").write_text(
+        "ID\tRDS\tLength\ncontig_1\t0.91\t12000\n",
+        encoding="utf-8",
+    )
+
+    rows = parse_standard_outputs("platon", output_dir, "S1")["plasmid_predictions"]
+
+    assert rows[0]["contig_id"] == "contig_1"
+    assert rows[0]["tool"] == "platon"
+    assert rows[0]["evidence_level"] == "supporting"
+
+
+def test_single_tool_consensus_keeps_primary_detector_authoritative(tmp_path):
+    tables = tmp_path / "tables"
+    append_standard_rows(
+        tables,
+        {
+            "plasmid_predictions": [
+                {"sample_id": "S1", "contig_id": "primary", "tool": "genomad"},
+                {"sample_id": "S1", "contig_id": "supported", "tool": "genomad"},
+                {"sample_id": "S1", "contig_id": "supported", "tool": "platon"},
+                {"sample_id": "S1", "contig_id": "optional_only", "tool": "platon"},
+            ]
+        },
+    )
+
+    write_consensus_table(
+        tables,
+        strategy="single_tool",
+        detection_tools=["genomad", "platon"],
+    )
+
+    rows = {row["contig_id"]: row for row in read_standard_table(tables, "plasmid_consensus")}
+    assert rows["primary"]["final_plasmid_call"] == "True"
+    assert rows["supported"]["support_tools"] == "genomad,platon"
+    assert rows["optional_only"]["final_plasmid_call"] == "False"

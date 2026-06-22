@@ -20,8 +20,10 @@ execution:
   network: false
   writes_output: true
 normalization:
+  parser: abi.autoplasm.parsers:parse_integronfinder
   tables:
   - annotations
+  - mge_elements
 failure_handling:
   missing_input:
     hint: Check plasmid_contigs FASTA path.

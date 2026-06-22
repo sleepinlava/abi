@@ -6,8 +6,14 @@ purpose: Aggregate QC outputs into a single report directory.
 when_to_use:
 - multiple_qc_outputs
 inputs:
+  project_outdir:
+    type: directory
+    required: true
   output_dir:
     type: directory
+    required: true
+  multiqc_filename:
+    type: string
     required: true
 outputs:
   multiqc_report:
@@ -15,7 +21,7 @@ outputs:
     format: html
 execution:
   executable: multiqc
-  command_template: multiqc {output_dir} --outdir {output_dir}
+  command_template: multiqc {project_outdir}/01_qc --outdir {output_dir} --filename {multiqc_filename}
   network: false
   writes_output: true
 normalization:

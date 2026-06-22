@@ -95,7 +95,16 @@ def _resolve_input_paths(config: Dict[str, Any], config_path: Path | None) -> No
         base_dirs.append(config_path.parent)
     base_dirs.append(PROJECT_ROOT)
 
-    for key in ("sample_sheet", "single_input", "read1", "read2", "long_reads", "assembly"):
+    for key in (
+        "sample_sheet",
+        "single_input",
+        "read1",
+        "read2",
+        "long_reads",
+        "pod5",
+        "bam",
+        "assembly",
+    ):
         value = input_config.get(key)
         if not value:
             continue
@@ -221,6 +230,45 @@ def validate_config(config: Mapping[str, Any]) -> None:
         )
     if strategy == "single_tool" and len(tools) != 1:
         raise ConfigError("single_tool strategy requires exactly one plasmid detection tool")
+
+    for section_name, field_name in (
+        ("typing", "tools"),
+        ("typing", "optional_tools"),
+        ("annotation", "tools"),
+        ("annotation", "optional_tools"),
+        ("host_prediction", "tools"),
+        ("host_prediction", "optional_tools"),
+        ("comparative_genomics", "tools"),
+        ("comparative_genomics", "optional_tools"),
+    ):
+        section = config.get(section_name, {})
+        if not isinstance(section, Mapping) or field_name not in section:
+            continue
+        value = section[field_name]
+        if value == "auto":
+            continue
+        if not isinstance(value, list) or not all(
+            isinstance(tool_id, str) and tool_id for tool_id in value
+        ):
+            raise ConfigError(f"{section_name}.{field_name} must be a list of tool IDs")
+
+    for section_name, field_name in (
+        ("sample_analysis", "min_diversity_samples"),
+        ("sample_analysis", "min_group_replicates"),
+        ("network", "min_samples"),
+    ):
+        section = config.get(section_name, {})
+        value = section.get(field_name) if isinstance(section, Mapping) else None
+        if value is not None and (not isinstance(value, int) or value < 1):
+            raise ConfigError(f"{section_name}.{field_name} must be a positive integer")
+
+    sample_analysis = config.get("sample_analysis", {})
+    if isinstance(sample_analysis, Mapping):
+        differential_method = sample_analysis.get("differential_method", "deseq2")
+        if differential_method not in {"deseq2", "internal_effect_size"}:
+            raise ConfigError(
+                "sample_analysis.differential_method must be deseq2 or internal_effect_size"
+            )
 
 
 def resolved_outdir(config: Mapping[str, Any]) -> Path:

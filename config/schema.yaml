@@ -62,3 +62,24 @@ properties:
     properties:
       platform:
         enum: [illumina, ont, pacbio_hifi, hybrid, assembly, null]
+      long_reads:
+        type: [string, "null"]
+      pod5:
+        type: [string, "null"]
+      bam:
+        type: [string, "null"]
+  sample_analysis:
+    type: object
+    properties:
+      min_diversity_samples:
+        type: integer
+        minimum: 1
+      min_group_replicates:
+        type: integer
+        minimum: 1
+  network:
+    type: object
+    properties:
+      min_samples:
+        type: integer
+        minimum: 1

@@ -18,9 +18,10 @@ core_contracts:
   - metaphlan
   - bakta
   - amrfinderplus
-  - abricate
   - isescan
   - integronfinder
+  - plasmidfinder
+  - mob_typer
   - bowtie2
   - samtools
   - coverm
@@ -29,8 +30,8 @@ core_contracts:
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Workflow declaration — literature-backed core plasmid detection path.
-# Covers the 7-step sub-pipeline used in Demo B (real execution validation).
-# The full 84-node DAG (pipeline_dag.yaml) remains the single source of
+# Covers the core sub-pipeline used in real execution validation.
+# The full DAG (pipeline_dag.yaml) remains the single source of
 # truth for complete workflow topology; this declaration provides the
 # literature-grounded skeleton that infer_dag() uses as L1 ground truth.
 # ═══════════════════════════════════════════════════════════════════════════
@@ -38,8 +39,8 @@ workflow:
   name: "Metagenomic Plasmid Detection Core Pipeline"
   citation: "Camargo et al. 2023, Nature Biotechnology, doi:10.1038/s41587-023-01953-y — geNomad-based plasmid detection"
   note: >
-    This 7-step sub-pipeline covers the core value path used in Demo B
-    (real execution validation).  The complete 84-node DAG is defined in
+    This sub-pipeline covers the core value path used in real execution
+    validation. The complete DAG is defined in
     pipeline_dag.yaml and includes additional QC, binning, host-linking,
     and comparative-genomics nodes beyond this skeleton.
   steps:
@@ -69,12 +70,17 @@ workflow:
       optional: false
       citation: "CoverM (https://github.com/wwood/CoverM) — no standalone paper; cited via Aroney et al. 2025, Nature Methods, doi:10.1038/s41592-024-02547-1 (Aviary tool suite)"
     - id: plasmid_typing
-      tool: abricate
+      tool: plasmidfinder
       after: [plasmid_detection]
-      optional: true
-      citation: "Seemann T, abricate (https://github.com/tseemann/abricate) — no standalone paper; cited via Inouye et al. 2014, Genome Medicine, doi:10.1186/s13073-014-0090-6 (SRST2) or Feldgarden et al. 2019, AAC, doi:10.1128/AAC.00483-19 (AMRFinder)"
+      optional: false
+      citation: "Carattoli et al. 2014, Antimicrobial Agents and Chemotherapy, doi:10.1128/AAC.02412-14"
+    - id: plasmid_mobility
+      tool: mob_typer
+      after: [plasmid_detection]
+      optional: false
+      citation: "Robertson and Nash 2018, Microbial Genomics, doi:10.1099/mgen.0.000206"
     - id: statistics
       tool: report_markdown
-      after: [plasmid_abundance, plasmid_typing]
+      after: [plasmid_abundance, plasmid_typing, plasmid_mobility]
       optional: false
       citation: "ABI built-in reporting layer — no external reference"

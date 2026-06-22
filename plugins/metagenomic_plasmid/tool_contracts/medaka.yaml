@@ -1,0 +1,36 @@
+abi_version: '0.1'
+tool_id: medaka
+name: Medaka
+category: polishing
+purpose: Optionally polish an ONT metaFlye assembly with the corresponding reads.
+when_to_use:
+- ont_polishing
+inputs:
+  long_reads:
+    type: path
+    required: true
+  assembly:
+    type: path
+    required: true
+  threads:
+    type: integer
+    required: true
+outputs:
+  output_dir:
+    type: path
+execution:
+  executable: medaka_consensus
+  command_template: medaka_consensus -i {long_reads} -d {assembly} -o {output_dir} -t {threads}
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check the filtered ONT reads and metaFlye assembly paths.
+  tool_not_found:
+    hint: Install medaka in the autoplasm-assembly environment.
+  nonzero_exit:
+    hint: Inspect provenance/step_logs and verify model compatibility.
+resources:
+  cpu: 8
+  memory: 16GB
+  walltime: 08:00:00

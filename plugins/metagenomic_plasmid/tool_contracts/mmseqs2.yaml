@@ -9,12 +9,6 @@ inputs:
   plasmid_contigs:
     type: path
     required: true
-  database:
-    type: path
-    required: true
-  sample_id:
-    type: string
-    required: true
   threads:
     type: integer
     required: true
@@ -23,14 +17,14 @@ outputs:
     type: path
 execution:
   executable: mmseqs
-  command_template: mmseqs easy-search {plasmid_contigs} {database} {output_dir}/{sample_id}.mmseqs.tsv
-    {output_dir}/tmp --threads {threads}
+  command_template: mmseqs easy-cluster {plasmid_contigs} {output_dir}/plasmid_catalog
+    {output_dir}/tmp --min-seq-id 0.95 -c 0.8 --cov-mode 1 --threads {threads}
   network: false
   writes_output: true
 normalization:
   parser: abi.autoplasm.parsers:parse_mmseqs2
   tables:
-  - comparative_hits
+  - plasmid_catalog
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.

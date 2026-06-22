@@ -1,0 +1,33 @@
+abi_version: '0.1'
+tool_id: minimap2_host_removal
+name: minimap2 host removal
+category: host_removal
+purpose: Retain unmapped ONT or HiFi reads when a host reference is supplied.
+when_to_use:
+- long_reads_with_host_reference
+inputs:
+  host_reference:
+    type: path
+    required: true
+  long_reads:
+    type: path
+    required: true
+outputs:
+  clean_long_reads:
+    type: path
+execution:
+  executable: minimap2
+  command_template: sh -c 'minimap2 -t "$1" -ax "$2" "$3" "$4" | samtools fastq -f 4 - > "$5"' autoplasm "{threads}" "{minimap2_preset}" "{host_reference}" "{long_reads}" "{clean_long_reads}"
+  network: false
+  writes_output: true
+failure_handling:
+  missing_input:
+    hint: Check long reads and the host reference FASTA.
+  tool_not_found:
+    hint: Install minimap2 and samtools in the autoplasm-abundance environment.
+  nonzero_exit:
+    hint: Inspect stderr and validate the host reference.
+resources:
+  cpu: 8
+  memory: 16GB
+  walltime: 08:00:00

@@ -23,3 +23,20 @@ def test_parse_sample_sheet_resolves_bundled_paths_outside_project_cwd(tmp_path,
     assert Path(context.samples[0].read1).exists()
     assert Path(context.samples[0].read2).exists()
     assert Path(context.samples[1].assembly).exists()
+
+
+def test_parse_sample_sheet_accepts_ont_pod5_and_hifi_bam(tmp_path):
+    pod5 = tmp_path / "reads.pod5"
+    bam = tmp_path / "reads.bam"
+    pod5.write_bytes(b"pod5")
+    bam.write_bytes(b"bam")
+    sheet = tmp_path / "samples.tsv"
+    sheet.write_text(
+        f"sample_id\tplatform\tpod5\tbam\nONT1\tont\t{pod5}\t\nHIFI1\tpacbio_hifi\t\t{bam}\n",
+        encoding="utf-8",
+    )
+
+    context = parse_sample_sheet(sheet)
+
+    assert context.samples[0].pod5 == str(pod5)
+    assert context.samples[1].bam == str(bam)
