@@ -1,0 +1,19 @@
+project_name: viral_viwrap_run
+mode: auto
+threads: 20
+outdir: results/viral_viwrap
+out_dir: results/viral_viwrap/raw
+log_dir: logs/viral_viwrap
+sample_id: viral_sample
+identify_method: genomad
+reads_type: illumina
+input_length_limit: 5000
+virome: false
+input:
+  input_metagenome: INPUT_METAGENOME_NOT_CONFIGURED.fasta
+  input_reads: []
+  input_cov: COVERAGE_NOT_CONFIGURED.tsv
+  input_sample2read_info: SAMPLE_READ_INFO_NOT_CONFIGURED.tsv
+resources:
+  db_dir: VIWRAP_DB_NOT_CONFIGURED
+  conda_env_dir: VIWRAP_CONDA_ENVS_NOT_CONFIGURED

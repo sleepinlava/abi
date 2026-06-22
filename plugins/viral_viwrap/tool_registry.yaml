@@ -1,0 +1,21 @@
+tools:
+  - id: viwrap
+    name: ViWrap
+    category: viral_analysis
+    executable: ViWrap
+    env_name: abi-base
+    required: true
+    output_dir_policy: must_not_exist
+    version_command: ViWrap -h
+    command_template: >-
+      ViWrap run --input_metagenome {input_metagenome} --out_dir {output_dir}
+      --db_dir {db_dir} --conda_env_dir {conda_env_dir}
+      --identify_method {identify_method} --threads {threads}
+      --input_length_limit {input_length_limit}
+    inputs: [input_metagenome, db_dir, conda_env_dir]
+    resources: {cpu: 20, memory: 64GB, walltime: "7-00:00:00", disk: 100GB}
+    failure_patterns:
+      - pattern: "already exists"
+        diagnosis: ViWrap requires a new output directory.
+      - pattern: "No space left"
+        diagnosis: Insufficient work or database disk space.

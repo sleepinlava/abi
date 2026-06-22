@@ -1,0 +1,12 @@
+database_id: kraken2_pluspf16g
+name: Kraken2 PlusPF 16G
+tool: kraken2
+required_for: [kraken2_classify, bracken_reestimate]
+path: "${ABI_DB}/kraken2/pluspf16g"
+host_db: "${ABI_DB}/kneaddata/host"
+memory_hint_gb: 32
+checks:
+  - {exists: "${ABI_DB}/kraken2/pluspf16g/hash.k2d"}
+  - {exists: "${ABI_DB}/kraken2/pluspf16g/opts.k2d"}
+  - {exists: "${ABI_DB}/kraken2/pluspf16g/taxo.k2d"}
+fallback: {action: fail_with_database_install_hint}

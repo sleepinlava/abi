@@ -1,0 +1,103 @@
+abi_version: "0.1"
+pipeline_id: viral_viwrap
+pipeline_name: Managed ViWrap Viral Metagenomics
+platforms: [assembly]
+category_dirs:
+  input_validation: 00_input_validation
+  environment_check: 01_environment_check
+  command_plan: 02_command_plan
+  viral_analysis: raw
+  parse: 03_parse
+  collect: 04_artifacts
+  report: report
+standard_tables:
+  virus_summary: {description: ViWrap per-virus summary}
+  viral_taxonomy: {description: ViWrap taxonomic assignments}
+  viral_hosts: {description: ViWrap host predictions}
+  viral_abundance_normalized: {description: ViWrap normalized abundance}
+nodes:
+  input_validation:
+    tool_id: internal
+    category: input_validation
+    scope: per_sample
+    platforms: [assembly]
+    optional: false
+    depends_on: []
+    inputs:
+      input_metagenome: {type: file, format: fasta, source: assembly}
+    outputs: {}
+  viwrap_env_check:
+    tool_id: internal
+    category: environment_check
+    scope: per_sample
+    platforms: [assembly]
+    optional: false
+    depends_on: [input_validation]
+    inputs:
+      db_dir: {type: directory}
+      conda_env_dir: {type: directory}
+    outputs: {}
+  viwrap_command_plan:
+    tool_id: internal
+    category: command_plan
+    scope: per_sample
+    platforms: [assembly]
+    optional: false
+    depends_on: [viwrap_env_check]
+    inputs: {}
+    outputs: {}
+  viwrap_managed_run:
+    tool_id: viwrap
+    category: viral_analysis
+    scope: per_sample
+    platforms: [assembly]
+    optional: false
+    depends_on: [viwrap_command_plan]
+    inputs:
+      input_metagenome: {type: file, format: fasta, source: assembly}
+      input_reads: {type: file}
+      input_cov: {type: file}
+      input_sample2read_info: {type: file}
+      db_dir: {type: directory}
+      conda_env_dir: {type: directory}
+      identify_method: {type: string}
+      reads_type: {type: string}
+      input_length_limit: {type: integer}
+      custom_MAGs_dir: {type: directory}
+      iPHoP_db_custom: {type: directory}
+      iPHoP_db_custom_pre: {type: string}
+      virome: {type: boolean}
+    outputs:
+      output_dir:
+        type: directory
+        path: "{outdir}/raw"
+    assertions:
+      - "output_files.output_dir exists"
+  viwrap_parse_summary:
+    tool_id: internal
+    category: parse
+    scope: per_sample
+    platforms: [assembly]
+    optional: false
+    depends_on: [viwrap_managed_run]
+    inputs:
+      output_dir: {type: directory, source: viwrap_managed_run.output_dir}
+    outputs: {}
+  viwrap_collect_artifacts:
+    tool_id: internal
+    category: collect
+    scope: per_sample
+    platforms: [assembly]
+    optional: false
+    depends_on: [viwrap_parse_summary]
+    inputs: {}
+    outputs: {}
+  viwrap_report:
+    tool_id: internal
+    category: report
+    scope: cross_sample
+    platforms: [assembly]
+    optional: false
+    depends_on: [viwrap_collect_artifacts]
+    inputs: {}
+    outputs: {}

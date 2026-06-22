@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["plugin", "status", "summary", "checks", "recommendations"],
+  "properties": {
+    "plugin": {"const": "viral_viwrap"},
+    "status": {"enum": ["pass", "warn", "fail"]},
+    "summary": {
+      "type": "object",
+      "required": ["ready", "can_run", "requires_setup"]
+    },
+    "checks": {"type": "array", "items": {"type": "object"}},
+    "recommendations": {"type": "array", "items": {"type": "string"}}
+  }
+}

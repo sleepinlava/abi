@@ -1,0 +1,2 @@
+sample_id	r1	r2	group
+S1	seq/S1_R1.fastq.gz	seq/S1_R2.fastq.gz	control

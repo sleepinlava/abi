@@ -1,0 +1,17 @@
+abi_version: "0.1"
+tool_id: seqkit
+name: SeqKit
+category: input_validation
+purpose: Record raw FASTQ statistics.
+when_to_use: [paired_end_reads]
+inputs:
+  read1: {type: file, formats: [fastq, fastq.gz], required: true}
+  read2: {type: file, formats: [fastq, fastq.gz], required: true}
+outputs:
+  stats: {type: file, format: tsv}
+execution: {executable: seqkit, command_template: "seqkit stat -T {read1} {read2} > {stats}", network: false, writes_output: true}
+normalization: {tables: [qc_summary]}
+failure_handling:
+  missing_input: {hint: Check manifest r1/r2 paths.}
+  tool_not_found: {hint: Install SeqKit in easymeta-p0.}
+resources: {cpu: 1, memory: 1GB, walltime: "00:30:00"}

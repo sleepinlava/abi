@@ -1,0 +1,19 @@
+abi_version: "0.1"
+tool_id: kraken2
+name: Kraken2
+category: taxonomy
+purpose: Classify host-filtered reads taxonomically.
+when_to_use: [shotgun_taxonomy]
+inputs:
+  dehost_read1: {type: file, formats: [fastq, fastq.gz], required: true}
+  dehost_read2: {type: file, formats: [fastq, fastq.gz], required: true}
+  kraken2_db: {type: directory, required: true}
+outputs:
+  report: {type: file, format: tsv}
+  classifications: {type: file, format: tsv}
+execution: {executable: kraken2, command_template: "kraken2 --db {kraken2_db} --paired {dehost_read1} {dehost_read2}", network: false, writes_output: true}
+normalization: {tables: [taxonomy_abundance]}
+failure_handling:
+  missing_input: {hint: Check KneadData outputs and Kraken2 database.}
+  nonzero_exit: {hint: Database errors and OOM are diagnosed by the P0 adapter.}
+resources: {cpu: 4, memory: 32GB, walltime: "08:00:00", disk: 20GB}

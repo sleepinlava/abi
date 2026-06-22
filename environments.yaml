@@ -262,6 +262,19 @@ environments:
     - mlst>=2.0
     - ncbi-amrfinderplus>=3.12
     - pigz
+  easymeta-p0:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - seqkit
+    - fastp
+    - kneaddata
+    - kraken2
+    - bracken
 tool_assignments:
   metagenomic_plasmid:
     fastp: autoplasm-qc
@@ -356,3 +369,11 @@ tool_assignments:
     fastp: abi-qc
     star: abi-stats
     featurecounts: abi-stats
+  easymetagenome:
+    seqkit: easymeta-p0
+    fastp: easymeta-p0
+    kneaddata: easymeta-p0
+    kraken2: easymeta-p0
+    bracken: easymeta-p0
+  viral_viwrap:
+    viwrap: abi-base

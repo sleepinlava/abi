@@ -1,0 +1,20 @@
+abi_version: "0.1"
+plugin_id: viral_viwrap
+display_name: ViWrap Viral Metagenomics
+description: Managed external-CLI integration for ViWrap 1.3.1.
+report_title: ViWrap Viral Metagenomics ABI Report
+plugin_type: adapter
+entry_point: abi.plugins.viral_viwrap:ViralViWrapPlugin
+tool_registry: tool_registry.yaml
+standard_tables: standard_tables.yaml
+core_contracts: [viwrap]
+workflow:
+  name: Managed ViWrap Viral Metagenomics
+  citation: "Zhou et al. 2023, iMeta, doi:10.1002/imt2.118"
+  note: ViWrap remains an upstream black box; ABI owns preflight, execution, parsing, and provenance.
+  steps:
+    - id: viwrap_run
+      tool: viwrap
+      after: []
+      optional: false
+      citation: "Zhou et al. 2023, iMeta, doi:10.1002/imt2.118"

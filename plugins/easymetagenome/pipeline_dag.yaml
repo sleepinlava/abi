@@ -1,0 +1,129 @@
+abi_version: "0.1"
+pipeline_id: easymetagenome
+pipeline_name: EasyMetagenome-style P0 Taxonomic Profiling
+platforms: [illumina]
+category_dirs:
+  input_validation: 00_input_validation
+  preprocessing: 01_preprocessing
+  host_removal: 02_host_removal
+  taxonomy: 03_taxonomy
+  report: report
+standard_tables:
+  qc_summary: {description: fastp read QC}
+  host_removal_summary: {description: KneadData read counts}
+  taxonomy_abundance: {description: Bracken taxonomic abundance}
+nodes:
+  seqkit_stat_raw:
+    tool_id: seqkit
+    category: input_validation
+    scope: per_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: []
+    inputs:
+      read1: {type: file, format: fastq.gz, source: sample_sheet}
+      read2: {type: file, format: fastq.gz, source: sample_sheet}
+    outputs:
+      stats: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.seqkit.tsv"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
+    assertions: ["output_files.stats exists"]
+  fastp_qc:
+    tool_id: fastp
+    category: preprocessing
+    scope: per_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [seqkit_stat_raw]
+    inputs:
+      read1: {type: file, format: fastq.gz, source: sample_sheet}
+      read2: {type: file, format: fastq.gz, source: sample_sheet}
+    outputs:
+      clean_read1: {type: file, format: fastq.gz, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_1.fastq.gz"}
+      clean_read2: {type: file, format: fastq.gz, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_2.fastq.gz"}
+      json: {type: file, format: json, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.fastp.json"}
+      html: {type: file, format: html, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.fastp.html"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
+    assertions: ["output_files.clean_read1 exists", "output_files.clean_read2 exists", "output_files.json exists"]
+  kneaddata_host_removal:
+    tool_id: kneaddata
+    category: host_removal
+    scope: per_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [fastp_qc]
+    inputs:
+      clean_read1: {type: file, source: fastp_qc.clean_read1}
+      clean_read2: {type: file, source: fastp_qc.clean_read2}
+      host_db: {type: directory}
+    outputs:
+      dehost_read1: {type: file, format: fastq.gz, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_1_kneaddata_paired_1.fastq.gz"}
+      dehost_read2: {type: file, format: fastq.gz, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_1_kneaddata_paired_2.fastq.gz"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
+    assertions: ["output_files.dehost_read1 exists", "output_files.dehost_read2 exists"]
+  kraken2_classify:
+    tool_id: kraken2
+    category: taxonomy
+    scope: per_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [kneaddata_host_removal]
+    inputs:
+      dehost_read1: {type: file, source: kneaddata_host_removal.dehost_read1}
+      dehost_read2: {type: file, source: kneaddata_host_removal.dehost_read2}
+      kraken2_db: {type: directory}
+    outputs:
+      report: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.kraken2.report"}
+      classifications: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.kraken2.output"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
+    assertions: ["output_files.report exists"]
+  bracken_phylum:
+    tool_id: bracken
+    category: taxonomy
+    scope: per_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [kraken2_classify]
+    params: {tax_level: P}
+    inputs:
+      kraken2_report: {type: file, source: kraken2_classify.report}
+      kraken2_db: {type: directory}
+      read_length: {type: integer}
+    outputs:
+      bracken_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.P.brk"}
+      bracken_report: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.P.report"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
+    assertions: ["output_files.bracken_table exists"]
+  bracken_genus:
+    tool_id: bracken
+    category: taxonomy
+    scope: per_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [kraken2_classify]
+    params: {tax_level: G}
+    inputs:
+      kraken2_report: {type: file, source: kraken2_classify.report}
+      kraken2_db: {type: directory}
+      read_length: {type: integer}
+    outputs:
+      bracken_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.G.brk"}
+      bracken_report: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.G.report"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
+    assertions: ["output_files.bracken_table exists"]
+  bracken_species:
+    tool_id: bracken
+    category: taxonomy
+    scope: per_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [kraken2_classify]
+    params: {tax_level: S}
+    inputs:
+      kraken2_report: {type: file, source: kraken2_classify.report}
+      kraken2_db: {type: directory}
+      read_length: {type: integer}
+    outputs:
+      bracken_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.S.brk"}
+      bracken_report: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.S.report"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
+    assertions: ["output_files.bracken_table exists"]

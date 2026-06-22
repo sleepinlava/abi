@@ -1,0 +1,18 @@
+abi_version: "0.1"
+tool_id: bracken
+name: Bracken
+category: taxonomy
+purpose: Re-estimate P/G/S taxonomic abundance from Kraken2 reports.
+when_to_use: [shotgun_taxonomy, abundance_estimation]
+inputs:
+  kraken2_report: {type: file, formats: [tsv], required: true}
+  kraken2_db: {type: directory, required: true}
+outputs:
+  bracken_table: {type: file, format: tsv}
+  bracken_report: {type: file, format: tsv}
+execution: {executable: bracken, command_template: "bracken -d {kraken2_db} -i {kraken2_report} -l {tax_level}", network: false, writes_output: true}
+normalization: {tables: [taxonomy_abundance]}
+failure_handling:
+  missing_input: {hint: Check Kraken2 report and Bracken k-mer database files.}
+  nonzero_exit: {hint: Verify read length and database preparation.}
+resources: {cpu: 1, memory: 8GB, walltime: "02:00:00"}

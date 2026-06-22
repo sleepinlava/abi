@@ -1,0 +1,41 @@
+tools:
+  - id: seqkit
+    name: SeqKit
+    category: input_validation
+    executable: seqkit
+    required: true
+    command_template: seqkit stat -T {read1} {read2} > {stats}
+    inputs: [read1, read2]
+    resources: {cpu: 1, memory: 1GB, walltime: "00:30:00"}
+  - id: fastp
+    name: fastp
+    category: preprocessing
+    executable: fastp
+    required: true
+    command_template: fastp -i {read1} -I {read2} -o {clean_read1} -O {clean_read2} -j {json} -h {html} --thread {threads}
+    inputs: [read1, read2]
+    resources: {cpu: 4, memory: 8GB, walltime: "02:00:00", disk: 20GB}
+  - id: kneaddata
+    name: KneadData
+    category: host_removal
+    executable: kneaddata
+    required: true
+    command_template: kneaddata -i1 {clean_read1} -i2 {clean_read2} -o {output_dir} -db {host_db} -t {threads} --bypass-trim --bypass-trf --reorder --remove-intermediate-output
+    inputs: [clean_read1, clean_read2, host_db]
+    resources: {cpu: 4, memory: 16GB, walltime: "08:00:00", disk: 40GB}
+  - id: kraken2
+    name: Kraken2
+    category: taxonomy
+    executable: kraken2
+    required: true
+    command_template: kraken2 --db {kraken2_db} --paired {dehost_read1} {dehost_read2} --threads {threads} --use-names --report-zero-counts --report {report} --output {classifications}
+    inputs: [dehost_read1, dehost_read2, kraken2_db]
+    resources: {cpu: 4, memory: 32GB, walltime: "08:00:00", disk: 20GB}
+  - id: bracken
+    name: Bracken
+    category: taxonomy
+    executable: bracken
+    required: true
+    command_template: bracken -d {kraken2_db} -i {kraken2_report} -r {read_length} -l {tax_level} -t 0 -o {bracken_table} -w {bracken_report}
+    inputs: [kraken2_report, kraken2_db]
+    resources: {cpu: 1, memory: 8GB, walltime: "02:00:00"}

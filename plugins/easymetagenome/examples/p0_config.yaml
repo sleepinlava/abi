@@ -1,0 +1,10 @@
+project_name: easymetagenome_demo
+threads: 16
+outdir: results/easymetagenome_demo
+log_dir: logs/easymetagenome_demo
+input:
+  sample_sheet: plugins/easymetagenome/sample_sheet_template.tsv
+resources:
+  host_db: /data/kneaddata/host
+  kraken2_db: /data/kraken2/pluspf16g
+  read_length: 150

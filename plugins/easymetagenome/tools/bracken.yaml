@@ -1,0 +1,4 @@
+tool_id: bracken
+execution: cli
+version: {command: bracken --version}
+supports: [version_check, command_build, dry_run, output_checks, failure_diagnosis]

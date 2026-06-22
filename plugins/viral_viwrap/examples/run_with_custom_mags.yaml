@@ -1,0 +1,11 @@
+input_metagenome: assembly.fasta
+input_reads: [sample_R1.fastq.gz, sample_R2.fastq.gz]
+custom_MAGs_dir: mags
+iPHoP_db_custom: results/iphop_custom_db
+out_dir: results/viwrap/raw
+db_dir: /data/viwrap/db
+conda_env_dir: /opt/conda/envs
+identify_method: vb
+reads_type: illumina
+threads: 20
+dry_run: true

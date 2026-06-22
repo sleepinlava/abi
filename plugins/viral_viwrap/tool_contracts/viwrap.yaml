@@ -1,0 +1,23 @@
+abi_version: "0.1"
+tool_id: viwrap
+name: ViWrap
+category: viral_analysis
+purpose: Run the managed upstream ViWrap workflow.
+when_to_use: [assembled_metagenome, viral_metagenomics]
+inputs:
+  input_metagenome: {type: file, formats: [fasta], required: true}
+  db_dir: {type: directory, required: true}
+  conda_env_dir: {type: directory, required: true}
+outputs:
+  output_dir: {type: directory}
+execution:
+  executable: ViWrap
+  command_template: ViWrap run --input_metagenome {input_metagenome} --out_dir {output_dir}
+  network: false
+  writes_output: true
+normalization:
+  tables: [virus_summary, viral_taxonomy, viral_hosts, viral_abundance_normalized]
+failure_handling:
+  tool_not_found: {hint: Install ViWrap 1.3.1 and its managed environments.}
+  nonzero_exit: {hint: Inspect viwrap.stderr.log and the preflight report.}
+resources: {cpu: 20, memory: 64GB, walltime: "7-00:00:00", disk: 100GB}

@@ -1,0 +1,170 @@
+workflow_id: easymetagenome.preprocess_kraken2_bracken
+name: EasyMetagenome-style preprocessing and Kraken2/Bracken taxonomy
+version: "0.1.0"
+domain: shotgun_metagenomics
+inputs:
+  manifest: {type: file, schema: schemas/sample_manifest.schema.json}
+  database_registry: {type: file, schema: db_registry/kraken2.yaml}
+runtime:
+  workdir: "{project.workdir}"
+  tempdir: "{project.workdir}/temp"
+  outdir: "{project.workdir}/result"
+  threads: 16
+  dry_run: false
+  resume: true
+nodes:
+  - id: validate_manifest
+    tool: abi.internal.validate_manifest
+    stage: input_validation
+    inputs: {manifest: "{inputs.manifest}"}
+    outputs:
+      normalized_manifest: result/metadata.normalized.tsv
+      validation_report: result/input_validation.json
+    params: {}
+    resources: {cpu: 1, memory_gb: 1, disk_multiplier: 1}
+    depends_on: []
+    checks: [{exists: result/metadata.normalized.tsv}, {exists: result/input_validation.json}]
+    on_fail: {retry: 0, action: stop_workflow}
+  - id: seqkit_stat_raw
+    tool: seqkit
+    stage: input_validation
+    map_over: samples
+    inputs: {r1: "{sample.r1}", r2: "{sample.r2}"}
+    outputs: {raw_stat: "result/seqkit/{sample.sample_id}.raw.txt"}
+    params: {}
+    resources: {cpu: 1, memory_gb: 1, disk_multiplier: 1}
+    depends_on: [validate_manifest]
+    command_template: seqkit stat -T {inputs.r1} {inputs.r2} > {outputs.raw_stat}
+    checks: [{exists: "{outputs.raw_stat}"}]
+    on_fail: {retry: 1, action: stop_workflow}
+  - id: fastp_qc
+    tool: fastp
+    stage: preprocessing
+    map_over: samples
+    inputs: {r1: "{sample.r1}", r2: "{sample.r2}"}
+    outputs:
+      clean_r1: "temp/qc/{sample.sample_id}_1.fastq.gz"
+      clean_r2: "temp/qc/{sample.sample_id}_2.fastq.gz"
+      json: "temp/qc/{sample.sample_id}_fastp.json"
+      html: "temp/qc/{sample.sample_id}_fastp.html"
+    params: {threads: 4}
+    resources: {cpu: 4, memory_gb: 8, disk_multiplier: 5}
+    depends_on: [validate_manifest]
+    command_template: fastp -i {inputs.r1} -I {inputs.r2} -o {outputs.clean_r1} -O {outputs.clean_r2} -j {outputs.json} -h {outputs.html} --thread {params.threads}
+    checks: [{exists: "{outputs.clean_r1}"}, {exists: "{outputs.clean_r2}"}, {exists: "{outputs.json}"}]
+    on_fail: {retry: 1, action: stop_workflow}
+  - id: fastp_summary
+    tool: abi.internal.fastp_summary
+    stage: preprocessing
+    inputs: {fastp_json: "temp/qc/*_fastp.json"}
+    outputs: {summary_table: result/qc/fastp.txt}
+    params: {}
+    resources: {cpu: 1, memory_gb: 1, disk_multiplier: 1}
+    depends_on: [fastp_qc]
+    checks: [{exists: result/qc/fastp.txt}]
+    on_fail: {retry: 0, action: stop_workflow}
+  - id: kneaddata_host_removal
+    tool: kneaddata
+    stage: preprocessing
+    map_over: samples
+    inputs:
+      clean_r1: "temp/qc/{sample.sample_id}_1.fastq.gz"
+      clean_r2: "temp/qc/{sample.sample_id}_2.fastq.gz"
+      host_db: "{db.kraken2.host_db}"
+    outputs:
+      output_dir: "temp/hr/{sample.sample_id}"
+      dehost_r1: "temp/hr/{sample.sample_id}/{sample.sample_id}_1_kneaddata_paired_1.fastq.gz"
+      dehost_r2: "temp/hr/{sample.sample_id}/{sample.sample_id}_1_kneaddata_paired_2.fastq.gz"
+    params: {threads: 4}
+    resources: {cpu: 4, memory_gb: 16, disk_multiplier: 5}
+    depends_on: [fastp_qc]
+    command_template: kneaddata -i1 {inputs.clean_r1} -i2 {inputs.clean_r2} -o {outputs.output_dir} -db {inputs.host_db} -t {params.threads} --bypass-trim --bypass-trf --reorder --remove-intermediate-output
+    checks: [{exists: "{outputs.dehost_r1}"}, {exists: "{outputs.dehost_r2}"}]
+    on_fail: {retry: 1, action: stop_workflow}
+  - id: kraken2_classify
+    tool: kraken2
+    stage: read_based_taxonomy
+    map_over: samples
+    inputs:
+      dehost_r1: "temp/hr/{sample.sample_id}/{sample.sample_id}_1_kneaddata_paired_1.fastq.gz"
+      dehost_r2: "temp/hr/{sample.sample_id}/{sample.sample_id}_1_kneaddata_paired_2.fastq.gz"
+      kraken2_db: "{db.kraken2.path}"
+    outputs:
+      report: "temp/kraken2/{sample.sample_id}.report"
+      output: "temp/kraken2/{sample.sample_id}.output"
+    params: {threads: 4}
+    resources: {cpu: 4, memory_gb: 32, disk_multiplier: 2}
+    depends_on: [kneaddata_host_removal]
+    command_template: kraken2 --db {inputs.kraken2_db} --paired {inputs.dehost_r1} {inputs.dehost_r2} --threads {params.threads} --use-names --report-zero-counts --report {outputs.report} --output {outputs.output}
+    checks: [{exists: "{outputs.report}"}]
+    on_fail: {retry: 0, action: stop_workflow}
+  - id: kneaddata_summary
+    tool: abi.internal.kneaddata_summary
+    stage: preprocessing
+    inputs: {host_removed_dir: temp/hr}
+    outputs: {summary_table: result/qc/sum.txt}
+    params: {}
+    resources: {cpu: 1, memory_gb: 1, disk_multiplier: 1}
+    depends_on: [kneaddata_host_removal]
+    checks: [{exists: result/qc/sum.txt}]
+    on_fail: {retry: 0, action: stop_workflow}
+  - id: bracken_reestimate
+    tool: bracken
+    stage: read_based_taxonomy
+    map_over: {samples: samples, tax_levels: [P, G, S]}
+    inputs:
+      kraken2_report: "temp/kraken2/{sample.sample_id}.report"
+      kraken2_db: "{db.kraken2.path}"
+    outputs:
+      bracken_table: "temp/bracken/{sample.sample_id}.{tax_level}.brk"
+      bracken_report: "temp/bracken/{sample.sample_id}.{tax_level}.report"
+    params: {read_length: 150, threshold: 0}
+    resources: {cpu: 1, memory_gb: 8, disk_multiplier: 1}
+    depends_on: [kraken2_classify]
+    command_template: bracken -d {inputs.kraken2_db} -i {inputs.kraken2_report} -r {params.read_length} -l {tax_level} -t {params.threshold} -o {outputs.bracken_table} -w {outputs.bracken_report}
+    checks: [{exists: "{outputs.bracken_table}"}]
+    on_fail: {retry: 0, action: stop_workflow}
+  - id: bracken_merge
+    tool: abi.internal.merge_bracken
+    stage: read_based_taxonomy
+    inputs: {bracken_dir: temp/bracken}
+    outputs:
+      phylum_table: result/kraken2/bracken.P.txt
+      genus_table: result/kraken2/bracken.G.txt
+      species_table: result/kraken2/bracken.S.txt
+    params: {}
+    resources: {cpu: 1, memory_gb: 4, disk_multiplier: 1}
+    depends_on: [bracken_reestimate]
+    checks: [{exists: result/kraken2/bracken.P.txt}, {exists: result/kraken2/bracken.G.txt}, {exists: result/kraken2/bracken.S.txt}]
+    on_fail: {retry: 0, action: stop_workflow}
+  - id: taxonomy_filter
+    tool: abi.internal.filter_feature_table
+    stage: read_based_taxonomy
+    inputs: {tables: [result/kraken2/bracken.P.txt, result/kraken2/bracken.G.txt, result/kraken2/bracken.S.txt]}
+    outputs:
+      filtered_tables: [result/kraken2/bracken.P.0.2.txt, result/kraken2/bracken.G.0.2.txt, result/kraken2/bracken.S.0.2.txt]
+    params: {prevalence: 0.2}
+    resources: {cpu: 1, memory_gb: 4, disk_multiplier: 1}
+    depends_on: [bracken_merge]
+    checks: [{exists: result/kraken2/bracken.S.0.2.txt}]
+    on_fail: {retry: 0, action: stop_workflow}
+  - id: taxonomy_diversity
+    tool: abi.internal.taxonomy_diversity
+    stage: statistics
+    inputs: {species_table: result/kraken2/bracken.S.txt}
+    outputs: {alpha_table: result/kraken2/alpha.txt, beta_table: result/kraken2/beta.txt}
+    params: {}
+    resources: {cpu: 1, memory_gb: 4, disk_multiplier: 1}
+    depends_on: [taxonomy_filter]
+    checks: [{exists: result/kraken2/alpha.txt}, {exists: result/kraken2/beta.txt}]
+    on_fail: {retry: 0, action: stop_workflow}
+  - id: collect_report
+    tool: abi.internal.report_collect
+    stage: report
+    inputs: {manifest: result/metadata.normalized.tsv}
+    outputs: {report_manifest: result/report_manifest.json, markdown_report: result/report.md}
+    params: {}
+    resources: {cpu: 1, memory_gb: 2, disk_multiplier: 1}
+    depends_on: [fastp_summary, kneaddata_summary, taxonomy_diversity]
+    checks: [{exists: result/report_manifest.json}, {exists: result/report.md}]
+    on_fail: {retry: 0, action: stop_workflow}

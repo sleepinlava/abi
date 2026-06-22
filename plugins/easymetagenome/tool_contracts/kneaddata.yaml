@@ -1,0 +1,20 @@
+abi_version: "0.1"
+tool_id: kneaddata
+name: KneadData
+category: host_removal
+purpose: Remove host reads with a declared Bowtie2 database.
+when_to_use: [host_decontamination]
+inputs:
+  clean_read1: {type: file, formats: [fastq, fastq.gz], required: true}
+  clean_read2: {type: file, formats: [fastq, fastq.gz], required: true}
+  host_db: {type: directory, required: true}
+outputs:
+  dehost_read1: {type: file, format: fastq.gz}
+  dehost_read2: {type: file, format: fastq.gz}
+  output_dir: {type: directory}
+execution: {executable: kneaddata, command_template: "kneaddata -i1 {clean_read1} -i2 {clean_read2} -o {output_dir} -db {host_db}", network: false, writes_output: true}
+normalization: {tables: [host_removal_summary]}
+failure_handling:
+  missing_input: {hint: Check fastp outputs and host database.}
+  tool_not_found: {hint: Install KneadData in easymeta-p0.}
+resources: {cpu: 4, memory: 16GB, walltime: "08:00:00", disk: 40GB}

@@ -1,0 +1,5 @@
+tables:
+  virus_summary: [sample_id]
+  viral_taxonomy: [sample_id]
+  viral_hosts: [sample_id]
+  viral_abundance_normalized: [sample_id]

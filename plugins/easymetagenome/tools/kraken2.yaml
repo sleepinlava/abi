@@ -1,0 +1,4 @@
+tool_id: kraken2
+execution: cli
+version: {command: kraken2 --version}
+supports: [version_check, command_build, dry_run, output_checks, failure_diagnosis]

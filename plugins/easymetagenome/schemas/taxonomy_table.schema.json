@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["name", "taxonomy_id"],
+  "properties": {
+    "name": {"type": "string"},
+    "taxonomy_id": {"type": "string"}
+  },
+  "additionalProperties": {"oneOf": [{"type": "number"}, {"type": "string"}]}
+}

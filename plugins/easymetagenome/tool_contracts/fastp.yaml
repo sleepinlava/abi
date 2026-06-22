@@ -1,0 +1,20 @@
+abi_version: "0.1"
+tool_id: fastp
+name: fastp
+category: preprocessing
+purpose: Trim and quality-control paired reads.
+when_to_use: [paired_end_reads, quality_control]
+inputs:
+  read1: {type: file, formats: [fastq, fastq.gz], required: true}
+  read2: {type: file, formats: [fastq, fastq.gz], required: true}
+outputs:
+  clean_read1: {type: file, format: fastq.gz}
+  clean_read2: {type: file, format: fastq.gz}
+  json: {type: file, format: json}
+  html: {type: file, format: html}
+execution: {executable: fastp, command_template: "fastp -i {read1} -I {read2} -o {clean_read1} -O {clean_read2}", network: false, writes_output: true}
+normalization: {tables: [qc_summary]}
+failure_handling:
+  missing_input: {hint: Check manifest r1/r2 paths.}
+  tool_not_found: {hint: Install fastp in easymeta-p0.}
+resources: {cpu: 4, memory: 8GB, walltime: "02:00:00", disk: 20GB}

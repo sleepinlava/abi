@@ -1,0 +1,9 @@
+input_metagenome: assembly.fasta
+input_cov: contig_coverage.tsv
+input_sample2read_info: sample_reads.tsv
+out_dir: results/viwrap/raw
+db_dir: /data/viwrap/db
+conda_env_dir: /opt/conda/envs
+identify_method: vb-vs
+threads: 20
+dry_run: true

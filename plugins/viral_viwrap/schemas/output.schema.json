@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["plugin", "status", "out_dir", "tables", "artifacts", "logs"],
+  "properties": {
+    "plugin": {"const": "viral_viwrap"},
+    "status": {"enum": ["success", "warn", "failed", "blocked"]},
+    "out_dir": {"type": "string"},
+    "tables": {"type": "object"},
+    "artifacts": {"type": "object"},
+    "logs": {"type": "object"},
+    "warnings": {"type": "array", "items": {"type": "string"}}
+  }
+}

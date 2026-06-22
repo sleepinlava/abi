@@ -1,0 +1,19 @@
+project_name: easymetagenome_p0
+mode: auto
+threads: 16
+outdir: results/easymetagenome
+log_dir: logs/easymetagenome
+input:
+  sample_sheet: samples.tsv
+resources:
+  host_db: KNEADDATA_HOST_DB_NOT_CONFIGURED
+  kraken2_db: KRAKEN2_DB_NOT_CONFIGURED
+  read_length: 150
+tool_params:
+  fastp: {threads: 4}
+  kneaddata: {threads: 4}
+  kraken2: {threads: 4}
+  bracken: {read_length: 150, threshold: 0}
+execution:
+  resume: true
+  progress: true
