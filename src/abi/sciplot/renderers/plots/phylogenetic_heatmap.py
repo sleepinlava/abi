@@ -74,14 +74,20 @@ def plot_phylogenetic_heatmap(
 
     if leaf_order is None:
         # Hierarchical clustering on rows
-        from scipy.cluster.hierarchy import leaves_list, linkage
-        from scipy.spatial.distance import pdist
-
         if len(pivot) >= 2:
-            dist = pdist(pivot.values, metric="euclidean")
-            z = linkage(dist, method="ward")
-            order_idx = leaves_list(z)
-            leaf_order = [pivot.index[i] for i in order_idx]
+            try:
+                from scipy.cluster.hierarchy import leaves_list, linkage
+                from scipy.spatial.distance import pdist
+
+                dist = pdist(pivot.values, metric="euclidean")
+                z = linkage(dist, method="ward")
+                order_idx = leaves_list(z)
+                leaf_order = [pivot.index[i] for i in order_idx]
+            except ImportError:
+                # SciPy is optional in lightweight sciplot installations.
+                # Preserve deterministic output with a dependency-free
+                # abundance ordering when clustering is unavailable.
+                leaf_order = list(pivot.sum(axis=1).sort_values(ascending=False).index)
         else:
             leaf_order = list(pivot.index)
 
@@ -102,7 +108,7 @@ def plot_phylogenetic_heatmap(
     cmap_name = getattr(spec.style, "colormap_name", None)
     if cmap_name is None:
         cmap_name = "viridis"
-    cmap_name = palette.get_continuous(cmap_name)
+    cmap_name = palette.get_matplotlib_colormap(cmap_name)
 
     im = ax.imshow(log_data, aspect="auto", cmap=cmap_name, interpolation="nearest")
 

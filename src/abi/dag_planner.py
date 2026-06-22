@@ -96,10 +96,14 @@ class PathTemplateContext(dict):
                 "read1",
                 "read2",
                 "long_reads",
+                "pod5",
+                "bam",
                 "assembly",
                 "group",
                 "condition",
                 "technology",
+                "host_reference",
+                "notes",
             ):
                 val = getattr(sample, attr, None)
                 if val:
@@ -197,6 +201,11 @@ class UniversalDAG:
     def category_dirs(self) -> Dict[str, str]:
         """Category → subdirectory mapping (e.g. ``{"qc": "01_qc"}``)."""
         return dict(self._category_dirs)
+
+    @property
+    def node_ids(self) -> List[str]:
+        """Return all declared node IDs in deterministic declaration order."""
+        return list(self._nodes)
 
     def category_dir_for(self, category: str) -> str:
         """Return the subdirectory for a category, or the category itself if unmapped."""
@@ -525,10 +534,12 @@ def detect_platform(sample: SampleInput) -> str:
 
     Resolution order:
     1. Explicit, valid platform (in ``VALID_PLATFORMS``, not ``"generic"``).
-    2. Long reads present → ``"ont"``.
-    3. Paired-end or single-end short reads → ``"illumina"``.
-    4. Assembly-only input → ``"assembly"``.
-    5. Default fallback → ``"illumina"``.
+    2. Both short and long reads present → ``"hybrid"``.
+    3. PacBio/HiFi technology metadata or filename → ``"pacbio_hifi"``.
+    4. Other long reads present → ``"ont"``.
+    5. Paired-end or single-end short reads → ``"illumina"``.
+    6. Assembly-only input → ``"assembly"``.
+    7. Default fallback → ``"illumina"``.
 
     Non-standard platform values (e.g. ``"rna_seq"``) are treated as
     "auto" and trigger detection rather than being passed through.
@@ -545,7 +556,18 @@ def detect_platform(sample: SampleInput) -> str:
     if explicit and explicit in VALID_PLATFORMS and explicit != "generic":
         return explicit
 
-    if sample.long_reads:
+    if sample.has_short_reads and sample.has_long_reads:
+        return "hybrid"
+
+    technology = (sample.technology or "").strip().lower().replace("-", "_")
+    long_read_name = str(sample.long_reads or sample.bam or "").lower()
+    if sample.has_long_reads and (
+        any(marker in technology for marker in ("pacbio", "hifi", "ccs", "sequel", "revio"))
+        or any(marker in long_read_name for marker in ("pacbio", "hifi", "ccs"))
+    ):
+        return "pacbio_hifi"
+
+    if sample.has_long_reads:
         return "ont"
 
     if sample.read1 and sample.read2:
@@ -602,6 +624,7 @@ def build_plan_from_dag(
     project_name = str(config.get("project_name", dag.pipeline_id))
 
     steps: List[PlanStep] = []
+    skipped_steps: List[PlanStep] = []
 
     # ── Per-sample platform routing ─────────────────────────────────────
     # Each sample may belong to a different sequencing platform (Illumina,
@@ -629,6 +652,12 @@ def build_plan_from_dag(
     for active_set in platform_active.values():
         all_active |= active_set
     if not all_active:
+        workflow = config.get("workflow", {})
+        if isinstance(workflow, Mapping) and workflow.get("include_nodes") is not None:
+            raise ValueError(
+                "workflow.include_nodes selected no active nodes for the project platforms "
+                "and resolved configuration"
+            )
         # Edge case: no nodes match any platform (e.g. empty config).
         # Fall back to the first platform for a meaningful error message.
         fallback_plat = next(iter(unique_platforms)) if unique_platforms else "illumina"
@@ -653,7 +682,7 @@ def build_plan_from_dag(
 
         for node_id in per_sample_ids:
             if node_id not in sample_active:
-                continue  # skip nodes inactive for this sample's platform
+                continue  # represented in skipped_steps below
             category = dag.node_category(node_id)
             category_dir = dag.category_dir_for(category)
 
@@ -682,10 +711,32 @@ def build_plan_from_dag(
                 inputs=resolved_inputs,
                 outputs=resolved_outputs,
                 params=_resolve_params(dag, node_id, sample, config, template_ctx),
+                reason=f"active DAG node {node_id!r} for platform {sample_plat!r}",
             )
             steps.append(step)
             upstream_outputs[node_id] = resolved_outputs
             sample_outputs[sample.sample_id][node_id] = resolved_outputs
+
+        # Preserve excluded per-sample nodes as auditable plan records.  They
+        # stay out of ``steps`` so the executor cannot run them accidentally.
+        for node_id in dag.node_ids:
+            if dag.scope_for(node_id) != "per_sample" or node_id in sample_active:
+                continue
+            category = dag.node_category(node_id)
+            skipped_steps.append(
+                PlanStep(
+                    step_id=(f"{sample.sample_id}_{category}_{node_id_to_tool_id(dag, node_id)}"),
+                    sample_id=sample.sample_id,
+                    step_name=category,
+                    tool_id=node_id_to_tool_id(dag, node_id),
+                    category=category,
+                    reason=(
+                        f"excluded DAG node {node_id!r}: platform {sample_plat!r} "
+                        "or resolved configuration did not satisfy its activation conditions"
+                    ),
+                    skipped=True,
+                )
+            )
 
     # ── Cross-sample nodes ─────────────────────────────────────────────
     # Track outputs of cross-sample nodes so subsequent cross-sample nodes
@@ -729,16 +780,36 @@ def build_plan_from_dag(
         tool_id = node_id_to_tool_id(dag, node_id)
         step = PlanStep(
             step_id=node_id,
-            sample_id="ALL",
+            sample_id=None,
             step_name=category,
             tool_id=tool_id,
             category=category,
             inputs=resolved_inputs,
             outputs=resolved_outputs,
             params=_resolve_params(dag, node_id, None, config, template_ctx),
+            reason=f"active cross-sample DAG node {node_id!r}",
         )
         steps.append(step)
         cross_sample_outputs[node_id] = resolved_outputs
+
+    for node_id in dag.node_ids:
+        if dag.scope_for(node_id) != "cross_sample" or node_id in all_active:
+            continue
+        category = dag.node_category(node_id)
+        skipped_steps.append(
+            PlanStep(
+                step_id=node_id,
+                sample_id=None,
+                step_name=category,
+                tool_id=node_id_to_tool_id(dag, node_id),
+                category=category,
+                reason=(
+                    f"excluded cross-sample DAG node {node_id!r}: no project platform "
+                    "or resolved configuration satisfied its activation conditions"
+                ),
+                skipped=True,
+            )
+        )
 
     # ── Assemble plan ──────────────────────────────────────────────────
     selected_tools = sorted({s.tool_id for s in steps if s.tool_id != "internal"})
@@ -753,6 +824,7 @@ def build_plan_from_dag(
         sample_context=sample_context,
         selected_tools=selected_tools,
         steps=steps,
+        skipped_steps=skipped_steps,
         provenance_dir=str(outdir / "provenance"),
     )
 
@@ -861,10 +933,8 @@ def _resolve_cross_sample_inputs(
                     val = dep_outputs.get(upstream_key)
                     if val:
                         values.append(str(val))
-            if len(sample_context.samples) == 1 and values:
-                resolved[key] = values[0]
-            else:
-                resolved[key] = values if values else ""
+            # Aggregation has one stable type regardless of cohort size.
+            resolved[key] = values
         else:
             source = spec.get("source")
             if source is not None and "." in str(source):
@@ -1007,6 +1077,11 @@ def _resolve_outputs(
     """
     outputs_spec = dag.node_outputs(node_id)
     resolved: Dict[str, Any] = {}
+    default_output_template = (
+        "{outdir}/{category_dir}/{sample_id}"
+        if "sample_id" in template_ctx
+        else "{outdir}/{category_dir}"
+    )
 
     has_output_dir = False
     for key, spec in outputs_spec.items():
@@ -1029,14 +1104,14 @@ def _resolve_outputs(
                 resolved[key] = ""
         elif key == "output_dir":
             # Default output_dir if no path template / 无路径模板时的默认 output_dir
-            resolved[key] = "{outdir}/{category_dir}/{sample_id}".format_map(template_ctx)
+            resolved[key] = default_output_template.format_map(template_ctx)
             has_output_dir = True
         else:
             resolved[key] = ""
 
     # Ensure output_dir is always present / 确保 output_dir 始终存在
     if not has_output_dir:
-        resolved["output_dir"] = "{outdir}/{category_dir}/{sample_id}".format_map(template_ctx)
+        resolved["output_dir"] = default_output_template.format_map(template_ctx)
 
     return resolved
 
@@ -1074,19 +1149,15 @@ def _resolve_params(
             except KeyError:
                 params[pkey] = pval
 
-    # Config section → params mapping for cross-sample tools / 配置段映射
-    # e.g. config.differential_expression.comparison → params["comparison"]
     tool_id = node_id_to_tool_id(dag, node_id)
-    _CONFIG_SECTION_PARAMS: Dict[str, list] = {
-        "deseq2": ["comparison", "alpha"],
-    }
-    if tool_id in _CONFIG_SECTION_PARAMS:
-        de_config = config.get("differential_expression")
-        if isinstance(de_config, dict):
-            for key in _CONFIG_SECTION_PARAMS[tool_id]:
-                val = de_config.get(key)
-                if val is not None:
-                    params.setdefault(key, val)
+    # Declarative config → parameter bindings. Example:
+    # config_params: {comparison: differential_expression.comparison}
+    config_params = node.get("config_params")
+    if isinstance(config_params, Mapping):
+        for param_name, config_path in config_params.items():
+            value = _lookup_config_path(config, str(config_path))
+            if value is not None:
+                params.setdefault(str(param_name), value)
 
     # Tool-level params from config.tool_params.<tool_id> / 工具级参数
     tool_params_block = config.get("tool_params")
@@ -1095,7 +1166,29 @@ def _resolve_params(
         if isinstance(tool_overrides, Mapping):
             params.update(tool_overrides)
 
+    # Preserve declarative output contracts and assertions through planning.
+    # The executor consumes this private transport-neutral block before the
+    # tool adapter is invoked, so pipeline_dag.yaml remains the runtime SSOT.
+    outputs = dag.node_outputs(node_id)
+    assertions = node.get("assertions", [])
+    if outputs or assertions:
+        params["_contract"] = {
+            "inputs": dag.node_inputs(node_id),
+            "outputs": outputs,
+            "assertions": list(assertions) if isinstance(assertions, list) else [str(assertions)],
+        }
+
     return params
+
+
+def _lookup_config_path(config: Mapping[str, Any], dotted_path: str) -> Any:
+    """Resolve a dotted config path, returning None when any segment is absent."""
+    value: Any = config
+    for segment in dotted_path.split("."):
+        if not isinstance(value, Mapping) or segment not in value:
+            return None
+        value = value[segment]
+    return value
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────

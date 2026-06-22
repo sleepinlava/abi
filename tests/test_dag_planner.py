@@ -20,6 +20,7 @@ from abi.dag_planner import (
     PathTemplateContext,
     UniversalDAG,
     build_plan_from_dag,
+    detect_platform,
 )
 from abi.schemas import SampleContext, SampleInput
 
@@ -56,6 +57,28 @@ def _make_config(**overrides: Any) -> Dict[str, Any]:
     }
     config.update(overrides)
     return config
+
+
+class TestPlatformDetection:
+    def test_detects_hybrid_from_short_and_long_reads(self) -> None:
+        sample = _make_sample(platform="auto", long_reads="/data/ont.fastq.gz")
+        assert detect_platform(sample) == "hybrid"
+
+    def test_detects_pacbio_hifi_from_technology(self) -> None:
+        sample = _make_sample(
+            platform="auto",
+            read1=None,
+            read2=None,
+            long_reads="/data/reads.fastq.gz",
+            technology="PacBio HiFi",
+        )
+        assert detect_platform(sample) == "pacbio_hifi"
+
+    def test_detects_ont_for_other_long_reads(self) -> None:
+        sample = _make_sample(
+            platform="auto", read1=None, read2=None, long_reads="/data/ont.fastq.gz"
+        )
+        assert detect_platform(sample) == "ont"
 
 
 # ── UniversalDAG loading ──────────────────────────────────────────────────
@@ -243,6 +266,27 @@ class TestActiveNodeFiltering:
         with pytest.raises(ValueError, match="unknown nodes"):
             dag.active_node_ids("illumina", {"workflow": {"include_nodes": ["missing"]}})
 
+    def test_build_plan_rejects_include_nodes_that_select_nothing(self, tmp_path) -> None:
+        dag_path = tmp_path / "pipeline_dag.yaml"
+        dag_path.write_text(
+            yaml.safe_dump(
+                {
+                    "pipeline_id": "empty_selection",
+                    "nodes": {"qc": {"tool_id": "fastp", "category": "qc"}},
+                }
+            ),
+            encoding="utf-8",
+        )
+        sample = _make_sample()
+        context = SampleContext(samples=[sample], multi_sample=False, has_groups=False)
+
+        with pytest.raises(ValueError, match="selected no active nodes"):
+            build_plan_from_dag(
+                dag_path,
+                _make_config(workflow={"include_nodes": []}),
+                context,
+            )
+
 
 # ── Scope and category ────────────────────────────────────────────────────
 
@@ -294,6 +338,22 @@ class TestPathTemplateContext:
         template = "{outdir}/{category_dir}/{sample_id}/{sample_id}_R1.clean.fastq.gz"
         resolved = template.format_map(ctx)
         assert resolved == "/tmp/abi-test/01_qc/SRR123/SRR123_R1.clean.fastq.gz"
+
+    def test_exposes_all_typed_sample_path_variables(self) -> None:
+        sample = _make_sample(
+            read1=None,
+            read2=None,
+            pod5="/data/input.pod5",
+            bam="/data/input.bam",
+            host_reference="/data/host.fasta",
+            notes="priority sample",
+        )
+        ctx = PathTemplateContext(config=_make_config(), sample=sample)
+
+        assert ctx["sample.pod5"] == "/data/input.pod5"
+        assert ctx["sample.bam"] == "/data/input.bam"
+        assert ctx["sample.host_reference"] == "/data/host.fasta"
+        assert ctx["sample.notes"] == "priority sample"
 
     def test_missing_variable_raises(self) -> None:
         ctx = PathTemplateContext(
@@ -481,7 +541,8 @@ class TestBuildPlanFromDAG:
             # Cross-sample step should have aggregated inputs
             de_step = plan.steps[2]
             assert de_step.tool_id == "deseq2"
-            assert de_step.sample_id == "ALL"
+            assert de_step.sample_id is None
+            assert de_step.reason
             # With multi_sample, count_files is a list
             assert isinstance(de_step.inputs["counts"], list)
             assert len(de_step.inputs["counts"]) == 2
@@ -538,8 +599,8 @@ class TestBuildPlanFromDAG:
             )
             plan = build_plan_from_dag(tmp_path, _make_config(), ctx)
             assert len(plan.steps) == 4  # 3 per_sample + 1 cross_sample
-            per_sample = [s for s in plan.steps if s.sample_id != "ALL"]
-            cross = [s for s in plan.steps if s.sample_id == "ALL"]
+            per_sample = [s for s in plan.steps if s.sample_id is not None]
+            cross = [s for s in plan.steps if s.sample_id is None]
             assert len(per_sample) == 3
             assert len(cross) == 1
         finally:

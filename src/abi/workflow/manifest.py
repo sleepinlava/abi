@@ -155,7 +155,9 @@ class ResourceManifest:
 
     def write(self, output_dir: str | Path) -> Path:
         """Write ``resource_manifest.json`` to *output_dir*."""
-        out = Path(output_dir) / "resource_manifest.json"
+        directory = Path(output_dir)
+        directory.mkdir(parents=True, exist_ok=True)
+        out = directory / "resource_manifest.json"
         out.write_text(
             json.dumps(self.to_dict(), indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",

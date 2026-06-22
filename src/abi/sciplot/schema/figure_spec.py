@@ -123,7 +123,7 @@ class StyleSpec(BaseModel):
     """
 
     theme: str = Field("abi_nature", description="Theme name from the theme registry.")
-    palette: str = Field("colorblind_safe", description="Palette name from the palette registry.")
+    palette: str = Field("colorblind_safe_8", description="Palette name from the palette registry.")
     width_mm: float = Field(90.0, gt=0.0, description="Figure width in millimetres.")
     height_mm: float = Field(70.0, gt=0.0, description="Figure height in millimetres.")
     dpi: int = Field(300, ge=72, description="Output resolution in dots per inch.")

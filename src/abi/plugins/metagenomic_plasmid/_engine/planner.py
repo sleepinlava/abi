@@ -453,7 +453,7 @@ def _hybrid_abundance_steps(
 
 
 def _abundance_source_for_mapper(tool_id: str) -> str:
-    if tool_id in {"bowtie2", "bwa"}:
+    if tool_id == "bowtie2":
         return "short"
     if tool_id in {"minimap2"}:
         return "long"
@@ -609,8 +609,6 @@ def _post_qc_input_params(
     if qc_enabled and sample.has_long_reads:
         if "filtlong" in qc_tools:
             params["long_reads"] = str(outdir / f"{sample.sample_id}.filtlong.fastq")
-        elif "fastplong" in qc_tools:
-            params["long_reads"] = str(outdir / f"{sample.sample_id}.long.clean.fastq.gz")
         elif "hifiadapterfilt" in qc_tools:
             params["long_reads"] = str(outdir / f"{sample.sample_id}.hifiadapterfilt.fastq.gz")
     return params
@@ -1264,6 +1262,7 @@ def _dag_step_for_node(
 
     # Embed the step contract from the DAG spec
     step_params["_contract"] = {
+        "inputs": node.get("inputs", {}),
         "outputs": node.get("outputs", {}),
         "assertions": node.get("assertions", []),
         "node_id": node_id,
@@ -1278,6 +1277,7 @@ def _dag_step_for_node(
         inputs=resolved_inputs,
         outputs=outputs,
         params=step_params,
+        reason=f"active DAG node {node_id!r} for platform {platform!r}",
     )
 
 
@@ -1332,6 +1332,12 @@ def _dag_project_step(
     step_params = dict(params)
     step_params.update(resolved_inputs)
     step_params["output_dir"] = str(outdir)
+    step_params["_contract"] = {
+        "inputs": node.get("inputs", {}),
+        "outputs": node.get("outputs", {}),
+        "assertions": node.get("assertions", []),
+        "node_id": node_id,
+    }
 
     return PlanStep(
         step_id=node_id,
@@ -1342,4 +1348,5 @@ def _dag_project_step(
         inputs=resolved_inputs,
         outputs=outputs,
         params=step_params,
+        reason=f"active cross-sample DAG node {node_id!r}",
     )

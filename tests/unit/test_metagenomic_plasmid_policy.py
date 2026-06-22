@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+from abi.plugins import get_plugin
 from abi.plugins.metagenomic_plasmid._engine.config import load_config
 from abi.plugins.metagenomic_plasmid._engine.pipeline import _terminal_overlap_length
 from abi.plugins.metagenomic_plasmid._engine.planner import build_plan_from_dag
@@ -343,7 +344,18 @@ def test_required_database_manifest_entries_are_registered(tmp_path):
         "metaphlan",
         "card",
         "amrfinderplus",
+        "eggnog_mapper",
+        "abricate",
     } <= resource_ids
+
+
+def test_standard_tables_yaml_is_runtime_schema_source_of_truth():
+    plugin = get_plugin("metagenomic_plasmid")
+    declared = yaml.safe_load((plugin.root / "standard_tables.yaml").read_text(encoding="utf-8"))[
+        "tables"
+    ]
+
+    assert plugin.table_schemas() == declared
 
 
 def test_dag_encodes_hard_tool_policy():

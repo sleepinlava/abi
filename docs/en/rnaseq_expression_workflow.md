@@ -144,6 +144,6 @@ load_config()  →  build_plan()  →  run (ExternalExecutor)
 
 `parse_outputs(tool_id, output_dir, sample_id)` dispatches:
 - `fastp` → `_parse_fastp()` → `qc_summary`
-- `star` / `hisat2` → `_parse_star()` → `alignment_summary`
+- `star` → `_parse_star()` → `alignment_summary`
 - `featurecounts` → `_parse_featurecounts()` → `gene_expression`
 - `deseq2` → `_parse_deseq2()` + `_parse_deseq2_normalized()` → `differential_expression` + `normalized_expression`

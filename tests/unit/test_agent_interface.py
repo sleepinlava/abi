@@ -116,3 +116,29 @@ def test_agent_interface_dispatch_accepts_cli_style_tool_aliases():
     assert doctor["command"] == "doctor_agent"
     assert list_types["status"] == "success"
     assert list_types["command"] == "list_types"
+
+
+def test_agent_dispatch_enforces_execution_permission_before_handler(monkeypatch):
+    agent = ABIAgentInterface()
+
+    def unexpected_run(**kwargs):
+        raise AssertionError(f"run handler should not be called: {kwargs}")
+
+    monkeypatch.setattr(agent, "run", unexpected_run)
+    payload = json.loads(agent.dispatch("run", {"analysis_type": "metatranscriptomics"}))
+
+    assert payload["status"] == "confirmation_required"
+    assert payload["result"]["tool"] == "abi_run"
+
+
+def test_agent_install_skills_is_dispatchable(tmp_path):
+    payload = json.loads(
+        ABIAgentInterface().dispatch(
+            "abi_install_skills",
+            {"target": str(tmp_path / "skills")},
+        )
+    )
+
+    assert payload["status"] == "success"
+    assert payload["command"] == "install_skills"
+    assert (tmp_path / "skills" / "README.md").is_file()

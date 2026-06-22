@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 
+from abi.contracts.step_contract import ContractViolation, ContractViolationError
 from abi.diagnostics import (
     ERROR_CODES,
     DiagnosticHint,
@@ -61,6 +62,7 @@ class TestErrorCodes:
         assert "internal_error" in ERROR_CODES
         assert "invalid_config" in ERROR_CODES
         assert "permission_required" in ERROR_CODES
+        assert "contract_violation" in ERROR_CODES
 
 
 class TestClassifyException:
@@ -108,3 +110,17 @@ class TestClassifyException:
         exc = RuntimeError("Execution requires explicit confirmation")
         code, hints = self._classify(exc)
         assert code in ("permission_required", "internal_error")
+
+    def test_contract_violation_classified(self):
+        exc = ContractViolationError(
+            "step_1",
+            [ContractViolation(check="file_exists", detail="missing output", path="out.bam")],
+        )
+        code, hints = self._classify(exc)
+        assert code == "contract_violation"
+        assert hints[0]["code"] == "contract_violation"
+
+    def test_extracts_common_bioinformatics_path_extensions(self):
+        exc = FileNotFoundError("Input does not exist: reads.fastq")
+        _, hints = self._classify(exc)
+        assert hints[0]["artifact"] == "reads.fastq"

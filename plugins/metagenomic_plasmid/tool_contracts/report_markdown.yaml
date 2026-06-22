@@ -26,4 +26,4 @@ failure_handling:
 resources:
   cpu: 1
   memory: 2GB
-  walltime: 00:30:00
+  walltime: "00:30:00"

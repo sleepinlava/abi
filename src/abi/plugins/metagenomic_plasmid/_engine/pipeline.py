@@ -9,8 +9,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping
 
-logger = logging.getLogger(__name__)
-
 from abi._shared import _display_command
 from abi.errors import ToolError as ABIToolError
 from abi.executor import GenericABIExecutor
@@ -54,6 +52,8 @@ from abi.provenance import (
     write_tool_versions,
 )
 
+logger = logging.getLogger(__name__)
+
 PLASMID_DETECTION_DIR = "04_plasmid_detection"
 
 
@@ -89,7 +89,10 @@ class PipelineExecutor:
         self, plan: ExecutionPlan, config: Mapping[str, Any], *, dry_run: bool
     ) -> Dict[str, Path]:
         outdir = ensure_directory(plan.outdir, label="Output directory")
-        provenance = ensure_directory(outdir / "provenance", label="Provenance directory")
+        provenance = ensure_directory(
+            plan.provenance_dir or outdir / "provenance",
+            label="Provenance directory",
+        )
         reset_run_provenance(provenance)
         tables_dir = ensure_directory(outdir / "tables", label="Standard tables directory")
         ensure_standard_tables(tables_dir)

@@ -25,7 +25,6 @@ import yaml
 from abi.sciplot.lint import LintReport
 from abi.sciplot.lint import lint_figure as _run_lint
 from abi.sciplot.renderers import RenderResult
-from abi.sciplot.renderers.matplotlib_renderer import MatplotlibRenderer
 from abi.sciplot.schema.figure_spec import FigureSpec
 
 
@@ -96,6 +95,11 @@ def render_figure(spec: FigureSpec) -> RenderResult:
     Returns:
         RenderResult with output_files, lint_report_path, provenance_path.
     """
+    # Keep ``import abi.sciplot`` usable in planning-only environments that do
+    # not install NumPy/pandas/matplotlib.  Rendering loads the heavy backend
+    # only at the point where those dependencies are actually required.
+    from abi.sciplot.renderers.matplotlib_renderer import MatplotlibRenderer
+
     renderer = MatplotlibRenderer()
     return renderer.render(spec)
 

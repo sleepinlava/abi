@@ -51,7 +51,7 @@ nodes:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Alignment ───────────────────────────────────────────────────────
   alignment_star:
@@ -71,13 +71,13 @@ nodes:
       bam:
         type: file
         format: bam
-        contract: {min_size: "1KB"}
+        contract: {min_size: "1B"}
         path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.Aligned.sortedByCoord.out.bam"
       output_dir:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Quantification ──────────────────────────────────────────────────
   quant_featurecounts:
@@ -100,7 +100,7 @@ nodes:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Count Matrix Assembly ────────────────────────────────────────────
   build_matrix:
@@ -131,7 +131,7 @@ nodes:
         type: directory
         path: "{outdir}/04_differential_expression"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Differential Expression ─────────────────────────────────────────
   de_deseq2:
@@ -141,6 +141,9 @@ nodes:
     scope: cross_sample
     optional: false
     depends_on: [build_matrix]
+    config_params:
+      comparison: differential_expression.comparison
+      alpha: differential_expression.alpha
     inputs:
       count_matrix:     {type: file, format: tsv, source: build_matrix.count_matrix}
       sample_metadata:  {type: file, format: tsv, source: build_matrix.sample_metadata}
@@ -155,4 +158,4 @@ nodes:
         type: directory
         path: "{outdir}/04_differential_expression"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"

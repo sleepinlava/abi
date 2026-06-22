@@ -64,6 +64,18 @@ def test_builtin_plugins_satisfy_machine_contracts():
         assert_plugin_contract(get_plugin(plugin_id))
 
 
+def test_inline_plugins_implement_dry_run_protocol():
+    from abi.interfaces import ABIDryRunPlugin
+
+    for plugin_id in (
+        "metatranscriptomics",
+        "rnaseq_expression",
+        "wgs_bacteria",
+        "amplicon_16s",
+    ):
+        assert isinstance(get_plugin(plugin_id), ABIDryRunPlugin)
+
+
 def test_metagenomic_plasmid_uses_plugin_local_registry():
     plugin = get_plugin("metagenomic_plasmid")
 

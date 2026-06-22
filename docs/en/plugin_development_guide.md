@@ -97,6 +97,20 @@ Supported output checks include:
 - `required_keys`: required top-level keys for JSON outputs.
 - `schema`: dotted JSON fields with simple type/range constraints.
 
+Checks must be nested under the output's `contract` key; placing `min_size`
+or other checks directly beside `type` is invalid and will not be enforced:
+
+```yaml
+outputs:
+  clean_read1:
+    type: file
+    format: fastq.gz
+    path: "{outdir}/{sample_id}.clean.fastq.gz"
+    contract:
+      min_size: "1KB"
+      extensions: [".fastq.gz"]
+```
+
 Assertions are evaluated after output validation against `output_files`,
 `output_json`, and `return_code`. Example:
 
@@ -246,7 +260,7 @@ three areas: contract compliance, registry loading, and plan generation.
 ```python
 import pytest
 from abi.testing import assert_plugin_contract
-from abi.plugins.my_analysis import MyPlugin
+from your_package.plugin import MyPlugin  # your installed plugin entry point
 
 
 def test_plugin_contract():
@@ -259,9 +273,10 @@ def test_registry_loads():
     """Tool registry YAML parses without error."""
     plugin = MyPlugin()
     registry = plugin.registry()
-    assert len(registry.tools) > 0
+    tools = registry.list_tools()
+    assert len(tools) > 0
     # Verify expected tools are registered
-    tool_ids = [t.tool_id for t in registry.tools]
+    tool_ids = [t["id"] for t in tools]
     assert "fastp" in tool_ids
 
 

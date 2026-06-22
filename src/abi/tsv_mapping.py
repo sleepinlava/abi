@@ -9,8 +9,8 @@ Design
 ~~~~~~
 - **TSVMapper**: loads a ``parsers.yaml`` spec and dispatches ``parse()`` calls.
 - **generate_rows()**: low-level function that executes one parser spec.
-- Extensible via ``source.type`` — currently supports ``"tsv_mapping"``;
-  ``"json_mapping"`` and ``"fasta_count"`` can be added later.
+- Extensible via ``source.type`` — supports ``tsv_mapping``, ``json_mapping``,
+  ``key_value_log``, and ``fasta_count``.
 
 Schema (``parsers.yaml``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -40,6 +40,7 @@ Usage::
 from __future__ import annotations
 
 import csv
+import gzip
 import logging
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence
@@ -163,6 +164,8 @@ def generate_rows(
         return _parse_json_mapping(spec, output_dir, sample_id)
     if source_type == "key_value_log":
         return _parse_key_value_log(spec, output_dir, sample_id)
+    if source_type == "fasta_count":
+        return _parse_fasta_count(spec, output_dir, sample_id)
     _logger.warning("Unknown parser source type: %s", source_type)
     return []
 
@@ -279,7 +282,7 @@ def _map_row(
                 if src_str in csv_row:
                     value = csv_row[src_str]
                     break
-            result[target_key] = value
+            result[target_key] = _coerce_value(value, col_spec.get("type"))
             continue
 
         # Option 2: Positional column index (1-based) / 位置索引（从1开始）
@@ -287,21 +290,51 @@ def _map_row(
         if sources_from == "last_column":
             if fieldnames:
                 last_col = fieldnames[-1]
-                result[target_key] = csv_row.get(last_col, default)
+                result[target_key] = _coerce_value(
+                    csv_row.get(last_col, default), col_spec.get("type")
+                )
             else:
-                result[target_key] = default
+                result[target_key] = _coerce_value(default, col_spec.get("type"))
         elif sources_from == "column_index":
             index = int(col_spec.get("index", 1))
             if 1 <= index <= len(fieldnames):
                 col_name = fieldnames[index - 1]
-                result[target_key] = csv_row.get(col_name, default)
+                result[target_key] = _coerce_value(
+                    csv_row.get(col_name, default), col_spec.get("type")
+                )
             else:
-                result[target_key] = default
+                result[target_key] = _coerce_value(default, col_spec.get("type"))
         else:
             # No source declared — use default or look up by target key name
-            result[target_key] = csv_row.get(target_key, default)
+            result[target_key] = _coerce_value(
+                csv_row.get(target_key, default), col_spec.get("type")
+            )
 
     return result
+
+
+def _coerce_value(value: Any, value_type: Any) -> Any:
+    """Apply an optional declarative scalar type without guessing."""
+    if value_type is None or str(value_type) == "string":
+        return value
+    normalized = str(value_type).lower()
+    if value in (None, ""):
+        return value
+    try:
+        if normalized in {"integer", "int"}:
+            return int(str(value))
+        if normalized in {"number", "float"}:
+            return float(str(value))
+        if normalized in {"boolean", "bool"}:
+            token = str(value).strip().lower()
+            if token in {"true", "1", "yes", "y"}:
+                return True
+            if token in {"false", "0", "no", "n"}:
+                return False
+            raise ValueError(f"invalid boolean token: {value!r}")
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Cannot coerce {value!r} to {normalized}") from exc
+    raise ValueError(f"Unsupported TSV column type: {value_type!r}")
 
 
 # ── JSON mapping implementation ──────────────────────────────────────────
@@ -443,4 +476,47 @@ def _parse_key_value_log(
             _logger.warning("Failed to parse %s: %s", path, exc)
             continue
 
+    return rows
+
+
+def _parse_fasta_count(
+    spec: Mapping[str, Any],
+    output_dir: Path,
+    sample_id: str,
+) -> List[Dict[str, Any]]:
+    """Count records and bases in matching FASTA files.
+
+    ``source.count_field`` and ``source.total_length_field`` customize output
+    column names; defaults are ``sequence_count`` and ``total_length``.
+    """
+    source = spec.get("source", {})
+    pattern = str(source.get("pattern", "*.fasta"))
+    count_field = str(source.get("count_field", "sequence_count"))
+    length_field = str(source.get("total_length_field", "total_length"))
+    constants = spec.get("constants")
+    constant_values = dict(constants) if isinstance(constants, Mapping) else {}
+    rows: List[Dict[str, Any]] = []
+
+    for path in sorted(output_dir.glob(pattern)):
+        opener = gzip.open if path.suffix == ".gz" else open
+        count = 0
+        total_length = 0
+        try:
+            with opener(path, "rt", encoding="utf-8") as handle:
+                for line in handle:
+                    if line.startswith(">"):
+                        count += 1
+                    elif line.strip():
+                        total_length += len(line.strip())
+        except (OSError, UnicodeDecodeError) as exc:
+            _logger.warning("Failed to count FASTA %s: %s", path, exc)
+            continue
+        row: Dict[str, Any] = {
+            "sample_id": sample_id,
+            count_field: count,
+            length_field: total_length,
+            "source_file": str(path),
+        }
+        row.update(constant_values)
+        rows.append(row)
     return rows

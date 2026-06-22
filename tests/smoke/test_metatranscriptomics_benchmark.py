@@ -33,8 +33,8 @@ def _tool_which(executable: str) -> str | None:
 
 
 requires_meta_tools = pytest.mark.skipif(
-    not (_tool_which("fastp") and (_tool_which("STAR") or _tool_which("hisat2"))),
-    reason="metatranscriptomics tools (fastp, STAR/hisat2) not found",
+    not (_tool_which("fastp") and _tool_which("STAR")),
+    reason="metatranscriptomics tools (fastp, STAR) not found",
 )
 
 

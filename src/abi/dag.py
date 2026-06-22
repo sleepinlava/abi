@@ -62,6 +62,7 @@ def infer_dag(
     project_root: str | Path | None = None,
     sequential_fallback: bool = False,
     workflow_spec: WorkflowSpec | None = None,
+    strict_workflow: bool = False,
 ) -> ABIDAG:
     """Infer a DAG with L1 (literature) / L2 (path) / L3 (validation).
 
@@ -88,6 +89,9 @@ def infer_dag(
 
         Edges from L1 take priority; L2 supplements edges for steps
         that are not covered by the workflow declaration.
+    strict_workflow:
+        Raise ``ABIError`` on L1/L2 mismatches instead of only logging them.
+        Intended for CI and plugin validation.
     """
     root = Path(project_root or PROJECT_ROOT).resolve()
     step_list = [step for step in steps if not getattr(step, "skipped", False)]
@@ -109,7 +113,7 @@ def infer_dag(
             if not normalized:
                 continue
             produced[str(key)] = normalized
-            if _is_shared_output_path(str(key), normalized):
+            if _is_shared_output_path(step, str(key), normalized):
                 continue
             if normalized in output_map:
                 previous_step, previous_key = output_map[normalized]
@@ -127,13 +131,20 @@ def infer_dag(
         dependencies: List[str] = []
         consumed: Dict[str, str] = {}
         for key, value in getattr(step, "inputs", {}).items():
-            normalized = _normalize_path(value, root)
-            if not normalized:
-                continue
-            consumed[str(key)] = normalized
-            producer = output_map.get(normalized)
-            if producer and producer[0] != step_id and producer[0] not in dependencies:
-                dependencies.append(producer[0])
+            for item_key, normalized in _normalized_input_paths(str(key), value, root):
+                consumed[item_key] = normalized
+                producer = output_map.get(normalized)
+                if producer and producer[0] != step_id and producer[0] not in dependencies:
+                    dependencies.append(producer[0])
+                elif _input_is_directory(step, str(key)):
+                    input_dir = Path(normalized)
+                    for output_path, (producer_id, _producer_key) in output_map.items():
+                        try:
+                            Path(output_path).relative_to(input_dir)
+                        except ValueError:
+                            continue
+                        if producer_id != step_id and producer_id not in dependencies:
+                            dependencies.append(producer_id)
         if sequential_fallback and not dependencies and previous_step_id:
             dependencies.append(previous_step_id)
         inferred_edges[step_id] = dependencies
@@ -141,7 +152,7 @@ def infer_dag(
 
     # ── L3: Cross-validation (only when workflow_spec is provided) ──────────
     if workflow_spec is not None:
-        _cross_validate_edges(declared_edges, inferred_edges)
+        _cross_validate_edges(declared_edges, inferred_edges, strict=strict_workflow)
 
     # ── Merge: L1 (declared) priority, L2 (inferred) supplement ────────────
     merged_edges: Dict[str, List[str]] = {str(s.step_id): [] for s in step_list}
@@ -164,9 +175,8 @@ def infer_dag(
         step_id = str(step.step_id)
         consumed_paths: Dict[str, str] = {}
         for key, value in getattr(step, "inputs", {}).items():
-            normalized = _normalize_path(value, root)
-            if normalized:
-                consumed_paths[str(key)] = normalized
+            for item_key, normalized in _normalized_input_paths(str(key), value, root):
+                consumed_paths[item_key] = normalized
         bindings.append(
             StepBinding(
                 step=step,
@@ -191,14 +201,14 @@ def _resolve_declared_edges(
     Returns a dict ``{plan_step_id: [dependency_plan_step_ids]}`` built
     from the workflow's ``after`` declarations.
     """
-    # Build tool_id → plan step_id mapping (last occurrence wins for
-    # duplicate tools — this matches real pipelines where the same tool
-    # may appear multiple times but we want the latest binding).
-    tool_to_plan: Dict[str, str] = {}
+    # Preserve every occurrence.  A tool commonly appears once per sample;
+    # binding through a single tool_id would otherwise connect all samples to
+    # whichever occurrence happened to be listed last.
+    tool_to_plan: Dict[str, List[Any]] = {}
     for step in step_list:
         tool_id = str(getattr(step, "tool_id", ""))
         if tool_id:
-            tool_to_plan[tool_id] = str(step.step_id)
+            tool_to_plan.setdefault(tool_id, []).append(step)
 
     # Build workflow_step_id → workflow_step mapping
     wf_by_id: Dict[str, Any] = {s.id: s for s in workflow_spec.steps}
@@ -211,20 +221,31 @@ def _resolve_declared_edges(
 
     declared: Dict[str, List[str]] = {}
     for wf_step in workflow_spec.steps:
-        plan_step_id = tool_to_plan.get(wf_step.tool)
-        if plan_step_id is None:
+        plan_steps = tool_to_plan.get(wf_step.tool, [])
+        if not plan_steps:
             # Workflow step references a tool not in the current plan;
             # this is normal — the tool may be in an optional path.
             continue
-        deps: List[str] = []
-        for after_id in wf_step.after:
-            dep_step = wf_by_id.get(after_id)
-            if dep_step is None:
-                continue
-            dep_plan_id = tool_to_plan.get(dep_step.tool)
-            if dep_plan_id is not None and dep_plan_id != plan_step_id:
-                deps.append(dep_plan_id)
-        declared[plan_step_id] = deps
+        for plan_step in plan_steps:
+            plan_step_id = str(plan_step.step_id)
+            sample_id = getattr(plan_step, "sample_id", None)
+            deps: List[str] = []
+            for after_id in wf_step.after:
+                dep_step = wf_by_id.get(after_id)
+                if dep_step is None:
+                    continue
+                candidates = list(tool_to_plan.get(dep_step.tool, []))
+                if sample_id is not None:
+                    candidates = [
+                        candidate
+                        for candidate in candidates
+                        if getattr(candidate, "sample_id", None) in {sample_id, None}
+                    ]
+                for candidate in candidates:
+                    dep_plan_id = str(candidate.step_id)
+                    if dep_plan_id != plan_step_id and dep_plan_id not in deps:
+                        deps.append(dep_plan_id)
+            declared[plan_step_id] = deps
 
     return declared
 
@@ -232,6 +253,8 @@ def _resolve_declared_edges(
 def _cross_validate_edges(
     declared: Dict[str, List[str]],
     inferred: Dict[str, List[str]],
+    *,
+    strict: bool = False,
 ) -> None:
     """L3: emit WARNING when declared and inferred edges disagree.
 
@@ -241,6 +264,7 @@ def _cross_validate_edges(
     but absent from *declared* suggests a path-level dependency that the
     workflow declaration may have omitted — possibly a genuine gap.
     """
+    mismatch_messages: List[str] = []
     all_steps = set(declared) | set(inferred)
     for step_id in sorted(all_steps):
         declared_deps = set(declared.get(step_id, []))
@@ -254,7 +278,11 @@ def _cross_validate_edges(
             parts.append(f"declared-but-not-inferred={sorted(only_declared)}")
         if only_inferred:
             parts.append(f"inferred-but-not-declared={sorted(only_inferred)}")
-        logger.warning(" ".join(parts))
+        message = " ".join(parts)
+        mismatch_messages.append(message)
+        logger.warning(message)
+    if strict and mismatch_messages:
+        raise ABIError("; ".join(mismatch_messages))
 
 
 def process_name(step_id: str) -> str:
@@ -273,18 +301,52 @@ def _normalize_path(value: Any, project_root: Path) -> str:
     if not isinstance(value, (str, Path)):
         return ""
     text = str(value)
-    if "NOT_CONFIGURED" in text:
-        return ""
     path = Path(text)
     if not path.is_absolute():
         path = project_root / path
     return str(path)
 
 
-def _is_shared_output_path(key: str, normalized_path: str) -> bool:
+def _input_is_directory(step: Any, key: str) -> bool:
+    """Return whether a consumed input is declared as a directory."""
+    contract = getattr(step, "params", {}).get("_contract", {})
+    if not isinstance(contract, Mapping):
+        return False
+    input_specs = contract.get("inputs", {})
+    if not isinstance(input_specs, Mapping):
+        return False
+    spec = input_specs.get(key, {})
+    return isinstance(spec, Mapping) and str(spec.get("type", "")) == "directory"
+
+
+def _normalized_input_paths(key: str, value: Any, project_root: Path) -> List[tuple[str, str]]:
+    """Normalize scalar or list-valued inputs without dropping aggregation edges."""
+    values = value if isinstance(value, (list, tuple, set)) else [value]
+    normalized: List[tuple[str, str]] = []
+    for index, item in enumerate(values):
+        path = _normalize_path(item, project_root)
+        if path:
+            item_key = key if len(values) == 1 else f"{key}[{index}]"
+            normalized.append((item_key, path))
+    return normalized
+
+
+def _is_shared_output_path(step: Any, key: str, normalized_path: str) -> bool:
+    contract = getattr(step, "params", {}).get("_contract", {})
+    if isinstance(contract, Mapping):
+        output_specs = contract.get("outputs", {})
+        spec = output_specs.get(key, {}) if isinstance(output_specs, Mapping) else {}
+        if isinstance(spec, Mapping):
+            declared_type = str(spec.get("type", ""))
+            if declared_type == "directory":
+                return True
+            if declared_type == "file":
+                return False
     if key in {"output_dir", "outdir", "work_dir", "report_dir", "tables_dir"}:
         return True
     path = Path(normalized_path)
+    if path.exists():
+        return path.is_dir()
     if not path.suffix:
         # Extensionless paths may be directories OR files like README/Makefile.
         # Only treat as shared-output dir if the name suggests a directory.

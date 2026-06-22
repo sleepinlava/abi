@@ -130,3 +130,23 @@ def test_build_assertion_context_keeps_multiple_json_outputs_keyed(tmp_path):
 
     assert context["output_json"]["json_report"] == {"kind": "report"}
     assert context["output_json"]["metrics_json"] == {"kind": "metrics"}
+
+
+def test_params_for_step_injects_configured_tool_timeout():
+    executor = GenericABIExecutor.__new__(GenericABIExecutor)
+    executor._tool_timeout_seconds = 123
+    step = SimpleNamespace(inputs={}, params={}, outputs={})
+
+    params = executor._params_for_step(step, dry_run=False)
+
+    assert params["timeout_seconds"] == 123
+
+
+def test_step_timeout_overrides_executor_default():
+    executor = GenericABIExecutor.__new__(GenericABIExecutor)
+    executor._tool_timeout_seconds = 123
+    step = SimpleNamespace(inputs={}, params={"timeout_seconds": 5}, outputs={})
+
+    params = executor._params_for_step(step, dry_run=False)
+
+    assert params["timeout_seconds"] == 5

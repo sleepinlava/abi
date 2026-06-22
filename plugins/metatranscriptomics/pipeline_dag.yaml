@@ -48,7 +48,7 @@ nodes:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Alignment ───────────────────────────────────────────────────────
   alignment_star:
@@ -74,7 +74,7 @@ nodes:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Quantification ──────────────────────────────────────────────────
   quant_featurecounts:
@@ -97,4 +97,4 @@ nodes:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"

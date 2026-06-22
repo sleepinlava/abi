@@ -203,6 +203,31 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
         "read_only": True,
         "permission": "read_only",
     },
+    "abi_install_skills": {
+        "description": "Install bundled ABI agent skills and their README documentation.",
+        "properties": {
+            "target": _string("Optional destination directory."),
+            "force": _boolean("Overwrite existing skill files."),
+        },
+        "required": [],
+        "read_only": False,
+        "permission": "planning_write",
+    },
+    "abi_query": {
+        "description": "Query lightweight plugin DAG and tool metadata without building a plan.",
+        "properties": {
+            "analysis_type": _string("ABI analysis type."),
+            "what": {
+                "type": "string",
+                "enum": ["stages", "tools", "platforms", "resources", "inputs", "outputs"],
+                "description": "Metadata target to query.",
+            },
+            "step": _string("Tool or DAG step ID required by resource/input/output queries."),
+        },
+        "required": ["analysis_type", "what"],
+        "read_only": True,
+        "permission": "read_only",
+    },
     "abi_run": {
         "description": "Execute an ABI analysis through a runtime backend after explicit approval.",
         "properties": {
@@ -242,6 +267,19 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
     },
     "abi_validate_result": {
         "description": "Validate an ABI result directory without modifying it.",
+        "properties": {
+            "result_dir": _string("ABI result directory."),
+            "allow_empty_tables": {
+                "type": "boolean",
+                "description": "Allow standard tables with headers and zero data rows.",
+            },
+        },
+        "required": ["result_dir"],
+        "read_only": True,
+        "permission": "read_only",
+    },
+    "abi_autoplasm_validate_result": {
+        "description": "Validate a metagenomic-plasmid result directory (legacy public alias).",
         "properties": {
             "result_dir": _string("ABI result directory."),
             "allow_empty_tables": {
@@ -293,12 +331,17 @@ TOOL_ALIASES: Dict[str, str] = {
     "doctor_agent": "doctor_agent",
     "doctor-agent": "doctor_agent",
     "abi_doctor_agent": "doctor_agent",
+    "install-skills": "install_skills",
+    "install_skills": "install_skills",
+    "abi_install_skills": "install_skills",
     "query": "query",
     "abi_query": "query",
     "validate_result": "abi_validate_result",
     "validate-result": "abi_validate_result",
     "abi_validate_result": "abi_validate_result",
+    "abi_autoplasm_validate_result": "autoplasm_validate_result",
     "autoplasm_validate_result": "autoplasm_validate_result",
+    "autoplasm-validate-result": "autoplasm_validate_result",
 }
 
 

@@ -28,7 +28,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Mapping, Sequence
 
-__all__ = ["load_limitations", "format_limitations_markdown"]
+__all__ = ["format_limitations_html", "format_limitations_markdown", "load_limitations"]
 
 
 def load_limitations(

@@ -82,7 +82,7 @@ def plot_heatmap(
         row_ids = [row_ids[i] for i in top_idx]
 
     # Colour map
-    cmap_name = palette.get_continuous(spec.style.palette)
+    cmap_name = palette.get_matplotlib_colormap(spec.style.palette)
     im = ax.imshow(matrix, aspect="auto", cmap=cmap_name, interpolation="nearest")
 
     # Labels

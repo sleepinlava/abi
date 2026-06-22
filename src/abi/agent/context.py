@@ -60,6 +60,8 @@ IMPORTANT_ARTIFACTS = [
     "provenance/tool_versions.tsv",
     "provenance/checksums.json",
     "provenance/resources.json",
+    "provenance/resource_manifest.json",
+    "provenance/methods.md",
     "provenance/progress.jsonl",
     "tables/*.tsv",
     "report/report.md",

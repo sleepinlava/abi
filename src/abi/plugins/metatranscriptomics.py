@@ -15,10 +15,8 @@ Tool chain / 工具链
 ~~~~~~~~~~~~~~~~~~~
 ::
 
-   fastp ──→ STAR / HISAT2 ──→ featureCounts
+   fastp ──→ STAR ──→ featureCounts
    (QC)       (alignment)      (quantification)
-
-The aligner is configurable via ``config.alignment.tool`` (default: ``star``).
 
 Standard table / 标准表格
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -56,11 +54,17 @@ implementation.
 
 from __future__ import annotations
 
-import csv
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from abi._shared import _clean, _offline_sample_context, _parse_fastp, _parse_star, _resolve_path
+from abi._shared import (
+    _execute_generic_dry_run,
+    _offline_sample_context,
+    _parse_fastp,
+    _parse_sample_sheet_tabular,
+    _parse_star,
+    _resolve_path,
+)
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
 from abi.report import write_plugin_report
 from abi.schemas import ABIExecutionPlan, ABISample, ABISampleContext
@@ -208,12 +212,15 @@ class MetatranscriptomicsPlugin:
         """Return the tool registry loaded from ``tool_registry.yaml``.
 
         Contains command templates and container images for fastp, STAR,
-        HISAT2, and featureCounts.
+        and featureCounts.
 
         返回从 ``tool_registry.yaml`` 加载的工具注册表，包含 fastp、STAR、
-        HISAT2 和 featureCounts 的命令模板及容器镜像。
+        featureCounts 的命令模板及容器镜像。
         """
         return ToolRegistry.from_path(self.root / "tool_registry.yaml")
+
+    def execute_dry_run(self, plan: Any, config: Mapping[str, Any]) -> Dict[str, Path]:
+        return _execute_generic_dry_run(self, plan, config)
 
     # ── Standard tables / 标准表格 ───────────────────────────────────────
 
@@ -249,7 +256,7 @@ class MetatranscriptomicsPlugin:
         # Fall back to hand-written parsers
         if tool_id == "fastp":
             return {"qc_summary": _parse_fastp(Path(output_dir), sample_id)}
-        if tool_id in ("star", "hisat2"):
+        if tool_id == "star":
             return {"alignment_summary": _parse_star(Path(output_dir), sample_id)}
         # featurecounts is handled by TSVMapper above
         return {}
@@ -315,53 +322,22 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
         if check_files:
             raise ValueError(f"Sample sheet does not exist: {sample_sheet}")
         return _offline_sample_context()
-    with sample_sheet.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        if reader.fieldnames is None:
-            raise ValueError(f"Sample sheet is empty: {sample_sheet}")
-        columns = set(reader.fieldnames)
-        required = {"sample_id", "read1", "read2"}
-        missing = required - columns
-        if missing:
-            raise ValueError(f"Sample sheet missing required columns: {sorted(missing)}")
-        samples = []
-        # start=2 so error messages reference the correct spreadsheet row
-        # start=2 使错误信息引用正确的电子表格行号
-        for index, row in enumerate(reader, start=2):
-            sample_id = _clean(row.get("sample_id"))
-            read1 = _clean(row.get("read1"))
-            read2 = _clean(row.get("read2"))
-            if not sample_id or not read1 or not read2:
-                raise ValueError(f"Row {index}: sample_id, read1, and read2 are required")
-            # Resolve READ paths relative to the sample-sheet directory first, then PROJECT_ROOT /
-            # 先相对于样本表目录解析 READ 路径，再相对于 PROJECT_ROOT
-            read1 = str(_resolve_path(read1, base_dirs=[sample_sheet.parent, PROJECT_ROOT]))
-            read2 = str(_resolve_path(read2, base_dirs=[sample_sheet.parent, PROJECT_ROOT]))
-            samples.append(
-                ABISample(
-                    sample_id=sample_id,
-                    platform=_clean(row.get("platform")) or "illumina",
-                    # group falls back to condition for DE-tool compatibility
-                    # group 回退到 condition 以兼容差异表达工具
-                    group=_clean(row.get("group")) or _clean(row.get("condition")),
-                    read1=read1,
-                    read2=read2,
-                    condition=_clean(row.get("condition")),
-                )
-            )
-    if not samples:
-        raise ValueError("Sample sheet contains no sample rows")
-    # Upfront file-existence check: fail with all missing paths at once
-    # 预先检查文件存在性：一次性报告所有缺失的路径
-    if check_files:
-        missing_files = []
-        for sample in samples:
-            for field in ("read1", "read2"):
-                value = getattr(sample, field)
-                if value and not Path(str(value)).exists():
-                    missing_files.append(f"{sample.sample_id}:{field}={value}")
-        if missing_files:
-            raise ValueError("Input files do not exist: " + "; ".join(missing_files))
+    rows = _parse_sample_sheet_tabular(
+        sample_sheet,
+        check_files=check_files,
+        base_dirs=[PROJECT_ROOT],
+    )
+    samples = [
+        ABISample(
+            sample_id=str(row["sample_id"]),
+            platform=str(row.get("platform") or "illumina"),
+            group=row.get("group") or row.get("condition"),
+            read1=str(row["read1"]),
+            read2=str(row["read2"]),
+            condition=row.get("condition"),
+        )
+        for row in rows
+    ]
     # Derive context flags from the parsed data / 从解析数据中导出上下文标志
     groups = {sample.group for sample in samples if sample.group}
     return ABISampleContext(

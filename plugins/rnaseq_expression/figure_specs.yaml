@@ -64,15 +64,6 @@ figures:
     top_n: 50
     required: false
 
-  - id: enrichment_dotplot
-    type: scatter
-    source_table: enrichment_results
-    x: term
-    y: enrichment_score
-    color: category
-    title: "Pathway Enrichment Results"
-    required: false
-
   - id: ma_plot
     type: scatter
     source_table: differential_expression

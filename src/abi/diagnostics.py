@@ -23,7 +23,7 @@ An agent that receives an error envelope can:
 
 # The error taxonomy / 错误分类体系
 
-ERROR_CODES is a frozen set of 14 stable error codes covering the full
+ERROR_CODES is a frozen set of stable error codes covering the full
 failure surface of ABI:
 
     unknown_analysis_type  — plugin ID not recognized
@@ -39,6 +39,7 @@ failure surface of ABI:
     parse_failed           — tool output could not be parsed into tables
     empty_result           — the pipeline produced no output
     artifact_missing       — a required result artifact is absent
+    contract_violation     — a step output/input contract failed
     internal_error         — unexpected/unclassified error at the ABI boundary
 
 # classify_exception data flow / classify_exception 数据流
@@ -95,6 +96,7 @@ ERROR_CODES = {
     "parse_failed",
     "empty_result",
     "artifact_missing",
+    "contract_violation",
     "internal_error",
 }
 
@@ -194,6 +196,16 @@ def classify_exception(exc: Exception, *, command: str) -> tuple[str, List[Dict[
             "runtime_not_supported",
             "The requested runtime backend is not supported.",
             "Use engine=local or engine=nextflow, or add a runtime backend before retrying.",
+        )
+    if error_type == "ContractViolationError" or "contract violated" in lowered:
+        return _diagnosis(
+            "contract_violation",
+            f"A pipeline step contract failed during {command}.",
+            (
+                "Inspect the reported contract checks and provenance/step_logs, "
+                "then correct or regenerate the failing input/output artifact."
+            ),
+            artifact=_extract_path(message),
         )
     if error_type == "ABIJSONError" or "invalid json" in lowered:
         # JSON deserialization failed — artifact is likely corrupted or malformed.
@@ -308,7 +320,7 @@ def classify_exception(exc: Exception, *, command: str) -> tuple[str, List[Dict[
     # 兜底: 没有匹配任何模式 — 这是未分类的内部错误。
     return _diagnosis(
         "internal_error",
-        "ABI hit an unexpected error at the agent boundary.",
+        f"ABI hit an unexpected error while running {command}.",
         "Inspect the error_type and message, then retry with a narrower command or report a bug.",
     )
 
@@ -397,6 +409,26 @@ def _extract_path(message: str) -> Optional[str]:
     for token in reversed(tokens):
         if not token:
             continue
-        if "/" in token or token.endswith((".yaml", ".yml", ".tsv", ".json", ".txt", ".fa")):
+        if "/" in token or token.lower().endswith(
+            (
+                ".yaml",
+                ".yml",
+                ".tsv",
+                ".json",
+                ".txt",
+                ".fa",
+                ".fasta",
+                ".fq",
+                ".fastq",
+                ".bam",
+                ".sam",
+                ".gff",
+                ".gff3",
+                ".gtf",
+                ".csv",
+                ".html",
+                ".pdf",
+            )
+        ):
             return str(Path(token))
     return None

@@ -34,10 +34,10 @@ Design principles / 设计原则
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from abi.errors import ABIError, ConfigError, SampleSheetError, ToolError
+from abi.filesystem import ensure_parent
 
 __all__ = [
     "ABIError",
@@ -55,6 +55,7 @@ __all__ = [
     "VALID_MODES",
     "VALID_PLATFORMS",
     "VALID_PLASMID_STRATEGIES",
+    "ensure_parent",
 ]
 
 # ── Validation sets / 校验集合 ──────────────────────────────────────────
@@ -458,9 +459,10 @@ class ExecutionPlan:
 
     provenance_dir: Optional[str] = None
     # Directory for storing provenance artifacts (plan snapshots, tool
-    # versions, output checksums). If None, provenance is disabled.
+    # versions, output checksums). If None, the executor uses
+    # ``<outdir>/provenance``.
     # 存储溯源制品（计划快照、工具版本、输出校验和）的目录。
-    # 若为 None，则溯源功能被禁用。
+    # 若为 None，执行器使用 ``<outdir>/provenance``。
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize the full execution plan for JSON round-tripping."""
@@ -493,25 +495,3 @@ ABISample = SampleInput
 ABISampleContext = SampleContext
 ABIPlanStep = PlanStep
 ABIExecutionPlan = ExecutionPlan
-
-
-# ── Utility / 工具函数 ──────────────────────────────────────────────────
-
-
-def ensure_parent(path: str | Path) -> Path:
-    """Ensure the parent directory of ``path`` exists, creating it if needed.
-
-    Idempotent -- safe to call multiple times on the same path. Returns the
-    resolved ``Path`` object so the caller can use it directly for I/O.
-
-    **Why it exists / 为何存在:**
-    Many tools write to ``<outdir>/<tool_id>/<sample_id>/output``. This
-    function avoids boilerplate ``mkdir -p`` calls scattered across plugins.
-    许多工具写入 <outdir>/<tool_id>/<sample_id>/output。此函数避免了
-    散落在各插件中的重复 mkdir -p 调用。
-
-    Idempotent / 幂等 -- 对同一路径多次调用是安全的。
-    """
-    resolved = Path(path)
-    resolved.parent.mkdir(parents=True, exist_ok=True)
-    return resolved

@@ -50,6 +50,7 @@ def test_mcp_server_exposes_agent_context_and_validation_tools(monkeypatch):
         "abi_export_nextflow",
         "abi_export_agent_context",
         "abi_doctor_agent",
+        "abi_install_skills",
         "abi_validate_result",
         "abi_run",
     } <= set(mcp.tools)

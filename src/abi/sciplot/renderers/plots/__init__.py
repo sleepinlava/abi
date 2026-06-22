@@ -30,6 +30,7 @@ from abi.sciplot.renderers.plots.boxplot_with_points import plot_boxplot_with_po
 from abi.sciplot.renderers.plots.differential_volcano import plot_differential_volcano
 from abi.sciplot.renderers.plots.genus_heatmap import plot_genus_heatmap
 from abi.sciplot.renderers.plots.heatmap import plot_heatmap
+from abi.sciplot.renderers.plots.lineplot import plot_lineplot
 from abi.sciplot.renderers.plots.ordination_plot import plot_ordination
 from abi.sciplot.renderers.plots.pcoa_plot import plot_pcoa_plot
 from abi.sciplot.renderers.plots.phylogenetic_heatmap import plot_phylogenetic_heatmap
@@ -48,6 +49,7 @@ PLOT_FUNCTIONS: Dict[str, Callable[..., None]] = {
     "stacked_barplot": plot_stacked_barplot,
     "heatmap": plot_heatmap,
     "volcano_plot": plot_volcano,
+    "lineplot": plot_lineplot,
     # Biological-grade plot types (v1.4.0)
     "phylum_stacked_bar": plot_phylum_stacked_bar,
     "genus_heatmap": plot_genus_heatmap,
@@ -67,6 +69,7 @@ __all__ = [
     "plot_stacked_barplot",
     "plot_heatmap",
     "plot_volcano",
+    "plot_lineplot",
     "plot_phylum_stacked_bar",
     "plot_genus_heatmap",
     "plot_pcoa_plot",

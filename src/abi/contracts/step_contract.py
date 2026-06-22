@@ -134,22 +134,12 @@ def load_checksums(
 
 
 def save_checksums(provenance_dir: str | Path, checksums: Dict[str, str]) -> Path:
-    """Persist the checksum map to the provenance directory.
+    """Persist the checksum map atomically.
 
-    Merges with any existing checksums (idempotent — later writes for the
-    same path overwrite earlier ones).
-
-    Prefer ``save_checksums_atomic()`` for production use; this function is
-    retained for backward compatibility.
+    Backward-compatible alias for :func:`save_checksums_atomic`; there is no
+    longer a public path that writes ``checksums.json`` non-atomically.
     """
-    existing = load_checksums(provenance_dir)
-    existing.update(checksums)
-    path = Path(provenance_dir) / CHECKSUMS_FILENAME
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as fh:
-        json.dump(existing, fh, indent=2, sort_keys=True, ensure_ascii=False)
-        fh.write("\n")
-    return path
+    return save_checksums_atomic(provenance_dir, checksums)
 
 
 def save_checksums_atomic(provenance_dir: str | Path, checksums: Dict[str, str]) -> Path:
@@ -659,6 +649,7 @@ def evaluate_assertions(
             # ``isclose`` for float-tolerant assertions (B13 fix):
             #   "isclose(output_json.summary.q20_rate, 0.95, rel_tol=0.01)"
             "isclose": _isclose_for_assertions,
+            "round": round,
         }
     )
 

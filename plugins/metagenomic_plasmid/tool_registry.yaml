@@ -51,15 +51,6 @@ tools:
   required: false
   command_template: multiqc {project_outdir}/01_qc --outdir {output_dir} --filename
     {multiqc_filename}
-- id: fastplong
-  name: fastplong
-  category: qc
-  executable: fastplong
-  default_enabled: false
-  required: true
-  command_template: fastplong --in1 {long_reads} --out1 {output_dir}/{sample_id}.long.clean.fastq.gz
-    --thread {threads}
-  limitations: Long-read QC wrapper retained from the original requirements.
 - id: nanoplot
   name: NanoPlot
   category: qc
@@ -507,53 +498,6 @@ tools:
   inputs:
   - host_plasmid_links
   limitations: Requires pyvis Python package; uses inline script for integration.
-- id: chopper
-  name: Chopper
-  category: qc
-  executable: chopper
-  default_enabled: false
-  required: false
-  command_template: chopper --threads {threads} --input {long_reads} > {output_dir}/{sample_id}.chopper.fastq
-  inputs:
-  - long_reads
-  limitations: Alternative ONT long-read QC filter; Rust-based for speed.
-- id: porechop
-  name: Porechop
-  category: qc
-  executable: porechop
-  default_enabled: false
-  required: false
-  command_template: porechop -i {long_reads} -o {output_dir}/{sample_id}.porechop.fastq
-    --threads {threads}
-  inputs:
-  - long_reads
-  limitations: ONT adapter trimmer; may be superseded by Porechop_ABI.
-- id: bwa
-  name: BWA
-  category: host_removal
-  executable: bwa
-  default_enabled: false
-  required: false
-  command_template: sh -c 'bwa index "$1" && bwa mem -t "$2" "$1" "$3" "$4" > "$5"'
-    autoplasm "{host_reference}" "{threads}" "{read1}" "{read2}" "{output_dir}/{sample_id}.host_removed.sam"
-  inputs:
-  - host_reference
-  - read1
-  - read2
-  limitations: Alternative short-read host removal using BWA-MEM.
-- id: kneaddata
-  name: KneadData
-  category: host_removal
-  executable: kneaddata
-  default_enabled: false
-  required: false
-  command_template: kneaddata --input {read1} --input {read2} --reference-db {host_reference}
-    --output {output_dir} --threads {threads}
-  inputs:
-  - read1
-  - read2
-  - host_reference
-  limitations: Wrapper around Bowtie2/Trimmomatic for host decontamination.
 - id: platon
   name: Platon
   category: plasmid_detection
@@ -589,17 +533,6 @@ tools:
   - plasmid_contigs
   - bam
   limitations: Requires plasmid candidate FASTA + assembly graph + BAM.
-- id: pmlst
-  name: pMLST
-  category: typing
-  executable: pmlst
-  default_enabled: false
-  required: false
-  command_template: pmlst --input {plasmid_contigs} --output {output_dir}/{sample_id}.pmlst.tsv
-    --threads {threads}
-  inputs:
-  - plasmid_contigs
-  limitations: Plasmid MLST typing; may require species-specific scheme selection.
 - id: conjscan
   name: CONJscan
   category: typing
@@ -703,17 +636,6 @@ tools:
   - read2
   - long_reads
   limitations: SPAdes hybrid mode for short + long read co-assembly.
-- id: bandage
-  name: Bandage
-  category: assembly_qc
-  executable: Bandage
-  default_enabled: false
-  required: false
-  command_template: Bandage image {assembly_graph} {output_dir}/{sample_id}.bandage.png
-    --height 3000 --width 4000
-  inputs:
-  - assembly_graph
-  limitations: Assembly graph visualization; GUI tool with CLI image export.
 - id: dna_features_viewer
   name: dna-features-viewer
   category: visualization
@@ -726,14 +648,3 @@ tools:
   inputs:
   - plasmid_contigs
   limitations: Requires dna_features_viewer + biopython Python packages.
-- id: hic_evidence
-  name: Hi-C meta3C
-  category: host_plasmid_linking
-  executable: python
-  default_enabled: false
-  required: false
-  command_template: python -c "import pandas as pd; links = pd.read_csv('{host_plasmid_links}',
-    sep='\t'); links.to_csv('{output_dir}/{sample_id}.hic_linked.tsv', sep='\t', index=False)"
-  inputs:
-  - host_plasmid_links
-  limitations: Placeholder for Hi-C/meta3C host-plasmid linkage analysis.

@@ -13,10 +13,23 @@ from abi.plugins.metagenomic_plasmid._engine.resources import (
 from abi.plugins.metagenomic_plasmid._engine.resources import (
     setup_resources as setup_autoplasm_resources,
 )
+from abi.timeouts import DEFAULT_RESOURCE_TIMEOUT_SECONDS, timeout_from_env_or_value
 
 __all__ = ["check_resources", "setup_resources"]
 
 _PLACEHOLDER_MARKERS = ("NOT_CONFIGURED", "TODO", "PLACEHOLDER")
+
+
+def _resource_timeout(config: Mapping[str, Any]) -> float | None:
+    execution = config.get("execution", {})
+    configured = (
+        execution.get("resource_timeout_seconds") if isinstance(execution, Mapping) else None
+    )
+    return timeout_from_env_or_value(
+        "ABI_RESOURCE_TIMEOUT_SECONDS",
+        configured,
+        default=DEFAULT_RESOURCE_TIMEOUT_SECONDS,
+    )
 
 
 def check_resources(
@@ -64,6 +77,21 @@ def setup_resources(
             dry_run=dry_run,
             mock=mock,
         )
+    if analysis_type == "wgs_bacteria":
+        return _setup_wgs_bacteria(
+            config,
+            resource_ids=resource_ids,
+            dry_run=dry_run,
+            mock=mock,
+        )
+    if analysis_type == "metatranscriptomics":
+        return _setup_reference_resources(
+            analysis_type,
+            config,
+            resource_ids=resource_ids,
+            dry_run=dry_run,
+            mock=mock,
+        )
     if not dry_run and not mock:
         raise ABIError(
             f"Resource setup is not implemented for analysis type {analysis_type!r}. "
@@ -87,6 +115,140 @@ def setup_resources(
             planned_row["message"] = "Mock resource directory prepared."
         planned.append(planned_row)
     return planned
+
+
+def _configured_or_default_resource_path(config: Mapping[str, Any], resource_id: str) -> Path:
+    resources = config.get("resources", {})
+    value = resources.get(resource_id) if isinstance(resources, Mapping) else None
+    if value and not any(marker in str(value) for marker in _PLACEHOLDER_MARKERS):
+        return Path(str(value))
+    return Path(str(config.get("outdir", "results"))) / "resources" / resource_id
+
+
+def _setup_wgs_bacteria(
+    config: Mapping[str, Any],
+    *,
+    resource_ids: Optional[Sequence[str]],
+    dry_run: bool,
+    mock: bool,
+) -> List[Dict[str, Any]]:
+    """Prepare the AMRFinderPlus database used by the WGS DAG."""
+    import subprocess
+
+    if resource_ids and "amrfinder_db" not in resource_ids:
+        return []
+    target = _configured_or_default_resource_path(config, "amrfinder_db")
+    command = ["amrfinder_update", "--database", str(target)]
+    if dry_run:
+        status = "planned"
+        message = "Would download/update the AMRFinderPlus database."
+    elif mock:
+        target.mkdir(parents=True, exist_ok=True)
+        (target / ".abi_mock_resource").write_text("wgs_bacteria:amrfinder_db\n", encoding="utf-8")
+        status = "ok"
+        message = "Mock AMRFinderPlus database prepared."
+    elif target.exists() and any(target.iterdir()):
+        status = "ok"
+        message = "Existing AMRFinderPlus database found; update skipped."
+    else:
+        target.mkdir(parents=True, exist_ok=True)
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=_resource_timeout(config),
+            )
+            status = "ok" if result.returncode == 0 else "error"
+            message = (result.stdout or result.stderr or "").strip()[-500:]
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            status = "error"
+            message = str(exc)
+    return [
+        {
+            "resource_id": "amrfinder_db",
+            "tool_id": "amrfinderplus",
+            "field": "amrfinder_db",
+            "path": str(target),
+            "status": status,
+            "version": "",
+            "source_url": "https://ftp.ncbi.nlm.nih.gov/pathogen/Antimicrobial_resistance/AMRFinderPlus/database/",
+            "checksum": "",
+            "command": command,
+            "ready_check": "non_empty_directory",
+            "directory_file_count": _directory_file_count(target),
+            "directory_size_bytes": 0,
+            "message": message,
+        }
+    ]
+
+
+def _setup_reference_resources(
+    analysis_type: str,
+    config: Mapping[str, Any],
+    *,
+    resource_ids: Optional[Sequence[str]],
+    dry_run: bool,
+    mock: bool,
+) -> List[Dict[str, Any]]:
+    """Plan or mock organism-specific reference resources.
+
+    Genome indices and annotations cannot be downloaded correctly without an
+    organism/build choice. Real setup therefore reports an actionable
+    ``manual_required`` status rather than raising a generic not-implemented
+    error or silently choosing the wrong reference.
+    """
+    selected = set(resource_ids or [])
+    rows: List[Dict[str, Any]] = []
+    for resource_id in ("genome_index", "annotation_gtf"):
+        if selected and resource_id not in selected:
+            continue
+        target = _configured_or_default_resource_path(config, resource_id)
+        if target.exists():
+            status = "ok"
+            message = "Configured reference resource exists."
+        elif dry_run:
+            status = "planned"
+            message = "Select an organism/genome build and configure this reference path."
+        elif mock:
+            if resource_id == "genome_index":
+                target.mkdir(parents=True, exist_ok=True)
+                (target / ".abi_mock_resource").write_text(
+                    f"{analysis_type}:{resource_id}\n", encoding="utf-8"
+                )
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(
+                    'chrMock\tABI\tgene\t1\t4\t.\t+\t.\tgene_id "MOCK1";\n',
+                    encoding="utf-8",
+                )
+            status = "ok"
+            message = "Mock reference resource prepared."
+        else:
+            status = "manual_required"
+            message = (
+                "Automatic download requires an organism/genome build choice; "
+                "configure the reference path explicitly."
+            )
+        rows.append(
+            {
+                "resource_id": resource_id,
+                "tool_id": "star" if resource_id == "genome_index" else "featurecounts",
+                "field": resource_id,
+                "path": str(target),
+                "status": status,
+                "version": "",
+                "source_url": "",
+                "checksum": "",
+                "command": [],
+                "ready_check": "path_exists",
+                "directory_file_count": _directory_file_count(target),
+                "directory_size_bytes": 0,
+                "message": message,
+            }
+        )
+    return rows
 
 
 def _check_generic_resources(
@@ -426,7 +588,13 @@ def _setup_amplicon_16s(
     elif download_script.exists():
         cmd = ["bash", str(download_script), "--output", str(outdir)]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=600)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=_resource_timeout(config),
+            )
             if result.returncode == 0 and tax_fasta.exists():
                 status = "ok"
                 message = "RDP 16S training set downloaded successfully."

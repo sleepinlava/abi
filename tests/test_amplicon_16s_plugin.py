@@ -33,6 +33,8 @@ def test_table_schemas():
     assert "species" in schemas["taxonomy"]
     assert "primer_trim_summary" in schemas
     assert "denoising_stats" in schemas
+    assert "otu_table" in schemas
+    assert "phylogeny_artifacts" in schemas
 
 
 def test_registry():
@@ -110,7 +112,7 @@ def test_workflow_spec_loads():
 
     ws = load_workflow_spec("plugins/amplicon_16s")
     assert ws is not None
-    assert len(ws.steps) == 7
+    assert len(ws.steps) == 10
     for s in ws.steps:
         assert s.citation is not None, f"step {s.id} missing citation"
 
@@ -171,6 +173,30 @@ def test_parse_vsearch_denoise():
     row = rows[0]
     assert row["stage"] == "denoising"
     assert int(row["output_reads"]) == 3  # 3 ASVs
+
+
+def test_parse_vsearch_otu(tmp_path):
+    (tmp_path / "S1_otu.tsv").write_text("#OTU ID\tS1\nOTU_1\t12\nOTU_2\t3\n", encoding="utf-8")
+    rows = get_plugin("amplicon_16s").parse_outputs("vsearch_otu", tmp_path, "S1")["otu_table"]
+    assert [(row["otu_id"], row["abundance"]) for row in rows] == [
+        ("OTU_1", "12"),
+        ("OTU_2", "3"),
+    ]
+
+
+def test_parse_phylogeny_stages(tmp_path):
+    (tmp_path / "combined.fasta").write_text(">ASV1\nACGT\n>ASV2\nTGCA\n", encoding="utf-8")
+    (tmp_path / "aligned.fasta").write_text(">ASV1\nACGT\n>ASV2\nTGCA\n", encoding="utf-8")
+    (tmp_path / "phylogeny.nwk").write_text("(ASV1:0.1,ASV2:0.1);\n", encoding="utf-8")
+    plugin = get_plugin("amplicon_16s")
+
+    combine = plugin.parse_outputs("phylogeny_combine", tmp_path, "")
+    alignment = plugin.parse_outputs("phylogeny_mafft", tmp_path, "")
+    tree = plugin.parse_outputs("phylogeny_tree", tmp_path, "")
+
+    assert combine["phylogeny_artifacts"][0]["record_count"] == 2
+    assert alignment["phylogeny_artifacts"][0]["artifact_type"] == "aligned_fasta"
+    assert tree["phylogeny_artifacts"][0]["artifact_type"] == "newick_tree"
 
 
 def test_parse_outputs_unknown():

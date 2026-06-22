@@ -1318,6 +1318,9 @@ def _path_parts(path: str) -> list[str]:
 
 # ── Process management / 进程管理 ────────────────────────────────────────
 
+PROCESS_TERMINATE_GRACE_SECONDS = 3.0
+PROCESS_KILL_WAIT_SECONDS = 5.0
+
 
 def _kill_process(proc: "subprocess.Popen[str]", pid: Optional[int]) -> None:
     """Send SIGTERM (then SIGKILL after 3s grace) to a subprocess.
@@ -1347,7 +1350,7 @@ def _kill_process(proc: "subprocess.Popen[str]", pid: Optional[int]) -> None:
     except OSError:
         pass
     try:
-        proc.wait(timeout=3)
+        proc.wait(timeout=PROCESS_TERMINATE_GRACE_SECONDS)
     except subprocess.TimeoutExpired:
         # Phase 2: force kill / 阶段 2：强制终止
         try:
@@ -1362,7 +1365,7 @@ def _kill_process(proc: "subprocess.Popen[str]", pid: Optional[int]) -> None:
     # proc.communicate() 处理）。在此调用 proc.communicate() 会与
     # 该线程竞争并损坏内部 Popen 状态。
     try:
-        proc.wait(timeout=5)
+        proc.wait(timeout=PROCESS_KILL_WAIT_SECONDS)
     except subprocess.TimeoutExpired:
         pass
 

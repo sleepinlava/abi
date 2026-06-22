@@ -3,7 +3,17 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Mapping
+from typing import Any
+
+from abi.config import mapping_block
+
+__all__ = [
+    "DEFAULT_RESOURCE_TIMEOUT_SECONDS",
+    "DEFAULT_TOOL_TIMEOUT_SECONDS",
+    "mapping_block",
+    "parse_timeout_seconds",
+    "timeout_from_env_or_value",
+]
 
 DEFAULT_TOOL_TIMEOUT_SECONDS = 7 * 24 * 60 * 60
 DEFAULT_RESOURCE_TIMEOUT_SECONDS = 24 * 60 * 60
@@ -35,9 +45,3 @@ def timeout_from_env_or_value(
     """Resolve timeout with an environment variable taking precedence."""
     env_value = os.environ.get(env_var)
     return parse_timeout_seconds(env_value if env_value is not None else value, default=default)
-
-
-def mapping_block(config: Mapping[str, Any], key: str) -> Mapping[str, Any]:
-    """Return a config section only when it is a mapping."""
-    block = config.get(key, {})
-    return block if isinstance(block, Mapping) else {}

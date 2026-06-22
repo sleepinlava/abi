@@ -435,7 +435,7 @@ class PipelineProgressRecorder:
         steps = [
             {
                 "step_id": step.step_id,
-                "sample_id": step.sample_id or "",
+                "sample_id": "" if step.sample_id is None else str(step.sample_id),
                 "step_name": step.step_name,
                 "tool_id": step.tool_id,
                 "category": step.category,
@@ -795,7 +795,7 @@ def _step_payload(step: Any) -> Dict[str, Any]:
     """
     return {
         "step_id": step.step_id,
-        "sample_id": step.sample_id or "",
+        "sample_id": "" if step.sample_id is None else str(step.sample_id),
         "step_name": step.step_name,
         "tool_id": step.tool_id,
         "category": step.category,
@@ -855,7 +855,11 @@ def _minimal_step_status(
         steps.append(
             {
                 "step_id": getattr(step, "step_id", ""),
-                "sample_id": getattr(step, "sample_id", "") or "",
+                "sample_id": (
+                    ""
+                    if getattr(step, "sample_id", None) is None
+                    else str(getattr(step, "sample_id"))
+                ),
                 "step_name": getattr(step, "step_name", ""),
                 "tool_id": getattr(step, "tool_id", ""),
                 "category": getattr(step, "category", ""),

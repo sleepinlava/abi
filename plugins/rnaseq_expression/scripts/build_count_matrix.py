@@ -36,9 +36,7 @@ from pathlib import Path
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        description="Build count matrix and sample metadata for DESeq2"
-    )
+    p = argparse.ArgumentParser(description="Build count matrix and sample metadata for DESeq2")
     p.add_argument(
         "--expression-dir",
         required=True,
@@ -104,9 +102,7 @@ def collect_gene_counts(expression_dir: str) -> tuple[dict[str, dict[str, str]],
                 if not gene_id:
                     continue
                 count_keys = [
-                    k
-                    for k in row
-                    if k not in ("Geneid", "Chr", "Start", "End", "Strand", "Length")
+                    k for k in row if k not in ("Geneid", "Chr", "Start", "End", "Strand", "Length")
                 ]
                 count = row.get(count_keys[-1], "0") if count_keys else "0"
                 gene_counts[gene_id][sample_id] = count
@@ -163,13 +159,14 @@ def main() -> None:
     print(f"Collected {len(gene_counts)} genes from {len(sample_ids)} samples")
 
     if not gene_counts:
-        print("ERROR: No gene counts collected. Check featureCounts outputs.",
-              file=sys.stderr)
+        print("ERROR: No gene counts collected. Check featureCounts outputs.", file=sys.stderr)
         sys.exit(1)
 
     # 3. Write outputs
     matrix_path = write_count_matrix(gene_counts, sample_ids, output_dir)
-    print(f"Wrote count matrix: {matrix_path} ({len(gene_counts)} genes × {len(sample_ids)} samples)")
+    print(
+        f"Wrote count matrix: {matrix_path} ({len(gene_counts)} genes × {len(sample_ids)} samples)"
+    )
 
     meta_path = write_sample_metadata(sample_rows, output_dir)
     print(f"Wrote sample metadata: {meta_path}")

@@ -9,8 +9,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 import pytest
 
-from abi.errors import MissingTemplateParamError
-from abi.tools import ResourceSpec, SafeFormatDict, resolve_resources
+from abi.errors import MissingTemplateParamError, ToolError
+from abi.tools import ResourceSpec, SafeFormatDict, _safe_output_path, resolve_resources
+
+
+def test_safe_output_path_rejects_traversal_absolute_and_symlink_escapes(tmp_path):
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    with pytest.raises(ToolError, match="escapes output directory"):
+        _safe_output_path(Path("../../etc/passwd"), output_dir)
+    with pytest.raises(ToolError, match="escapes output directory"):
+        _safe_output_path(Path("/etc/passwd"), output_dir)
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (output_dir / "link").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ToolError, match="escapes output directory"):
+        _safe_output_path(Path("link/result.tsv"), output_dir)
 
 
 class TestSafeFormatDictLenient:

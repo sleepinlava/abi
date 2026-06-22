@@ -210,6 +210,12 @@ class PaletteRegistry:
         # Fall back to coolwarm
         return "coolwarm"
 
+    def get_matplotlib_colormap(self, name: str, *, diverging_default: bool = False) -> str:
+        """Resolve a registered continuous or diverging palette to a cmap name."""
+        if name in self._continuous or name in self._diverging:
+            return name
+        return "coolwarm" if diverging_default else "viridis"
+
     @property
     def categorical_names(self) -> Set[str]:
         return set(self._categorical.keys())

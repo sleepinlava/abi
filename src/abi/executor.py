@@ -113,6 +113,7 @@ from abi.provenance import (
     capture_tool_version,
     reset_run_provenance,
     write_commands_tsv,
+    write_methods_md,
     write_minimal_progress_artifacts,
     write_resolved_inputs_tsv,
 )
@@ -168,6 +169,10 @@ class GenericABIExecutor:
         # Accumulated checksum map across all executed steps.
         # 跨所有已执行步骤累积的校验和映射。
         self._checksums: Dict[str, str] = {}
+        self._checksum_lock = threading.Lock()
+        self._tool_timeout_seconds: Any = None
+        self._last_tool_version_rows: List[Dict[str, Any]] = []
+        self._last_resource_rows: List[Dict[str, Any]] = []
 
     def dry_run(self, plan: Any, config: Mapping[str, Any]) -> Dict[str, Path]:
         """Execute a dry run — plan and validate without invoking real tools.
@@ -220,8 +225,16 @@ class GenericABIExecutor:
         # Create the three-tier output directory structure.
         # 创建三层输出目录结构。
         outdir = ensure_directory(plan.outdir, label="Output directory")
-        provenance = ensure_directory(outdir / "provenance", label="Provenance directory")
+        configured_provenance = getattr(plan, "provenance_dir", None)
+        provenance = ensure_directory(
+            configured_provenance or outdir / "provenance",
+            label="Provenance directory",
+        )
         reset_run_provenance(provenance)
+        # Executor instances may be reused for multiple runs.  Checksums from a
+        # prior plan must never participate in the next plan's integrity chain.
+        with self._checksum_lock:
+            self._checksums = {}
         tables_dir = ensure_directory(outdir / "tables", label="Standard tables directory")
         self.table_manager.ensure_tables(tables_dir)
         # Pre-create per-step output directories so tools don't fail on missing dirs.
@@ -255,6 +268,7 @@ class GenericABIExecutor:
         # 确定是否记录结构化的管线进度事件。
         # 当 config.execution.progress 为 True 或启用了 dashboard 时启用进度记录。
         execution = _execution_options(config)
+        self._tool_timeout_seconds = execution.get("tool_timeout_seconds")
         progress_recorder = (
             PipelineProgressRecorder(provenance) if bool(execution["record_progress"]) else None
         )
@@ -274,7 +288,7 @@ class GenericABIExecutor:
         # 执行步骤，收集命令元数据行。
         # Error policy: "halt" (fail-fast, default) or "continue" (collect all errors).
         # 错误策略: "halt" (fail-fast, 默认) 或 "continue" (收集所有错误)。
-        error_policy = str(config.get("execution", {}).get("error_policy", "halt")).lower()
+        error_policy = str(execution.get("error_policy", "halt")).lower()
         command_rows = []
         failed_errors: List[ToolError] = []
         _last_step_id = "unknown"
@@ -282,6 +296,7 @@ class GenericABIExecutor:
         # failed_errors, _last_step_id) when workers > 1.
         # 线程安全：当 workers > 1 时使用锁保护共享可变状态。
         _state_lock = threading.Lock()
+        _stop_event = threading.Event()
         try:
             if parallel and workers > 1:
                 # ── Parallel mode: sample-level concurrency ──
@@ -319,8 +334,13 @@ class GenericABIExecutor:
 
                 def _run_sample_chain(steps: List[Any], label: str) -> List[tuple]:
                     """Run a chain of steps sequentially in one thread."""
+                    nonlocal _last_step_id
                     results: List[tuple] = []
                     for step in steps:
+                        if _stop_event.is_set() and error_policy != "continue":
+                            break
+                        with _state_lock:
+                            _last_step_id = getattr(step, "step_id", str(step))
                         row, error = self._execute_step(
                             step,
                             dry_run=dry_run,
@@ -328,37 +348,37 @@ class GenericABIExecutor:
                             tables_dir=tables_dir,
                             progress_recorder=progress_recorder,
                         )
-                        with _state_lock:
-                            command_rows.append(row)
-                            if error:
-                                failed_errors.append(error)
-                                self.logger.log_step(
-                                    step,
-                                    command=row.get("command", ""),
-                                    status="failed",
-                                    error_message=str(error),
-                                )
+                        results.append((step, row, error))
                         if error and error_policy != "continue":
+                            _stop_event.set()
                             break
                     return results
 
-                actual_workers = min(workers, len(per_sample))
-                with ThreadPoolExecutor(max_workers=actual_workers) as pool:
-                    futures = {
-                        pool.submit(_run_sample_chain, steps, f"sample_{i}"): steps
-                        for i, steps in enumerate(per_sample)
-                    }
-                    for future in as_completed(futures):
-                        future.result()  # propagate exceptions
-                    # Check for early termination
-                    if failed_errors and error_policy != "continue":
-                        raise ToolError(
-                            f"Parallel execution halted: {len(failed_errors)} sample(s) failed"
-                        )
+                completed_chains: Dict[int, List[tuple]] = {}
+                if per_sample:
+                    actual_workers = min(workers, len(per_sample))
+                    with ThreadPoolExecutor(max_workers=actual_workers) as pool:
+                        futures = {
+                            pool.submit(_run_sample_chain, steps, f"sample_{i}"): i
+                            for i, steps in enumerate(per_sample)
+                        }
+                        for future in as_completed(futures):
+                            completed_chains[futures[future]] = future.result()
+
+                # Merge results in plan/sample order, independent of worker
+                # completion order.  This also makes the worker return value
+                # authoritative instead of relying on shared-list side effects.
+                for index in sorted(completed_chains):
+                    for _step, row, error in completed_chains[index]:
+                        command_rows.append(row)
+                        if error:
+                            failed_errors.append(error)
 
                 # ── Cross-sample steps (sequential) ──
+                if failed_errors and error_policy != "continue":
+                    cross_sample_steps = []
                 for step in cross_sample_steps:
-                    _last_step_id = getattr(step, "tool_id", str(step))
+                    _last_step_id = getattr(step, "step_id", str(step))
                     row, error = self._execute_step(
                         step,
                         dry_run=dry_run,
@@ -369,19 +389,13 @@ class GenericABIExecutor:
                     command_rows.append(row)
                     if error:
                         failed_errors.append(error)
-                        self.logger.log_step(
-                            step,
-                            command=row.get("command", ""),
-                            status="failed",
-                            error_message=str(error),
-                        )
                         if error_policy != "continue":
                             break
             else:
                 # ── Sequential mode (original behavior) ──
                 # ── 顺序模式（原始行为）──
                 for i, step in enumerate(plan.steps):
-                    _last_step_id = getattr(step, "tool_id", str(step))
+                    _last_step_id = getattr(step, "step_id", str(step))
                     row, error = self._execute_step(
                         step,
                         dry_run=dry_run,
@@ -392,12 +406,6 @@ class GenericABIExecutor:
                     command_rows.append(row)
                     if error:
                         failed_errors.append(error)
-                        self.logger.log_step(
-                            step,
-                            command=row.get("command", ""),
-                            status="failed",
-                            error_message=str(error),
-                        )
                         if error_policy == "continue":
                             continue
                         break
@@ -426,6 +434,13 @@ class GenericABIExecutor:
         # tool_versions.tsv is written before step iteration (B4 fix).
         resources_path = self._write_resources(config, provenance / "resources.json")
         environment_path = self._write_environment(provenance / "environment.yml")
+        methods_path = provenance / "methods.md"
+        write_methods_md(
+            command_rows,
+            self._last_tool_version_rows,
+            self._last_resource_rows,
+            path=methods_path,
+        )
         report_paths = write_generic_report(
             plan,
             outdir,
@@ -494,6 +509,7 @@ class GenericABIExecutor:
             "tool_versions": versions_path,
             "resources": resources_path,
             "environment": environment_path,
+            "methods": methods_path,
             "summary": summary_path,
             "tables": tables_dir,
             "report": report_paths["report"],
@@ -583,16 +599,24 @@ class GenericABIExecutor:
         else:
             # Real execution path: invoke the external tool.
             # 真实执行路径：调用外部工具。
-            result = self._run_external_step(step, provenance, tables_dir)
-            status = str(result["status"])
-            return_code = result["return_code"]
-            reason = str(result["reason"])
-            parsed_status = str(result.get("parsed_status", ""))
-            standard_tables = str(result.get("standard_tables", ""))
-            if status != "success":
-                # Wrap non-success results in a ToolError for upstream handling.
-                # 将非成功结果包装为 ToolError 供上游处理。
+            try:
+                result = self._run_external_step(step, provenance, tables_dir)
+                status = str(result["status"])
+                return_code = result["return_code"]
+                reason = str(result["reason"])
+                parsed_status = str(result.get("parsed_status", ""))
+                standard_tables = str(result.get("standard_tables", ""))
+                if status != "success":
+                    # Wrap non-success results in a ToolError for upstream handling.
+                    # 将非成功结果包装为 ToolError 供上游处理。
+                    failed_error = ToolError(reason)
+            except Exception as exc:
+                # Contract checks and unexpected adapter errors must still
+                # produce a commands.tsv row for the failing step.
+                status = "failed"
+                reason = f"{type(exc).__name__}: {exc}"
                 failed_error = ToolError(reason)
+                failed_error.__cause__ = exc
 
         # Assemble the standardized command metadata row for commands.tsv.
         # 组装用于 commands.tsv 的标准化命令元数据行。
@@ -673,9 +697,11 @@ class GenericABIExecutor:
             # B25: Invalidate any prior checksums for this step's outputs before
             # re-execution (retry / resume safety).  Match by output directory.
             step_outdir = params.get("output_dir") or params.get("outdir", "")
-            if step_outdir and self._checksums:
-                invalidate_step_checksums(self._checksums, output_dir=str(step_outdir))
-            input_violations = verify_input_checksums(step.step_id, params, self._checksums)
+            with self._checksum_lock:
+                if step_outdir and self._checksums:
+                    invalidate_step_checksums(self._checksums, output_dir=str(step_outdir))
+                checksum_snapshot = dict(self._checksums)
+            input_violations = verify_input_checksums(step.step_id, params, checksum_snapshot)
             if input_violations:
                 raise ContractViolationError(step.step_id, input_violations)
 
@@ -690,7 +716,8 @@ class GenericABIExecutor:
                 stderr_path=params["stderr_path"],
                 message=str(exc),
             )
-            Path(params["stderr_path"]).write_text(str(exc) + "\n", encoding="utf-8")
+            with Path(params["stderr_path"]).open("a", encoding="utf-8") as handle:
+                handle.write(str(exc) + "\n")
             return {"status": "failed", "return_code": "", "reason": reason}
         if result.return_code != 0:
             # The tool ran but exited with a non-zero code.
@@ -759,7 +786,8 @@ class GenericABIExecutor:
             # 2. Merge computed checksums.
             # 2. 合并计算的校验和。
             if contract_result.checksums:
-                self._checksums.update(contract_result.checksums)
+                with self._checksum_lock:
+                    self._checksums.update(contract_result.checksums)
 
             # 3. Evaluate runtime assertions.
             # 3. 评估运行时断言。
@@ -771,8 +799,9 @@ class GenericABIExecutor:
 
             # 4. Persist checksums to provenance (atomic write, B25 fix).
             # 4. 将校验和持久化到溯源目录（原子写入，B25 修复）。
-            if self._checksums:
-                save_checksums_atomic(provenance, self._checksums)
+            with self._checksum_lock:
+                if self._checksums:
+                    save_checksums_atomic(provenance, self._checksums)
 
         # Parse tool outputs into structured table data.
         # The parse_outputs callback is plugin-specific and understands each tool's
@@ -782,7 +811,7 @@ class GenericABIExecutor:
         rows_by_table = self.parse_outputs(
             step.tool_id,
             step.outputs.get("output_dir", params.get("output_dir", "")),
-            str(step.sample_id or ""),
+            "" if step.sample_id is None else str(step.sample_id),
         )
         # Append the parsed rows to the standard tables directory.
         # 将解析后的行追加到标准表格目录中。
@@ -857,6 +886,8 @@ class GenericABIExecutor:
         # 为期望标准键的工具将 outdir 规范化为 output_dir。
         if "output_dir" not in params and "outdir" in params:
             params["output_dir"] = params["outdir"]
+        if "timeout_seconds" not in params and self._tool_timeout_seconds is not None:
+            params["timeout_seconds"] = self._tool_timeout_seconds
         params["dry_run"] = dry_run
         return params
 
@@ -932,7 +963,7 @@ class GenericABIExecutor:
                     {
                         "step_id": step.step_id,
                         "tool_id": step.tool_id,
-                        "sample_id": step.sample_id or "",
+                        "sample_id": "" if step.sample_id is None else str(step.sample_id),
                         "input_name": name,
                         "path": str(path),
                         "exists": path.exists(),
@@ -972,6 +1003,7 @@ class GenericABIExecutor:
                     "status": status,
                 }
             )
+        self._last_tool_version_rows = rows
         path.parent.mkdir(parents=True, exist_ok=True)
         fields = ["tool_id", "executable", "env_name", "version", "status"]
         # Write manually (not via csv module) to keep the format consistent with
@@ -1014,6 +1046,7 @@ class GenericABIExecutor:
             item.setdefault("license", "")
             item.setdefault("validated_at", str(item.get("last_checked_at", validated_at)))
             normalized.append(item)
+        self._last_resource_rows = normalized
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             json.dumps(
@@ -1163,6 +1196,8 @@ def _execution_options(config: Mapping[str, Any]) -> Dict[str, Any]:
         "record_progress": progress or dashboard_enabled,
         "parallel": parallel,
         "workers": max(workers, 1),
+        "error_policy": str(execution.get("error_policy", "halt")),
+        "tool_timeout_seconds": execution.get("tool_timeout_seconds"),
     }
 
 
@@ -1395,7 +1430,7 @@ def _bridge_consensus_for_single_detector(step: Any, resolved_outputs: Dict[str,
     # Consensus step expects:
     # {outdir}/plasmid_consensus/{sample_id}/{sample_id}.internal.plasmid_contigs
     outdir = Path(step.outputs.get("output_dir", ""))
-    sample_id = step.sample_id or ""
+    sample_id = "" if step.sample_id is None else str(step.sample_id)
     if not outdir.exists() or not sample_id:
         return
 

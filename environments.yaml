@@ -42,18 +42,14 @@ environments:
     dependencies:
     - python=3.10
     - fastp
-    - fastplong
     - fastqc
     - multiqc
     - trimmomatic
     - cutadapt
     - nanoplot
     - filtlong
-    - chopper
-    - porechop
     - hifiadapterfilt
     - ont-dorado
-    - kneaddata
   autoplasm-assembly:
     channels:
     - conda-forge
@@ -68,7 +64,6 @@ environments:
     - hifiasm
     - raven-assembler
     - quast
-    - bandage
     - perl-opera-ms
     - medaka
   autoplasm-annotation:
@@ -105,7 +100,6 @@ environments:
     dependencies:
     - python=3.10
     - bowtie2
-    - bwa
     - minimap2
     - samtools
     - coverm
@@ -211,7 +205,6 @@ environments:
     - python=3.10
     - pip
     - star>=2.7
-    - hisat2>=2.2
     - subread>=2.0
   rnaseq:
     channels:
@@ -274,15 +267,11 @@ tool_assignments:
     fastp: autoplasm-qc
     fastqc: autoplasm-qc
     multiqc: autoplasm-qc
-    fastplong: autoplasm-qc
     nanoplot: autoplasm-qc
     filtlong: autoplasm-qc
     hifiadapterfilt: autoplasm-qc
     dorado: autoplasm-qc
     samtools_fastq: autoplasm-abundance
-    chopper: autoplasm-qc
-    porechop: autoplasm-qc
-    kneaddata: autoplasm-qc
     megahit: autoplasm-assembly
     metaspades: autoplasm-assembly
     metaflye: autoplasm-assembly
@@ -291,7 +280,6 @@ tool_assignments:
     quast: autoplasm-assembly
     medaka: autoplasm-assembly
     hybridspades: autoplasm-assembly
-    bandage: autoplasm-assembly
     bakta: autoplasm-annotation
     prodigal: autoplasm-annotation
     abricate: autoplasm-annotation
@@ -308,7 +296,6 @@ tool_assignments:
     rgi: autoplasm-annotation
     copla: autoplasm-annotation
     plasmidhostfinder: autoplasm-annotation
-    pmlst: autoplasm-annotation
     conjscan: autoplasm-annotation
     macsyfinder: autoplasm-annotation
     bowtie2: autoplasm-abundance
@@ -317,7 +304,6 @@ tool_assignments:
     minimap2_host_removal: autoplasm-abundance
     samtools: autoplasm-abundance
     coverm: autoplasm-abundance
-    bwa: autoplasm-abundance
     genomad: autoplasm-plasmid-detect
     plasme: autoplasm-plasmid-detect
     plasx: autoplasm-plasmid-detect
@@ -337,7 +323,6 @@ tool_assignments:
     checkm2: stats
     gtdbtk: stats
     das_tool: stats
-    hic_evidence: stats
     clinker: autoplasm-visualization
     pycirclize: autoplasm-visualization
     pyvis: autoplasm-visualization
@@ -353,7 +338,6 @@ tool_assignments:
   amplicon_16s:
     cutadapt: amplicon
     diversity_metrics: amplicon
-    phylogeny_build: amplicon
     phylogeny_combine: amplicon
     phylogeny_mafft: amplicon
     phylogeny_tree: amplicon
@@ -368,9 +352,7 @@ tool_assignments:
     featurecounts: rnaseq
     build_count_matrix: rnaseq
     deseq2: rnaseq
-    clusterprofiler: rnaseq
   metatranscriptomics:
     fastp: abi-qc
     star: abi-stats
-    hisat2: abi-stats
     featurecounts: abi-stats

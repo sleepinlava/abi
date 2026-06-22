@@ -20,7 +20,7 @@ Delegation map / 委托映射
 * ``execute_dry_run``     → ``_engine.pipeline.PipelineExecutor``
 * ``parse_outputs``       → ``_engine.parsers.parse_standard_outputs``
 * ``write_report``        → ``_engine.report.markdown`` / ``_engine.report.html``
-* ``table_schemas``       → ``_engine.standard_tables.TABLE_SCHEMAS``
+* ``table_schemas``       → declarative ``standard_tables.yaml``
 
 Data flow / 数据流
 ~~~~~~~~~~~~~~~~~~
@@ -45,7 +45,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
-from abi.config import PLUGIN_ROOT
+from abi.config import PLUGIN_ROOT, load_yaml
 from abi.provenance import RunLogger
 from abi.schemas import ExecutionPlan, PlanStep, SampleContext, SampleInput
 from abi.tools import ToolRegistry
@@ -56,7 +56,7 @@ from ._engine.pipeline import PipelineExecutor
 from ._engine.planner import build_plan, build_plan_from_dag
 from ._engine.report.html import write_html_report
 from ._engine.report.markdown import write_markdown_report
-from ._engine.standard_tables import TABLE_SCHEMAS, summarize_standard_tables
+from ._engine.standard_tables import summarize_standard_tables
 
 
 class MetagenomicPlasmidPlugin:
@@ -165,7 +165,11 @@ class MetagenomicPlasmidPlugin:
 
         返回标准输出表的预期列结构，用于验证和汇总管道结果。
         """
-        return TABLE_SCHEMAS
+        data = load_yaml(self.root / "standard_tables.yaml")
+        tables = data.get("tables", {})
+        if not isinstance(tables, Mapping):
+            raise ValueError("standard_tables.yaml must contain a tables mapping")
+        return {str(name): [str(column) for column in columns] for name, columns in tables.items()}
 
     # ── Output parsing / 输出解析 ────────────────────────────────────────
 

@@ -48,8 +48,8 @@ every plan iteration would slow down agent workflows without adding safety.
 **Adding a new tool / 添加新工具**
 
 Add the tool name → ``PermissionLevel`` mapping to ``TOOL_PERMISSIONS``.
-If you are unsure which level to use, default to ``PLANNING_WRITE``
-(the ``permission_for_tool`` fallback). Only use ``EXECUTION`` for tools
+If you are unsure which level to use, classify it explicitly before exposing
+the tool. Unregistered names fall back to ``READ_ONLY``. Only use ``EXECUTION`` for tools
 that launch subprocesses or mutate external state.
 """
 
@@ -101,7 +101,7 @@ class PermissionLevel(str, Enum):
 # This is the central registry of which tools require which permission level.
 # The ABI agent runtime reads this table before dispatching any tool call.
 # If a tool is NOT listed here, ``permission_for_tool`` falls back to
-# ``PLANNING_WRITE`` -- a safe default that allows writes but not execution.
+# ``READ_ONLY`` -- the least-privilege default for an unknown operation.
 # 这是工具所需权限级别的中央注册表。ABI 智能体运行时在分派任何工具调用前
 # 读取此表。如果某工具不在此列表中，permission_for_tool 回退到 PLANNING_WRITE
 # -- 一个允许写入但不允许执行的安全默认值。
@@ -111,14 +111,17 @@ TOOL_PERMISSIONS: Dict[str, PermissionLevel] = {
     "abi_list_types": PermissionLevel.READ_ONLY,
     "abi_inspect": PermissionLevel.READ_ONLY,
     "abi_validate_result": PermissionLevel.READ_ONLY,
+    "abi_autoplasm_validate_result": PermissionLevel.READ_ONLY,
     "autoplasm_validate_result": PermissionLevel.READ_ONLY,
     "abi_export_agent_context": PermissionLevel.READ_ONLY,
     "abi_doctor_agent": PermissionLevel.READ_ONLY,
+    "abi_query": PermissionLevel.READ_ONLY,
     # ── PLANNING_WRITE: plan and report generation / 计划和报告生成 ──
     "abi_plan": PermissionLevel.PLANNING_WRITE,
     "abi_dry_run": PermissionLevel.PLANNING_WRITE,
     "abi_report": PermissionLevel.PLANNING_WRITE,
     "abi_export_nextflow": PermissionLevel.PLANNING_WRITE,
+    "abi_install_skills": PermissionLevel.PLANNING_WRITE,
     # ── EXECUTION: pipeline execution (requires confirmation) / 流水线执行（需要确认） ──
     "abi_run": PermissionLevel.EXECUTION,
 }

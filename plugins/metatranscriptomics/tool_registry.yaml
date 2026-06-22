@@ -26,19 +26,6 @@ tools:
   - read1
   - read2
   - genome_index
-- id: hisat2
-  name: HISAT2
-  category: alignment
-  executable: hisat2
-  default_enabled: false
-  required: false
-  skill_path: plugins/metatranscriptomics/skills/hisat2/SKILL.md
-  command_template: hisat2 -p {threads} -x {genome_index} -1 {read1} -2 {read2} -S
-    {output_dir}/{sample_id}.sam
-  inputs:
-  - read1
-  - read2
-  - genome_index
 - id: featurecounts
   name: featureCounts
   category: expression

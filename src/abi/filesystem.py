@@ -6,7 +6,7 @@ from pathlib import Path
 
 from abi.errors import ABIError
 
-__all__ = ["ensure_directory"]
+__all__ = ["ensure_directory", "ensure_parent"]
 
 
 def ensure_directory(path: str | Path, *, label: str = "Directory") -> Path:
@@ -18,3 +18,10 @@ def ensure_directory(path: str | Path, *, label: str = "Directory") -> Path:
         return directory
     directory.mkdir(parents=True, exist_ok=True)
     return directory
+
+
+def ensure_parent(path: str | Path) -> Path:
+    """Create a path's parent directory and return the path unchanged."""
+    resolved = Path(path)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    return resolved

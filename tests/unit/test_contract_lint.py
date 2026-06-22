@@ -132,6 +132,19 @@ class TestLintDag:
         errors = [f for f in findings if f.severity == "error"]
         assert errors == [], f"Unexpected errors: {errors}"
 
+    def test_misplaced_output_contract_is_rejected(self):
+        dag = {
+            "nodes": {
+                "qc": {
+                    "outputs": {
+                        "report": {"type": "file", "min_size": "1KB"},
+                    }
+                }
+            }
+        }
+        findings = lint_dag(dag)
+        assert any(f.check == "misplaced_output_contract" for f in findings)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # B20: Assertion syntax
@@ -203,6 +216,20 @@ class TestLintAssertionSyntax:
         findings = lint_assertion_syntax(dag)
         assert len(findings) >= 1
         assert any("undefined_variable" in f.detail for f in findings)
+
+    def test_assertion_lint_does_not_evaluate_code(self, tmp_path):
+        marker = tmp_path / "must-not-exist"
+        dag = {
+            "nodes": [
+                {
+                    "id": "test",
+                    "assertions": [f"open({str(marker)!r}, 'w')"],
+                }
+            ]
+        }
+        findings = lint_assertion_syntax(dag)
+        assert findings
+        assert not marker.exists()
 
     def test_multiple_nodes_checked(self):
         dag = {

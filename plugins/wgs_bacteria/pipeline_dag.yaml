@@ -53,7 +53,7 @@ nodes:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Assembly ────────────────────────────────────────────────────────
   assembly_spades:
@@ -80,7 +80,7 @@ nodes:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
       - "output_files.contigs_fasta.min_size >= 1000"
 
   # ── Annotation ──────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ nodes:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── MLST ────────────────────────────────────────────────────────────
   mlst:
@@ -137,7 +137,7 @@ nodes:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── AMR Profiling ───────────────────────────────────────────────────
   amr:
@@ -149,6 +149,8 @@ nodes:
     depends_on: [annotation_prokka]
     inputs:
       prokka_faa:  {type: file, format: fasta, source: annotation_prokka.faa}
+      prokka_gff:  {type: file, format: gff, source: annotation_prokka.gff}
+      amrfinder_db: {type: directory}
     outputs:
       amr_tsv:
         type: file
@@ -159,4 +161,4 @@ nodes:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"

@@ -40,6 +40,31 @@ TYPE_MAP: dict[str, str] = {
     "pca": "ordination_plot",
 }
 
+_CATEGORICAL_TYPES = {
+    "barplot",
+    "boxplot_with_points",
+    "violin_with_box",
+    "scatterplot",
+    "ordination_plot",
+    "stacked_barplot",
+    "lineplot",
+    "phylum_stacked_bar",
+    "alpha_stats_boxplot",
+}
+_CONTINUOUS_PALETTE_ALIASES = {
+    "viridis": "viridis",
+    "magma": "magma",
+    "plasma": "plasma",
+    "inferno": "inferno",
+    "cividis": "cividis",
+    "Reds": "magma",
+}
+_DIVERGING_PALETTE_ALIASES = {
+    "RdBu_r": "coolwarm",
+    "RdBu": "coolwarm",
+    "coolwarm": "coolwarm",
+}
+
 
 def _map_type(old_type: str) -> str:
     """Map an old FigureEngine figure type to an abi_sciplot figure type.
@@ -120,9 +145,14 @@ def adapt_spec(
     else:
         width_mm, height_mm = 90.0, 70.0
 
-    colormap = old_spec.get("colormap", "viridis")
-    # colormap names like RdBu_r, tab20, Reds — these are safe
-    palette_name = colormap if colormap not in ("jet", "rainbow") else "viridis"
+    colormap = str(old_spec.get("colormap", "viridis"))
+    if figure_type in _CATEGORICAL_TYPES:
+        # Legacy matplotlib colormap names are not categorical palette IDs.
+        palette_name = "colorblind_safe_8"
+    elif colormap in _DIVERGING_PALETTE_ALIASES:
+        palette_name = _DIVERGING_PALETTE_ALIASES[colormap]
+    else:
+        palette_name = _CONTINUOUS_PALETTE_ALIASES.get(colormap, "viridis")
 
     style = StyleSpec(
         theme="abi_nature",
@@ -137,6 +167,7 @@ def adapt_spec(
         title=old_spec.get("title", ""),
         x_label=old_spec.get("xlabel", ""),
         y_label=old_spec.get("ylabel", ""),
+        legend_title=old_spec.get("legend_title") or old_spec.get("color", ""),
     )
 
     # ── Statistics (best-effort from volcano plots) ──

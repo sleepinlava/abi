@@ -7,6 +7,7 @@ from abi.autoplasm.resources import (
     setup_resources,
     sha256_path,
 )
+from abi.resources import setup_resources as setup_abi_resources
 
 
 def test_setup_resources_mock_writes_manifest(tmp_path):
@@ -260,6 +261,52 @@ def test_fetch_example_dataset_mock(tmp_path):
     assert sha256_path(fasta)
 
 
+def test_wgs_resource_setup_has_real_dry_run_and_mock_paths(tmp_path):
+    config = {
+        "outdir": str(tmp_path / "wgs"),
+        "resources": {"amrfinder_db": "AMRFINDER_DB_NOT_CONFIGURED"},
+    }
+
+    planned = setup_abi_resources(analysis_type="wgs_bacteria", config=config, dry_run=True)
+    mocked = setup_abi_resources(analysis_type="wgs_bacteria", config=config, mock=True)
+
+    assert planned[0]["status"] == "planned"
+    assert planned[0]["command"][0] == "amrfinder_update"
+    assert mocked[0]["status"] == "ok"
+    assert Path(mocked[0]["path"]).is_dir()
+
+
+def test_metatranscriptomics_resource_setup_is_actionable_without_build_choice(tmp_path):
+    config = {
+        "outdir": str(tmp_path / "meta"),
+        "resources": {
+            "genome_index": "GENOME_INDEX_NOT_CONFIGURED",
+            "annotation_gtf": "ANNOTATION_GTF_NOT_CONFIGURED",
+        },
+    }
+
+    rows = setup_abi_resources(analysis_type="metatranscriptomics", config=config)
+
+    assert {row["resource_id"] for row in rows} == {"genome_index", "annotation_gtf"}
+    assert {row["status"] for row in rows} == {"manual_required"}
+
+
+def test_metatranscriptomics_mock_resources_create_expected_shapes(tmp_path):
+    config = {
+        "outdir": str(tmp_path / "meta"),
+        "resources": {
+            "genome_index": "GENOME_INDEX_NOT_CONFIGURED",
+            "annotation_gtf": "ANNOTATION_GTF_NOT_CONFIGURED",
+        },
+    }
+
+    rows = setup_abi_resources(analysis_type="metatranscriptomics", config=config, mock=True)
+    paths = {row["resource_id"]: Path(row["path"]) for row in rows}
+
+    assert paths["genome_index"].is_dir()
+    assert paths["annotation_gtf"].is_file()
+
+
 # ---- New tests for Level 1 + Level 2 resources (2026-06-20) ----
 
 
@@ -279,7 +326,7 @@ def test_level1_resources_included_in_default_setup(tmp_path):
     assert "gtdbtk" in ids
     assert "checkm2" in ids
     # Level 1 = 9 databases + 4 auto-install tools = 13
-    assert len(rows) == 13
+    assert len(rows) == 14
 
 
 def test_level2_resources_excluded_from_default_setup(tmp_path):
@@ -302,7 +349,6 @@ def test_level2_resources_excluded_from_default_setup(tmp_path):
     assert "recycler_tool" not in ids
     assert "copla_tool" not in ids
     assert "plasmidhostfinder_tool" not in ids
-    assert "pmlst_tool" not in ids
     assert "conjscan_tool" not in ids
 
 
@@ -407,12 +453,12 @@ def test_checkm2_env_var_injection(tmp_path):
 
 
 def test_all_resources_in_check_resources(tmp_path):
-    """check_resources returns all 29 registered resources (17 DB + 12 tool)."""
+    """check_resources returns every registered database and tool resource."""
     config = {"resources": {"root": str(tmp_path / "resources")}}
     rows = check_resources(config)
     ids = {row["resource_id"] for row in rows}
 
-    assert len(ids) == 29
+    assert len(ids) == 30
     expected_db = {
         "genomad",
         "bakta",
@@ -424,6 +470,8 @@ def test_all_resources_in_check_resources(tmp_path):
         "kraken2",
         "gtdbtk",
         "checkm2",
+        "eggnog_mapper",
+        "abricate",
         "plasme",
         "plasx_annotations",
         "plasx_model",
@@ -443,7 +491,6 @@ def test_all_resources_in_check_resources(tmp_path):
         "recycler_tool",
         "copla_tool",
         "plasmidhostfinder_tool",
-        "pmlst_tool",
         "conjscan_tool",
     }
     assert ids == expected_db | expected_tools

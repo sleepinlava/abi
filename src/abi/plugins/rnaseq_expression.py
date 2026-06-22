@@ -37,7 +37,14 @@ import csv
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from abi._shared import _clean, _offline_sample_context, _parse_fastp, _parse_star, _resolve_path
+from abi._shared import (
+    _execute_generic_dry_run,
+    _offline_sample_context,
+    _parse_fastp,
+    _parse_sample_sheet_tabular,
+    _parse_star,
+    _resolve_path,
+)
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
 from abi.report import write_plugin_report
 from abi.schemas import ABIExecutionPlan, ABISample, ABISampleContext
@@ -124,6 +131,9 @@ class RNASeqExpressionPlugin:
     def registry(self) -> ToolRegistry:
         return ToolRegistry.from_path(self.root / "tool_registry.yaml")
 
+    def execute_dry_run(self, plan: Any, config: Mapping[str, Any]) -> Dict[str, Path]:
+        return _execute_generic_dry_run(self, plan, config)
+
     # ── Standard tables ──────────────────────────────────────────────────
 
     def table_schemas(self) -> Mapping[str, Iterable[str]]:
@@ -150,7 +160,10 @@ class RNASeqExpressionPlugin:
         # Fall back to hand-written parsers
         if tool_id == "fastp":
             return {"qc_summary": _parse_fastp(Path(output_dir), sample_id)}
-        if tool_id in ("star", "hisat2"):
+        # ``hisat2`` was accepted by earlier releases for STAR-shaped legacy
+        # output directories.  Keep the read-only parser alias without
+        # advertising HISAT2 as a runnable workflow tool.
+        if tool_id in {"star", "hisat2"}:
             return {"alignment_summary": _parse_star(Path(output_dir), sample_id)}
         # featurecounts is handled by TSVMapper above
         if tool_id == "deseq2":
@@ -158,6 +171,8 @@ class RNASeqExpressionPlugin:
                 "differential_expression": _parse_deseq2(Path(output_dir), sample_id),
                 "normalized_expression": _parse_deseq2_normalized(Path(output_dir), sample_id),
             }
+        if tool_id == "build_count_matrix":
+            return {"count_matrix": _parse_count_matrix(Path(output_dir))}
         return {}
 
     # ── Report generation ────────────────────────────────────────────────
@@ -190,45 +205,22 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
         if check_files:
             raise ValueError(f"Sample sheet does not exist: {sample_sheet}")
         return _offline_sample_context(condition="CONDITION_NOT_CONFIGURED")
-    with sample_sheet.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        if reader.fieldnames is None:
-            raise ValueError(f"Sample sheet is empty: {sample_sheet}")
-        columns = set(reader.fieldnames)
-        required = {"sample_id", "read1", "read2"}
-        missing = required - columns
-        if missing:
-            raise ValueError(f"Sample sheet missing required columns: {sorted(missing)}")
-        samples = []
-        for index, row in enumerate(reader, start=2):
-            sample_id = _clean(row.get("sample_id"))
-            read1 = _clean(row.get("read1"))
-            read2 = _clean(row.get("read2"))
-            if not sample_id or not read1 or not read2:
-                raise ValueError(f"Row {index}: sample_id, read1, and read2 are required")
-            read1 = str(_resolve_path(read1, base_dirs=[sample_sheet.parent, PROJECT_ROOT]))
-            read2 = str(_resolve_path(read2, base_dirs=[sample_sheet.parent, PROJECT_ROOT]))
-            samples.append(
-                ABISample(
-                    sample_id=sample_id,
-                    platform=_clean(row.get("platform")) or "illumina",
-                    group=_clean(row.get("group")) or _clean(row.get("condition")),
-                    read1=read1,
-                    read2=read2,
-                    condition=_clean(row.get("condition")),
-                )
-            )
-    if not samples:
-        raise ValueError("Sample sheet contains no sample rows")
-    if check_files:
-        missing_files = []
-        for sample in samples:
-            for field in ("read1", "read2"):
-                value = getattr(sample, field)
-                if value and not Path(str(value)).exists():
-                    missing_files.append(f"{sample.sample_id}:{field}={value}")
-        if missing_files:
-            raise ValueError("Input files do not exist: " + "; ".join(missing_files))
+    rows = _parse_sample_sheet_tabular(
+        sample_sheet,
+        check_files=check_files,
+        base_dirs=[PROJECT_ROOT],
+    )
+    samples = [
+        ABISample(
+            sample_id=str(row["sample_id"]),
+            platform=str(row.get("platform") or "illumina"),
+            group=row.get("group") or row.get("condition"),
+            read1=str(row["read1"]),
+            read2=str(row["read2"]),
+            condition=row.get("condition"),
+        )
+        for row in rows
+    ]
     groups = {sample.group for sample in samples if sample.group}
     return ABISampleContext(
         samples=samples,
@@ -251,7 +243,36 @@ def _resolve_config_paths(config: Dict[str, Any]) -> None:
         input_config["sample_sheet"] = str(_resolve_path(sample_sheet, base_dirs=[PROJECT_ROOT]))
 
 
-# ── featureCounts parser ─────────────────────────────────────────────────
+# ── Count-matrix parser ──────────────────────────────────────────────────
+
+
+def _parse_count_matrix(output_dir: Path) -> List[Dict[str, Any]]:
+    """Unpivot the generated wide count matrix into stable standard rows."""
+    path = output_dir / "count_matrix.tsv"
+    if not path.exists():
+        return []
+    rows: List[Dict[str, Any]] = []
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        if not reader.fieldnames or len(reader.fieldnames) < 2:
+            return []
+        gene_column = "gene_id" if "gene_id" in reader.fieldnames else reader.fieldnames[0]
+        sample_columns = [column for column in reader.fieldnames if column != gene_column]
+        for source_row in reader:
+            gene_id = str(source_row.get(gene_column, "")).strip()
+            if not gene_id:
+                continue
+            for matrix_sample_id in sample_columns:
+                rows.append(
+                    {
+                        "gene_id": gene_id,
+                        "sample_id": matrix_sample_id,
+                        "count": source_row.get(matrix_sample_id, "0"),
+                        "tool": "build_count_matrix",
+                        "source_file": str(path),
+                    }
+                )
+    return rows
 
 
 # ── DESeq2 parser ───────────────────────────────────────────────────────

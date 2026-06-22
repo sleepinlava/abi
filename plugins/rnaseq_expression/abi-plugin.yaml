@@ -12,6 +12,7 @@ core_contracts:
   - fastp
   - star
   - featurecounts
+  - build_count_matrix
   - deseq2
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -42,8 +43,13 @@ workflow:
       after: [alignment]
       optional: false
       citation: "Liao et al. 2014, Bioinformatics, doi:10.1093/bioinformatics/btt656"
+    - id: count_matrix
+      tool: build_count_matrix
+      after: [quantification]
+      optional: false
+      citation: "ABI deterministic featureCounts matrix assembly"
     - id: differential_expression
       tool: deseq2
-      after: [quantification]
+      after: [count_matrix]
       optional: false
       citation: "Love et al. 2014, Genome Biology, doi:10.1186/s13059-014-0550-8"

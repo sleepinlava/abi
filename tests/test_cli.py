@@ -52,3 +52,19 @@ def test_export_openai_tools_uses_abi_tool_names():
     names = {tool["name"] for tool in tools}
     assert names
     assert all(name.startswith("abi_") for name in names)
+
+
+def test_install_skills_json_uses_agent_envelope_and_installs_readme(tmp_path):
+    target = tmp_path / "skills"
+
+    result = runner.invoke(
+        app,
+        ["install-skills", "--target", str(target), "--output-json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["status"] == "success"
+    assert payload["command"] == "install_skills"
+    assert (target / "README.md").is_file()
+    assert list(target.glob("*/SKILL.md"))

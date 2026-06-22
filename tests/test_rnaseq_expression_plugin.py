@@ -27,7 +27,7 @@ def test_table_schemas():
     assert "qc_summary" in schemas
     assert "alignment_summary" in schemas
     assert "normalized_expression" in schemas
-    assert "enrichment_results" in schemas
+    assert "count_matrix" in schemas
 
 
 def test_registry():
@@ -89,6 +89,8 @@ def test_deseq2_step_is_last(tmp_path):
     last_step = plan.steps[-1]
     assert last_step.tool_id == "deseq2"
     assert last_step.category == "differential_expression"
+    assert last_step.params["comparison"] == "treatment_vs_control"
+    assert last_step.params["alpha"] == 0.05
 
 
 def test_workflow_spec_loads():
@@ -96,7 +98,7 @@ def test_workflow_spec_loads():
 
     ws = load_workflow_spec("plugins/rnaseq_expression")
     assert ws is not None
-    assert len(ws.steps) == 4
+    assert len(ws.steps) == 5
     assert ws.steps[0].tool == "fastp"
     assert ws.steps[-1].tool == "deseq2"
     # All steps must have DOIs
@@ -176,6 +178,45 @@ def test_parse_deseq2_normalized():
     assert all(r["tool"] == "deseq2" for r in norm_rows)
 
 
+def test_parse_build_count_matrix(tmp_path):
+    (tmp_path / "count_matrix.tsv").write_text(
+        "gene_id\tS1\tS2\nGENE1\t10\t20\nGENE2\t3\t4\n",
+        encoding="utf-8",
+    )
+    result = get_plugin("rnaseq_expression").parse_outputs("build_count_matrix", tmp_path, "")
+
+    assert result["count_matrix"] == [
+        {
+            "gene_id": "GENE1",
+            "sample_id": "S1",
+            "count": "10",
+            "tool": "build_count_matrix",
+            "source_file": str(tmp_path / "count_matrix.tsv"),
+        },
+        {
+            "gene_id": "GENE1",
+            "sample_id": "S2",
+            "count": "20",
+            "tool": "build_count_matrix",
+            "source_file": str(tmp_path / "count_matrix.tsv"),
+        },
+        {
+            "gene_id": "GENE2",
+            "sample_id": "S1",
+            "count": "3",
+            "tool": "build_count_matrix",
+            "source_file": str(tmp_path / "count_matrix.tsv"),
+        },
+        {
+            "gene_id": "GENE2",
+            "sample_id": "S2",
+            "count": "4",
+            "tool": "build_count_matrix",
+            "source_file": str(tmp_path / "count_matrix.tsv"),
+        },
+    ]
+
+
 def test_unknown_tool_returns_empty():
     """Unrecognized tool_id → empty dict (graceful no-op)."""
     plugin = get_plugin("rnaseq_expression")
@@ -237,7 +278,7 @@ def test_figure_specs_valid():
     plugin = get_plugin("rnaseq_expression")
     schemas = plugin.table_schemas()
     specs = load_figure_specs(plugin.root / "figure_specs.yaml", table_schemas=schemas)
-    assert len(specs) == 7  # 6 original + ma_plot
+    assert len(specs) == 6
     spec_ids = {s.id for s in specs}
     assert spec_ids == {
         "qc_read_counts",
@@ -245,7 +286,6 @@ def test_figure_specs_valid():
         "pca_expression",
         "volcano_deg",
         "top_deg_heatmap",
-        "enrichment_dotplot",
         "ma_plot",
     }
     required = [s for s in specs if s.required]

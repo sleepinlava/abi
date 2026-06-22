@@ -24,7 +24,7 @@ import csv
 import json
 import shlex
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Union
 
 from abi.config import compact_overrides
 
@@ -137,27 +137,6 @@ def _common_overrides(
     return compact_overrides(overrides)
 
 
-def _fetch_url_safe(url: str, *, timeout: float = 10.0) -> str:
-    """Fetch a URL with timeout and graceful fallback (B9/B22 fix).
-
-    Returns the response body as a string on success, or ``""`` on any
-    failure (timeout, DNS error, HTTP error).  Never raises — callers
-    should check for an empty return value and handle the fallback.
-
-    Use this for non-critical external resources (CrossRef API, database
-    source URLs) where the pipeline should not abort on network issues.
-    """
-    import urllib.error as _error
-    import urllib.request as _request
-
-    try:
-        req = _request.Request(url, headers={"User-Agent": "ABI/1.0"})
-        with _request.urlopen(req, timeout=timeout) as resp:
-            return resp.read().decode("utf-8", errors="replace")
-    except (_error.URLError, _error.HTTPError, OSError, ValueError, TimeoutError):
-        return ""
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Shared plugin utilities — previously duplicated across 4 inline plugins.
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -181,30 +160,33 @@ def _resolve_path(
 ) -> Path:
     """Resolve *value* against *base_dirs*, rejecting paths that escape.
 
-    Mirrors the path-traversal guard in the flagship plasmid plugin
-    (``metagenomic_plasmid/_engine/sample_sheet.py``).  Absolute paths and
-    paths that already exist are accepted only if they lie inside one of
-    the *base_dirs*.
+    Absolute input paths are accepted because datasets commonly live outside
+    the project. Relative paths are constrained to *base_dirs* and lexical
+    ``..`` traversal is rejected.
     """
     path = Path(value)
-    # Absolute-or-existing fast path — but only if contained in a base dir.
-    if path.is_absolute() or path.exists():
-        for base_dir in base_dirs:
-            try:
-                path.resolve().relative_to(base_dir.resolve())
-                return path
-            except ValueError:
-                continue
-        # Fall through: could not validate containment; try base-relative.
-    for base_dir in base_dirs:
+    if path.is_absolute():
+        return path.resolve()
+    if ".." in path.parts:
+        raise ValueError(f"Relative path traversal is not allowed: {value}")
+    bases = [base_dir.resolve() for base_dir in base_dirs]
+    if not bases:
+        raise ValueError("At least one base directory is required for relative paths")
+    for base_dir in bases:
         candidate = (base_dir / path).resolve()
         try:
-            candidate.relative_to(base_dir.resolve())
+            candidate.relative_to(base_dir)
         except ValueError:
             continue
         if candidate.exists():
             return candidate
-    return path
+    # Return a deterministic, contained path for deferred/offline validation.
+    candidate = (bases[0] / path).resolve()
+    try:
+        candidate.relative_to(bases[0])
+    except ValueError as exc:
+        raise ValueError(f"Relative path escapes its base directory: {value}") from exc
+    return candidate
 
 
 def _offline_sample_context(
@@ -240,6 +222,23 @@ def _offline_sample_context(
     )
 
 
+def _execute_generic_dry_run(plugin: Any, plan: Any, config: Mapping[str, Any]) -> Dict[str, Path]:
+    """Run the shared mock executor for an inline plugin dry-run hook."""
+    from abi.executor import GenericABIExecutor
+    from abi.provenance import RunLogger
+    from abi.tables import StandardTableManager
+
+    executor = GenericABIExecutor(
+        plugin.registry(),
+        RunLogger(str(config["log_dir"])),
+        table_manager=StandardTableManager(plugin.table_schemas()),
+        parse_outputs=plugin.parse_outputs,
+        report_title=plugin.report_title,
+        mock_tools=True,
+    )
+    return executor.dry_run(plan, config)
+
+
 def _parse_fastp(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
     """Parse fastp JSON output → qc_summary rows.
 
@@ -252,7 +251,7 @@ def _parse_fastp(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
         try:
             with path.open("r", encoding="utf-8") as handle:
                 data = json.load(handle)
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             continue
         if not isinstance(data, dict):
             continue
@@ -313,7 +312,7 @@ def _parse_star(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
                             "source_file": str(path),
                         }
                     )
-        except OSError:
+        except (OSError, UnicodeDecodeError):
             continue
     return rows
 
@@ -324,6 +323,8 @@ def _parse_sample_sheet_tabular(
     required_columns: Iterable[str] = ("sample_id", "read1", "read2"),
     check_files: bool = True,
     extra_fields: Iterable[str] = ("group", "condition", "platform"),
+    file_fields: Iterable[str] = ("read1", "read2", "long_reads", "assembly"),
+    base_dirs: Iterable[Path] = (),
 ) -> List[Dict[str, Any]]:
     """Parse a tab-separated sample sheet into a list of row dicts.
 
@@ -335,6 +336,7 @@ def _parse_sample_sheet_tabular(
     whitespace stripped).  Callers wrap with their own typed objects
     (e.g. ``ABISample``).
     """
+    del extra_fields  # Accepted for backward compatibility; all TSV columns are retained.
     sample_sheet = Path(path)
     if not sample_sheet.exists():
         raise ValueError(f"Sample sheet does not exist: {sample_sheet}")
@@ -358,13 +360,22 @@ def _parse_sample_sheet_tabular(
             for col in required_columns:
                 if not cleaned.get(col):
                     raise ValueError(f"Row {index}: {col} is required")
+            for field in file_fields:
+                value = cleaned.get(field)
+                if value:
+                    cleaned[field] = str(
+                        _resolve_path(
+                            value,
+                            base_dirs=[sample_sheet.parent, *base_dirs],
+                        )
+                    )
             rows.append(cleaned)
     if not rows:
         raise ValueError("Sample sheet contains no sample rows")
     if check_files:
         missing_files = []
         for row in rows:
-            for field in required_columns:
+            for field in file_fields:
                 val = row.get(field)
                 if val and not Path(str(val)).exists():
                     missing_files.append(f"{row.get('sample_id', '?')}:{field}={val}")

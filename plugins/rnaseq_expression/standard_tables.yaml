@@ -38,16 +38,9 @@ tables:
     - normalization_method
     - tool
     - source_file
-  enrichment_results:
-    - term_id
-    - term
-    - category
-    - gene_count
-    - gene_ratio
-    - enrichment_score
-    - bg_ratio
-    - pvalue
-    - padj
-    - gene_ids
+  count_matrix:
+    - gene_id
+    - sample_id
+    - count
     - tool
     - source_file

@@ -188,3 +188,9 @@ abi-databases/
 # Plugin benchmark run artifacts
 bench/Bench_1/bench/results/
 bench/results/
+SRR12396486/
+
+sample_sheet_illumina_test.tsv
+meta_viru.md
+easy_meta.md
+comprehensive-testing-audit.md

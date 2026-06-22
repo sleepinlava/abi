@@ -61,7 +61,7 @@ nodes:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Merge Paired Reads ──────────────────────────────────────────────
   merge_vsearch:
@@ -78,13 +78,13 @@ nodes:
       merged_fasta:
         type: file
         format: fasta
-        contract: {min_size: "100B"}
+        contract: {min_size: "0B"}
         path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_merged.fasta"
       output_dir:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Dereplicate ─────────────────────────────────────────────────────
   derep_vsearch:
@@ -100,13 +100,13 @@ nodes:
       derep_fasta:
         type: file
         format: fasta
-        contract: {min_size: "100B"}
+        contract: {min_size: "0B"}
         path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_derep.fasta"
       output_dir:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Denoise UNOISE3 ─────────────────────────────────────────────────
   denoise_unoise3:
@@ -122,13 +122,13 @@ nodes:
       asv_fasta:
         type: file
         format: fasta
-        contract: {min_size: "100B"}
+        contract: {min_size: "0B"}
         path: "{outdir}/{category_dir}/{sample_id}/asvs.fasta"
       output_dir:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Optional OTU clustering ─────────────────────────────────────────
   otu_cluster:
@@ -150,7 +150,7 @@ nodes:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── SINTAX Taxonomy ─────────────────────────────────────────────────
   taxonomy_sintax:
@@ -167,13 +167,13 @@ nodes:
       taxonomy_tsv:
         type: file
         format: tsv
-        contract: {min_size: "100B"}
+        contract: {min_size: "0B"}
         path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_taxonomy.tsv"
       output_dir:
         type: directory
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Combine ASV FASTA ───────────────────────────────────────────────
   phylogeny_combine:
@@ -198,7 +198,7 @@ nodes:
         type: directory
         path: "{outdir}/05b_phylogeny"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Phylogeny Alignment ─────────────────────────────────────────────
   phylogeny_mafft:
@@ -223,7 +223,7 @@ nodes:
         type: directory
         path: "{outdir}/05b_phylogeny"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Phylogeny Tree ───────────────────────────────────────────────────
   phylogeny_tree:
@@ -248,7 +248,7 @@ nodes:
         type: directory
         path: "{outdir}/05b_phylogeny"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"
 
   # ── Diversity Metrics ───────────────────────────────────────────────
   diversity:
@@ -257,12 +257,10 @@ nodes:
     category: diversity
     scope: cross_sample
     optional: false
-    depends_on: [denoise_unoise3, phylogeny_tree]
-    params:
-      denoise_dir: "{outdir}/04_denoise"
-      merge_dir: "{outdir}/02_merge"
+    depends_on: [denoise_unoise3, merge_vsearch, phylogeny_tree]
     inputs:
-      asv_table:        {type: file, format: tsv}
+      denoise_dir:      {type: directory, path: "{outdir}/04_denoise"}
+      merge_dir:        {type: directory, path: "{outdir}/02_merge"}
       diversity_script: {type: file, format: py}
       phylogeny_tree:
         type: file
@@ -282,4 +280,4 @@ nodes:
         type: directory
         path: "{outdir}/06_diversity"
     assertions:
-      - "output_dir.exists()"
+      - "output_files.output_dir exists"

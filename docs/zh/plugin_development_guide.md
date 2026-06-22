@@ -86,6 +86,20 @@ abi install-skills      # → ~/.claude/skills/abi/
 - `required_keys`：JSON 输出必需的顶层键。
 - `schema`：带有简单类型/范围约束的点分 JSON 字段。
 
+检查项必须嵌套在输出的 `contract` 键下；将 `min_size` 等检查与 `type`
+并列是无效声明，运行时不会执行：
+
+```yaml
+outputs:
+  clean_read1:
+    type: file
+    format: fastq.gz
+    path: "{outdir}/{sample_id}.clean.fastq.gz"
+    contract:
+      min_size: "1KB"
+      extensions: [".fastq.gz"]
+```
+
 断言在输出验证之后根据 `output_files`、`output_json` 和 `return_code` 进行评估。示例：
 
 ```yaml
@@ -222,7 +236,7 @@ def parse_outputs(self, tool_id, output_dir, sample_id):
 ```python
 import pytest
 from abi.testing import assert_plugin_contract
-from abi.plugins.my_analysis import MyPlugin
+from your_package.plugin import MyPlugin  # 你的已安装插件入口点
 
 
 def test_plugin_contract():
@@ -235,9 +249,10 @@ def test_registry_loads():
     """工具注册表 YAML 解析无错误。"""
     plugin = MyPlugin()
     registry = plugin.registry()
-    assert len(registry.tools) > 0
+    tools = registry.list_tools()
+    assert len(tools) > 0
     # 验证预期工具已注册
-    tool_ids = [t.tool_id for t in registry.tools]
+    tool_ids = [t["id"] for t in tools]
     assert "fastp" in tool_ids
 
 

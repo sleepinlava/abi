@@ -92,7 +92,11 @@ class ToolRegistry:
 
     @classmethod
     def from_path(cls, path: str | Path | None = None) -> "ToolRegistry":
-        registry_path = Path(path) if path else PROJECT_ROOT / "config" / "tool_registry.yaml"
+        registry_path = (
+            Path(path)
+            if path
+            else PROJECT_ROOT / "plugins" / "metagenomic_plasmid" / "tool_registry.yaml"
+        )
         if not registry_path.exists():
             raise ConfigError(f"Tool registry does not exist: {registry_path}")
         with registry_path.open("r", encoding="utf-8") as handle:

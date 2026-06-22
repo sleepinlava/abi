@@ -32,7 +32,12 @@ import csv
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from abi._shared import _clean, _offline_sample_context, _resolve_path
+from abi._shared import (
+    _execute_generic_dry_run,
+    _offline_sample_context,
+    _parse_sample_sheet_tabular,
+    _resolve_path,
+)
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
 from abi.report import write_plugin_report
 from abi.schemas import ABIExecutionPlan, ABISample, ABISampleContext
@@ -119,6 +124,9 @@ class Amplicon16SPlugin:
     def registry(self) -> ToolRegistry:
         return ToolRegistry.from_path(self.root / "tool_registry.yaml")
 
+    def execute_dry_run(self, plan: Any, config: Mapping[str, Any]) -> Dict[str, Path]:
+        return _execute_generic_dry_run(self, plan, config)
+
     # ── Standard tables ──────────────────────────────────────────────────
 
     def table_schemas(self) -> Mapping[str, Iterable[str]]:
@@ -151,8 +159,12 @@ class Amplicon16SPlugin:
             return {"denoising_stats": _parse_vsearch_derep(Path(output_dir), sample_id)}
         if tool_id == "vsearch_denoise":
             return {"denoising_stats": _parse_vsearch_denoise(Path(output_dir), sample_id)}
+        if tool_id == "vsearch_otu":
+            return {"otu_table": _parse_vsearch_otu(Path(output_dir), sample_id)}
         if tool_id == "vsearch_taxonomy":
             return {"taxonomy": _parse_sintax(Path(output_dir), sample_id)}
+        if tool_id in {"phylogeny_combine", "phylogeny_mafft", "phylogeny_tree"}:
+            return {"phylogeny_artifacts": _parse_phylogeny_artifact(Path(output_dir), tool_id)}
         if tool_id == "diversity_metrics":
             return {
                 "alpha_diversity": _parse_alpha_diversity(Path(output_dir)),
@@ -191,45 +203,22 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
         if check_files:
             raise ValueError(f"Sample sheet does not exist: {sample_sheet}")
         return _offline_sample_context(group="GROUP_NOT_CONFIGURED")
-    with sample_sheet.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        if reader.fieldnames is None:
-            raise ValueError(f"Sample sheet is empty: {sample_sheet}")
-        columns = set(reader.fieldnames)
-        required = {"sample_id", "read1", "read2"}
-        missing = required - columns
-        if missing:
-            raise ValueError(f"Sample sheet missing required columns: {sorted(missing)}")
-        samples = []
-        for index, row in enumerate(reader, start=2):
-            sample_id = _clean(row.get("sample_id"))
-            read1 = _clean(row.get("read1"))
-            read2 = _clean(row.get("read2"))
-            if not sample_id or not read1 or not read2:
-                raise ValueError(f"Row {index}: sample_id, read1, and read2 are required")
-            read1 = str(_resolve_path(read1, base_dirs=[sample_sheet.parent, PROJECT_ROOT]))
-            read2 = str(_resolve_path(read2, base_dirs=[sample_sheet.parent, PROJECT_ROOT]))
-            samples.append(
-                ABISample(
-                    sample_id=sample_id,
-                    platform="illumina",
-                    group=_clean(row.get("group")),
-                    read1=read1,
-                    read2=read2,
-                    condition=_clean(row.get("condition")),
-                )
-            )
-    if not samples:
-        raise ValueError("Sample sheet contains no sample rows")
-    if check_files:
-        missing_files = []
-        for sample in samples:
-            for field in ("read1", "read2"):
-                value = getattr(sample, field)
-                if value and not Path(str(value)).exists():
-                    missing_files.append(f"{sample.sample_id}:{field}={value}")
-        if missing_files:
-            raise ValueError("Input files do not exist: " + "; ".join(missing_files))
+    rows = _parse_sample_sheet_tabular(
+        sample_sheet,
+        check_files=check_files,
+        base_dirs=[PROJECT_ROOT],
+    )
+    samples = [
+        ABISample(
+            sample_id=str(row["sample_id"]),
+            platform=str(row.get("platform") or "illumina"),
+            group=row.get("group"),
+            read1=str(row["read1"]),
+            read2=str(row["read2"]),
+            condition=row.get("condition"),
+        )
+        for row in rows
+    ]
     groups = {sample.group for sample in samples if sample.group}
     return ABISampleContext(
         samples=samples,
@@ -430,6 +419,61 @@ def _parse_vsearch_denoise(output_dir: Path, sample_id: str) -> List[Dict[str, A
             }
         )
     return rows
+
+
+def _parse_vsearch_otu(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
+    """Parse vsearch's wide OTU table into one row per OTU/sample."""
+    rows: List[Dict[str, Any]] = []
+    paths = sorted(output_dir.glob("*_otu.tsv"))
+    for path in paths:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle, delimiter="\t")
+            if not reader.fieldnames or len(reader.fieldnames) < 2:
+                continue
+            otu_column = reader.fieldnames[0]
+            abundance_columns = reader.fieldnames[1:]
+            for source_row in reader:
+                otu_id = str(source_row.get(otu_column, "")).strip()
+                if not otu_id:
+                    continue
+                for column in abundance_columns:
+                    rows.append(
+                        {
+                            "otu_id": otu_id,
+                            "sample_id": column or sample_id,
+                            "abundance": source_row.get(column, "0"),
+                            "tool": "vsearch_otu",
+                            "source_file": str(path),
+                        }
+                    )
+    return rows
+
+
+def _parse_phylogeny_artifact(output_dir: Path, tool_id: str) -> List[Dict[str, Any]]:
+    """Describe the concrete artifact emitted by each phylogeny stage."""
+    artifact_names = {
+        "phylogeny_combine": ("combined.fasta", "combined_fasta"),
+        "phylogeny_mafft": ("aligned.fasta", "aligned_fasta"),
+        "phylogeny_tree": ("phylogeny.nwk", "newick_tree"),
+    }
+    filename, artifact_type = artifact_names[tool_id]
+    path = output_dir / filename
+    if not path.is_file():
+        return []
+    record_count = 0
+    if path.suffix in {".fa", ".fasta", ".fna"}:
+        with path.open("r", encoding="utf-8") as handle:
+            record_count = sum(1 for line in handle if line.startswith(">"))
+    return [
+        {
+            "stage": tool_id,
+            "artifact_type": artifact_type,
+            "artifact_path": str(path),
+            "record_count": record_count,
+            "tool": tool_id,
+            "source_file": str(path),
+        }
+    ]
 
 
 # ── SINTAX taxonomy parser ──────────────────────────────────────────────

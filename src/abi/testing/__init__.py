@@ -11,6 +11,8 @@ Usage::
 
 from __future__ import annotations
 
+from typing import cast
+
 from abi.testing.benchmark import (
     BenchmarkAssertion,
     BenchmarkResult,
@@ -52,6 +54,41 @@ def assert_plugin_contract(plugin: object) -> None:
             f"Plugin contract validation failed ({len(errors)} issues):\n"
             + "\n".join(f"  - {e}" for e in errors)
         )
+
+    typed_plugin = cast(ABIPlugin, plugin)
+
+    # Filesystem-backed built-ins are also statically linted here so normal
+    # CI plugin validation covers DAG assertions, contract/resource blocks,
+    # and registry cross-references without requiring a separate CLI run.
+    root = getattr(plugin, "root", None)
+    if root is not None:
+        from pathlib import Path
+
+        import yaml
+
+        from abi.contracts import load_tool_contracts
+        from abi.contracts.lint import run_contract_lint
+
+        plugin_root = Path(root)
+        dag_path = plugin_root / "pipeline_dag.yaml"
+        contracts_path = plugin_root / "tool_contracts"
+        if dag_path.exists() and contracts_path.is_dir():
+            dag_spec = yaml.safe_load(dag_path.read_text(encoding="utf-8")) or {}
+            contracts = load_tool_contracts(str(plugin_root))
+            registry_ids = {str(tool["id"]) for tool in typed_plugin.registry().list_tools()}
+            lint_result = run_contract_lint(
+                dag_spec,
+                contracts=contracts,
+                registry_tool_ids=registry_ids,
+            )
+            lint_errors = [
+                finding for finding in lint_result["findings"] if finding["severity"] == "error"
+            ]
+            if lint_errors:
+                errors.extend(
+                    f"{finding['check']} at {finding['location']}: {finding['detail']}"
+                    for finding in lint_errors
+                )
 
     # ── Dry-run extension (optional) ───────────────────────────────────
     if isinstance(plugin, ABIDryRunPlugin):

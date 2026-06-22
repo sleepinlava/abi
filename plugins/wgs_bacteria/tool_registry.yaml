@@ -47,7 +47,9 @@ tools:
   executable: amrfinder
   default_enabled: true
   required: true
-  command_template: amrfinder --plus --protein {prokka_faa} --output {output_dir}/amr.tsv
-    --threads {threads}
+  command_template: amrfinder --plus --protein {prokka_faa} --gff {prokka_gff}
+    --database {amrfinder_db} --output {output_dir}/amr.tsv --threads {threads}
   inputs:
   - prokka_faa
+  - prokka_gff
+  - amrfinder_db

@@ -14,6 +14,11 @@ from abi.tool_descriptors import (
     export_openai_tools,
 )
 
+SAFE_TOOL_COUNT = sum(
+    metadata.get("permission") != "execution" for metadata in ABI_AGENT_TOOLS.values()
+)
+ALL_TOOL_COUNT = len(ABI_AGENT_TOOLS)
+
 
 @pytest.fixture
 def plugin():
@@ -28,7 +33,7 @@ def plugin():
 
 def test_anthropic_format_uses_input_schema_key(plugin):
     tools = export_anthropic(plugin)
-    assert len(tools) == 9
+    assert len(tools) == SAFE_TOOL_COUNT
     for tool in tools:
         assert "input_schema" in tool, f"Missing input_schema in {tool['name']}"
         assert "parameters" not in tool, f"Unexpected parameters key in {tool['name']}"
@@ -56,7 +61,7 @@ def test_anthropic_format_respects_include_execution(plugin):
     full = export_anthropic(plugin, include_execution=True)
     names = {t["name"] for t in full}
     assert "abi_run" in names
-    assert len(full) == 10
+    assert len(full) == ALL_TOOL_COUNT
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -68,7 +73,7 @@ def test_gemini_format_wrapped_in_function_declarations(plugin):
     result = export_gemini(plugin)
     assert isinstance(result, dict)
     assert "function_declarations" in result
-    assert len(result["function_declarations"]) == 9
+    assert len(result["function_declarations"]) == SAFE_TOOL_COUNT
 
 
 def test_gemini_format_uses_parameters_key(plugin):
@@ -93,7 +98,7 @@ def test_gemini_format_respects_include_execution(plugin):
     full = export_gemini(plugin, include_execution=True)
     full_names = {t["name"] for t in full["function_declarations"]}
     assert "abi_run" in full_names
-    assert len(full["function_declarations"]) == 10
+    assert len(full["function_declarations"]) == ALL_TOOL_COUNT
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -103,7 +108,7 @@ def test_gemini_format_respects_include_execution(plugin):
 
 def test_openai_compatible_nested_function_structure(plugin):
     tools = export_openai_compatible(plugin)
-    assert len(tools) == 9
+    assert len(tools) == SAFE_TOOL_COUNT
     for tool in tools:
         assert tool["type"] == "function"
         assert "function" in tool
@@ -120,14 +125,14 @@ def test_openai_compatible_respects_include_execution(plugin):
     full = export_openai_compatible(plugin, include_execution=True)
     full_names = {t["function"]["name"] for t in full}
     assert "abi_run" in full_names
-    assert len(full) == 10
+    assert len(full) == ALL_TOOL_COUNT
 
 
 def test_openai_compatible_all_known_providers(plugin):
     """Every provider in PROVIDER_PROFILES must produce valid output."""
     for provider in PROVIDER_PROFILES:
         tools = export_openai_compatible(plugin, provider=provider)
-        assert len(tools) == 9, f"Provider {provider} returned {len(tools)} tools"
+        assert len(tools) == SAFE_TOOL_COUNT, f"Provider {provider} returned {len(tools)} tools"
         for tool in tools:
             assert tool["type"] == "function"
             assert "function" in tool
@@ -253,10 +258,10 @@ def test_tool_aliases_maps_to_valid_methods():
             assert hasattr(ABIAgentInterface, method), f"{method!r} not on ABIAgentInterface"
 
 
-def test_tool_aliases_all_abi_keys_begin_with_abi():
-    """All canonical tool names in ABI_AGENT_TOOLS start with abi_."""
+def test_tool_aliases_all_new_canonical_keys_begin_with_abi():
+    """All provider-exported canonical names use the ABI namespace."""
     for name in ABI_AGENT_TOOLS:
-        assert name.startswith("abi_"), f"Tool {name!r} does not start with abi_"
+        assert name.startswith("abi_")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -626,7 +631,7 @@ def test_plugin_with_non_ascii_plugin_id():
         description = "元基因组分析"
 
     tools = export_openai_compatible(NonAsciiPlugin(), provider="openai")
-    assert len(tools) == 9  # still produces tools
+    assert len(tools) == SAFE_TOOL_COUNT  # still produces tools
     assert "宏基因组分析" in tools[0]["function"]["description"]
 
 
@@ -637,7 +642,7 @@ def test_plugin_with_empty_plugin_id():
         plugin_id = ""
 
     tools = export_openai_compatible(EmptyIdPlugin(), provider="openai")
-    assert len(tools) == 9
+    assert len(tools) == SAFE_TOOL_COUNT
     assert "Plugin scope:" in tools[0]["function"]["description"]
 
 
@@ -648,7 +653,7 @@ def test_plugin_with_special_plugin_id():
         plugin_id = "test<script>alert(1)</script>"
 
     tools = export_openai_compatible(SpecialPlugin(), provider="openai")
-    assert len(tools) == 9
+    assert len(tools) == SAFE_TOOL_COUNT
     # The plugin_id is embedded in JSON — callers are responsible for escaping
     assert "test<script>" in tools[0]["function"]["description"]
 
@@ -820,7 +825,14 @@ def test_all_formats_export_same_number_of_tools(plugin):
     anthropic_count = len(export_anthropic(plugin))
     gemini_count = len(export_gemini(plugin)["function_declarations"])
 
-    assert openai_count == deepseek_count == zhipu_count == anthropic_count == gemini_count == 9
+    assert (
+        openai_count
+        == deepseek_count
+        == zhipu_count
+        == anthropic_count
+        == gemini_count
+        == SAFE_TOOL_COUNT
+    )
 
 
 def test_same_tool_names_across_formats(plugin):
@@ -851,7 +863,7 @@ def test_many_provider_exports_no_memory_leak(plugin):
     for _ in range(50):
         for provider in PROVIDER_PROFILES:
             tools = export_openai_compatible(plugin, provider=provider)
-            assert len(tools) == 9
+            assert len(tools) == SAFE_TOOL_COUNT
 
 
 def test_rapid_format_switching_no_corruption(plugin):
@@ -866,7 +878,7 @@ def test_rapid_format_switching_no_corruption(plugin):
             results.append(export_gemini(plugin)["function_declarations"])
     # All results must have 9 tools
     for result in results:
-        assert len(result) == 9
+        assert len(result) == SAFE_TOOL_COUNT
 
 
 # ═══════════════════════════════════════════════════════════════════════════

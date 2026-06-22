@@ -265,6 +265,7 @@ def render_figure(
     Returns the output path on success, or None if the figure was skipped
     (optional figure with missing/empty source table).
     """
+    figures_dir.mkdir(parents=True, exist_ok=True)
     output_path = figures_dir / f"{spec.id}.png"
 
     rows = _read_tsv(tables_dir / f"{spec.source_table}.tsv")

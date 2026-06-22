@@ -25,11 +25,14 @@ table_summary from StandardTableManager.summarize() (for row counts per table).
 from __future__ import annotations
 
 import json
+import logging
 from html import escape
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
 __all__ = ["write_generic_report", "write_full_report", "write_plugin_report"]
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def write_generic_report(
@@ -286,10 +289,6 @@ def render_figures_via_sciplot(
     plugin_name = getattr(plugin, "report_title", None) or plugin.__class__.__name__
     abi_version = getattr(plugin, "abi_version", None)
 
-    import logging
-
-    _log = logging.getLogger(__name__)
-
     rendered: Dict[str, Path] = {}
     for old in old_specs:
         spec_id = old.get("id", "")
@@ -304,14 +303,14 @@ def render_figures_via_sciplot(
         if table_path is not None:
             if not table_path.exists():
                 if is_required:
-                    _log.warning(
+                    _LOGGER.warning(
                         "Figure '%s' (required): source table '%s' not found at %s — skipping",
                         spec_id,
                         source_table,
                         table_path,
                     )
                 else:
-                    _log.info(
+                    _LOGGER.info(
                         "Figure '%s' (optional): source table '%s' not found — skipping",
                         spec_id,
                         source_table,
@@ -327,9 +326,9 @@ def render_figures_via_sciplot(
             if line_count <= 1:
                 msg = "Figure '%s' (%s): source table '%s' is empty (no data rows) — skipping"
                 if is_required:
-                    _log.warning(msg, spec_id, "required", source_table)
+                    _LOGGER.warning(msg, spec_id, "required", source_table)
                 else:
-                    _log.info(msg, spec_id, "optional", source_table)
+                    _LOGGER.info(msg, spec_id, "optional", source_table)
                 continue
 
         try:
@@ -343,21 +342,21 @@ def render_figures_via_sciplot(
             result = render_figure(spec)
             # Log any validation / rendering errors
             for err in result.errors:
-                _log.warning("Figure '%s': %s", spec_id, err)
+                _LOGGER.warning("Figure '%s': %s", spec_id, err)
             for warn in result.warnings:
-                _log.info("Figure '%s': %s", spec_id, warn)
+                _LOGGER.info("Figure '%s': %s", spec_id, warn)
             # Find the PNG output for HTML embedding
             png_files = [p for p in result.output_files if p.suffix == ".png"]
             if png_files:
                 rendered[spec_id] = png_files[0]
             elif not result.errors:
-                _log.info(
+                _LOGGER.info(
                     "Figure '%s' rendered but produced no PNG — lint/provenance only",
                     spec_id,
                 )
         except Exception as exc:
             # Best-effort: log warning and skip figures that fail to render
-            _log.warning(
+            _LOGGER.warning(
                 "Figure '%s' failed to render: %s: %s",
                 spec_id,
                 type(exc).__name__,
@@ -456,8 +455,13 @@ def write_plugin_report(
                         Path(result_dir) / "tables",
                         Path(result_dir) / "figures",
                     )
-            except Exception:  # noqa: S110
-                pass
+            except Exception as exc:
+                _LOGGER.warning(
+                    "Figure rendering failed for plugin '%s': %s: %s",
+                    plugin.plugin_id,
+                    type(exc).__name__,
+                    exc,
+                )
 
     # ── Stashed config (for resource manifest) ──
     config = getattr(plugin, "_last_config", None)

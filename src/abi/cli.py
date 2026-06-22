@@ -93,6 +93,7 @@ from abi.plugins import get_plugin, list_plugins
 from abi.resources import check_resources, setup_resources
 from abi.results import validate_abi_result_dir
 from abi.schemas import ABIError
+from abi.skill_installer import install_bundled_skills
 from abi.tool_descriptors import (
     PROVIDER_PROFILES,
     export_anthropic,
@@ -114,32 +115,6 @@ app = typer.Typer(
 # 用于 Job Service 操作的子 Typer，挂载在 ``abi job`` 下。
 job_app = typer.Typer(help="Submit and inspect queued ABI Job Service operations.")
 app.add_typer(job_app, name="job")
-
-
-def _resolve_skills_source() -> Path:
-    """Resolve the bundled skills directory inside the ABI package.
-
-    Uses ``importlib.resources`` (Python ≥ 3.9) when available, falling back
-    to ``Path(abi.__file__).parent / "skills"`` for compatibility with
-    zip-imports and frozen environments.
-
-    解析 ABI 包内的 skills 目录。优先使用 importlib.resources，
-    在 zip 导入或冻结环境中回退到 __file__ 路径。
-    """
-    try:
-        from importlib.resources import files as _resources_files
-
-        _path = _resources_files("abi") / "skills"
-        if _path.is_dir():
-            return Path(str(_path))
-    except Exception:
-        pass
-    import abi
-
-    _path = Path(abi.__file__).parent / "skills"
-    if not _path.is_dir():
-        raise ABIError(f"ABI skills directory not found: {_path}")
-    return _path
 
 
 def _fail(exc: Exception) -> None:
@@ -1131,7 +1106,10 @@ def export_openai_tools_command(
     descriptor_format: str = typer.Option(
         "responses",
         "--format",
-        help="Descriptor format: responses, apps-sdk, or json.",
+        help=(
+            "OpenAI descriptor format: responses, apps-sdk, or json. "
+            "Use `abi export-tools` for Anthropic or Gemini."
+        ),
     ),
     include_execution: bool = typer.Option(
         False,
@@ -1145,6 +1123,9 @@ def export_openai_tools_command(
     report, etc.) in a format compatible with the OpenAI Chat Completions /
     Responses API ``tools`` parameter. Supports ``responses``, ``apps-sdk``,
     and ``json`` descriptor formats.
+
+    For Anthropic, Gemini, or provider-specific OpenAI-compatible exports,
+    use the unified ``abi export-tools`` command.
 
     ``--include-execution`` adds execution tools like ``abi_run`` to the export
     (off by default for safety).
@@ -1464,78 +1445,20 @@ def install_skills_command(
     （默认 ``~/.claude/skills/abi/``）。安装后，Claude Code 将自动加载
     这些 skills，并知道如何使用 ``abi`` CLI 及其生物信息学工具。
     """
+    if output_json:
+        _emit_agent_json(ABIAgentInterface().install_skills(target=target, force=force))
+        return
     try:
-        _source = _resolve_skills_source()
-        dest = target or (Path.home() / ".claude" / "skills" / "abi")
-        copied: List[str] = []
-        skipped: List[str] = []
-
-        # Collect skill files: only SKILL.md files in subdirectories (skip bare
-        # files like README.md that are human documentation, not agent skills).
-        install_plan: list[tuple[Path, Path, Path]] = []  # (skill_file, dest_subdir, dest_file)
-        for item in sorted(_source.iterdir()):
-            if not item.is_dir():
-                continue
-            skill_file = item / "SKILL.md"
-            if not skill_file.is_file():
-                continue
-            dest_subdir = dest / item.name
-            dest_file = dest_subdir / "SKILL.md"
-            if dest_file.exists() and not force:
-                skipped.append(str(dest_file))
-                continue
-            install_plan.append((skill_file, dest_subdir, dest_file))
-
-        # Atomic install: copy to temp dir first, then rename into place.
-        tmp_dest: Optional[Path] = None
-        try:
-            if install_plan:
-                import tempfile
-
-                tmp_dest = Path(tempfile.mkdtemp(prefix=".abi-skills-", dir=dest.parent))
-                for skill_file, dest_subdir, dest_file in install_plan:
-                    tmp_subdir = tmp_dest / dest_subdir.name
-                    tmp_subdir.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(skill_file, tmp_subdir / "SKILL.md")
-                # Ensure target directory exists for the rename
-                dest.mkdir(parents=True, exist_ok=True)
-                for skill_file, dest_subdir, dest_file in install_plan:
-                    dest_subdir.mkdir(parents=True, exist_ok=True)
-                    final_src = tmp_dest / dest_subdir.name / "SKILL.md"
-                    shutil.copy2(final_src, dest_file)
-                    copied.append(str(dest_file))
-                # Clean up temp directory
-                shutil.rmtree(tmp_dest, ignore_errors=True)
-                tmp_dest = None
-            elif not skipped and not any(
-                (dest / d.name / "SKILL.md").exists()
-                for d in sorted(_source.iterdir())
-                if d.is_dir()
-            ):
-                pass  # No skills to install and dest is empty — still report success
-        finally:
-            if tmp_dest is not None:
-                shutil.rmtree(tmp_dest, ignore_errors=True)
-
-        result = {
-            "source": str(_source),
-            "target": str(dest),
-            "copied": copied,
-            "skipped": skipped,
-            "count": len(copied),
-        }
-        if output_json:
-            _emit_agent_json(json.dumps({"status": "success", "result": result}))
-        else:
-            typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
-        if skipped:
+        result = install_bundled_skills(target=target, force=force)
+        typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
+        if result["skipped"]:
             typer.secho(
-                f"Skipped {len(skipped)} existing files (use --force to overwrite).",
+                f"Skipped {len(result['skipped'])} existing files (use --force to overwrite).",
                 fg=typer.colors.YELLOW,
                 err=True,
             )
         typer.secho(
-            f"Installed {len(copied)} skill(s) to {dest}",
+            f"Installed {result['count']} file(s) to {result['target']}",
             fg=typer.colors.GREEN,
             err=True,
         )

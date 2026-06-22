@@ -2,7 +2,7 @@
 project_name: illumina_full_test
 mode: auto
 platform: illumina
-threads: 8
+threads: 16
 outdir: /root/autodl-tmp/abi-illumina-full-run
 log_dir: /root/autodl-tmp/abi-illumina-full-run/logs
 

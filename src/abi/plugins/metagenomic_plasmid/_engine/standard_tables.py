@@ -599,7 +599,10 @@ def write_consensus_table(
         consensus_source = predictions
     logger.info(
         "write_consensus_table: %d predictions, %d configured_tools=%s, %d consensus_source",
-        len(predictions), len(configured_tools), configured_tools, len(consensus_source),
+        len(predictions),
+        len(configured_tools),
+        configured_tools,
+        len(consensus_source),
     )
 
     # Normalise weights: fill defaults for unlisted tools
@@ -683,7 +686,9 @@ def write_consensus_table(
 
     logger.info(
         "write_consensus_table: %d groups → %d consensus_rows, strategy=%s, append=False → %s",
-        len(by_sample_contig), len(consensus_rows), strategy,
+        len(by_sample_contig),
+        len(consensus_rows),
+        strategy,
         table_path(tables_dir, "plasmid_consensus"),
     )
     return write_standard_table(tables_dir, "plasmid_consensus", consensus_rows, append=False)

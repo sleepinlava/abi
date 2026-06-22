@@ -23,7 +23,10 @@ else:
 _JSON_TO_PY_TYPE: dict[str, str] = {
     "string": "str",
     "integer": "int",
+    "number": "float",
     "boolean": "bool",
+    "array": "list",
+    "object": "dict",
 }
 
 
@@ -36,8 +39,8 @@ def _register_mcp_tools(mcp: Any, agent: ABIAgentInterface) -> None:
     to generate JSON Schema — the same information that was previously
     maintained by hand in 10 separate ``@mcp.tool()`` functions.
 
-    The legacy ``autoplasm_validate_result`` alias is registered separately
-    to preserve backward compatibility with older MCP clients.
+    Legacy public aliases are included in ``ABI_AGENT_TOOLS`` so every
+    transport and provider exporter exposes the same tool set.
     """
     from abi.tool_descriptors import ABI_AGENT_TOOLS, TOOL_ALIASES
 
@@ -84,22 +87,25 @@ def _register_mcp_tools(mcp: Any, agent: ABIAgentInterface) -> None:
             "Optional": Optional,
             "str": str,
             "int": int,
+            "float": float,
             "bool": bool,
+            "list": list,
+            "dict": dict,
         }
         exec(func_source, namespace)
         tool_func = namespace[tool_name]
         mcp.tool()(tool_func)
 
-    # Legacy alias — preserve backward compatibility with MCP clients
-    # that reference the old ``autoplasm_validate_result`` tool name.
+    # Preserve the pre-ABI MCP name for clients that already persisted it.
+    # Provider exports advertise the canonical abi_* name above.
     def autoplasm_validate_result(
         result_dir: str,
         allow_empty_tables: Optional[bool] = None,
     ) -> str:
-        """Validate an ABI result directory (legacy autoplasm alias)."""
+        """Validate a metagenomic-plasmid result directory (legacy alias)."""
         return agent.autoplasm_validate_result(
             result_dir=result_dir,
-            allow_empty_tables=bool(allow_empty_tables),
+            allow_empty_tables=True if allow_empty_tables is None else allow_empty_tables,
         )
 
     mcp.tool()(autoplasm_validate_result)

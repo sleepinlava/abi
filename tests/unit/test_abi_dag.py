@@ -81,6 +81,26 @@ def test_infer_dag_allows_shared_step_output_directories(tmp_path):
     assert dag.binding_for("fastqc").produced_paths["output_dir"] == str(shared)
 
 
+def test_extensionless_output_uses_declared_contract_type(tmp_path):
+    shared = str(tmp_path / "artifact")
+    file_contract = {"_contract": {"outputs": {"artifact": {"type": "file"}}}}
+    steps = [
+        ABIPlanStep(
+            step_id=step_id,
+            sample_id="S1",
+            step_name="test",
+            tool_id="mock",
+            category="test",
+            outputs={"artifact": shared},
+            params=file_contract,
+        )
+        for step_id in ("a", "b")
+    ]
+
+    with pytest.raises(ABIError, match="Duplicate ABI output path"):
+        infer_dag(steps)
+
+
 def test_infer_dag_sequential_fallback_links_unresolved_steps(tmp_path):
     shared = tmp_path / "01_qc" / "S1"
     steps = [
@@ -159,6 +179,45 @@ def test_infer_dag_ignores_structured_non_path_values():
     assert binding.produced_paths == {}
 
 
+def test_infer_dag_links_list_valued_aggregate_inputs(tmp_path):
+    first = tmp_path / "S1.counts.tsv"
+    second = tmp_path / "S2.counts.tsv"
+    steps = [
+        ABIPlanStep(
+            step_id="S1_counts",
+            sample_id="S1",
+            step_name="counts",
+            tool_id="featurecounts",
+            category="expression",
+            outputs={"counts": str(first)},
+        ),
+        ABIPlanStep(
+            step_id="S2_counts",
+            sample_id="S2",
+            step_name="counts",
+            tool_id="featurecounts",
+            category="expression",
+            outputs={"counts": str(second)},
+        ),
+        ABIPlanStep(
+            step_id="matrix",
+            sample_id=None,
+            step_name="matrix",
+            tool_id="build_count_matrix",
+            category="expression",
+            inputs={"count_files": [str(first), str(second)]},
+        ),
+    ]
+
+    dag = infer_dag(steps)
+
+    assert dag.edges["matrix"] == ["S1_counts", "S2_counts"]
+    assert dag.binding_for("matrix").consumed_paths == {
+        "count_files[0]": str(first),
+        "count_files[1]": str(second),
+    }
+
+
 def test_process_name_is_nextflow_safe():
     assert process_name("1 sample/qc-fastp") == "STEP_1_SAMPLE_QC_FASTP"
 
@@ -175,6 +234,41 @@ def test_metatranscriptomics_declared_workflow_is_golden_dag(tmp_path):
 
     assert dag.edges["RNA1_alignment_star"] == ["RNA1_qc_fastp"]
     assert dag.edges["RNA1_expression_featurecounts"] == ["RNA1_alignment_star"]
+
+
+def test_declared_workflow_binds_duplicate_tools_per_sample():
+    steps = []
+    for sample_id in ("S1", "S2"):
+        steps.extend(
+            [
+                ABIPlanStep(
+                    step_id=f"{sample_id}_qc",
+                    sample_id=sample_id,
+                    step_name="qc",
+                    tool_id="fastp",
+                    category="qc",
+                ),
+                ABIPlanStep(
+                    step_id=f"{sample_id}_align",
+                    sample_id=sample_id,
+                    step_name="align",
+                    tool_id="star",
+                    category="alignment",
+                ),
+            ]
+        )
+    workflow = WorkflowSpec(
+        name="multi-sample",
+        steps=[
+            WorkflowStepSpec(id="qc", tool="fastp", after=[]),
+            WorkflowStepSpec(id="align", tool="star", after=["qc"]),
+        ],
+    )
+
+    dag = infer_dag(steps, workflow_spec=workflow)
+
+    assert dag.edges["S1_align"] == ["S1_qc"]
+    assert dag.edges["S2_align"] == ["S2_qc"]
 
 
 def test_metagenomic_plasmid_core_declared_workflow_is_golden_dag():
@@ -224,6 +318,37 @@ def test_declared_workflow_path_mismatch_emits_warning(caplog):
     infer_dag(steps, workflow_spec=workflow)
 
     assert "declared-but-not-inferred=['qc']" in caplog.text
+
+
+def test_declared_workflow_path_mismatch_can_fail_strict_validation():
+    steps = [
+        ABIPlanStep(
+            step_id="qc",
+            sample_id="S1",
+            step_name="qc",
+            tool_id="fastp",
+            category="qc",
+            outputs={"reads": "trimmed.fastq.gz"},
+        ),
+        ABIPlanStep(
+            step_id="alignment",
+            sample_id="S1",
+            step_name="alignment",
+            tool_id="star",
+            category="alignment",
+            inputs={"reads": "different.fastq.gz"},
+        ),
+    ]
+    workflow = WorkflowSpec(
+        name="mismatch",
+        steps=[
+            WorkflowStepSpec(id="qc", tool="fastp", after=[]),
+            WorkflowStepSpec(id="alignment", tool="star", after=["qc"]),
+        ],
+    )
+
+    with pytest.raises(ABIError, match="DAG mismatch"):
+        infer_dag(steps, workflow_spec=workflow, strict_workflow=True)
 
 
 def test_declared_workflow_missing_node_fails():

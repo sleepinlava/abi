@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Dict, Mapping, Optional, Tuple
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
@@ -75,6 +75,14 @@ def request_json(
     except HTTPError as exc:
         payload = _read_json_response(exc.read())
         raise JobClientError(exc.code, payload) from exc
+    except (URLError, TimeoutError, OSError) as exc:
+        raise JobClientError(
+            0,
+            {
+                "status": "connection_error",
+                "error": f"Unable to reach ABI Job Service at {url}: {exc}",
+            },
+        ) from exc
 
 
 def _join_url(base_url: str, path: str) -> str:

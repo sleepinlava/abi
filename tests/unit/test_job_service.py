@@ -1,4 +1,7 @@
 import json
+import signal
+import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -700,6 +703,33 @@ def test_job_service_subprocess_workers_flag():
         assert job["status"] == "succeeded"
     finally:
         service.shutdown()
+
+
+def test_kill_process_escalates_to_sigkill_for_term_ignoring_child(monkeypatch):
+    import abi.jobs.service as service_module
+
+    monkeypatch.setattr(service_module, "PROCESS_TERMINATE_GRACE_SECONDS", 0.1)
+    monkeypatch.setattr(service_module, "PROCESS_KILL_WAIT_SECONDS", 1.0)
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import signal,time; "
+                "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                "print('ready', flush=True); time.sleep(60)"
+            ),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert process.stdout is not None
+    assert process.stdout.readline().strip() == "ready"
+
+    service_module._kill_process(process, process.pid)
+
+    assert process.returncode == -signal.SIGKILL
 
 
 def test_job_service_persists_remote_scheduler_job_id(tmp_path):

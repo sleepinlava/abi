@@ -132,6 +132,7 @@ pythonpath = ["src"]
 markers = [
     "smoke: end-to-end smoke tests that execute real bioinformatics tools (may be slow)",
     "requires_tools: tests that require conda environments with tools installed",
+    "performance: deterministic core performance and memory regression baselines",
 ]
 
 [tool.ruff]

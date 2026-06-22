@@ -56,3 +56,16 @@ tables:
     - distance
     - tool
     - source_file
+  otu_table:
+    - otu_id
+    - sample_id
+    - abundance
+    - tool
+    - source_file
+  phylogeny_artifacts:
+    - stage
+    - artifact_type
+    - artifact_path
+    - record_count
+    - tool
+    - source_file

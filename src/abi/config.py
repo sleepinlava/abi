@@ -9,6 +9,8 @@ from typing import Any, Dict, Mapping, Optional
 
 import yaml
 
+from abi.filesystem import ensure_parent
+
 
 def _resolve_project_root() -> Path:
     current = Path(__file__).resolve()
@@ -38,8 +40,7 @@ def load_yaml(path: str | Path) -> Dict[str, Any]:
 
 
 def write_yaml(data: Mapping[str, Any], path: str | Path) -> Path:
-    yaml_path = Path(path)
-    yaml_path.parent.mkdir(parents=True, exist_ok=True)
+    yaml_path = ensure_parent(path)
     with yaml_path.open("w", encoding="utf-8") as handle:
         yaml.safe_dump(dict(data), handle, sort_keys=False, allow_unicode=True)
     return yaml_path
@@ -92,6 +93,12 @@ def compact_overrides(overrides: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
         else:
             compacted[key] = value
     return compacted
+
+
+def mapping_block(config: Mapping[str, Any], key: str) -> Mapping[str, Any]:
+    """Return a config section only when it is a mapping."""
+    block = config.get(key, {})
+    return block if isinstance(block, Mapping) else {}
 
 
 def load_resource_profile(name: str) -> Dict[str, Any]:

@@ -15,6 +15,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+import pytest
+
 from abi.tsv_mapping import TSVMapper, generate_rows
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -145,6 +147,28 @@ class TestColumnMapping:
         }
         rows = generate_rows(spec, tmp_path, sample_id="S1")
         assert rows[0]["missing"] == "N/A"
+
+    def test_explicit_scalar_type_coercion(self, tmp_path: Path) -> None:
+        _write_tsv(tmp_path / "output.tsv", [{"count": "42", "score": "0.5"}])
+        spec = {
+            "source": {"type": "tsv_mapping", "pattern": "*.tsv"},
+            "columns": {
+                "count": {"sources": ["count"], "type": "integer"},
+                "score": {"sources": ["score"], "type": "number"},
+            },
+        }
+        row = generate_rows(spec, tmp_path)[0]
+        assert row["count"] == 42
+        assert row["score"] == 0.5
+
+    def test_invalid_explicit_type_is_rejected(self, tmp_path: Path) -> None:
+        _write_tsv(tmp_path / "output.tsv", [{"count": "not-an-int"}])
+        spec = {
+            "source": {"type": "tsv_mapping", "pattern": "*.tsv"},
+            "columns": {"count": {"sources": ["count"], "type": "integer"}},
+        }
+        with pytest.raises(ValueError, match="Cannot coerce"):
+            generate_rows(spec, tmp_path)
 
 
 # ── Positional columns ─────────────────────────────────────────────────────
@@ -439,6 +463,25 @@ class TestKeyValueLog:
         }
         rows = generate_rows(spec, tmp_path, sample_id="S1")
         assert rows == []
+
+
+class TestFastaCount:
+    def test_counts_records_and_bases(self, tmp_path: Path) -> None:
+        (tmp_path / "contigs.fasta").write_text(">a\nACGT\n>b\nAA\n", encoding="utf-8")
+        spec = {
+            "source": {"type": "fasta_count", "pattern": "*.fasta"},
+            "constants": {"tool": "assembler"},
+        }
+        rows = generate_rows(spec, tmp_path, sample_id="S1")
+        assert rows == [
+            {
+                "sample_id": "S1",
+                "sequence_count": 2,
+                "total_length": 6,
+                "source_file": str(tmp_path / "contigs.fasta"),
+                "tool": "assembler",
+            }
+        ]
 
 
 class TestTSVMapperGoldenTraceParity:

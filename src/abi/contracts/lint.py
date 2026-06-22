@@ -22,6 +22,7 @@ Design / 设计
 
 from __future__ import annotations
 
+import ast
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Set
@@ -212,6 +213,37 @@ def lint_dag(dag_spec: Mapping[str, Any]) -> List[LintFinding]:
                 )
             )
 
+    contract_keys = {
+        "min_size",
+        "extensions",
+        "contains",
+        "min_files",
+        "min_contigs",
+        "required_keys",
+        "schema",
+    }
+    for node in nodes:
+        nid = str(node.get("id", ""))
+        outputs = node.get("outputs", {})
+        if not isinstance(outputs, Mapping):
+            continue
+        for output_name, output_spec in outputs.items():
+            if not isinstance(output_spec, Mapping):
+                continue
+            misplaced = sorted(contract_keys & set(output_spec))
+            if misplaced:
+                findings.append(
+                    LintFinding(
+                        severity="error",
+                        check="misplaced_output_contract",
+                        detail=(
+                            f"Output {output_name!r} places contract checks {misplaced} "
+                            "outside the required 'contract' mapping"
+                        ),
+                        location=nid,
+                    )
+                )
+
     return findings
 
 
@@ -220,107 +252,47 @@ def lint_dag(dag_spec: Mapping[str, Any]) -> List[LintFinding]:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-# Safe builtins allowed in assertion expressions
-class _StubAttr:
-    """A stub object that accepts any attribute access, returning itself.
-
-    Used in the assertion precheck namespace so that ``output_json.x.y``
-    and ``output_files.z`` resolve without error during static analysis.
-    At runtime, ``_AttrDict`` provides the real values.
-    """
-
-    def __getattr__(self, _name: str) -> "_StubAttr":
-        return self
-
-    def __gt__(self, _other: Any) -> bool:
-        return True
-
-    def __lt__(self, _other: Any) -> bool:
-        return True
-
-    def __ge__(self, _other: Any) -> bool:
-        return True
-
-    def __le__(self, _other: Any) -> bool:
-        return True
-
-    def __eq__(self, _other: Any) -> bool:
-        return True
-
-    def __ne__(self, _other: Any) -> bool:
-        return True
-
-    def __bool__(self) -> bool:
-        return True
-
-    def __int__(self) -> int:
-        return 1
-
-    def __float__(self) -> float:
-        return 1.0
-
-    def __len__(self) -> int:
-        return 1
-
-    def __add__(self, _other: Any) -> "_StubAttr":
-        return self
-
-    def __sub__(self, _other: Any) -> "_StubAttr":
-        return self
-
-    def __mul__(self, _other: Any) -> "_StubAttr":
-        return self
-
-    def __truediv__(self, _other: Any) -> "_StubAttr":
-        return self
-
-    def __call__(self, *args: Any, **kwargs: Any) -> "_StubAttr":
-        return self
-
-
-_STUB = _StubAttr()
-
-_ASSERTION_SAFE_BUILTINS: Dict[str, Any] = {
-    "True": True,
-    "False": False,
-    "None": None,
-    "int": int,
-    "float": float,
-    "str": str,
-    "bool": bool,
-    "len": len,
-    "abs": abs,
-    "min": min,
-    "max": max,
-    "sum": sum,
-    "any": any,
-    "all": all,
-    "exists": lambda x: bool(x),
-    "isclose": lambda a, b, rel_tol=1e-9, abs_tol=0.0: True,  # stub
-    # Runtime context variables — stubbed for static analysis
-    "output_json": _STUB,
-    "output_files": _STUB,
-    "return_code": 0,
-}
-
-
 def _precheck_assertion_expression(expression: str) -> Optional[str]:
-    """Check whether an assertion expression is syntactically valid Python.
+    """Check whether an assertion expression is valid in the runtime namespace.
 
-    Returns ``None`` if the expression compiles, or an error message string.
-    Does NOT evaluate the expression — only checks syntax.
+    This remains a static check: it parses the expression and rejects names
+    that the runtime assertion evaluator does not provide.  It never evaluates
+    user-controlled YAML.
     """
     # Normalise natural-language syntax
     expr = re.sub(r"(\S+)\s+exists\s*$", r"exists(\1)", expression.strip())
     try:
-        compile(expr, "<assertion>", "eval")
+        tree = ast.parse(expr, mode="eval")
     except SyntaxError as exc:
         return f"Syntax error in assertion {expression!r}: {exc}"
-    # Also check it evaluates without runtime error in a dry namespace
-    try:
-        eval(expr, {"__builtins__": {}}, dict(_ASSERTION_SAFE_BUILTINS))
-    except Exception as exc:
-        return f"Runtime error in assertion {expression!r}: {exc}"
+    allowed_names = {
+        "output_json",
+        "output_files",
+        "return_code",
+        "int",
+        "float",
+        "str",
+        "bool",
+        "len",
+        "abs",
+        "min",
+        "max",
+        "sum",
+        "any",
+        "all",
+        "exists",
+        "isclose",
+        "round",
+    }
+    unknown_names = sorted(
+        {
+            node.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Name) and node.id not in allowed_names
+        }
+    )
+    if unknown_names:
+        return f"Unknown assertion variable(s): {', '.join(unknown_names)}"
     return None
 
 

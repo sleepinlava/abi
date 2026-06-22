@@ -74,6 +74,7 @@ from abi.diagnostics import classify_exception
 from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
 from abi.json_utils import load_json_object
+from abi.permissions import requires_confirmation
 from abi.plugins import get_plugin, list_plugins
 from abi.plugins.metagenomic_plasmid._engine.result_validation import (
     validate_result_dir as validate_autoplasm_result_dir,
@@ -82,6 +83,7 @@ from abi.provenance import RunLogger
 from abi.results import validate_abi_result_dir
 from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
 from abi.schemas import ABIError
+from abi.skill_installer import install_bundled_skills
 from abi.tables import StandardTableManager
 from abi.tool_descriptors import TOOL_ALIASES
 
@@ -465,6 +467,20 @@ class ABIAgentInterface:
         """
         return self._call("doctor_agent", self._doctor_agent, analysis_type=analysis_type)
 
+    def install_skills(
+        self,
+        *,
+        target: Optional[Union[str, Path]] = None,
+        force: bool = False,
+    ) -> str:
+        """Install bundled ABI skills and documentation into a target directory."""
+        return self._call(
+            "install_skills",
+            install_bundled_skills,
+            target=target,
+            force=force,
+        )
+
     def query(
         self,
         *,
@@ -586,6 +602,24 @@ class ABIAgentInterface:
                         }
                     ],
                     extra={"available": sorted(aliases)},
+                )
+            )
+        # Enforce the central permission registry at the transport-neutral
+        # dispatch boundary.  Short/legacy aliases resolve to their canonical
+        # ``abi_*`` permission name before the handler is called.
+        permission_name = tool_name
+        if permission_name not in TOOL_ALIASES or not permission_name.startswith("abi_"):
+            canonical = f"abi_{method_name}"
+            if canonical in TOOL_ALIASES:
+                permission_name = canonical
+        if requires_confirmation(permission_name) and not bool(args.get("confirm_execution")):
+            return json_dumps(
+                confirmation_required_envelope(
+                    method_name,
+                    {
+                        "message": "Re-run with confirm_execution=true after user approval.",
+                        "tool": permission_name,
+                    },
                 )
             )
         try:

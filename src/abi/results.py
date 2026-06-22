@@ -99,6 +99,20 @@ class ABIResultWriter:
             provenance / "environment.yml",
         )
         trace_path = _write_trace_tsv(trace_rows or [], provenance / "nextflow_trace.tsv")
+        progress_events_path = provenance / "progress.jsonl"
+        progress_events_path.write_text(
+            json.dumps(
+                {
+                    "event": "run_completed",
+                    "status": status,
+                    "engine": engine,
+                    "completed_step_count": _completed_step_count(command_rows),
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         table_summary = self.table_manager.summarize(tables_dir)
         report_paths = write_generic_report(
             plan,
@@ -135,6 +149,7 @@ class ABIResultWriter:
             "resources": resources_path,
             "environment": environment_path,
             "summary": summary_path,
+            "progress_events": progress_events_path,
             "tables": tables_dir,
             "report": report_paths["report"],
             "report_html": report_paths["report_html"],
@@ -267,7 +282,7 @@ def _resolved_input_rows(plan: Any, *, smoke: bool) -> list[dict[str, Any]]:
                 {
                     "step_id": step.step_id,
                     "tool_id": step.tool_id,
-                    "sample_id": step.sample_id or "",
+                    "sample_id": "" if step.sample_id is None else str(step.sample_id),
                     "input_name": name,
                     "path": str(path),
                     "exists": path.exists(),

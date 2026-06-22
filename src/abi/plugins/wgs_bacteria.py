@@ -10,11 +10,16 @@ Clinical/food/environmental bacterial isolate analysis pipeline:
 
 from __future__ import annotations
 
-import csv
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from abi._shared import _offline_sample_context, _parse_fastp, _resolve_path
+from abi._shared import (
+    _execute_generic_dry_run,
+    _offline_sample_context,
+    _parse_fastp,
+    _parse_sample_sheet_tabular,
+    _resolve_path,
+)
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
 from abi.report import write_plugin_report
 from abi.schemas import ABIExecutionPlan, ABISample, ABISampleContext
@@ -79,6 +84,9 @@ class WGSBacteriaPlugin:
     def registry(self) -> ToolRegistry:
         return ToolRegistry.from_path(self.root / "tool_registry.yaml")
 
+    def execute_dry_run(self, plan: Any, config: Mapping[str, Any]) -> Dict[str, Path]:
+        return _execute_generic_dry_run(self, plan, config)
+
     def table_schemas(self) -> Mapping[str, Any]:
         data = load_yaml(self.root / "standard_tables.yaml")
         return data.get("tables", {})
@@ -122,44 +130,23 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
         if check_files:
             raise ValueError(f"Sample sheet does not exist: {ss}")
         return _offline_sample_context()
-    with ss.open("r", encoding="utf-8", newline="") as h:
-        r = csv.DictReader(h, delimiter="\t")
-        if not r.fieldnames:
-            raise ValueError(f"Sample sheet is empty: {ss}")
-        required = {"sample_id", "read1", "read2"}
-        if required - set(r.fieldnames):
-            raise ValueError(
-                f"Sample sheet missing columns: {sorted(required - set(r.fieldnames))}"
-            )
-        samples = []
-        for i, row in enumerate(r, start=2):
-            sid = str(row.get("sample_id", "")).strip()
-            r1 = str(row.get("read1", "")).strip()
-            r2 = str(row.get("read2", "")).strip()
-            if not sid or not r1 or not r2:
-                raise ValueError(f"Row {i}: sample_id, read1, read2 required")
-            r1 = str(_resolve_path(r1, base_dirs=[ss.parent, PROJECT_ROOT]))
-            r2 = str(_resolve_path(r2, base_dirs=[ss.parent, PROJECT_ROOT]))
-            samples.append(
-                ABISample(
-                    sample_id=sid,
-                    platform="illumina",
-                    group=str(row.get("group", "")).strip() or None,
-                    read1=r1,
-                    read2=r2,
-                    condition=str(row.get("condition", "")).strip() or None,
-                )
-            )
+    rows = _parse_sample_sheet_tabular(
+        ss,
+        check_files=check_files,
+        base_dirs=[PROJECT_ROOT],
+    )
+    samples = [
+        ABISample(
+            sample_id=str(row["sample_id"]),
+            platform=str(row.get("platform") or "illumina"),
+            group=row.get("group"),
+            read1=str(row["read1"]),
+            read2=str(row["read2"]),
+            condition=row.get("condition"),
+        )
+        for row in rows
+    ]
     groups = {s.group for s in samples if s.group}
-    if check_files:
-        missing_files = []
-        for sample in samples:
-            for field in ("read1", "read2"):
-                value = getattr(sample, field)
-                if value and not Path(str(value)).exists():
-                    missing_files.append(f"{sample.sample_id}:{field}={value}")
-        if missing_files:
-            raise ValueError("Input files do not exist: " + "; ".join(missing_files))
     return ABISampleContext(
         samples=samples,
         multi_sample=len(samples) > 1,

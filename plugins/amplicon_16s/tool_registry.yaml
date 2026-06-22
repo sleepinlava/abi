@@ -105,12 +105,3 @@ tools:
   command_template: fasttree -nt {aligned_fasta} > {output_dir}/phylogeny.nwk
   inputs:
   - aligned_fasta
-- id: phylogeny_build
-  name: Phylogeny Build (MAFFT + FastTree)
-  category: phylogeny
-  executable: bash
-  default_enabled: true
-  required: false
-  command_template: mafft --auto --thread {threads} {asv_fasta} > {output_dir}/aligned.fasta && fasttree -nt {output_dir}/aligned.fasta > {output_dir}/phylogeny.nwk
-  inputs:
-  - asv_fasta

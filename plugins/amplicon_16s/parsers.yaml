@@ -4,8 +4,4 @@
 # (alpha_diversity + beta_diversity) and beta_diversity computes a compound
 # field (comparison = sample_a_vs_sample_b) that requires Python logic.
 
-parsers:
-  # No simple TSV column-mapping parsers yet for amplicon_16s.
-  # The alpha_diversity parser is a candidate, but it shares the
-  # diversity_metrics handler with beta_diversity (multi-table return).
-  # When the parser is split, alpha_diversity can be declarified here.
+parsers: {}

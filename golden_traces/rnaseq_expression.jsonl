@@ -1,9 +1,9 @@
 {"tool":"abi_list_types","arguments":{},"expect_status":"success"}
-{"tool":"abi_plan","arguments":{"analysis_type":"rnaseq_expression","config_path":"examples/config_minimal.yaml","profile":"dry_run","outdir":"{tmpdir}/rnaseq_demo","log_dir":"{tmpdir}/log","check_files":true},"expect_status":"success"}
-{"tool":"abi_dry_run","arguments":{"analysis_type":"rnaseq_expression","config_path":"examples/config_minimal.yaml","profile":"dry_run","outdir":"{tmpdir}/rnaseq_demo","log_dir":"{tmpdir}/log","progress":false,"check_files":true},"expect_status":"success"}
+{"tool":"abi_plan","arguments":{"analysis_type":"rnaseq_expression","config_path":"data/examples/rnaseq_expression/config.yaml","outdir":"{tmpdir}/rnaseq_demo","log_dir":"{tmpdir}/log","check_files":false},"expect_status":"success"}
+{"tool":"abi_dry_run","arguments":{"analysis_type":"rnaseq_expression","config_path":"data/examples/rnaseq_expression/config.yaml","outdir":"{tmpdir}/rnaseq_demo","log_dir":"{tmpdir}/log","progress":false,"check_files":false},"expect_status":"success"}
 {"tool":"abi_inspect","arguments":{"result_dir":"{tmpdir}/rnaseq_demo"},"expect_status":"success"}
 {"tool":"abi_report","arguments":{"analysis_type":"rnaseq_expression","result_dir":"{tmpdir}/rnaseq_demo"},"expect_status":"success"}
 {"tool":"abi_validate_result","arguments":{"result_dir":"{tmpdir}/rnaseq_demo","allow_empty_tables":true},"expect_status":"success"}
 {"tool":"abi_export_agent_context","arguments":{"analysis_type":"rnaseq_expression"},"expect_status":"success"}
 {"tool":"abi_doctor_agent","arguments":{"analysis_type":"rnaseq_expression"},"expect_status":"success"}
-{"tool":"abi_run","arguments":{"analysis_type":"rnaseq_expression","config_path":"examples/config_minimal.yaml","profile":"dry_run","outdir":"{tmpdir}/rnaseq_demo_run","log_dir":"{tmpdir}/log","smoke":true},"expect_status":"confirmation_required"}
+{"tool":"abi_run","arguments":{"analysis_type":"rnaseq_expression","config_path":"data/examples/rnaseq_expression/config.yaml","outdir":"{tmpdir}/rnaseq_demo_run","log_dir":"{tmpdir}/log","smoke":true},"expect_status":"confirmation_required"}

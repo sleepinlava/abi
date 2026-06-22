@@ -15,7 +15,7 @@ annotation:
   species: coli
 
 typing:
-  mlst_scheme: auto
+  scheme: auto
 
 resources:
   amrfinder_db: AMRFINDER_DB_NOT_CONFIGURED
