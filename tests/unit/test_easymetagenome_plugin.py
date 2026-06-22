@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import csv
 import gzip
+import json
 import os
 from pathlib import Path
 
 import pytest
 
+from abi.agent import ABIAgentInterface
 from abi.plugins import get_plugin
 from abi.plugins.easymetagenome.adapters import (
     DatabaseChecker,
@@ -124,6 +126,60 @@ def test_easymetagenome_is_registered_and_plannable_offline(tmp_path):
 
     assert plan.analysis_type == "easymetagenome"
     assert set(plan.selected_tools) == {"seqkit", "fastp", "kneaddata", "kraken2", "bracken"}
+
+
+def test_humann4_preset_selects_functional_branch_without_taxonomy(tmp_path):
+    plugin = get_plugin("easymetagenome")
+    config = plugin.load_config(
+        overrides={
+            "workflow": {"preset": "p1_humann4"},
+            "outdir": str(tmp_path / "results"),
+            "log_dir": str(tmp_path / "logs"),
+        }
+    )
+    plan = plugin.build_plan(config, check_files=False)
+
+    assert "humann4" in plan.selected_tools
+    assert "humann_regroup_table" in plan.selected_tools
+    assert "kraken2" not in plan.selected_tools
+    assert "bracken" not in plan.selected_tools
+    join_step = next(step for step in plan.steps if step.step_id == "humann_join_genefamilies")
+    assert join_step.params["_explicit_dependencies"]
+
+
+def test_workflow_catalog_is_available_through_unified_query():
+    payload = json.loads(
+        ABIAgentInterface().query(analysis_type="easymetagenome", what="workflows")
+    )
+
+    assert payload["status"] == "success"
+    assert {item["id"] for item in payload["result"]["workflows"]} == {
+        "p0_taxonomy",
+        "p1_humann4",
+        "full_read_based",
+    }
+
+
+def test_humann4_preflight_requires_only_functional_databases(tmp_path):
+    resource_dirs = {}
+    for name in ("host_db", "humann_nucleotide_db", "humann_protein_db", "metaphlan_db"):
+        path = tmp_path / name
+        path.mkdir()
+        resource_dirs[name] = str(path)
+    plugin = get_plugin("easymetagenome")
+    config = plugin.load_config(
+        overrides={
+            "input": {"sample_sheet": str(_manifest(tmp_path))},
+            "workflow": {"preset": "p1_humann4"},
+            "resources": resource_dirs,
+            "outdir": str(tmp_path / "results"),
+        }
+    )
+
+    report = plugin.preflight(config, engine="local", check_runtime=False)
+
+    assert report["status"] == "pass"
+    assert "kraken2_db" not in {check["name"] for check in report["checks"]}
 
 
 def test_p0_runner_executes_chain_and_writes_report(tmp_path, monkeypatch):

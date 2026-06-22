@@ -1,0 +1,4 @@
+tool_id: humann_split_stratified_table
+execution: cli
+version: {command: humann_split_stratified_table --help}
+supports: [version_check, command_build, dry_run, output_checks, failure_diagnosis]

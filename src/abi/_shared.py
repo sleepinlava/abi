@@ -225,6 +225,7 @@ def _offline_sample_context(
 def _execute_generic_dry_run(plugin: Any, plan: Any, config: Mapping[str, Any]) -> Dict[str, Path]:
     """Run the shared mock executor for an inline plugin dry-run hook."""
     from abi.executor import GenericABIExecutor
+    from abi.internal import plugin_internal_handlers
     from abi.provenance import RunLogger
     from abi.tables import StandardTableManager
 
@@ -235,6 +236,7 @@ def _execute_generic_dry_run(plugin: Any, plan: Any, config: Mapping[str, Any]) 
         parse_outputs=plugin.parse_outputs,
         report_title=plugin.report_title,
         mock_tools=True,
+        internal_handlers=plugin_internal_handlers(plugin),
     )
     return executor.dry_run(plan, config)
 

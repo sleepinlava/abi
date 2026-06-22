@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from unittest import mock
 
@@ -34,6 +35,11 @@ def test_safe_name_truncates_to_50_chars() -> None:
     long_name = "a" * 100
     result = _safe_name(long_name)
     assert len(result) <= 50
+
+
+def test_safe_name_keeps_long_prefixes_collision_resistant() -> None:
+    prefix = "sample_" + "a" * 80
+    assert _safe_name(prefix + "one") != _safe_name(prefix + "two")
 
 
 # ── _log_dir ─────────────────────────────────────────────────────────────
@@ -274,6 +280,74 @@ def test_build_submit_command_pbs() -> None:
     assert "qsub" in cmd
 
 
+def test_submit_jobs_uses_actual_slurm_afterok_dependencies(tmp_path: Path) -> None:
+    from abi.dag import ABIDAG, StepBinding
+    from abi.schemas import PlanStep
+
+    first = PlanStep("first", "stage", "tool", "stage", None)
+    second = PlanStep("second", "stage", "tool", "stage", None)
+    bindings = [
+        StepBinding(first, "first", [], {}, {}),
+        StepBinding(second, "second", ["first"], {}, {}),
+    ]
+    rt = HpcRuntime(mock.Mock())
+    rt._dag = ABIDAG(bindings, {"first": [], "second": ["first"]}, ["first"], ["first", "second"])
+    rt._script_by_step = {"first": tmp_path / "first.sh", "second": tmp_path / "second.sh"}
+    responses = [
+        subprocess.CompletedProcess([], 0, "101\n", ""),
+        subprocess.CompletedProcess([], 0, "102\n", ""),
+    ]
+
+    with mock.patch("subprocess.run", side_effect=responses) as run:
+        assert rt._submit_jobs(list(rt._script_by_step.values())) == {
+            "first": "101",
+            "second": "102",
+        }
+
+    assert "--dependency=afterok:101" in run.call_args_list[1].args[0]
+
+
+def test_poll_slurm_uses_sacct_for_jobs_missing_from_squeue() -> None:
+    rt = HpcRuntime(mock.Mock())
+    responses = [
+        subprocess.CompletedProcess([], 0, "", ""),
+        subprocess.CompletedProcess([], 0, "42|COMPLETED|0:0\n", ""),
+    ]
+
+    with mock.patch("subprocess.run", side_effect=responses):
+        assert rt._poll_slurm(["42"]) == {"42": "COMPLETED"}
+
+
+def test_resume_requires_matching_nonempty_checksums(tmp_path: Path) -> None:
+    import json
+
+    from abi.contracts.step_contract import compute_file_checksum
+    from abi.schemas import PlanStep
+
+    outdir = tmp_path / "out"
+    output = outdir / "result.tsv"
+    output.parent.mkdir(parents=True)
+    output.write_text("feature\tvalue\nA\t1\n", encoding="utf-8")
+    provenance = outdir / "provenance"
+    provenance.mkdir()
+    (provenance / "checksums.json").write_text(
+        json.dumps({str(output): compute_file_checksum(output)}), encoding="utf-8"
+    )
+    step = PlanStep(
+        step_id="result",
+        step_name="stage",
+        tool_id="tool",
+        category="stage",
+        sample_id=None,
+        outputs={"table": str(output), "output_dir": str(outdir)},
+    )
+    rt = HpcRuntime(mock.Mock())
+
+    assert rt._step_is_resumable(step, {"outdir": str(outdir)}) is True
+    output.write_text("changed\n", encoding="utf-8")
+    assert rt._step_is_resumable(step, {"outdir": str(outdir)}) is False
+
+
 # ── HpcRuntime dry_run ───────────────────────────────────────────────────
 
 
@@ -399,3 +473,26 @@ def test_write_single_script_pbs(tmp_path: Path) -> None:
     assert "#PBS" in content
     assert "#PBS -q short" in content
     assert "abi dispatch" in content
+
+
+def test_write_single_script_rejects_scheduler_directive_newlines(tmp_path: Path) -> None:
+    from abi.dag import infer_dag
+    from abi.schemas import ABIError, ABIPlanStep
+    from abi.tools import ResourceSpec
+
+    options = RuntimeOptions(engine="hpc", partition="compute\n#SBATCH --exclusive")
+    plugin = mock.Mock()
+    rt = HpcRuntime(plugin, options=options)
+    step = ABIPlanStep("step", "stage", "fastp", "qc", None)
+    dag = infer_dag([step])
+
+    with pytest.raises(ABIError, match="Invalid newline"):
+        rt._write_single_script(
+            tmp_path / "step.sh",
+            step,
+            dag.binding_for("step"),
+            ResourceSpec(),
+            None,
+            {"outdir": str(tmp_path), "log_dir": str(tmp_path / "logs")},
+            dag,
+        )

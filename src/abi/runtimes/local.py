@@ -5,8 +5,10 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from abi.executor import GenericABIExecutor
+from abi.internal import plugin_internal_handlers, run_plugin_preflight
 from abi.provenance import RunLogger
 from abi.runtimes.base import RuntimeOptions, RuntimeResult
+from abi.schemas import ABIError
 from abi.tables import StandardTableManager
 
 
@@ -46,6 +48,14 @@ class LocalRuntime:
         *,
         dry_run: bool,
     ) -> RuntimeResult:
+        mock_tools = dry_run or _coerce_bool(config.get("mock_tools"))
+        if not mock_tools:
+            report = run_plugin_preflight(self.plugin, config, engine="local")
+            if str(report.get("status", "pass")) == "fail":
+                raise ABIError(
+                    f"{self.plugin.plugin_id} preflight failed: "
+                    + "; ".join(str(item) for item in report.get("recommendations", []))
+                )
         table_manager = StandardTableManager(self.plugin.table_schemas())
         executor = GenericABIExecutor(
             self.plugin.registry(),
@@ -53,7 +63,8 @@ class LocalRuntime:
             table_manager=table_manager,
             parse_outputs=self.plugin.parse_outputs,
             report_title=self.plugin.report_title,
-            mock_tools=dry_run or _coerce_bool(config.get("mock_tools")),
+            mock_tools=mock_tools,
+            internal_handlers=plugin_internal_handlers(self.plugin),
         )
         outputs = executor.run(plan, config, dry_run=dry_run)
         return RuntimeResult(status="success", return_code=0, outputs=dict(outputs))

@@ -1,0 +1,11 @@
+abi_version: "0.1"
+tool_id: humann_join_tables
+name: HUMAnN Join Tables
+category: functional_summary
+purpose: Join per-sample HUMAnN tables into a cohort matrix.
+inputs: {humann_samples_dir: {type: directory, required: true}}
+outputs: {joined_table: {type: file, format: tsv}}
+execution: {executable: humann_join_tables, network: false, writes_output: true}
+normalization: {tables: [functional_abundance]}
+failure_handling: {tool_not_found: {hint: Create the easymeta-humann environment.}}
+resources: {cpu: 1, memory: 8GB, walltime: "02:00:00"}

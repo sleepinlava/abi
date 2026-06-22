@@ -116,6 +116,7 @@ TOOL_PERMISSIONS: Dict[str, PermissionLevel] = {
     "abi_export_agent_context": PermissionLevel.READ_ONLY,
     "abi_doctor_agent": PermissionLevel.READ_ONLY,
     "abi_query": PermissionLevel.READ_ONLY,
+    "abi_check": PermissionLevel.READ_ONLY,
     # ── PLANNING_WRITE: plan and report generation / 计划和报告生成 ──
     "abi_plan": PermissionLevel.PLANNING_WRITE,
     "abi_dry_run": PermissionLevel.PLANNING_WRITE,

@@ -1,0 +1,4 @@
+tool_id: humann_renorm_table
+execution: cli
+version: {command: humann_renorm_table --help}
+supports: [version_check, command_build, dry_run, output_checks, failure_diagnosis]

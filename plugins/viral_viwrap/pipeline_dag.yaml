@@ -18,6 +18,8 @@ standard_tables:
 nodes:
   input_validation:
     tool_id: internal
+    internal_handler: viral_viwrap.validate_inputs
+    execution_scope: driver
     category: input_validation
     scope: per_sample
     platforms: [assembly]
@@ -25,9 +27,16 @@ nodes:
     depends_on: []
     inputs:
       input_metagenome: {type: file, format: fasta, source: assembly}
-    outputs: {}
+    outputs:
+      validation_report:
+        type: file
+        format: json
+        path: "{outdir}/{category_dir}/{sample_id}.input_validation.json"
+        contract: {min_size: "10B"}
   viwrap_env_check:
     tool_id: internal
+    internal_handler: viral_viwrap.check_environment
+    execution_scope: driver
     category: environment_check
     scope: per_sample
     platforms: [assembly]
@@ -36,16 +45,28 @@ nodes:
     inputs:
       db_dir: {type: directory}
       conda_env_dir: {type: directory}
-    outputs: {}
+    outputs:
+      env_report:
+        type: file
+        format: json
+        path: "{outdir}/{category_dir}/{sample_id}.env_report.json"
+        contract: {min_size: "10B"}
   viwrap_command_plan:
     tool_id: internal
+    internal_handler: viral_viwrap.plan_command
+    execution_scope: driver
     category: command_plan
     scope: per_sample
     platforms: [assembly]
     optional: false
     depends_on: [viwrap_env_check]
     inputs: {}
-    outputs: {}
+    outputs:
+      command_plan:
+        type: file
+        format: json
+        path: "{outdir}/{category_dir}/{sample_id}.command.json"
+        contract: {min_size: "10B"}
   viwrap_managed_run:
     tool_id: viwrap
     category: viral_analysis
@@ -75,6 +96,7 @@ nodes:
       - "output_files.output_dir exists"
   viwrap_parse_summary:
     tool_id: internal
+    internal_handler: viral_viwrap.parse_summary
     category: parse
     scope: per_sample
     platforms: [assembly]
@@ -82,22 +104,39 @@ nodes:
     depends_on: [viwrap_managed_run]
     inputs:
       output_dir: {type: directory, source: viwrap_managed_run.output_dir}
-    outputs: {}
+    outputs:
+      parsed_summary:
+        type: file
+        format: json
+        path: "{outdir}/{category_dir}/{sample_id}.parsed_summary.json"
+        contract: {min_size: "10B"}
   viwrap_collect_artifacts:
     tool_id: internal
+    internal_handler: viral_viwrap.collect_artifacts
     category: collect
     scope: per_sample
     platforms: [assembly]
     optional: false
     depends_on: [viwrap_parse_summary]
     inputs: {}
-    outputs: {}
+    outputs:
+      artifact_manifest:
+        type: file
+        format: json
+        path: "{outdir}/{category_dir}/{sample_id}.artifacts.json"
+        contract: {min_size: "10B"}
   viwrap_report:
     tool_id: internal
+    internal_handler: viral_viwrap.report
     category: report
     scope: cross_sample
     platforms: [assembly]
     optional: false
     depends_on: [viwrap_collect_artifacts]
     inputs: {}
-    outputs: {}
+    outputs:
+      report_markdown:
+        type: file
+        format: markdown
+        path: "{outdir}/{category_dir}/viwrap_report.md"
+        contract: {min_size: "10B"}

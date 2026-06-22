@@ -16,6 +16,7 @@ Command                       Purpose
 ``list-types`` / ``list``     List installed ABI analysis plugins.
 ``init``                      Scaffold a workspace from a plugin template.
 ``plan``                      Build and write an ABI execution plan.
+``check``                     Run plugin input, resource, and runtime preflight checks.
 ``dry-run``                   Validate a plan and write provenance (no tool execution).
 ``run``                       Execute a plan through local or Nextflow runtime.
 ``run-nextflow``              Convenience alias for ``run --engine nextflow``.
@@ -371,6 +372,45 @@ def plan_command(
         _fail(exc)
 
 
+@app.command("check")
+def check_command(
+    analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
+    config: Optional[Path] = typer.Option(None, "--config", help="Plugin config YAML."),
+    sample_sheet: Optional[Path] = typer.Option(None, "--sample-sheet", help="Sample sheet TSV."),
+    profile: str = typer.Option("dry_run", "--profile", help="Plugin configuration profile."),
+    engine: str = typer.Option("local", "--engine", help="Target engine: local, nextflow, or hpc."),
+    check_runtime: bool = typer.Option(
+        True, "--check-runtime/--no-check-runtime", help="Check installed executables."
+    ),
+    output_json: bool = typer.Option(False, "--output-json", help="Emit the agent JSON envelope."),
+) -> None:
+    """Run side-effect-free input, resource, and runtime preflight checks."""
+    try:
+        payload = ABIAgentInterface().check(
+            analysis_type=analysis_type,
+            config_path=config,
+            sample_sheet=sample_sheet,
+            profile=profile,
+            engine=engine,
+            check_runtime=check_runtime,
+        )
+        if output_json:
+            typer.echo(payload)
+            envelope = loads_json(payload, label="agent response")
+            if not isinstance(envelope, Mapping) or envelope.get("status") != "success":
+                raise typer.Exit(code=1)
+            report = envelope.get("result", {})
+        else:
+            report = _agent_result(payload)
+            _emit_json_payload(report)
+        if isinstance(report, Mapping) and report.get("status") == "fail":
+            raise typer.Exit(code=1)
+    except typer.Exit:
+        raise
+    except Exception as exc:
+        _fail(exc)
+
+
 @app.command("dry-run")
 def dry_run_command(
     analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
@@ -530,7 +570,7 @@ def query_command(
     what: str = typer.Option(
         ...,
         "--what",
-        help="What to query: stages, tools, platforms, resources, inputs, outputs.",
+        help="What to query: stages, tools, platforms, workflows, resources, inputs, outputs.",
     ),
     step: Optional[str] = typer.Option(
         None,
@@ -756,7 +796,9 @@ def export_nextflow_command(
 @app.command("run")
 def run_command(
     analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
-    engine: str = typer.Option("local", "--engine", help="Runtime engine: local or nextflow."),
+    engine: str = typer.Option(
+        "local", "--engine", help="Runtime engine: local, nextflow, or hpc."
+    ),
     config: Optional[Path] = typer.Option(None, "--config", help="Plugin config YAML."),
     sample_sheet: Optional[Path] = typer.Option(None, "--sample-sheet", help="Sample sheet TSV."),
     profile: str = typer.Option("dry_run", "--profile", help="Profile for adapter plugins."),
@@ -782,7 +824,7 @@ def run_command(
         "--executor",
         help="Nextflow process executor override.",
     ),
-    resume: bool = typer.Option(False, "--resume", help="Pass -resume to Nextflow."),
+    resume: bool = typer.Option(False, "--resume", help="Resume completed workflow steps."),
     mamba_root: Optional[Path] = typer.Option(None, "--mamba-root", help="Local mamba root."),
     smoke: bool = typer.Option(False, "--smoke/--real", help="Use mocked/smoke tools."),
     check_files: bool = typer.Option(True, "--check-files/--no-check-files"),
@@ -831,6 +873,18 @@ def run_command(
         "--container-runtime",
         help="Container runtime: docker, singularity, podman, apptainer.",
     ),
+    scheduler: Optional[str] = typer.Option(
+        None, "--scheduler", help="HPC scheduler: slurm or pbs."
+    ),
+    partition: Optional[str] = typer.Option(None, "--partition", help="HPC partition/queue."),
+    account: Optional[str] = typer.Option(None, "--account", help="HPC allocation account."),
+    qos: Optional[str] = typer.Option(None, "--qos", help="Slurm quality of service."),
+    hpc_timeout_seconds: Optional[float] = typer.Option(
+        None, "--hpc-timeout", help="Maximum HPC workflow duration in seconds."
+    ),
+    poll_interval_seconds: float = typer.Option(
+        30.0, "--poll-interval", help="Scheduler polling interval in seconds."
+    ),
 ) -> None:
     """Run an ABI execution plan through a selected runtime backend.
 
@@ -841,7 +895,7 @@ def run_command(
     callers present a confirmation prompt.
 
     **Execution flow**: Loads the plugin config, builds the plan, selects a
-    runtime (``LocalRuntime`` or ``NextflowRuntime`` based on ``--engine``),
+    runtime (local, Nextflow, or native HPC based on ``--engine``),
     and executes. ``--smoke`` uses mock tool wrappers for smoke testing.
 
     通过选定的运行时后端运行 ABI 执行计划。
@@ -850,8 +904,8 @@ def run_command(
     命令返回 ``confirmation_required`` 信封并以代码 2 退出。这防止意外执行，
     并允许 agent 调用者展示确认提示。
 
-    执行流程：加载插件配置，构建计划，选择运行时（基于 ``--engine`` 选择
-    ``LocalRuntime`` 或 ``NextflowRuntime``），然后执行。
+    执行流程：加载插件配置，构建计划，按 ``--engine`` 选择本地、Nextflow 或
+    原生 HPC 运行时，然后执行。
     """
     if not confirm_execution:
         # No confirmation and not in output-json mode — route through agent
@@ -887,6 +941,12 @@ def run_command(
                 accelerator_override=accelerator_override,
                 container_image=container_image,
                 container_runtime=container_runtime,
+                scheduler=scheduler,
+                partition=partition,
+                account=account,
+                qos=qos,
+                hpc_timeout_seconds=hpc_timeout_seconds,
+                poll_interval_seconds=poll_interval_seconds,
             )
         )
         return
@@ -923,6 +983,12 @@ def run_command(
                 accelerator_override=accelerator_override,
                 container_image=container_image,
                 container_runtime=container_runtime,
+                scheduler=scheduler,
+                partition=partition,
+                account=account,
+                qos=qos,
+                hpc_timeout_seconds=hpc_timeout_seconds,
+                poll_interval_seconds=poll_interval_seconds,
             )
         )
         return
@@ -956,6 +1022,12 @@ def run_command(
                 accelerator_override=accelerator_override,
                 container_image=container_image,
                 container_runtime=container_runtime,
+                scheduler=scheduler,
+                partition=partition,
+                account=account,
+                qos=qos,
+                hpc_timeout_seconds=hpc_timeout_seconds,
+                poll_interval_seconds=poll_interval_seconds,
             )
         )
         typer.echo(json.dumps(result["outputs"], indent=2))
@@ -1955,6 +2027,24 @@ def dispatch_command(
             raise typer.BadParameter("Arguments must be a JSON object.")
         interface = ABIAgentInterface()
         typer.echo(interface.dispatch(command, arguments), nl=False)
+    except typer.Exit:
+        raise
+    except Exception as exc:
+        _fail(exc)
+
+
+@app.command("run-step", hidden=True)
+def run_step_command(
+    payload_file: Path = typer.Option(..., "--payload-file", help="ABI step payload JSON."),
+) -> None:
+    """Execute one serialized plan step inside a batch worker."""
+    try:
+        from abi.step_runner import execute_step_payload
+
+        result = execute_step_payload(payload_file)
+        typer.echo(json.dumps(result.to_dict(), ensure_ascii=False))
+        if result.status != "success":
+            raise typer.Exit(code=1)
     except typer.Exit:
         raise
     except Exception as exc:

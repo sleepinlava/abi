@@ -39,3 +39,53 @@ tools:
     command_template: bracken -d {kraken2_db} -i {kraken2_report} -r {read_length} -l {tax_level} -t 0 -o {bracken_table} -w {bracken_report}
     inputs: [kraken2_report, kraken2_db]
     resources: {cpu: 1, memory: 8GB, walltime: "02:00:00"}
+  - id: humann4
+    name: HUMAnN 4
+    category: functional
+    executable: humann
+    required: true
+    command_template: >-
+      humann --input {merged_reads} --output {output_dir}
+      --output-basename {sample_id} --threads {threads}
+      --nucleotide-database {humann_nucleotide_db}
+      --protein-database {humann_protein_db}
+      --metaphlan-options "--bowtie2db {metaphlan_db}"
+    inputs: [merged_reads, humann_nucleotide_db, humann_protein_db, metaphlan_db]
+    resources: {cpu: 16, memory: 64GB, walltime: "2-00:00:00", disk: 100GB}
+  - id: humann_join_tables
+    name: HUMAnN Join Tables
+    category: functional_summary
+    executable: humann_join_tables
+    required: true
+    command_template: >-
+      humann_join_tables --input {humann_samples_dir} --file_name {file_name}
+      --output {joined_table}
+    inputs: [humann_samples_dir]
+    resources: {cpu: 1, memory: 8GB, walltime: "02:00:00"}
+  - id: humann_renorm_table
+    name: HUMAnN Renormalize Table
+    category: functional_summary
+    executable: humann_renorm_table
+    required: true
+    command_template: >-
+      humann_renorm_table --input {input_table} --output {normalized_table} --units {units}
+    inputs: [input_table]
+    resources: {cpu: 1, memory: 8GB, walltime: "02:00:00"}
+  - id: humann_regroup_table
+    name: HUMAnN Regroup Table
+    category: functional_summary
+    executable: humann_regroup_table
+    required: true
+    command_template: >-
+      humann_regroup_table --input {input_table} --output {regrouped_table} --groups {groups}
+    inputs: [input_table]
+    resources: {cpu: 1, memory: 8GB, walltime: "04:00:00"}
+  - id: humann_split_stratified_table
+    name: HUMAnN Split Stratified Table
+    category: functional_summary
+    executable: humann_split_stratified_table
+    required: true
+    command_template: >-
+      humann_split_stratified_table --input {input_table} --output {split_dir}
+    inputs: [input_table]
+    resources: {cpu: 1, memory: 8GB, walltime: "02:00:00"}

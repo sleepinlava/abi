@@ -1,25 +1,51 @@
 abi_version: "0.1"
 pipeline_id: easymetagenome
-pipeline_name: EasyMetagenome-style P0 Taxonomic Profiling
+pipeline_name: EasyMetagenome Read-based Taxonomic and Functional Profiling
 platforms: [illumina]
 category_dirs:
   input_validation: 00_input_validation
   preprocessing: 01_preprocessing
   host_removal: 02_host_removal
   taxonomy: 03_taxonomy
+  functional: 04_function/sample
+  functional_summary: 04_function/summary
+  summary: 04_summary
+  statistics: 05_statistics
   report: report
 standard_tables:
   qc_summary: {description: fastp read QC}
   host_removal_summary: {description: KneadData read counts}
   taxonomy_abundance: {description: Bracken taxonomic abundance}
+  functional_abundance: {description: HUMAnN gene-family, pathway, and KO abundance}
 nodes:
+  validate_manifest:
+    tool_id: internal
+    internal_handler: easymetagenome.validate_manifest
+    execution_scope: driver
+    category: input_validation
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: []
+    inputs: {}
+    outputs:
+      normalized_manifest:
+        type: file
+        format: tsv
+        path: "{outdir}/{category_dir}/metadata.normalized.tsv"
+        contract: {min_size: "10B"}
+      validation_report:
+        type: file
+        format: json
+        path: "{outdir}/{category_dir}/input_validation.json"
+        contract: {min_size: "10B"}
   seqkit_stat_raw:
     tool_id: seqkit
     category: input_validation
     scope: per_sample
     platforms: [illumina]
     optional: false
-    depends_on: []
+    depends_on: [validate_manifest]
     inputs:
       read1: {type: file, format: fastq.gz, source: sample_sheet}
       read2: {type: file, format: fastq.gz, source: sample_sheet}
@@ -33,7 +59,7 @@ nodes:
     scope: per_sample
     platforms: [illumina]
     optional: false
-    depends_on: [seqkit_stat_raw]
+    depends_on: [validate_manifest, seqkit_stat_raw]
     inputs:
       read1: {type: file, format: fastq.gz, source: sample_sheet}
       read2: {type: file, format: fastq.gz, source: sample_sheet}
@@ -90,6 +116,7 @@ nodes:
       read_length: {type: integer}
     outputs:
       bracken_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.P.brk"}
+      phylum_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.P.brk"}
       bracken_report: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.P.report"}
       output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
     assertions: ["output_files.bracken_table exists"]
@@ -107,6 +134,7 @@ nodes:
       read_length: {type: integer}
     outputs:
       bracken_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.G.brk"}
+      genus_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.G.brk"}
       bracken_report: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.G.report"}
       output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
     assertions: ["output_files.bracken_table exists"]
@@ -124,6 +152,231 @@ nodes:
       read_length: {type: integer}
     outputs:
       bracken_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.S.brk"}
+      species_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.S.brk"}
       bracken_report: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.S.report"}
       output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
     assertions: ["output_files.bracken_table exists"]
+  fastp_summary:
+    tool_id: internal
+    internal_handler: easymetagenome.fastp_summary
+    category: summary
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [fastp_qc]
+    inputs:
+      fastp_json: {type: files, source: fastp_qc.json, aggregate: per_sample_outputs}
+    outputs:
+      summary_table:
+        type: file
+        format: tsv
+        path: "{outdir}/{category_dir}/fastp_summary.tsv"
+        contract: {min_size: "10B"}
+  kneaddata_summary:
+    tool_id: internal
+    internal_handler: easymetagenome.kneaddata_summary
+    category: summary
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [kneaddata_host_removal]
+    inputs:
+      dehost_reads: {type: files, source: kneaddata_host_removal.dehost_read1, aggregate: per_sample_outputs}
+    outputs:
+      summary_table:
+        type: file
+        format: tsv
+        path: "{outdir}/{category_dir}/kneaddata_summary.tsv"
+        contract: {min_size: "10B"}
+  bracken_merge:
+    tool_id: internal
+    internal_handler: easymetagenome.bracken_merge
+    category: summary
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [bracken_phylum, bracken_genus, bracken_species]
+    inputs:
+      phylum_tables: {type: files, source: bracken_phylum.phylum_table, aggregate: per_sample_outputs}
+      genus_tables: {type: files, source: bracken_genus.genus_table, aggregate: per_sample_outputs}
+      species_tables: {type: files, source: bracken_species.species_table, aggregate: per_sample_outputs}
+    outputs:
+      phylum_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/bracken.P.tsv", contract: {min_size: "10B"}}
+      genus_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/bracken.G.tsv", contract: {min_size: "10B"}}
+      species_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/bracken.S.tsv", contract: {min_size: "10B"}}
+  taxonomy_filter:
+    tool_id: internal
+    internal_handler: easymetagenome.taxonomy_filter
+    category: summary
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [bracken_merge]
+    params: {prevalence: 0.2}
+    inputs:
+      phylum_table: {type: file, source: bracken_merge.phylum_table}
+      genus_table: {type: file, source: bracken_merge.genus_table}
+      species_table: {type: file, source: bracken_merge.species_table}
+    outputs:
+      filtered_phylum: {type: file, format: tsv, path: "{outdir}/{category_dir}/bracken.P.filtered.tsv", contract: {min_size: "10B"}}
+      filtered_genus: {type: file, format: tsv, path: "{outdir}/{category_dir}/bracken.G.filtered.tsv", contract: {min_size: "10B"}}
+      filtered_species: {type: file, format: tsv, path: "{outdir}/{category_dir}/bracken.S.filtered.tsv", contract: {min_size: "10B"}}
+  taxonomy_diversity:
+    tool_id: internal
+    internal_handler: easymetagenome.taxonomy_diversity
+    category: statistics
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [taxonomy_filter]
+    inputs:
+      species_table: {type: file, source: taxonomy_filter.filtered_species}
+    outputs:
+      alpha_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/alpha.tsv", contract: {min_size: "10B"}}
+      beta_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/beta.tsv", contract: {min_size: "10B"}}
+  collect_report:
+    tool_id: internal
+    internal_handler: easymetagenome.report
+    category: report
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [fastp_summary, kneaddata_summary, taxonomy_diversity]
+    inputs:
+      fastp_summary: {type: file, source: fastp_summary.summary_table}
+      kneaddata_summary: {type: file, source: kneaddata_summary.summary_table}
+      species_table: {type: file, source: taxonomy_filter.filtered_species}
+      alpha_table: {type: file, source: taxonomy_diversity.alpha_table}
+      beta_table: {type: file, source: taxonomy_diversity.beta_table}
+    outputs:
+      report_manifest: {type: file, format: json, path: "{outdir}/{category_dir}/report_manifest.json", contract: {min_size: "10B"}}
+      report_markdown: {type: file, format: markdown, path: "{outdir}/{category_dir}/easymetagenome_report.md", contract: {min_size: "10B"}}
+  concat_dehost_reads:
+    tool_id: internal
+    internal_handler: easymetagenome.concat_reads
+    category: functional
+    scope: per_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [kneaddata_host_removal]
+    inputs:
+      dehost_read1: {type: file, source: kneaddata_host_removal.dehost_read1}
+      dehost_read2: {type: file, source: kneaddata_host_removal.dehost_read2}
+    outputs:
+      merged_reads: {type: file, format: fastq.gz, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.merged.fastq.gz", contract: {min_size: "10B"}}
+  humann4_profile:
+    tool_id: humann4
+    category: functional
+    scope: per_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [concat_dehost_reads]
+    inputs:
+      merged_reads: {type: file, source: concat_dehost_reads.merged_reads}
+      humann_nucleotide_db: {type: directory}
+      humann_protein_db: {type: directory}
+      metaphlan_db: {type: directory}
+    outputs:
+      genefamilies: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_genefamilies.tsv", contract: {min_size: "10B"}}
+      pathabundance: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_pathabundance.tsv", contract: {min_size: "10B"}}
+      pathcoverage: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}_pathcoverage.tsv", contract: {min_size: "10B"}}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
+  humann_join_genefamilies:
+    tool_id: humann_join_tables
+    category: functional_summary
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [humann4_profile]
+    params: {file_name: genefamilies}
+    inputs:
+      humann_samples_dir: {type: directory}
+    outputs:
+      joined_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/genefamilies.tsv", contract: {min_size: "10B"}}
+  humann_renorm_genefamilies:
+    tool_id: humann_renorm_table
+    category: functional_summary
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [humann_join_genefamilies]
+    params: {units: relab}
+    inputs:
+      input_table: {type: file, source: humann_join_genefamilies.joined_table}
+    outputs:
+      normalized_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/genefamilies_relab.tsv", contract: {min_size: "10B"}}
+  humann_regroup_ko:
+    tool_id: humann_regroup_table
+    category: functional_summary
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [humann_renorm_genefamilies]
+    params: {groups: uniref90_ko}
+    inputs:
+      input_table: {type: file, source: humann_renorm_genefamilies.normalized_table}
+    outputs:
+      regrouped_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/ko_relab.tsv", contract: {min_size: "10B"}}
+  humann_split_ko:
+    tool_id: humann_split_stratified_table
+    category: functional_summary
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [humann_regroup_ko]
+    inputs:
+      input_table: {type: file, source: humann_regroup_ko.regrouped_table}
+    outputs:
+      split_dir: {type: directory, path: "{outdir}/{category_dir}/ko_split"}
+  humann_join_pathabundance:
+    tool_id: humann_join_tables
+    category: functional_summary
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [humann4_profile]
+    params: {file_name: pathabundance}
+    inputs:
+      humann_samples_dir: {type: directory}
+    outputs:
+      joined_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/pathabundance.tsv", contract: {min_size: "10B"}}
+  humann_renorm_pathabundance:
+    tool_id: humann_renorm_table
+    category: functional_summary
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [humann_join_pathabundance]
+    params: {units: relab}
+    inputs:
+      input_table: {type: file, source: humann_join_pathabundance.joined_table}
+    outputs:
+      normalized_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/pathabundance_relab.tsv", contract: {min_size: "10B"}}
+  humann_split_pathabundance:
+    tool_id: humann_split_stratified_table
+    category: functional_summary
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [humann_renorm_pathabundance]
+    inputs:
+      input_table: {type: file, source: humann_renorm_pathabundance.normalized_table}
+    outputs:
+      split_dir: {type: directory, path: "{outdir}/{category_dir}/pathabundance_split"}
+  functional_report:
+    tool_id: internal
+    internal_handler: easymetagenome.functional_report
+    category: report
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [humann_split_ko, humann_split_pathabundance]
+    inputs:
+      gene_families: {type: file, source: humann_renorm_genefamilies.normalized_table}
+      ko_table: {type: file, source: humann_regroup_ko.regrouped_table}
+      pathway_table: {type: file, source: humann_renorm_pathabundance.normalized_table}
+      ko_split_dir: {type: directory, source: humann_split_ko.split_dir}
+      pathway_split_dir: {type: directory, source: humann_split_pathabundance.split_dir}
+    outputs:
+      report_manifest: {type: file, format: json, path: "{outdir}/{category_dir}/functional_report_manifest.json", contract: {min_size: "10B"}}
+      report_markdown: {type: file, format: markdown, path: "{outdir}/{category_dir}/easymetagenome_functional_report.md", contract: {min_size: "10B"}}

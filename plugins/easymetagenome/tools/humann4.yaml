@@ -1,0 +1,4 @@
+tool_id: humann4
+execution: cli
+version: {command: humann --version}
+supports: [version_check, command_build, dry_run, output_checks, failure_diagnosis]

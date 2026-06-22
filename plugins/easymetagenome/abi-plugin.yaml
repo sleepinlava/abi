@@ -1,13 +1,13 @@
 abi_version: "0.1"
 plugin_id: easymetagenome
-display_name: EasyMetagenome-style P0
-description: ABI-native P0 shotgun metagenomics DAG inspired by EasyMetagenome.
-report_title: EasyMetagenome-style P0 ABI Report
+display_name: EasyMetagenome Read-based Analysis
+description: ABI-native taxonomy and HUMAnN4 functional profiling inspired by EasyMetagenome.
+report_title: EasyMetagenome ABI Report
 plugin_type: standalone
 entry_point: abi.plugins.easymetagenome:EasyMetagenomePlugin
 tool_registry: tool_registry.yaml
 standard_tables: standard_tables.yaml
-core_contracts: [seqkit, fastp, kneaddata, kraken2, bracken]
+core_contracts: [seqkit, fastp, kneaddata, kraken2, bracken, humann4, humann_join_tables, humann_renorm_table, humann_regroup_table, humann_split_stratified_table]
 workflow:
   name: EasyMetagenome-style preprocessing and Kraken2/Bracken profiling
   citation: "Liu et al. 2025, iMeta, doi:10.1002/imt2.70008"

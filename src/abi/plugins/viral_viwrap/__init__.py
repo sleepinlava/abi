@@ -13,6 +13,7 @@ from abi.tools import GenericCommandSkill, ToolRegistry
 
 from .checker import check_environment
 from .command_builder import build_viwrap_command
+from .handlers import handlers as viwrap_handlers
 from .parser import parse_table_for_abi
 from .runner import run_viwrap
 
@@ -30,7 +31,9 @@ class _ViWrapToolSkill(GenericCommandSkill):
     def build_command(self, params: Dict[str, Any]) -> list[str]:
         config = dict(params)
         config["out_dir"] = params.get("output_dir")
-        config["executable"] = self.executable
+        conda_env_dir = Path(str(params.get("conda_env_dir", "")))
+        shared_executable = conda_env_dir / "ViWrap" / "bin" / "ViWrap"
+        config["executable"] = str(shared_executable) if conda_env_dir else self.executable
         return build_viwrap_command(config)
 
 
@@ -117,6 +120,7 @@ class ViralViWrapPlugin:
             {"db_dir": config["db_dir"], "conda_env_dir": config["conda_env_dir"]}
         )
         config["resources"] = resolved_resources
+        config["executable"] = str(Path(str(config["conda_env_dir"])) / "ViWrap/bin/ViWrap")
         build_viwrap_command(config)
         return config
 
@@ -135,14 +139,6 @@ class ViralViWrapPlugin:
     ) -> ABIExecutionPlan:
         from abi.dag_planner import build_plan_from_dag
 
-        if check_files:
-            report = check_environment(config)
-            if report["status"] == "fail":
-                failures = [
-                    item["message"] for item in report["checks"] if item["status"] == "fail"
-                ]
-                raise ValueError("ViWrap preflight failed: " + "; ".join(failures))
-
         plan = build_plan_from_dag(
             self.root / "pipeline_dag.yaml",
             config,
@@ -159,6 +155,19 @@ class ViralViWrapPlugin:
             elif step.step_name == "parse" and "output_dir" in step.inputs:
                 step.inputs["output_dir"] = viwrap_output
         return plan
+
+    def preflight(
+        self,
+        config: Mapping[str, Any],
+        *,
+        engine: str,
+        check_runtime: bool = True,
+    ) -> Mapping[str, Any]:
+        del engine
+        return check_environment(config, check_runtime=check_runtime)
+
+    def internal_handlers(self):
+        return viwrap_handlers()
 
     def registry(self) -> ToolRegistry:
         return _ViWrapToolRegistry.from_path(self.root / "tool_registry.yaml")

@@ -11,7 +11,7 @@ ABI pipelines can execute on three runtimes:
 Runtimes
   ├── local        — Single machine, subprocess-based (default)
   ├── nextflow     — DSL2 export via ``abi export-nextflow``
-  └── hpc          — Planned: SLURM/PBS/Torque job array submission
+  └── hpc          — Native Slurm jobs; PBS script/submission compatibility
 ```
 
 ## Local Runtime (Current Default)
@@ -38,7 +38,7 @@ subprocesses via ``GenericCommandSkill`` with conda environment isolation.
 
 ## HPC Execution Strategy
 
-### Phase 1: Nextflow export (current)
+### Nextflow export
 
 ```bash
 abi export-nextflow --type rnaseq_expression \
@@ -50,20 +50,27 @@ Produces a self-contained Nextflow DSL2 pipeline that can be submitted
 to SLURM/PBS clusters.  Each tool becomes a Nextflow process with
 per-step resource directives.
 
-### Phase 2: Native HPC submission (planned)
+### Native HPC submission
 
 ```bash
 abi run --type rnaseq_expression \
   --engine hpc \
-  --hpc-scheduler slurm \
-  --hpc-queue production \
-  --hpc-account proj_abi \
+  --scheduler slurm \
+  --partition production \
+  --account proj_abi \
   --config config.yaml \
   --confirm-execution
 ```
 
-ABI would generate SLURM/PBS job arrays with correct dependencies,
-resource requests, and log directories.
+ABI creates one payload and scheduler script per worker-scoped step, submits
+real `afterok` dependencies, polls `squeue` with `sacct` fallback, cancels timed
+out jobs, and aggregates atomic step result files. Driver-scoped validation runs
+before the first submission. `--resume` reuses only non-empty outputs whose
+checksums match `provenance/checksums.json`.
+
+Run `abi check --type <plugin> --config config.yaml --engine hpc` before
+submission. Production support targets Slurm; PBS retains compatible directives
+and dependency submission but has a smaller validation surface.
 
 ### Key HPC considerations for plugin developers
 

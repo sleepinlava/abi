@@ -73,6 +73,7 @@ from abi.agent.envelopes import (
 from abi.diagnostics import classify_exception
 from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
+from abi.internal import run_plugin_preflight
 from abi.json_utils import load_json_object
 from abi.permissions import requires_confirmation
 from abi.plugins import get_plugin, list_plugins
@@ -174,6 +175,28 @@ class ABIAgentInterface:
             outdir=outdir,
             log_dir=log_dir,
             check_files=check_files,
+        )
+
+    def check(
+        self,
+        *,
+        analysis_type: str,
+        config_path: Optional[Union[str, Path]] = None,
+        sample_sheet: Optional[Union[str, Path]] = None,
+        profile: str = "dry_run",
+        engine: str = "local",
+        check_runtime: bool = True,
+    ) -> str:
+        """Run plugin input, resource, and optional runtime preflight checks."""
+        return self._call(
+            "check",
+            self._check,
+            analysis_type=analysis_type,
+            config_path=config_path,
+            sample_sheet=sample_sheet,
+            profile=profile,
+            engine=engine,
+            check_runtime=check_runtime,
         )
 
     def dry_run(
@@ -319,6 +342,12 @@ class ABIAgentInterface:
         accelerator_override: Optional[str] = None,
         container_image: Optional[str] = None,
         container_runtime: Optional[str] = None,
+        scheduler: Optional[str] = None,
+        partition: Optional[str] = None,
+        account: Optional[str] = None,
+        qos: Optional[str] = None,
+        hpc_timeout_seconds: Optional[float] = None,
+        poll_interval_seconds: float = 30.0,
     ) -> str:
         """Run an ABI plan through a runtime backend after explicit confirmation.
 
@@ -332,16 +361,15 @@ class ABIAgentInterface:
             1. If ``confirm_execution`` is False -> return ``confirmation_required``
                immediately (no side effects).
             2. Resolve plugin config and build the execution plan.
-            3. Select runtime: ``engine=local`` uses ``LocalRuntime`` (subprocess);
-               ``engine=nextflow`` uses ``NextflowRuntime`` (DSL2 pipeline).
+            3. Select local subprocess, Nextflow DSL2, or native HPC runtime.
             4. Execute plan steps, capture return code, and collect outputs.
 
         Key parameters:
-            engine:             ``"local"`` or ``"nextflow"``.
+            engine:             ``"local"``, ``"nextflow"``, or ``"hpc"``.
             confirm_execution:  must be ``True`` to proceed past the safety gate.
             smoke:              if True with engine=local, tools run in mock mode
                                 (useful for integration tests).
-            resume:             resume a previous Nextflow run.
+            resume:             resume supported completed workflow steps.
             mamba_root:         path to the conda/mamba prefix for tool environments.
 
         Returns:
@@ -384,6 +412,12 @@ class ABIAgentInterface:
             accelerator_override=accelerator_override,
             container_image=container_image,
             container_runtime=container_runtime,
+            scheduler=scheduler,
+            partition=partition,
+            account=account,
+            qos=qos,
+            hpc_timeout_seconds=hpc_timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
         )
 
     def export_nextflow(
@@ -499,6 +533,7 @@ class ABIAgentInterface:
             ``stages``     — ordered pipeline stages (from DAG categories)
             ``tools``      — all tools grouped by category
             ``platforms``  — supported sequencing platforms
+            ``workflows``  — named workflow presets when the plugin declares them
             ``resources``  — inputs + outputs for a specific ``--step``
             ``inputs``     — only inputs for a specific ``--step``
             ``outputs``    — only outputs for a specific ``--step``
@@ -767,6 +802,35 @@ class ABIAgentInterface:
             "plan": plan_data,
         }
 
+    def _check(
+        self,
+        *,
+        analysis_type: str,
+        config_path: Optional[Union[str, Path]],
+        sample_sheet: Optional[Union[str, Path]],
+        profile: str,
+        engine: str,
+        check_runtime: bool,
+    ) -> Dict[str, Any]:
+        """Load configuration and run the plugin's side-effect-free preflight."""
+        plugin = get_plugin(analysis_type)
+        cfg = plugin.load_config(
+            _optional_path(config_path),
+            profile=profile,
+            overrides=_common_overrides(sample_sheet=sample_sheet),
+        )
+        report = dict(
+            run_plugin_preflight(
+                plugin,
+                cfg,
+                engine=engine.lower().strip(),
+                check_runtime=check_runtime,
+            )
+        )
+        report.setdefault("plugin", analysis_type)
+        report.setdefault("status", "pass")
+        return report
+
     def _dry_run(
         self,
         *,
@@ -931,8 +995,14 @@ class ABIAgentInterface:
         accelerator_override: Optional[str],
         container_image: Optional[str],
         container_runtime: Optional[str],
+        scheduler: Optional[str],
+        partition: Optional[str],
+        account: Optional[str],
+        qos: Optional[str],
+        hpc_timeout_seconds: Optional[float],
+        poll_interval_seconds: float,
     ) -> Dict[str, Any]:
-        """Execute the plan on a real runtime (local or Nextflow).
+        """Execute the plan on a real runtime (local, Nextflow, or native HPC).
 
         The ``confirm_execution`` safety gate is checked first: if False, a
         ``status="confirmation_required"`` dict is returned immediately so
@@ -998,6 +1068,12 @@ class ABIAgentInterface:
             accelerator_override=accelerator_override,
             container_image=container_image,
             container_runtime=container_runtime,
+            scheduler=scheduler,
+            partition=partition,
+            account=account,
+            qos=qos,
+            timeout_seconds=hpc_timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
         )
         # Select runtime backend: LocalRuntime for subprocess execution,
         # NextflowRuntime for DSL2 pipeline orchestration.
@@ -1129,6 +1205,18 @@ class ABIAgentInterface:
         if what_lower == "platforms":
             return _query_platforms(dag)
 
+        if what_lower == "workflows":
+            catalog_path = PLUGIN_ROOT / analysis_type / "workflows" / "catalog.yaml"
+            if not catalog_path.is_file():
+                return {"pipeline": analysis_type, "workflows": [], "workflow_count": 0}
+            catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8")) or {}
+            workflows = catalog.get("workflows", [])
+            return {
+                "pipeline": analysis_type,
+                "workflows": workflows,
+                "workflow_count": len(workflows),
+            }
+
         if what_lower in ("resources", "inputs", "outputs"):
             if not step:
                 raise ValueError(
@@ -1139,7 +1227,7 @@ class ABIAgentInterface:
 
         raise ValueError(
             f"Unknown query target: {what!r}. "
-            f"Valid targets: stages, tools, platforms, resources, inputs, outputs."
+            f"Valid targets: stages, tools, platforms, workflows, resources, inputs, outputs."
         )
 
     def _build_plan(

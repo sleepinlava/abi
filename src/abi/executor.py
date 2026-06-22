@@ -107,6 +107,11 @@ from abi.contracts.step_contract import (
 )
 from abi.errors import ToolError
 from abi.filesystem import ensure_directory
+from abi.internal import (
+    ABIInternalHandler,
+    InternalHandlerContext,
+    internal_handler_spec,
+)
 from abi.provenance import (
     PipelineProgressRecorder,
     RunLogger,
@@ -143,6 +148,7 @@ class GenericABIExecutor:
         report_title: str = "ABI Report",
         mock_tools: bool = False,
         enforce_contracts: bool = True,
+        internal_handlers: Mapping[str, ABIInternalHandler] | None = None,
     ) -> None:
         # ToolRegistry provides tool discovery and instantiation.
         # ToolRegistry 提供工具发现和实例化。
@@ -166,6 +172,8 @@ class GenericABIExecutor:
         # declared in pipeline_dag.yaml (via step params._contract).
         # 为 True 时，执行 pipeline_dag.yaml 中声明的输出契约、断言和校验和链。
         self.enforce_contracts = enforce_contracts
+        self.internal_handlers = dict(internal_handlers or {})
+        self._config: Mapping[str, Any] = {}
         # Accumulated checksum map across all executed steps.
         # 跨所有已执行步骤累积的校验和映射。
         self._checksums: Dict[str, str] = {}
@@ -222,6 +230,7 @@ class GenericABIExecutor:
 
         如果任何步骤失败，抛出 ``ToolError``。
         """
+        self._config = config
         # Create the three-tier output directory structure.
         # 创建三层输出目录结构。
         outdir = ensure_directory(plan.outdir, label="Output directory")
@@ -584,12 +593,27 @@ class GenericABIExecutor:
             # Step was explicitly skipped (e.g., already completed in a prior run).
             # 步骤被显式跳过（例如在之前的运行中已完成）。
             status = "skipped"
-        elif dry_run or step.tool_id == "internal":
+        elif dry_run:
             # In dry_run mode, we never invoke external tools.
             # "internal" tools are handled by the plan itself (no external process).
             # 在 dry_run 模式下，我们从不调用外部工具。
             # "internal" 工具由计划本身处理（无外部进程）。
             pass
+        elif step.tool_id == "internal":
+            try:
+                result = self._run_internal_step(step, provenance, tables_dir)
+                status = str(result["status"])
+                return_code = result["return_code"]
+                reason = str(result["reason"])
+                parsed_status = str(result.get("parsed_status", ""))
+                standard_tables = str(result.get("standard_tables", ""))
+                if status != "success":
+                    failed_error = ToolError(reason)
+            except Exception as exc:
+                status = "failed"
+                reason = f"{type(exc).__name__}: {exc}"
+                failed_error = ToolError(reason)
+                failed_error.__cause__ = exc
         elif not self.registry.has(step.tool_id):
             # Tool not found in the registry — fail immediately with a clear reason.
             # 在注册表中找不到工具——立即以明确原因失败。
@@ -646,6 +670,69 @@ class GenericABIExecutor:
                 standard_tables=standard_tables,
             )
         return row, failed_error
+
+    def _run_internal_step(
+        self,
+        step: Any,
+        provenance: Path,
+        tables_dir: Path,
+    ) -> Dict[str, Any]:
+        """Execute a registered internal handler and enforce its output contract."""
+        handler_id, _ = internal_handler_spec(step)
+        if not handler_id:
+            return {
+                "status": "success",
+                "return_code": 0,
+                "reason": "legacy internal node has no registered handler",
+                "parsed_status": "not_applicable",
+                "standard_tables": "",
+            }
+        handler = self.internal_handlers.get(handler_id)
+        if handler is None:
+            raise ToolError(f"Internal handler {handler_id!r} is not registered")
+        result = handler.run(
+            step,
+            self._config,
+            InternalHandlerContext(
+                outdir=Path(str(self._config.get("outdir", "."))),
+                provenance_dir=provenance,
+                tables_dir=tables_dir,
+            ),
+        )
+        if result.status != "success":
+            return {
+                "status": result.status,
+                "return_code": 1,
+                "reason": result.message or f"Internal handler {handler_id!r} failed",
+                "parsed_status": "failed",
+                "standard_tables": "",
+            }
+
+        contract = step.params.get("_contract", {})
+        if self.enforce_contracts and contract:
+            output_spec = contract.get("outputs", {})
+            contract_result = validate_output_contract(step.step_id, step.outputs, output_spec)
+            if not contract_result.passed:
+                raise ContractViolationError(step.step_id, contract_result.violations)
+            assertions = contract.get("assertions", [])
+            if assertions:
+                assertion_context = _build_assertion_context(step, step.outputs)
+                violations = evaluate_assertions(assertions, assertion_context)
+                if violations:
+                    raise ContractViolationError(step.step_id, violations)
+            if contract_result.checksums:
+                with self._checksum_lock:
+                    self._checksums.update(contract_result.checksums)
+                    save_checksums_atomic(provenance, self._checksums)
+
+        written = self.table_manager.append_rows(tables_dir, result.tables)
+        return {
+            "status": "success",
+            "return_code": 0,
+            "reason": result.message,
+            "parsed_status": "parsed" if written else "not_applicable",
+            "standard_tables": ",".join(sorted(written)),
+        }
 
     def _run_external_step(self, step: Any, provenance: Path, tables_dir: Path) -> Dict[str, Any]:
         """Run an external tool and parse its outputs into standard tables.
@@ -848,7 +935,16 @@ class GenericABIExecutor:
         if step.tool_id == "internal":
             # Internal steps have no external tool; synthesize a representative command.
             # 内部步骤没有外部工具；合成一个代表性命令。
-            return ["abi", "internal", step.step_name, "--step-id", step.step_id]
+            handler_id, scope = internal_handler_spec(step)
+            return [
+                "abi",
+                "internal",
+                handler_id or step.step_name,
+                "--scope",
+                scope,
+                "--step-id",
+                step.step_id,
+            ]
         if not self.registry.has(step.tool_id):
             # Placeholder so the plan is still readable even with missing tools.
             # 占位符，以便即使工具缺失计划仍然可读。

@@ -139,6 +139,24 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
         "read_only": False,
         "permission": "planning_write",
     },
+    "abi_check": {
+        "description": "Run plugin input, resource, and runtime preflight checks.",
+        "properties": {
+            "analysis_type": _string("ABI analysis type."),
+            "config_path": _string("Optional plugin config YAML path."),
+            "sample_sheet": _string("Optional sample sheet TSV path."),
+            "profile": _string("Optional plugin configuration profile."),
+            "engine": {
+                "type": "string",
+                "enum": ["local", "nextflow", "hpc"],
+                "description": "Target runtime backend.",
+            },
+            "check_runtime": _boolean("Check installed executables and environments."),
+        },
+        "required": ["analysis_type"],
+        "read_only": True,
+        "permission": "read_only",
+    },
     "abi_dry_run": {
         "description": "Render commands and provenance without executing external tools.",
         "properties": {
@@ -219,7 +237,15 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
             "analysis_type": _string("ABI analysis type."),
             "what": {
                 "type": "string",
-                "enum": ["stages", "tools", "platforms", "resources", "inputs", "outputs"],
+                "enum": [
+                    "stages",
+                    "tools",
+                    "platforms",
+                    "workflows",
+                    "resources",
+                    "inputs",
+                    "outputs",
+                ],
                 "description": "Metadata target to query.",
             },
             "step": _string("Tool or DAG step ID required by resource/input/output queries."),
@@ -258,6 +284,18 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
             "confirm_execution": {
                 "type": "boolean",
                 "description": "Must be true after user approval before execution.",
+            },
+            "scheduler": _string("HPC scheduler (slurm or pbs)."),
+            "partition": _string("HPC partition or queue."),
+            "account": _string("HPC allocation account."),
+            "qos": _string("Slurm quality of service."),
+            "hpc_timeout_seconds": {
+                "type": "number",
+                "description": "Maximum HPC workflow duration in seconds.",
+            },
+            "poll_interval_seconds": {
+                "type": "number",
+                "description": "Scheduler polling interval in seconds.",
             },
         },
         "required": ["analysis_type", "confirm_execution"],
@@ -313,6 +351,8 @@ TOOL_ALIASES: Dict[str, str] = {
     "abi_list_types": "list_types",
     "plan": "plan",
     "abi_plan": "plan",
+    "check": "check",
+    "abi_check": "check",
     "dry_run": "dry_run",
     "dry-run": "dry_run",
     "abi_dry_run": "dry_run",

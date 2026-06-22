@@ -2,3 +2,4 @@ tables:
   qc_summary: [sample_id, tool, metric, value, unit, source_file]
   host_removal_summary: [sample_id]
   taxonomy_abundance: [sample_id]
+  functional_abundance: [sample_id, feature_type, feature_id, value, stratified, source_file]

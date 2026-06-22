@@ -1,0 +1,4 @@
+tool_id: humann_join_tables
+execution: cli
+version: {command: humann_join_tables --help}
+supports: [version_check, command_build, dry_run, output_checks, failure_diagnosis]

@@ -5,6 +5,16 @@ environments, databases, output-path policy, and disk capacity before execution;
 it then records commands and logs and normalizes stable files under
 `08_ViWrap_summary_outdir/`. ABI does not rewrite or vendor ViWrap internals.
 
-Use `abi plan --type viral_viwrap --config <config.yaml>` to inspect the plan.
-For direct preflight and managed execution, use `check_environment()` and
-`run_viwrap()` from `abi.plugins.viral_viwrap`.
+Use the unified ABI entry points; plugin Python helpers are implementation
+details.
+
+```bash
+abi plan --type viral_viwrap --config viwrap.yaml
+abi check --type viral_viwrap --config viwrap.yaml --engine hpc
+abi run --type viral_viwrap --config viwrap.yaml --engine hpc \
+  --scheduler slurm --partition compute --confirm-execution
+```
+
+`resources.conda_env_dir` points to the shared ViWrap environment collection;
+ABI launches `<conda_env_dir>/ViWrap/bin/ViWrap`. ViWrap itself remains a single
+black-box external step surrounded by ABI validation, parsing, and reporting.

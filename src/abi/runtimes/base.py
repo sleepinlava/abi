@@ -39,6 +39,7 @@ class RuntimeOptions:
     mail_type: str | None = None
     mail_user: str | None = None
     hpc_strategy: str | None = None
+    poll_interval_seconds: float = 30.0
 
 
 @dataclass

@@ -1,4 +1,4 @@
-project_name: easymetagenome_p0
+project_name: easymetagenome
 mode: auto
 threads: 16
 outdir: results/easymetagenome
@@ -8,7 +8,12 @@ input:
 resources:
   host_db: KNEADDATA_HOST_DB_NOT_CONFIGURED
   kraken2_db: KRAKEN2_DB_NOT_CONFIGURED
+  humann_nucleotide_db: HUMANN_NUCLEOTIDE_DB_NOT_CONFIGURED
+  humann_protein_db: HUMANN_PROTEIN_DB_NOT_CONFIGURED
+  metaphlan_db: METAPHLAN_DB_NOT_CONFIGURED
   read_length: 150
+workflow:
+  preset: p0_taxonomy
 tool_params:
   fastp: {threads: 4}
   kneaddata: {threads: 4}

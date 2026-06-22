@@ -667,17 +667,68 @@ def build_plan_from_dag(
 
     # Separate per_sample and cross_sample nodes / 分离逐样本和跨样本节点
     per_sample_ids = [nid for nid in ordered_ids if dag.scope_for(nid) == "per_sample"]
-    cross_sample_ids = [nid for nid in ordered_ids if dag.scope_for(nid) == "cross_sample"]
+    driver_cross_ids = [
+        nid
+        for nid in ordered_ids
+        if dag.scope_for(nid) == "cross_sample"
+        and str(dag.get_node(nid).get("execution_scope", "worker")) == "driver"
+    ]
+    cross_sample_ids = [
+        nid
+        for nid in ordered_ids
+        if dag.scope_for(nid) == "cross_sample" and nid not in driver_cross_ids
+    ]
+
+    # Driver-scoped cross-sample nodes validate project-wide inputs before any
+    # per-sample work. They are executed synchronously by HPC runtimes and in
+    # declaration order by the local runtime.
+    cross_sample_outputs: Dict[str, Dict[str, Any]] = {}
+    driver_step_ids: Dict[str, str] = {}
+    for node_id in driver_cross_ids:
+        category = dag.node_category(node_id)
+        category_dir = dag.category_dir_for(category)
+        template_ctx = PathTemplateContext(config=config, sample=None, category_dir=category_dir)
+        resolved_outputs = _resolve_outputs(dag, node_id, template_ctx)
+        params = _resolve_params(dag, node_id, None, config, template_ctx)
+        params["_dag_node_id"] = node_id
+        params["_explicit_dependencies"] = [
+            driver_step_ids[dep] for dep in dag.node_depends_on(node_id) if dep in driver_step_ids
+        ]
+        steps.append(
+            PlanStep(
+                step_id=node_id,
+                sample_id=None,
+                step_name=category,
+                tool_id=node_id_to_tool_id(dag, node_id),
+                category=category,
+                inputs=_resolve_cross_sample_inputs(
+                    dag,
+                    node_id,
+                    sample_context,
+                    config,
+                    {},
+                    cross_sample_outputs,
+                    plugin_root,
+                ),
+                outputs=resolved_outputs,
+                params=params,
+                reason=f"active driver-scoped DAG node {node_id!r}",
+            )
+        )
+        driver_step_ids[node_id] = node_id
+        cross_sample_outputs[node_id] = resolved_outputs
 
     # ── Per-sample nodes ──────────────────────────────────────────────
     # Track resolved outputs per sample per node for cross-sample aggregation.
     # / 跟踪每个样本每个节点的解析输出，用于跨样本聚合。
     sample_outputs: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    sample_step_ids: Dict[str, Dict[str, str]] = {}
 
     for sample in sample_context.samples:
         sample_plat = sample_platforms[sample.sample_id]
         sample_active = platform_active.get(sample_plat, set())
         sample_outputs[sample.sample_id] = {}
+        sample_step_ids[sample.sample_id] = {}
         upstream_outputs: Dict[str, Dict[str, Any]] = {}
 
         for node_id in per_sample_ids:
@@ -702,6 +753,18 @@ def build_plan_from_dag(
 
             # Build step / 构建步骤
             step_id = f"{sample.sample_id}_{category}_{node_id_to_tool_id(dag, node_id)}"
+            if any(existing.step_id == step_id for existing in steps):
+                step_id = f"{step_id}_{node_id}"
+            params = _resolve_params(dag, node_id, sample, config, template_ctx)
+            params["_dag_node_id"] = node_id
+            params["_explicit_dependencies"] = [
+                dependency_id
+                for dep in dag.node_depends_on(node_id)
+                for dependency_id in (
+                    sample_step_ids[sample.sample_id].get(dep) or driver_step_ids.get(dep),
+                )
+                if dependency_id
+            ]
             step = PlanStep(
                 step_id=step_id,
                 sample_id=sample.sample_id,
@@ -710,10 +773,11 @@ def build_plan_from_dag(
                 category=category,
                 inputs=resolved_inputs,
                 outputs=resolved_outputs,
-                params=_resolve_params(dag, node_id, sample, config, template_ctx),
+                params=params,
                 reason=f"active DAG node {node_id!r} for platform {sample_plat!r}",
             )
             steps.append(step)
+            sample_step_ids[sample.sample_id][node_id] = step_id
             upstream_outputs[node_id] = resolved_outputs
             sample_outputs[sample.sample_id][node_id] = resolved_outputs
 
@@ -741,8 +805,6 @@ def build_plan_from_dag(
     # ── Cross-sample nodes ─────────────────────────────────────────────
     # Track outputs of cross-sample nodes so subsequent cross-sample nodes
     # can reference them via source: NODE.OUTPUT_KEY.
-    cross_sample_outputs: Dict[str, Dict[str, Any]] = {}
-
     for node_id in cross_sample_ids:
         category = dag.node_category(node_id)
         category_dir = dag.category_dir_for(category)
@@ -778,6 +840,17 @@ def build_plan_from_dag(
         resolved_outputs = _resolve_outputs(dag, node_id, template_ctx)
 
         tool_id = node_id_to_tool_id(dag, node_id)
+        explicit_dependencies: List[str] = []
+        for dep in dag.node_depends_on(node_id):
+            if dep in per_sample_ids:
+                explicit_dependencies.extend(
+                    mapping[dep] for mapping in sample_step_ids.values() if dep in mapping
+                )
+            elif dep in cross_sample_outputs:
+                explicit_dependencies.append(dep)
+        params = _resolve_params(dag, node_id, None, config, template_ctx)
+        params["_dag_node_id"] = node_id
+        params["_explicit_dependencies"] = explicit_dependencies
         step = PlanStep(
             step_id=node_id,
             sample_id=None,
@@ -786,7 +859,7 @@ def build_plan_from_dag(
             category=category,
             inputs=resolved_inputs,
             outputs=resolved_outputs,
-            params=_resolve_params(dag, node_id, None, config, template_ctx),
+            params=params,
             reason=f"active cross-sample DAG node {node_id!r}",
         )
         steps.append(step)
@@ -1176,6 +1249,13 @@ def _resolve_params(
             "inputs": dag.node_inputs(node_id),
             "outputs": outputs,
             "assertions": list(assertions) if isinstance(assertions, list) else [str(assertions)],
+        }
+
+    handler_id = node.get("internal_handler")
+    if handler_id:
+        params["_internal_handler"] = {
+            "handler_id": str(handler_id),
+            "execution_scope": str(node.get("execution_scope", "worker")),
         }
 
     return params

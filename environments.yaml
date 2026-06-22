@@ -275,6 +275,16 @@ environments:
     - kneaddata
     - kraken2
     - bracken
+  easymeta-humann:
+    channels:
+    - conda-forge
+    - bioconda
+    - defaults
+    channel_priority: strict
+    dependencies:
+    - python=3.10
+    - humann>=4
+    - metaphlan>=4
 tool_assignments:
   metagenomic_plasmid:
     fastp: autoplasm-qc
@@ -375,5 +385,10 @@ tool_assignments:
     kneaddata: easymeta-p0
     kraken2: easymeta-p0
     bracken: easymeta-p0
+    humann4: easymeta-humann
+    humann_join_tables: easymeta-humann
+    humann_renorm_table: easymeta-humann
+    humann_regroup_table: easymeta-humann
+    humann_split_stratified_table: easymeta-humann
   viral_viwrap:
     viwrap: abi-base

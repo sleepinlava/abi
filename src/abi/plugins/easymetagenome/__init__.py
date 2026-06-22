@@ -13,9 +13,46 @@ from abi.schemas import ABIExecutionPlan, ABISample, ABISampleContext
 from abi.tools import ToolRegistry
 
 from .adapters import ManifestValidator
+from .handlers import handlers as easymeta_handlers
 from .workflow import P0Workflow
 
 __all__ = ["EasyMetagenomePlugin", "ManifestValidator", "P0Workflow"]
+
+_COMMON_NODES = [
+    "validate_manifest",
+    "seqkit_stat_raw",
+    "fastp_qc",
+    "kneaddata_host_removal",
+    "fastp_summary",
+    "kneaddata_summary",
+]
+_TAXONOMY_NODES = [
+    "kraken2_classify",
+    "bracken_phylum",
+    "bracken_genus",
+    "bracken_species",
+    "bracken_merge",
+    "taxonomy_filter",
+    "taxonomy_diversity",
+    "collect_report",
+]
+_FUNCTIONAL_NODES = [
+    "concat_dehost_reads",
+    "humann4_profile",
+    "humann_join_genefamilies",
+    "humann_renorm_genefamilies",
+    "humann_regroup_ko",
+    "humann_split_ko",
+    "humann_join_pathabundance",
+    "humann_renorm_pathabundance",
+    "humann_split_pathabundance",
+    "functional_report",
+]
+WORKFLOW_PRESETS = {
+    "p0_taxonomy": _COMMON_NODES + _TAXONOMY_NODES,
+    "p1_humann4": _COMMON_NODES + _FUNCTIONAL_NODES,
+    "full_read_based": _COMMON_NODES + _TAXONOMY_NODES + _FUNCTIONAL_NODES,
+}
 
 
 class EasyMetagenomePlugin:
@@ -40,6 +77,17 @@ class EasyMetagenomePlugin:
         if config_path:
             config = deep_merge(config, load_yaml(config_path))
         config = deep_merge(config, compact_overrides(overrides))
+        workflow = dict(config.get("workflow", {}))
+        preset = str(workflow.get("preset", "p0_taxonomy"))
+        if preset not in WORKFLOW_PRESETS:
+            raise ValueError(
+                f"Unknown easymetagenome workflow preset {preset!r}; "
+                f"choose one of {sorted(WORKFLOW_PRESETS)}"
+            )
+        workflow.setdefault("include_nodes", list(WORKFLOW_PRESETS[preset]))
+        workflow["functional_enabled"] = preset in {"p1_humann4", "full_read_based"}
+        workflow["taxonomy_enabled"] = preset in {"p0_taxonomy", "full_read_based"}
+        config["workflow"] = workflow
         raw_input_config = config.get("input", {})
         if not isinstance(raw_input_config, Mapping) or not raw_input_config.get("sample_sheet"):
             raise ValueError("easymetagenome requires input.sample_sheet")
@@ -50,6 +98,7 @@ class EasyMetagenomePlugin:
         config["input"] = input_config
         if int(config.get("threads", 0)) < 1:
             raise ValueError("threads must be at least 1")
+        config["humann_samples_dir"] = str(Path(str(config["outdir"])) / "04_function/sample")
         return config
 
     def build_sample_context(
@@ -100,6 +149,86 @@ class EasyMetagenomePlugin:
             config,
             self.build_sample_context(config, check_files=check_files),
         )
+
+    def preflight(
+        self,
+        config: Mapping[str, Any],
+        *,
+        engine: str,
+        check_runtime: bool = True,
+    ) -> Mapping[str, Any]:
+        del engine
+        checks: list[dict[str, Any]] = []
+        try:
+            samples = ManifestValidator.validate(config["input"]["sample_sheet"])
+            checks.append({"name": "manifest", "status": "pass", "sample_count": len(samples)})
+        except (FileNotFoundError, ValueError) as exc:
+            checks.append({"name": "manifest", "status": "fail", "message": str(exc)})
+        resources = config.get("resources", {})
+        workflow = config.get("workflow", {})
+        taxonomy_enabled = (
+            bool(workflow.get("taxonomy_enabled")) if isinstance(workflow, Mapping) else True
+        )
+        functional_enabled = (
+            bool(workflow.get("functional_enabled")) if isinstance(workflow, Mapping) else False
+        )
+        required_resources = ["host_db"]
+        if taxonomy_enabled:
+            required_resources.append("kraken2_db")
+        if functional_enabled:
+            required_resources.extend(["humann_nucleotide_db", "humann_protein_db", "metaphlan_db"])
+        for name in required_resources:
+            value = resources.get(name) if isinstance(resources, Mapping) else None
+            path = Path(str(value or ""))
+            valid = bool(value) and "NOT_CONFIGURED" not in str(value) and path.exists()
+            checks.append(
+                {
+                    "name": name,
+                    "status": "pass" if valid else "fail",
+                    "path": str(path),
+                }
+            )
+        if check_runtime:
+            taxonomy_tools = {"seqkit", "fastp", "kneaddata", "kraken2", "bracken"}
+            functional_tools = {
+                "seqkit",
+                "fastp",
+                "kneaddata",
+                "humann4",
+                "humann_join_tables",
+                "humann_renorm_table",
+                "humann_regroup_table",
+                "humann_split_stratified_table",
+            }
+            selected_tools = (taxonomy_tools if taxonomy_enabled else set()) | (
+                functional_tools if functional_enabled else set()
+            )
+            for result in self.registry().check_tools(config=config):
+                if str(result.get("tool_id")) not in selected_tools:
+                    continue
+                installed = bool(result.get("installed"))
+                resource_status = str(result.get("resource_status", "ok"))
+                checks.append(
+                    {
+                        "name": str(result.get("tool_id", "tool")),
+                        "status": (
+                            "pass"
+                            if installed and resource_status in {"ok", "not_required"}
+                            else "fail"
+                        ),
+                        "details": result,
+                    }
+                )
+        failures = [item for item in checks if item["status"] == "fail"]
+        return {
+            "plugin": self.plugin_id,
+            "status": "fail" if failures else "pass",
+            "checks": checks,
+            "recommendations": [f"Fix failed preflight check: {item['name']}" for item in failures],
+        }
+
+    def internal_handlers(self):
+        return easymeta_handlers()
 
     def registry(self) -> ToolRegistry:
         return ToolRegistry.from_path(self.root / "tool_registry.yaml")

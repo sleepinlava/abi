@@ -1,0 +1,21 @@
+abi_version: "0.1"
+tool_id: humann4
+name: HUMAnN 4
+category: functional
+purpose: Profile microbial gene families and pathways from host-filtered reads.
+when_to_use: [read_based_functional_profiling]
+inputs:
+  merged_reads: {type: file, formats: [fastq, fastq.gz], required: true}
+  humann_nucleotide_db: {type: directory, required: true}
+  humann_protein_db: {type: directory, required: true}
+  metaphlan_db: {type: directory, required: true}
+outputs:
+  genefamilies: {type: file, format: tsv}
+  pathabundance: {type: file, format: tsv}
+  pathcoverage: {type: file, format: tsv}
+execution: {executable: humann, network: false, writes_output: true}
+normalization: {tables: [functional_abundance]}
+failure_handling:
+  missing_input: {hint: Check host-filtered reads and all HUMAnN/MetaPhlAn databases.}
+  tool_not_found: {hint: Create the easymeta-humann environment.}
+resources: {cpu: 16, memory: 64GB, walltime: "2-00:00:00", disk: 100GB}

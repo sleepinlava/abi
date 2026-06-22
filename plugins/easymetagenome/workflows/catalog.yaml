@@ -1,0 +1,13 @@
+workflows:
+  - id: p0_taxonomy
+    name: Taxonomic profiling
+    description: fastp, KneadData, Kraken2, Bracken, prevalence filtering, and diversity.
+    required_resources: [host_db, kraken2_db]
+  - id: p1_humann4
+    name: HUMAnN4 functional profiling
+    description: fastp, KneadData, HUMAnN4 gene families, pathways, KO regrouping, and stratified tables.
+    required_resources: [host_db, humann_nucleotide_db, humann_protein_db, metaphlan_db]
+  - id: full_read_based
+    name: Taxonomic and functional profiling
+    description: Runs both the P0 taxonomy and P1 HUMAnN4 branches from shared preprocessing.
+    required_resources: [host_db, kraken2_db, humann_nucleotide_db, humann_protein_db, metaphlan_db]

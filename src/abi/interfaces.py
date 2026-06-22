@@ -50,7 +50,29 @@ __all__ = [
     "ABIDryRunPlugin",
     "ABIInitializablePlugin",
     "ABIPlugin",
+    "ABIInternalHandlerPlugin",
+    "ABIPreflightPlugin",
 ]
+
+
+@runtime_checkable
+class ABIInternalHandlerPlugin(Protocol):
+    """Optional extension for plugins with executable internal DAG nodes."""
+
+    def internal_handlers(self) -> Mapping[str, Any]: ...
+
+
+@runtime_checkable
+class ABIPreflightPlugin(Protocol):
+    """Optional extension for structured execution preflight checks."""
+
+    def preflight(
+        self,
+        config: Mapping[str, Any],
+        *,
+        engine: str,
+        check_runtime: bool = True,
+    ) -> Mapping[str, Any]: ...
 
 
 @runtime_checkable

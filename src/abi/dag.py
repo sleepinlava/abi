@@ -158,10 +158,18 @@ def infer_dag(
     merged_edges: Dict[str, List[str]] = {str(s.step_id): [] for s in step_list}
     for step in step_list:
         step_id = str(step.step_id)
+        explicit = getattr(step, "params", {}).get("_explicit_dependencies", [])
+        if not isinstance(explicit, list):
+            raise ABIError(f"Step {step_id} _explicit_dependencies must be a list")
+        unknown = sorted(str(dep) for dep in explicit if str(dep) not in merged_edges)
+        if unknown:
+            raise ABIError(f"Step {step_id} has unknown explicit dependencies: {unknown}")
         declared = declared_edges.get(step_id, [])
         inferred = inferred_edges.get(step_id, [])
         # Declared edges take priority; inferred edges fill gaps
         combined: Dict[str, None] = {}
+        for dep in explicit:
+            combined[str(dep)] = None
         for dep in declared:
             combined[dep] = None
         for dep in inferred:
