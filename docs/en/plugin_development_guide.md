@@ -155,10 +155,10 @@ Plugins should import from the public SDK:
 | `abi.contracts` | `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec`, `run_contract_lint` — L1/L2/L3 workflow declaration + validation |
 | `abi.report` | `write_plugin_report`, `render_figures_via_sciplot` — report generation + figure rendering |
 
-## DAG-Driven Plan Construction (recommended for new plugins)
+## DAG-Driven Plan Construction
 
 Instead of writing a hand-coded `build_plan()` that iterates samples and
-constructs `PlanStep` objects (~200 lines of boilerplate), new plugins should
+constructs `PlanStep` objects (~200 lines of boilerplate), plugins must
 declare their workflow in a `pipeline_dag.yaml` file and use the universal
 DAG planner:
 
@@ -166,12 +166,10 @@ DAG planner:
 # In your plugin's build_plan():
 def build_plan(self, config, *, check_files=True):
     context = self.build_sample_context(config, check_files=check_files)
-    if config.get("use_dag", True):
-        from abi.dag_planner import build_plan_from_dag
-        return build_plan_from_dag(
-            self.root / "pipeline_dag.yaml", config, context
-        )
-    # ... old hand-written code (deprecated)
+    from abi.dag_planner import build_plan_from_dag
+    return build_plan_from_dag(
+        self.root / "pipeline_dag.yaml", config, context
+    )
 ```
 
 ### `pipeline_dag.yaml` structure

@@ -114,7 +114,6 @@ def test_metatranscriptomics_benchmark_assertions(tmp_path: Path) -> None:
     config_path.write_text(
         yaml.dump(
             {
-                "use_dag": False,
                 "project_name": "bench-meta",
                 "mode": "local",
                 "threads": 2,

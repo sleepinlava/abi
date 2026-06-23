@@ -116,7 +116,7 @@ def test_pacbio_hifi_route_uses_filtered_reads_and_hifiasm_contigs(tmp_path):
     plan = build_plan(config)
     steps = {step.step_id: step for step in plan.steps if step.sample_id == "HIFI1"}
 
-    hifiasm = steps["HIFI1_assembly_hifiasm_meta"]
+    hifiasm = steps["HIFI1_assembly_hifiasm"]
     assert hifiasm.params["long_reads"].endswith("01_qc/HIFI1/HIFI1.hifiadapterfilt.fastq.gz")
 
     quast = steps["HIFI1_assembly_qc_quast"]
@@ -152,11 +152,11 @@ def test_hybrid_route_uses_cleaned_reads_opera_ms_and_split_abundance(tmp_path):
     assert quast.params["assembly"].endswith("02_assembly/HYB1/contigs.fasta")
 
     bowtie2 = steps["HYB1_abundance_bowtie2_short"]
-    assert bowtie2.params["alignment"].endswith("10_abundance/HYB1/short/HYB1.short.sam")
+    assert bowtie2.outputs["alignment"].endswith("10_abundance/HYB1/short/HYB1.short.sam")
     assert bowtie2.params["abundance_source"] == "short"
 
     minimap2 = steps["HYB1_abundance_minimap2_long"]
-    assert minimap2.params["alignment"].endswith("10_abundance/HYB1/long/HYB1.long.sam")
+    assert minimap2.outputs["alignment"].endswith("10_abundance/HYB1/long/HYB1.long.sam")
     assert minimap2.params["long_reads"].endswith("01_qc/HYB1/HYB1.filtlong.fastq")
     assert minimap2.params["minimap2_preset"] == "map-ont"
 
@@ -166,9 +166,9 @@ def test_hybrid_route_uses_cleaned_reads_opera_ms_and_split_abundance(tmp_path):
     assert metaphlan_read2.endswith("01_qc/HYB1/HYB1_R2.clean.fastq.gz")
     assert metaphlan.params["metaphlan_long_reads_flag"] == ""
 
-    assert steps["HYB1_abundance_samtools_short"].params["bam"].endswith("HYB1.short.bam")
-    assert steps["HYB1_abundance_samtools_long"].params["bam"].endswith("HYB1.long.bam")
+    assert steps["HYB1_abundance_samtools_short"].outputs["bam"].endswith("HYB1.short.bam")
+    assert steps["HYB1_abundance_samtools_long"].outputs["bam"].endswith("HYB1.long.bam")
     assert (
-        steps["HYB1_abundance_coverm_short"].params["abundance"].endswith("HYB1.short.coverm.tsv")
+        steps["HYB1_abundance_coverm_short"].outputs["abundance"].endswith("HYB1.short.coverm.tsv")
     )
-    assert steps["HYB1_abundance_coverm_long"].params["abundance"].endswith("HYB1.long.coverm.tsv")
+    assert steps["HYB1_abundance_coverm_long"].outputs["abundance"].endswith("HYB1.long.coverm.tsv")

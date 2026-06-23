@@ -73,13 +73,11 @@ from abi.agent.envelopes import (
 from abi.diagnostics import classify_exception
 from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
+from abi.interfaces import ABIResultValidationPlugin
 from abi.internal import run_plugin_preflight
 from abi.json_utils import load_json_object
 from abi.permissions import requires_confirmation
 from abi.plugins import get_plugin, list_plugins
-from abi.plugins.metagenomic_plasmid._engine.result_validation import (
-    validate_result_dir as validate_autoplasm_result_dir,
-)
 from abi.provenance import RunLogger
 from abi.results import validate_abi_result_dir
 from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
@@ -87,6 +85,21 @@ from abi.schemas import ABIError
 from abi.skill_installer import install_bundled_skills
 from abi.tables import StandardTableManager
 from abi.tool_descriptors import TOOL_ALIASES
+
+
+def _validate_plugin_result_dir(
+    plugin_id: str,
+    result_dir: str | Path,
+    *,
+    allow_empty_tables: bool = True,
+) -> Mapping[str, Any]:
+    plugin = get_plugin(plugin_id)
+    if not isinstance(plugin, ABIResultValidationPlugin):
+        raise ABIError(f"Plugin {plugin_id!r} does not provide specialized result validation")
+    return plugin.validate_result_dir(
+        result_dir,
+        allow_empty_tables=allow_empty_tables,
+    )
 
 
 class ABIAgentInterface:
@@ -589,7 +602,8 @@ class ABIAgentInterface:
         """
         return self._call(
             "autoplasm_validate_result",
-            validate_autoplasm_result_dir,
+            _validate_plugin_result_dir,
+            "metagenomic_plasmid",
             result_dir,
             allow_empty_tables=allow_empty_tables,
         )

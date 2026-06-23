@@ -9,6 +9,7 @@ from typing import Any, Dict, Mapping, Optional
 
 import yaml
 
+from abi.config import PROJECT_ROOT
 from abi.plugins.metagenomic_plasmid._engine.schemas import (
     VALID_MODES,
     VALID_PLASMID_STRATEGIES,
@@ -16,16 +17,6 @@ from abi.plugins.metagenomic_plasmid._engine.schemas import (
 )
 from abi.plugins.metagenomic_plasmid._engine.timeouts import parse_timeout_seconds
 
-
-def _resolve_project_root() -> Path:
-    current = Path(__file__).resolve()
-    for candidate in (current.parents[3], current.parents[2], Path.cwd()):
-        if (candidate / "config" / "default.yaml").exists():
-            return candidate
-    return current.parents[3]
-
-
-PROJECT_ROOT = _resolve_project_root()
 DEFAULT_CONFIG = PROJECT_ROOT / "config" / "default.yaml"
 
 

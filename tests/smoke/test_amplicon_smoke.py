@@ -191,7 +191,6 @@ def test_amplicon_real_execution(tmp_path: Path) -> None:
     results_dir = tmp_path / "results"
     config = plugin.load_config(
         overrides={
-            "use_dag": False,
             "project_name": "smoke-amplicon",
             "mode": "local",
             "threads": 2,
@@ -221,7 +220,6 @@ def test_amplicon_real_execution(tmp_path: Path) -> None:
     config_path.write_text(
         yaml.dump(
             {
-                "use_dag": False,
                 "project_name": "smoke-amplicon",
                 "mode": "local",
                 "threads": 2,

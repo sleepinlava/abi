@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Optional
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
 from abi._shared import _execute_generic_dry_run, _resolve_path
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
@@ -123,6 +123,34 @@ class ViralViWrapPlugin:
         config["executable"] = str(Path(str(config["conda_env_dir"])) / "ViWrap/bin/ViWrap")
         build_viwrap_command(config)
         return config
+
+    def check_resources(
+        self,
+        config: Mapping[str, Any],
+        *,
+        resource_ids: Optional[Sequence[str]] = None,
+    ) -> list[dict[str, Any]]:
+        from abi.resources import _check_generic_resources
+
+        return _check_generic_resources(self.plugin_id, config, resource_ids=resource_ids)
+
+    def setup_resources(
+        self,
+        config: Mapping[str, Any],
+        *,
+        resource_ids: Optional[Sequence[str]] = None,
+        dry_run: bool = False,
+        mock: bool = False,
+    ) -> list[dict[str, Any]]:
+        from abi.resources import _setup_manual_resource_bundle
+
+        return _setup_manual_resource_bundle(
+            self.plugin_id,
+            config,
+            resource_ids=resource_ids,
+            dry_run=dry_run,
+            mock=mock,
+        )
 
     def build_sample_context(
         self, config: Mapping[str, Any], *, check_files: bool = True

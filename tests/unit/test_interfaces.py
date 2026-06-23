@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from abi.interfaces import ABIDryRunPlugin, ABIInitializablePlugin, ABIPlugin
+from abi.interfaces import (
+    ABIDryRunPlugin,
+    ABIInitializablePlugin,
+    ABIPlugin,
+    ABIResourcePlugin,
+    ABIResultValidationPlugin,
+)
 
 
 class CompletePlugin:
@@ -39,6 +45,19 @@ class InitializablePlugin(CompletePlugin):
     root = Path("/tmp/plugin")
 
 
+class ResourcePlugin(CompletePlugin):
+    def check_resources(self, config, *, resource_ids=None):
+        return []
+
+    def setup_resources(self, config, *, resource_ids=None, dry_run=False, mock=False):
+        return []
+
+
+class ResultValidationPlugin(CompletePlugin):
+    def validate_result_dir(self, result_dir, *, allow_empty_tables=True):
+        return {"valid": True}
+
+
 def test_base_plugin_protocol_is_structural_and_runtime_checkable():
     assert isinstance(CompletePlugin(), ABIPlugin)
     assert not isinstance(object(), ABIPlugin)
@@ -52,3 +71,13 @@ def test_dry_run_protocol_requires_dedicated_method():
 def test_initializable_protocol_requires_root_attribute():
     assert isinstance(InitializablePlugin(), ABIInitializablePlugin)
     assert not isinstance(CompletePlugin(), ABIInitializablePlugin)
+
+
+def test_resource_protocol_requires_check_and_setup_methods():
+    assert isinstance(ResourcePlugin(), ABIResourcePlugin)
+    assert not isinstance(CompletePlugin(), ABIResourcePlugin)
+
+
+def test_result_validation_protocol_is_optional():
+    assert isinstance(ResultValidationPlugin(), ABIResultValidationPlugin)
+    assert not isinstance(CompletePlugin(), ABIResultValidationPlugin)

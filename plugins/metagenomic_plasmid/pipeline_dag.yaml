@@ -439,7 +439,6 @@ nodes:
     name: NanoPlot quality report (ONT)
     platforms:
     - ont
-    - pacbio_hifi
     - hybrid
     optional: false
     depends_on:
@@ -1622,7 +1621,7 @@ nodes:
     - assembly
     optional: true
     enable_condition:
-      field: host_prediction.optional_tools
+      field: host_prediction.tools
       operator: list_contains
       value: plasmidhostfinder
     depends_on:
@@ -1767,7 +1766,7 @@ nodes:
         type: file
         format: tsv
     enable_condition:
-      field: annotation.optional_tools
+      field: annotation.tools
       operator: list_contains
       value: abricate
   annotation_isescan:
@@ -1852,7 +1851,7 @@ nodes:
       output_dir:
         type: directory
     enable_condition:
-      field: annotation.optional_tools
+      field: annotation.tools
       operator: list_contains
       value: mob_suite
   mag_metabat2:
@@ -2094,7 +2093,6 @@ nodes:
     name: Bowtie2 map reads to plasmid contigs for abundance
     platforms:
     - illumina
-    - hybrid
     optional: false
     depends_on:
     - plasmid_consensus
@@ -2136,7 +2134,6 @@ nodes:
     platforms:
     - ont
     - pacbio_hifi
-    - hybrid
     optional: false
     depends_on:
     - plasmid_consensus
@@ -2172,7 +2169,6 @@ nodes:
     - illumina
     - ont
     - pacbio_hifi
-    - hybrid
     optional: false
     depends_on:
     - abundance_bowtie2
@@ -2200,7 +2196,6 @@ nodes:
     - illumina
     - ont
     - pacbio_hifi
-    - hybrid
     optional: false
     depends_on:
     - abundance_samtools
@@ -2221,6 +2216,113 @@ nodes:
         format: tsv
     standard_tables:
     - abundance
+  abundance_bowtie2_short:
+    tool_id: bowtie2
+    category: abundance
+    scope: per_sample
+    name: Bowtie2 short-read abundance mapping for hybrid samples
+    platforms: [hybrid]
+    optional: false
+    depends_on: [plasmid_consensus, host_removal_bowtie2]
+    fallback_depends: [plasmid_consensus, qc_fastp]
+    inputs:
+      plasmid_contigs: {type: file, format: fasta, source: plasmid_consensus.plasmid_contigs}
+      read1:
+        {type: file, format: fastq.gz, source: host_removal_bowtie2.clean_read1, fallback: qc_fastp.clean_read1}
+      read2:
+        {type: file, format: fastq.gz, source: host_removal_bowtie2.clean_read2, fallback: qc_fastp.clean_read2}
+      abundance_source: {type: string, default: short}
+      abundance_label: {type: string, default: .short}
+      threads: {type: integer, default: 1}
+    outputs:
+      alignment: {type: file, format: sam, path: '{outdir}/{category_dir}/{sample_id}/short/{sample_id}.short.sam'}
+      output_dir: {type: directory, path: '{outdir}/{category_dir}/{sample_id}/short'}
+  abundance_samtools_short:
+    tool_id: samtools
+    category: abundance
+    scope: per_sample
+    name: Sort hybrid short-read abundance alignment
+    platforms: [hybrid]
+    optional: false
+    depends_on: [abundance_bowtie2_short]
+    inputs:
+      alignment: {type: file, format: sam, source: abundance_bowtie2_short.alignment}
+      abundance_source: {type: string, default: short}
+      abundance_label: {type: string, default: .short}
+      threads: {type: integer, default: 1}
+    outputs:
+      bam: {type: file, format: bam, path: '{outdir}/{category_dir}/{sample_id}/short/{sample_id}.short.bam'}
+      output_dir: {type: directory, path: '{outdir}/{category_dir}/{sample_id}/short'}
+  abundance_coverm_short:
+    tool_id: coverm
+    category: abundance
+    scope: per_sample
+    name: CoverM hybrid short-read abundance
+    platforms: [hybrid]
+    optional: false
+    depends_on: [abundance_samtools_short]
+    inputs:
+      bam: {type: file, format: bam, source: abundance_samtools_short.bam}
+      abundance_source: {type: string, default: short}
+      abundance_label: {type: string, default: .short}
+      threads: {type: integer, default: 1}
+    outputs:
+      abundance: {type: file, format: tsv, path: '{outdir}/{category_dir}/{sample_id}/short/{sample_id}.short.coverm.tsv'}
+      tpm_table: {type: file, format: tsv, path: '{outdir}/{category_dir}/{sample_id}/short/{sample_id}.short.tpm.tsv'}
+      output_dir: {type: directory, path: '{outdir}/{category_dir}/{sample_id}/short'}
+    standard_tables: [abundance]
+  abundance_minimap2_long:
+    tool_id: minimap2
+    category: abundance
+    scope: per_sample
+    name: minimap2 long-read abundance mapping for hybrid samples
+    platforms: [hybrid]
+    optional: false
+    depends_on: [plasmid_consensus, host_removal_minimap2_long]
+    fallback_depends: [plasmid_consensus, qc_filtlong]
+    inputs:
+      plasmid_contigs: {type: file, format: fasta, source: plasmid_consensus.plasmid_contigs}
+      long_reads: {type: file, format: fastq, source: '{active_long_read_source}.analysis_long_reads'}
+      abundance_source: {type: string, default: long}
+      abundance_label: {type: string, default: .long}
+      threads: {type: integer, default: 1}
+    outputs:
+      alignment: {type: file, format: sam, path: '{outdir}/{category_dir}/{sample_id}/long/{sample_id}.long.sam'}
+      output_dir: {type: directory, path: '{outdir}/{category_dir}/{sample_id}/long'}
+  abundance_samtools_long:
+    tool_id: samtools
+    category: abundance
+    scope: per_sample
+    name: Sort hybrid long-read abundance alignment
+    platforms: [hybrid]
+    optional: false
+    depends_on: [abundance_minimap2_long]
+    inputs:
+      alignment: {type: file, format: sam, source: abundance_minimap2_long.alignment}
+      abundance_source: {type: string, default: long}
+      abundance_label: {type: string, default: .long}
+      threads: {type: integer, default: 1}
+    outputs:
+      bam: {type: file, format: bam, path: '{outdir}/{category_dir}/{sample_id}/long/{sample_id}.long.bam'}
+      output_dir: {type: directory, path: '{outdir}/{category_dir}/{sample_id}/long'}
+  abundance_coverm_long:
+    tool_id: coverm
+    category: abundance
+    scope: per_sample
+    name: CoverM hybrid long-read abundance
+    platforms: [hybrid]
+    optional: false
+    depends_on: [abundance_samtools_long]
+    inputs:
+      bam: {type: file, format: bam, source: abundance_samtools_long.bam}
+      abundance_source: {type: string, default: long}
+      abundance_label: {type: string, default: .long}
+      threads: {type: integer, default: 1}
+    outputs:
+      abundance: {type: file, format: tsv, path: '{outdir}/{category_dir}/{sample_id}/long/{sample_id}.long.coverm.tsv'}
+      tpm_table: {type: file, format: tsv, path: '{outdir}/{category_dir}/{sample_id}/long/{sample_id}.long.tpm.tsv'}
+      output_dir: {type: directory, path: '{outdir}/{category_dir}/{sample_id}/long'}
+    standard_tables: [abundance]
   multisample_diversity:
     tool_id: internal
     category: diversity
@@ -3104,8 +3206,8 @@ platform_resolution:
     host_taxonomy:
     - host_prediction_metaphlan
     abundance_mapper:
-    - abundance_bowtie2
-    - abundance_minimap2
+    - abundance_bowtie2_short
+    - abundance_minimap2_long
   assembly:
     assembly:
     - assembly_provided

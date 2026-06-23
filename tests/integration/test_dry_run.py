@@ -62,7 +62,7 @@ def test_repeated_dry_run_replaces_analysis_status_rows(tmp_path):
     executor.dry_run(plan, config)
     second_rows = read_standard_table(outdir / "tables", "analysis_status")
 
-    assert len(first_rows) == 1
+    assert len(first_rows) == 5
     assert second_rows == first_rows
 
 

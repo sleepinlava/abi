@@ -6,13 +6,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from abi.errors import ABIError
+from abi.interfaces import ABIResourcePlugin
 from abi.plugins import get_plugin
-from abi.plugins.metagenomic_plasmid._engine.resources import (
-    check_resources as check_autoplasm_resources,
-)
-from abi.plugins.metagenomic_plasmid._engine.resources import (
-    setup_resources as setup_autoplasm_resources,
-)
 from abi.timeouts import DEFAULT_RESOURCE_TIMEOUT_SECONDS, timeout_from_env_or_value
 
 __all__ = ["check_resources", "setup_resources"]
@@ -39,12 +34,9 @@ def check_resources(
     resource_ids: Optional[Sequence[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Check configured resources for an ABI analysis type."""
-    if analysis_type == "metagenomic_plasmid":
-        return check_autoplasm_resources(config, resource_ids=resource_ids)
-    if analysis_type == "rnaseq_expression":
-        return _check_rnaseq_expression(config, resource_ids=resource_ids)
-    if analysis_type == "amplicon_16s":
-        return _check_amplicon_16s(config, resource_ids=resource_ids)
+    plugin = get_plugin(analysis_type)
+    if isinstance(plugin, ABIResourcePlugin):
+        return plugin.check_resources(config, resource_ids=resource_ids)
     return _check_generic_resources(analysis_type, config, resource_ids=resource_ids)
 
 
@@ -57,44 +49,9 @@ def setup_resources(
     mock: bool = False,
 ) -> List[Dict[str, Any]]:
     """Prepare or plan resources for an ABI analysis type."""
-    if analysis_type == "metagenomic_plasmid":
-        return setup_autoplasm_resources(
-            config,
-            resource_ids=resource_ids,
-            dry_run=dry_run,
-            mock=mock,
-        )
-    if analysis_type == "rnaseq_expression":
-        return _setup_rnaseq_expression(
-            config,
-            resource_ids=resource_ids,
-            dry_run=dry_run,
-        )
-    if analysis_type == "amplicon_16s":
-        return _setup_amplicon_16s(
-            config,
-            resource_ids=resource_ids,
-            dry_run=dry_run,
-            mock=mock,
-        )
-    if analysis_type == "wgs_bacteria":
-        return _setup_wgs_bacteria(
-            config,
-            resource_ids=resource_ids,
-            dry_run=dry_run,
-            mock=mock,
-        )
-    if analysis_type == "metatranscriptomics":
-        return _setup_reference_resources(
-            analysis_type,
-            config,
-            resource_ids=resource_ids,
-            dry_run=dry_run,
-            mock=mock,
-        )
-    if analysis_type in {"easymetagenome", "viral_viwrap"}:
-        return _setup_manual_resource_bundle(
-            analysis_type,
+    plugin = get_plugin(analysis_type)
+    if isinstance(plugin, ABIResourcePlugin):
+        return plugin.setup_resources(
             config,
             resource_ids=resource_ids,
             dry_run=dry_run,
@@ -389,6 +346,9 @@ def _check_rnaseq_expression(
     import subprocess
 
     rows = _check_generic_resources("rnaseq_expression", config, resource_ids=resource_ids)
+    selected = set(resource_ids or [])
+    if selected and "deseq2_package" not in selected:
+        return rows
 
     # Check DESeq2 availability via Rscript
     deseq2_status = "not_installed"
@@ -455,6 +415,10 @@ def _setup_rnaseq_expression(
     import subprocess
 
     from abi.config import PROJECT_ROOT
+
+    selected = set(resource_ids or [])
+    if selected and "rnaseq_environment" not in selected:
+        return _check_generic_resources("rnaseq_expression", config, resource_ids=resource_ids)
 
     setup_script = PROJECT_ROOT / "scripts" / "setup_rnaseq_env.sh"
     if not setup_script.exists():
@@ -531,6 +495,9 @@ def _check_amplicon_16s(
 ) -> List[Dict[str, Any]]:
     """Check amplicon_16s resources including taxonomy database."""
     rows = _check_generic_resources("amplicon_16s", config, resource_ids=resource_ids)
+    selected = set(resource_ids or [])
+    if selected and "taxonomy_db" not in selected:
+        return rows
 
     # Check taxonomy DB
     taxonomy_db = config.get("resources", {}).get("taxonomy_db", "TAXONOMY_DB_NOT_CONFIGURED")
@@ -594,6 +561,9 @@ def _setup_amplicon_16s(
 
     from abi.config import PROJECT_ROOT
 
+    if resource_ids and "taxonomy_db" not in resource_ids:
+        return []
+
     resources = config.get("resources", {})
     if not isinstance(resources, Mapping):
         resources = {}
@@ -601,7 +571,8 @@ def _setup_amplicon_16s(
     outdir = Path(str(config.get("outdir", str(PROJECT_ROOT / "data" / "taxonomy"))))
     if "taxonomy" not in outdir.parts:
         outdir = outdir / "taxonomy"
-    outdir.mkdir(parents=True, exist_ok=True)
+    if not dry_run:
+        outdir.mkdir(parents=True, exist_ok=True)
 
     if mock:
         generate_script = PROJECT_ROOT / "scripts" / "generate_synthetic_taxonomy.py"
@@ -619,7 +590,7 @@ def _setup_amplicon_16s(
                 "tool_id": "vsearch_taxonomy",
                 "field": "taxonomy_db",
                 "path": str(tax_fasta),
-                "status": "ok" if dry_run else ("ok" if tax_fasta.exists() else "error"),
+                "status": "planned" if dry_run else ("ok" if tax_fasta.exists() else "error"),
                 "version": "synthetic_test_only",
                 "source_url": "generated by scripts/generate_synthetic_taxonomy.py",
                 "checksum": "",
@@ -628,7 +599,9 @@ def _setup_amplicon_16s(
                 "directory_file_count": 0,
                 "directory_size_bytes": 0,
                 "message": (
-                    "Synthetic taxonomy DB generated for TESTING only. "
+                    "Would generate a synthetic taxonomy DB for testing."
+                    if dry_run
+                    else "Synthetic taxonomy DB generated for TESTING only. "
                     "For real analysis, run without --mock to download the RDP training set."
                 ),
             }

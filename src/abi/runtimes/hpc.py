@@ -357,7 +357,8 @@ class HpcRuntime:
                 if word.isdigit():
                     return word
             return ""
-        return text.split(".", 1)[0]
+        match = re.match(r"^(\d+(?:\[\])?)(?:\.|$)", text)
+        return match.group(1) if match else ""
 
     def _poll_until_complete(
         self, job_ids: dict[str, str], timeout_seconds: float

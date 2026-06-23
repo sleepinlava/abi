@@ -1,6 +1,7 @@
 import json
+from types import SimpleNamespace
 
-from abi.agent import ABIAgentInterface
+from abi.agent import ABIAgentInterface, interface
 
 
 def test_agent_interface_lists_types_with_success_envelope():
@@ -142,3 +143,24 @@ def test_agent_install_skills_is_dispatchable(tmp_path):
     assert payload["status"] == "success"
     assert payload["command"] == "install_skills"
     assert (tmp_path / "skills" / "README.md").is_file()
+
+
+def test_autoplasm_result_alias_uses_plugin_validation_capability(monkeypatch, tmp_path):
+    calls = []
+    plugin = SimpleNamespace(
+        validate_result_dir=lambda result_dir, allow_empty_tables=True: (
+            calls.append((result_dir, allow_empty_tables)) or {"valid": True}
+        )
+    )
+    monkeypatch.setattr(interface, "get_plugin", lambda plugin_id: plugin)
+
+    payload = json.loads(
+        ABIAgentInterface().autoplasm_validate_result(
+            result_dir=tmp_path,
+            allow_empty_tables=False,
+        )
+    )
+
+    assert payload["status"] == "success"
+    assert payload["result"] == {"valid": True}
+    assert calls == [(tmp_path, False)]

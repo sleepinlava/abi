@@ -7,6 +7,7 @@ from abi.autoplasm.resources import (
     setup_resources,
     sha256_path,
 )
+from abi.resources import check_resources as check_abi_resources
 from abi.resources import setup_resources as setup_abi_resources
 
 
@@ -322,6 +323,49 @@ def test_large_plugin_resource_bundles_report_manual_and_support_mock(tmp_path):
         assert manual[0]["status"] == "manual_required"
         assert mocked[0]["status"] == "ok"
         assert Path(mocked[0]["path"]).is_dir()
+
+
+def test_core_resource_orchestrator_delegates_to_plugin_capability(monkeypatch):
+    calls = []
+
+    class ResourcePlugin:
+        def check_resources(self, config, *, resource_ids=None):
+            calls.append(("check", config, resource_ids))
+            return [{"status": "checked"}]
+
+        def setup_resources(self, config, *, resource_ids=None, dry_run=False, mock=False):
+            calls.append(("setup", config, resource_ids, dry_run, mock))
+            return [{"status": "planned"}]
+
+    monkeypatch.setattr("abi.resources.get_plugin", lambda analysis_type: ResourcePlugin())
+
+    assert check_abi_resources(
+        analysis_type="external", config={"value": 1}, resource_ids=["db"]
+    ) == [{"status": "checked"}]
+    assert setup_abi_resources(
+        analysis_type="external",
+        config={"value": 2},
+        resource_ids=["db"],
+        dry_run=True,
+        mock=True,
+    ) == [{"status": "planned"}]
+    assert calls == [
+        ("check", {"value": 1}, ["db"]),
+        ("setup", {"value": 2}, ["db"], True, True),
+    ]
+
+
+def test_core_resource_orchestrator_has_generic_fallback(tmp_path, monkeypatch):
+    monkeypatch.setattr("abi.resources.get_plugin", lambda analysis_type: object())
+    database = tmp_path / "db"
+    database.mkdir()
+    config = {"outdir": str(tmp_path), "resources": {"database": str(database)}}
+
+    checked = check_abi_resources(analysis_type="external", config=config)
+    planned = setup_abi_resources(analysis_type="external", config=config, dry_run=True)
+
+    assert checked[0]["status"] == "ok"
+    assert planned[0]["status"] == "planned"
 
 
 # ---- New tests for Level 1 + Level 2 resources (2026-06-20) ----

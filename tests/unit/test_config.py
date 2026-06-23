@@ -3,9 +3,16 @@ from pathlib import Path
 import pytest
 import yaml
 
+from abi import config as core_config
 from abi.autoplasm.config import load_config
 from abi.autoplasm.schemas import ConfigError
 from abi.config import load_yaml
+from abi.plugins.metagenomic_plasmid._engine import config as plasmid_config
+
+
+def test_plasmid_engine_uses_canonical_project_root():
+    assert plasmid_config.PROJECT_ROOT == core_config.PROJECT_ROOT
+    assert plasmid_config.DEFAULT_CONFIG == core_config.PROJECT_ROOT / "config" / "default.yaml"
 
 
 def test_load_config_merges_defaults_and_profile():

@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from abi._shared import (
     _execute_generic_dry_run,
@@ -98,6 +98,29 @@ class RNASeqExpressionPlugin:
         # Stash for write_report() — ABIPlugin.write_report doesn't receive config.
         self._last_config = config
         return config
+
+    def check_resources(
+        self,
+        config: Mapping[str, Any],
+        *,
+        resource_ids: Optional[Sequence[str]] = None,
+    ) -> list[dict[str, Any]]:
+        from abi.resources import _check_rnaseq_expression
+
+        return _check_rnaseq_expression(config, resource_ids=resource_ids)
+
+    def setup_resources(
+        self,
+        config: Mapping[str, Any],
+        *,
+        resource_ids: Optional[Sequence[str]] = None,
+        dry_run: bool = False,
+        mock: bool = False,
+    ) -> list[dict[str, Any]]:
+        from abi.resources import _setup_rnaseq_expression
+
+        del mock
+        return _setup_rnaseq_expression(config, resource_ids=resource_ids, dry_run=dry_run)
 
     # ── Sample context ───────────────────────────────────────────────────
 

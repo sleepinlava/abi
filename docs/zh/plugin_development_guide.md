@@ -136,20 +136,18 @@ assertions:
 | `abi.contracts` | `WorkflowSpec`、`WorkflowStepSpec`、`load_workflow_spec`、`run_contract_lint` — L1/L2/L3 工作流声明与验证 |
 | `abi.report` | `write_plugin_report`、`render_figures_via_sciplot` — 报告生成与图表渲染 |
 
-## DAG 驱动的计划构建（推荐用于新插件）
+## DAG 驱动的计划构建
 
-与其手写遍历样本、构造 `PlanStep` 对象的 `build_plan()`（约 200 行样板代码），新插件应在 `pipeline_dag.yaml` 文件中声明工作流，并使用通用 DAG 规划器：
+与其手写遍历样本、构造 `PlanStep` 对象的 `build_plan()`（约 200 行样板代码），插件必须在 `pipeline_dag.yaml` 文件中声明工作流，并使用通用 DAG 规划器：
 
 ```python
 # 在插件的 build_plan() 中：
 def build_plan(self, config, *, check_files=True):
     context = self.build_sample_context(config, check_files=check_files)
-    if config.get("use_dag", True):
-        from abi.dag_planner import build_plan_from_dag
-        return build_plan_from_dag(
-            self.root / "pipeline_dag.yaml", config, context
-        )
-    # ... 旧的手写代码（已弃用）
+    from abi.dag_planner import build_plan_from_dag
+    return build_plan_from_dag(
+        self.root / "pipeline_dag.yaml", config, context
+    )
 ```
 
 ### `pipeline_dag.yaml` 结构

@@ -4,11 +4,12 @@ Covers:
 - ``UniversalDAG`` loading, querying, topological sort, scope/category resolution.
 - ``build_plan_from_dag()`` plan generation for linear and cross-sample workflows.
 - ``PathTemplateContext`` variable resolution.
-- Golden-trace comparison: DAG-generated plan vs hand-written plugin plan.
+- Plugin-boundary comparison against the canonical DAG planner.
 """
 
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 from typing import Any, Dict
 
@@ -90,9 +91,13 @@ class TestUniversalDAGLoading:
     @pytest.mark.parametrize(
         "plugin_name,expected_nodes",
         [
-            ("rnaseq_expression", 5),
-            ("wgs_bacteria", 5),
             ("amplicon_16s", 10),
+            ("easymetagenome", 24),
+            ("metagenomic_plasmid", 90),
+            ("metatranscriptomics", 3),
+            ("rnaseq_expression", 5),
+            ("viral_viwrap", 7),
+            ("wgs_bacteria", 5),
         ],
     )
     def test_load_existing_dag(self, plugin_name: str, expected_nodes: int) -> None:
@@ -100,13 +105,6 @@ class TestUniversalDAGLoading:
         dag = UniversalDAG.from_yaml(dag_path)
         assert dag.pipeline_id == plugin_name
         assert len(dag._nodes) == expected_nodes
-
-    def test_load_plasmid_dag(self) -> None:
-        """The plasmid DAG is large (84 nodes); verify it loads without error."""
-        dag_path = PLUGIN_ROOT / "metagenomic_plasmid" / "pipeline_dag.yaml"
-        dag = UniversalDAG.from_yaml(dag_path)
-        assert dag.pipeline_id == "metagenomic_plasmid"
-        assert len(dag._nodes) >= 80
 
     def test_missing_file_raises(self) -> None:
         with pytest.raises(FileNotFoundError):
@@ -193,6 +191,23 @@ class TestTopologicalSort:
 
         assert resolved["assembly"] == ["qc"]
         assert dag.topological_order(resolved) == ["qc", "assembly"]
+
+    def test_fallback_resolution_handles_platform_variant_lists(self) -> None:
+        spec = {
+            "nodes": {
+                "hifi_qc": {"depends_on": []},
+                "host_profile": {
+                    "optional": True,
+                    "depends_on": ["short_host_removal", "long_host_removal"],
+                    "fallback_depends": ["short_qc", "ont_qc", "hifi_qc"],
+                },
+            }
+        }
+        dag = UniversalDAG(spec)
+
+        resolved = dag.resolve_dependencies(["hifi_qc", "host_profile"], "pacbio_hifi")
+
+        assert resolved["host_profile"] == ["hifi_qc"]
 
 
 # ── Active node filtering ─────────────────────────────────────────────────
@@ -607,20 +622,13 @@ class TestBuildPlanFromDAG:
             Path(tmp_path).unlink(missing_ok=True)
 
 
-# ── Golden-trace: DAG plan ≈ hand-written plugin plan ─────────────────────
+# ── Plugin boundary delegates to the canonical DAG planner ────────────────
 
 
 class TestGoldenTraceParity:
-    """Verify that DAG-generated plans match hand-written plugin build_plan().
+    """Verify plugin planning has no second, hand-written implementation."""
 
-    These tests require the DAG YAML to be updated with category_dirs, scope,
-    and path templates.  They are skipped until the DAG files are updated
-    (Task 35 in the uv-ification plan).
-    """
-
-    @pytest.mark.skip(reason="DAG YAML not yet updated with scope + path templates")
-    def test_rnaseq_dag_matches_handwritten(self) -> None:
-        """Compare DAG plan vs rnaseq_expression.build_plan()."""
+    def test_rnaseq_plugin_matches_canonical_dag(self) -> None:
         from abi.plugins.rnaseq_expression import RNASeqExpressionPlugin
 
         plugin = RNASeqExpressionPlugin()
@@ -639,11 +647,13 @@ class TestGoldenTraceParity:
             config,
             ctx,
         )
-        hand_plan = plugin.build_plan(config, check_files=False)
+        plugin_plan = plugin.build_plan(config, check_files=False)
 
-        assert len(dag_plan.steps) == len(hand_plan.steps)
-        for ds, hs in zip(dag_plan.steps, hand_plan.steps):
-            assert ds.tool_id == hs.tool_id
-            # Output paths may differ; focus on structural parity
-            assert ds.sample_id == hs.sample_id
-            assert ds.category == hs.category
+        assert dag_plan.to_dict() == plugin_plan.to_dict()
+
+    def test_plugins_do_not_expose_a_legacy_planner_switch(self) -> None:
+        from abi.plugins import list_plugins
+
+        for plugin in list_plugins():
+            assert (plugin.root / "pipeline_dag.yaml").is_file()
+            assert "use_dag" not in inspect.signature(plugin.build_plan).parameters

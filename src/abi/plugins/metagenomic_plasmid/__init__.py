@@ -43,7 +43,7 @@ writers can traverse it with attribute access.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 from abi.config import PLUGIN_ROOT, load_yaml
 from abi.provenance import RunLogger
@@ -53,9 +53,12 @@ from abi.tools import ToolRegistry
 from ._engine.config import load_config as load_autoplasm_config
 from ._engine.parsers import parse_standard_outputs
 from ._engine.pipeline import PipelineExecutor
-from ._engine.planner import build_plan, build_plan_from_dag
+from ._engine.planner import build_plan_from_dag
 from ._engine.report.html import write_html_report
 from ._engine.report.markdown import write_markdown_report
+from ._engine.resources import check_resources as check_plugin_resources
+from ._engine.resources import setup_resources as setup_plugin_resources
+from ._engine.result_validation import validate_result_dir as validate_plugin_result_dir
 from ._engine.standard_tables import summarize_standard_tables
 
 
@@ -107,6 +110,40 @@ class MetagenomicPlasmidPlugin:
         """
         return load_autoplasm_config(config_path, profile=profile or "dry_run", overrides=overrides)
 
+    def check_resources(
+        self,
+        config: Mapping[str, Any],
+        *,
+        resource_ids: Optional[Sequence[str]] = None,
+    ) -> list[dict[str, Any]]:
+        return check_plugin_resources(config, resource_ids=resource_ids)
+
+    def setup_resources(
+        self,
+        config: Mapping[str, Any],
+        *,
+        resource_ids: Optional[Sequence[str]] = None,
+        dry_run: bool = False,
+        mock: bool = False,
+    ) -> list[dict[str, Any]]:
+        return setup_plugin_resources(
+            config,
+            resource_ids=resource_ids,
+            dry_run=dry_run,
+            mock=mock,
+        )
+
+    def validate_result_dir(
+        self,
+        result_dir: str | Path,
+        *,
+        allow_empty_tables: bool = True,
+    ) -> Mapping[str, Any]:
+        return validate_plugin_result_dir(
+            result_dir,
+            allow_empty_tables=allow_empty_tables,
+        )
+
     # ── Sample context / 样本上下文 ──────────────────────────────────────
 
     def build_sample_context(self, config: Mapping[str, Any], *, check_files: bool = True) -> Any:
@@ -125,21 +162,9 @@ class MetagenomicPlasmidPlugin:
 
     # ── Plan construction / 计划构建 ─────────────────────────────────────
 
-    def build_plan(
-        self, config: Mapping[str, Any], *, check_files: bool = True, use_dag: bool = True
-    ) -> Any:
-        """Build an execution plan from the normalized configuration.
-
-        When ``use_dag=True`` (default), reads the canonical
-        ``pipeline_dag.yaml`` spec and generates steps from it.  When
-        ``use_dag=False``, falls back to the legacy hardcoded planner.
-
-        从规范化配置构建执行计划。use_dag=True（默认）时读取规范的
-        pipeline_dag.yaml 并从中生成步骤。use_dag=False 时回退到旧的硬编码规划器。
-        """
-        if use_dag:
-            return build_plan_from_dag(config, check_files=check_files)
-        return build_plan(config, check_files=check_files)
+    def build_plan(self, config: Mapping[str, Any], *, check_files: bool = True) -> Any:
+        """Build an execution plan from the canonical declarative DAG."""
+        return build_plan_from_dag(config, check_files=check_files)
 
     # ── Tool registry / 工具注册表 ───────────────────────────────────────
 

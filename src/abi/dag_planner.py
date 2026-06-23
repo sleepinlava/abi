@@ -379,6 +379,13 @@ class UniversalDAG:
                         fb = fallbacks[i]
                         if fb not in effective:
                             effective.append(fb)
+                    else:
+                        # Platform variants can share a fallback list whose
+                        # length differs from ``depends_on``. Keep positional
+                        # preference, then retain the first active edge.
+                        candidate = next((item for item in fallbacks if item in active_set), None)
+                        if candidate is not None and candidate not in effective:
+                            effective.append(candidate)
 
             # Required nodes with declared deps but zero effective → error
             if deps and not effective and not optional_flag:

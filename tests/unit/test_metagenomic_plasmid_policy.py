@@ -95,6 +95,73 @@ def test_default_illumina_route_matches_optimized_main_path(tmp_path):
     assert assembly.inputs["read2"] == fastp.outputs["clean_read2"]
 
 
+def test_modern_annotation_fields_override_legacy_default_tool_list(tmp_path):
+    sample = SampleInput(sample_id="ONT1", platform="ont", long_reads="reads.fastq.gz")
+    config = _config(
+        tmp_path,
+        {
+            "annotation": {
+                "enable": True,
+                "general_annotator": "bakta",
+                "arg_tools": ["amrfinderplus", "abricate"],
+                "vf_tools": [],
+                "mobile_element_tools": [],
+            },
+            "host_prediction": {"enable": "auto", "tools": "auto"},
+        },
+    )
+
+    plan = build_plan_from_dag(config, _context([sample]), check_files=False)
+    tools = {step.tool_id for step in plan.steps}
+
+    assert {"bakta", "amrfinderplus", "abricate", "metaphlan"} <= tools
+    assert {"isescan", "integronfinder"}.isdisjoint(tools)
+
+
+def test_auto_tool_policy_is_resolved_before_dag_filtering(tmp_path):
+    sample = SampleInput(
+        sample_id="S1", platform="illumina", read1="R1.fastq.gz", read2="R2.fastq.gz"
+    )
+    config = _config(
+        tmp_path,
+        {
+            "workflow": {"data_profile": "isolate_plasmid"},
+            "plasmid_binning": {"enable": True, "tools": "auto"},
+            "typing": {"enable": "auto", "tools": "auto"},
+            "host_prediction": {"enable": True, "tools": "auto"},
+        },
+    )
+
+    plan = build_plan_from_dag(config, _context([sample]), check_files=False)
+    tools = {step.tool_id for step in plan.steps}
+
+    assert {"gplas2", "plasmidfinder", "mob_typer", "mob_suite"} <= tools
+
+
+def test_hifi_route_does_not_run_ont_specific_nanoplot(tmp_path):
+    sample = SampleInput(
+        sample_id="HIFI1",
+        platform="pacbio_hifi",
+        long_reads="hifi.fastq.gz",
+        technology="PacBio HiFi",
+    )
+
+    plan = build_plan_from_dag(_config(tmp_path), _context([sample]), check_files=False)
+    tools = {step.tool_id for step in plan.steps}
+
+    assert "hifiadapterfilt" in tools
+    assert "nanoplot" not in tools
+
+
+def test_assembly_input_remains_active_when_assembly_generation_is_disabled(tmp_path):
+    sample = SampleInput(sample_id="ASM1", platform="assembly", assembly="assembly.fasta")
+    config = _config(tmp_path, {"assembly": {"enable": False}})
+
+    plan = build_plan_from_dag(config, _context([sample]), check_files=False)
+
+    assert "ASM1_assembly_provided" in {step.step_id for step in plan.steps}
+
+
 def test_host_removal_is_resolved_per_sample(tmp_path):
     samples = [
         SampleInput(
