@@ -69,3 +69,12 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+
+  publish-pypi:
+    needs: release
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish-pypi.yml
+    with:
+      tag: ${{ github.ref_name }}

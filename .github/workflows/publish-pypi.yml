@@ -3,6 +3,14 @@ name: Publish to PyPI
 "on":
   release:
     types: [published]
+  repository_dispatch:
+    types: [publish-pypi]
+  workflow_call:
+    inputs:
+      tag:
+        description: Existing verified GitHub Release tag to publish
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -27,7 +35,7 @@ jobs:
       - name: Download distributions attached to this GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag || github.event.client_payload.tag }}
         run: |
           gh release download "${RELEASE_TAG}" \
             --repo "${GITHUB_REPOSITORY}" \

@@ -81,6 +81,8 @@ def test_release_workflow_uses_full_gate_and_clean_wheel_smoke() -> None:
     assert "/tmp/abi-wheel-smoke/bin/abi dry-run" in release_workflow
     assert "--type metagenomic_plasmid" in release_workflow
     assert "--config examples/config_minimal.yaml" in release_workflow
+    assert "uses: ./.github/workflows/publish-pypi.yml" in release_workflow
+    assert "needs: release" in release_workflow
     for plugin in (
         "rnaseq_expression",
         "wgs_bacteria",
@@ -112,6 +114,9 @@ def test_pypi_publishes_the_github_release_artifacts_without_rebuilding() -> Non
     assert "gh release download" in workflow
     assert "python -m twine check dist/*" in workflow
     assert "python -m build" not in workflow
+    assert "workflow_call:" in workflow
+    assert "repository_dispatch:" in workflow
+    assert "github.event.client_payload.tag" in workflow
 
 
 def test_ci_includes_github_pages_deployment() -> None:
