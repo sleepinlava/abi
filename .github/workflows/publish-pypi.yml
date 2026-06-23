@@ -1,6 +1,9 @@
 name: Publish to PyPI
 
 "on":
+  push:
+    tags:
+      - "pypi-v*"
   release:
     types: [published]
   repository_dispatch:
@@ -35,8 +38,9 @@ jobs:
       - name: Download distributions attached to this GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag || github.event.client_payload.tag }}
+          REQUESTED_TAG: ${{ github.event.release.tag_name || inputs.tag || github.event.client_payload.tag || github.ref_name }}
         run: |
+          RELEASE_TAG="${REQUESTED_TAG#pypi-}"
           gh release download "${RELEASE_TAG}" \
             --repo "${GITHUB_REPOSITORY}" \
             --pattern "*.whl" --pattern "*.tar.gz" --dir dist

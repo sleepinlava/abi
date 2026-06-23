@@ -117,6 +117,8 @@ def test_pypi_publishes_the_github_release_artifacts_without_rebuilding() -> Non
     assert "workflow_call:" in workflow
     assert "repository_dispatch:" in workflow
     assert "github.event.client_payload.tag" in workflow
+    assert '"pypi-v*"' in workflow
+    assert 'RELEASE_TAG="${REQUESTED_TAG#pypi-}"' in workflow
 
 
 def test_ci_includes_github_pages_deployment() -> None:
