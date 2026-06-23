@@ -2,20 +2,27 @@
 
 > :us: [English version](README.md)
 
-ABI 是一个面向 AI Agent 驱动的生物信息学工作流的 Python 接口层。它将分析插件标准化为统一的
+ABI 是一个面向 AI Agent 驱动的生物信息学工作流的 Python 接口层。它将 **7 个分析插件** 标准化为统一的
 `plan -> dry-run -> run -> inspect -> report` 生命周期，提供 provenance 审计追踪、
 标准 TSV 表、**多 LLM 工具描述符**（OpenAI、Anthropic Claude、Google Gemini、
 DeepSeek、智谱 GLM、Kimi、通义千问 Qwen、MiniMax），可选 MCP 传输、
-Nextflow 导出/运行支持、DAG/合约静态分析，
+Nextflow 导出/运行支持、DAG/合约静态分析、资源自动发现 + 安装、
+论文级科研图形编译器（`abi-sciplot`，15 种图形类型，PDF/SVG/PNG/TIFF），
 以及带 force-kill 能力的队列化 HTTP Job Service。
 
 [![PyPI](https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=blue)](https://pypi.org/project/abi-agent/)
 [![Python](https://img.shields.io/pypi/pyversions/abi-agent?style=flat-square)](https://pypi.org/project/abi-agent/)
 [![CI](https://img.shields.io/github/actions/workflow/status/sleepinlava/abi/ci.yml?branch=master&style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-60%25%2B-brightgreen?style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-75.39%25-brightgreen?style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-Sphinx-blue?style=flat-square)](https://sleepinlava.github.io/abi/)
 [![Status](https://img.shields.io/badge/status-alpha-orange?style=flat-square)](https://github.com/sleepinlava/abi)
 [![License](https://img.shields.io/pypi/l/abi-agent?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
+
+> **工程状态（v1.5.1 源码，2026-06-23）：本地冻结候选。**
+> 980 项测试通过，分支覆盖口径为 75.39%，高风险模块覆盖率门禁全部通过，
+> 全新环境安装 wheel 后 7 个内置插件 dry-run 全部通过。正式硬冻结仍需：
+> 远程 Python 3.10-3.13 矩阵全绿、带生物学判定标准的固定真实工具 benchmark、
+> 连续两个仅修缺陷的候选版本，以及连续一周无新增 P0/P1 缺陷。
 
 ## 安装
 
@@ -68,6 +75,10 @@ abi export-tools --type metatranscriptomics --format gemini              # Gemin
 abi export-agent-context --type metatranscriptomics --format json
 abi doctor-agent --type metatranscriptomics
 
+# 资源发现与自动安装
+abi check-resources --type metagenomic_plasmid
+abi setup-resources --type metagenomic_plasmid --confirm
+
 # 静态合约 / DAG 验证（L1 文献 + L2 路径 + L3 验证三层模型）
 abi contract-lint --type metagenomic_plasmid
 abi contract-lint --type metagenomic_plasmid --strict
@@ -97,11 +108,13 @@ abi job-service --workers 2 --store jobs.json --subprocess-workers
 
 | 类型 | 工具数 | 说明 |
 | --- | --- | --- |
-| `amplicon_16s` | 8 | 16S rRNA 微生物组：cutadapt → vsearch 合并/去冗余/去噪 → SINTAX 分类 → MAFFT+FastTree 系统发育 → alpha/beta 多样性。**✅ 端到端验证通过** |
-| `rnaseq_expression` | 6 | 批量 RNA-seq：fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler。**✅ 端到端验证通过** |
-| `wgs_bacteria` | 5 | 细菌分离株 WGS：fastp → SPAdes → Prokka → MLST → AMRFinderPlus。**✅ 端到端验证通过** |
-| `metatranscriptomics` | 4 | 宏转录组：fastp → STAR/HISAT2 → featureCounts。**✅ 端到端验证通过** |
-| `metagenomic_plasmid` | 67 | 旗舰质粒分析：QC → 组装 → 质粒检测 → 注释 → 丰度 → 群落分析 → 可视化。10 个 conda 环境，84+ 节点 DAG，16 张标准表。**⚠️ 核心流程通过，全量待数据库补齐** |
+| `amplicon_16s` | 10 | 16S rRNA 微生物组：cutadapt → vsearch 合并/去冗余/去噪 → SINTAX 分类 → MAFFT+FastTree 系统发育 → alpha/beta 多样性。**✅ 软件工作流验证通过** |
+| `rnaseq_expression` | 5 | 批量 RNA-seq：fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler。**✅ 软件工作流验证通过** |
+| `wgs_bacteria` | 5 | 细菌分离株 WGS：fastp → SPAdes → Prokka → MLST → AMRFinderPlus。**✅ 软件工作流验证通过** |
+| `metatranscriptomics` | 3 | 宏转录组：fastp → STAR/HISAT2 → featureCounts。**✅ 软件工作流验证通过** |
+| `easymetagenome` | 10 | P0 宏基因组：fastp → kneaddata → kraken2 → bracken → humann4 + HUMAnN 工具集 → seqkit。3 种工作流预设（分类、功能、全流程），DAG 驱动规划，内置处理器。**✅ 软件工作流验证通过** |
+| `viral_viwrap` | 1 | 病毒宏基因组：封装 ViWrap 1.3.1 — 分箱 → 分类 → 宿主预测 → 质量过滤。托管外部 CLI 插件，含环境检查器。**✅ 软件工作流验证通过** |
+| `metagenomic_plasmid` | 64 | 旗舰质粒分析：QC → 组装 → 质粒检测 → 注释 → 丰度 → 群落分析 → 可视化。10 个 conda 环境，**90 节点声明式 DAG**，16 张标准表，8 张 sciplot 图形。**⚠️ 软件工作流验证通过；全数据库生物学验证待完成** |
 
 `autoplasm` CLI 保留以维持向后兼容：
 
@@ -111,7 +124,7 @@ autoplasm dry-run --config examples/config_minimal.yaml --profile dry_run
 
 ## Docker
 
-为全部 5 个插件提供预构建 Docker 镜像：
+为 7 个插件中的 5 个提供预构建 Docker 镜像（`easymetagenome` 和 `viral_viwrap` 本地运行）：
 
 ```bash
 # 构建插件镜像
@@ -142,16 +155,16 @@ ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch / query
 ABI 核心层          schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
                     contracts│  dag         │  figures      │  dag_planner
-                    tsv_mapping  │  sciplot
+                    tsv_mapping  │  sciplot  │  resources  │  workflow
+                    tool_descriptors  │  internal  │  results
         │
         v
 插件层              amplicon_16s/  rnaseq_expression/  wgs_bacteria/
-                    metatranscriptomics/  metagenomic_plasmid/
-                        (群落分析、比较基因组学、
-                         可视化、共现网络)
+                    metatranscriptomics/  easymetagenome/
+                    viral_viwrap/  metagenomic_plasmid/
         │
         v
-运行时后端          local  │  Docker  │  Nextflow  │  HPC  │  cloud
+运行时后端          local  │  Docker  │  Nextflow  │  HPC (SLURM/PBS)  │  cloud  │  Job Service
 ```
 
 ### 设计原则
@@ -221,6 +234,13 @@ ruff format --check src/ tests/
 mypy src/abi/ --ignore-missing-imports
 pytest tests/ -v --tb=short
 
+# 与 CI 一致的测试、分支覆盖率和高风险模块门禁
+python -m pytest tests/ src/abi/sciplot/tests/ \
+  -m "not requires_tools" --strict-markers \
+  --cov=src/abi --cov-branch --cov-report=json:coverage.json \
+  --cov-fail-under=75
+python scripts/check_module_coverage.py --coverage coverage.json
+
 python -m build
 python -m twine check dist/*
 ```
@@ -231,19 +251,18 @@ python -m twine check dist/*
 更多文档：
 
 - [ABI Spec v0.1](docs/zh/abi_spec_v0.1.md)
-- [开发计划](docs/en/next_development_plan.md)
+- [开发指南](docs/zh/development.md)
 - [API 参考](docs/en/api.rst) — Sphinx 自动从 docstring 生成
 - [abi_sciplot 设计文档](docs/en/abi_sciplot_design.md) — 科研图形编译器
-- [插件开发指南](docs/en/plugin_development_guide.md)
+- [插件开发指南](docs/zh/plugin_development_guide.md)
 - [RNA-seq 工作流](docs/en/rnaseq_expression_workflow.md)
 - [工作流验证](docs/zh/workflow_validation.md)
-- [HPC 开发](docs/en/hpc_development.md)
+- [HPC 开发](docs/zh/hpc_development.md)
 - [OpenAI/LLM 接口标准](docs/zh/openai_interface_standard.md)
 - [Agent 使用指南](docs/zh/agent_usage.md)
 - [Job Service 指南](docs/zh/job_service.md)
 - [发布指南](docs/zh/release.md)
 - [开发日志](docs/en/devlog.md)
-- [最新工作报告](docs/en/work_report_2026-06-20.md)
 
 ## 公共 SDK
 
@@ -251,17 +270,22 @@ python -m twine check dist/*
 
 | 模块 | 内容 |
 | --- | --- |
-| `abi.interfaces` | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin` |
+| `abi.interfaces` | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin`, `ABIResourcePlugin`, `ABIResultValidationPlugin` |
 | `abi.schemas` | `SampleInput`, `SampleContext`, `PlanStep`, `ExecutionPlan`（含 `ABI` 前缀别名） |
 | `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
 | `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV 审计追踪写入器 |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError`, `MissingTemplateParamError` |
 | `abi.contracts` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, `save_checksums_atomic`, `run_contract_lint`, `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec` |
 | `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG 推断，支持 L1（文献）/ L2（路径）/ L3（验证）三层正确性模型 |
-| `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — 从 `pipeline_dag.yaml` 声明式生成执行计划（v1.3.2） |
-| `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML 驱动的 TSV 列映射，替换手写解析器样板代码（v1.3.2） |
+| `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — 从 `pipeline_dag.yaml` 声明式生成执行计划，全部 7 个插件使用。（v1.3.2） |
+| `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML 驱动的 TSV 列映射，替换 ~14 个手写解析器样板代码。（v1.3.2） |
 | `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure` — 论文级科研图形编译器。Pydantic schema，15 种图形类型（含 PCoA、火山图、堆叠柱状图、热图、系统发育热图），plotnine+seaborn 后端，PDF/SVG/PNG/TIFF 导出，3 套主题，FigureLint 质检，SHA256 溯源。（v1.4.0） |
 | `abi.tool_descriptors` | `ABI_AGENT_TOOLS`, `TOOL_ALIASES`, `export_openai_compatible`, `export_anthropic`, `export_gemini`, `PROVIDER_PROFILES` |
+| `abi.resources` | `check_resources`, `setup_resources` — 基于插件能力协议的资源发现与受控配置 |
+| `abi.internal` | `ABIInternalHandler`, `InternalHandlerContext`, `InternalHandlerResult` — 传输无关的内部 DAG 节点，用于无外部工具的步骤 |
+| `abi.results` | `ABIResultWriter`, `validate_abi_result_dir` — 共享结果/provenance 写入器 |
+| `abi.tables` | `StandardTableManager` — YAML 驱动的表规范化 |
+| `abi.config` | `resolved_mamba_root`, `PROJECT_ROOT`, `load_yaml`, `deep_merge` — 环境解析，4 级优先级 |
 | `abi.testing` | `assert_plugin_contract` |
 
 注册第三方插件：

@@ -1,22 +1,31 @@
 # <img src="figures/abi_logo.png" alt="ABI" width="36" height="36" align="top"> ABI — Agent-Bioinformatics Interface
 
 ABI is a Python interface layer for agent-driven bioinformatics workflows. It
-standardizes analysis plugins behind a common
+standardizes **7 analysis plugins** behind a common
 `plan -> dry-run -> run -> inspect -> report` lifecycle, with provenance,
 standard TSV tables, **multi-LLM tool descriptors** (OpenAI, Anthropic Claude,
 Google Gemini, DeepSeek, 智谱 GLM, Kimi, Qwen, MiniMax), optional MCP transport,
-Nextflow export/runtime support, DAG/contract static analysis, and a queue-backed
+Nextflow export/runtime support, DAG/contract static analysis, resource
+auto-discovery + install, a publication-grade scientific figure compiler
+(`abi-sciplot`, 15 plot types, PDF/SVG/PNG/TIFF), and a queue-backed
 HTTP Job Service with force-kill capability.
 
 [![PyPI](https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=blue)](https://pypi.org/project/abi-agent/)
 [![Python](https://img.shields.io/pypi/pyversions/abi-agent?style=flat-square)](https://pypi.org/project/abi-agent/)
 [![CI](https://img.shields.io/github/actions/workflow/status/sleepinlava/abi/ci.yml?branch=master&style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-60%25%2B-brightgreen?style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-75.39%25-brightgreen?style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-Sphinx-blue?style=flat-square)](https://sleepinlava.github.io/abi/)
 [![Status](https://img.shields.io/badge/status-alpha-orange?style=flat-square)](https://github.com/sleepinlava/abi)
 [![License](https://img.shields.io/pypi/l/abi-agent?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
 
 > :cn: [中文版](README.zh.md)
+
+> **Engineering status (v1.5.1 source, 2026-06-23): local freeze candidate.**
+> 980 tests pass, branch-aware coverage is 75.39%, risk-based module coverage
+> gates pass, and a clean wheel runs all 7 built-in plugin dry-runs. Hard freeze
+> still requires a green remote Python 3.10-3.13 matrix, fixed real-tool
+> benchmarks with biological acceptance criteria, two defect-only release
+> candidates, and one week without new P0/P1 defects.
 
 ## Installation
 
@@ -69,6 +78,10 @@ abi export-tools --type metatranscriptomics --format gemini              # Gemin
 abi export-agent-context --type metatranscriptomics --format json
 abi doctor-agent --type metatranscriptomics
 
+# Resource discovery and auto-install
+abi check-resources --type metagenomic_plasmid
+abi setup-resources --type metagenomic_plasmid --confirm
+
 # Static contract / DAG validation (L1 literature + L2 path + L3 validation)
 abi contract-lint --type metagenomic_plasmid
 abi contract-lint --type metagenomic_plasmid --strict
@@ -98,11 +111,13 @@ All agent-facing commands support `--output-json`.
 
 | Type | Tools | Description |
 | --- | --- | --- |
-| `amplicon_16s` | 8 | 16S rRNA microbiome: cutadapt → vsearch merge/derep/denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta). **✅ 端到端验证通过** |
-| `rnaseq_expression` | 6 | Bulk RNA-seq: fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. **✅ 端到端验证通过** |
-| `wgs_bacteria` | 5 | Bacterial isolate WGS: fastp → SPAdes → Prokka → MLST → AMRFinderPlus. **✅ 端到端验证通过** |
-| `metatranscriptomics` | 4 | Metatranscriptomics: fastp → STAR/HISAT2 → featureCounts. **✅ 端到端验证通过** |
-| `metagenomic_plasmid` | 67 | Flagship plasmid analysis: QC → assembly → plasmid detection → annotation → abundance → community analysis → visualization. 10 conda envs, 84+-node DAG, 16 standard tables. **⚠️ 核心流程通过，全量待数据库补齐** |
+| `amplicon_16s` | 10 | 16S rRNA microbiome: cutadapt → vsearch merge/derep/denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta). **✅ Software workflow validated** |
+| `rnaseq_expression` | 5 | Bulk RNA-seq: fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. **✅ Software workflow validated** |
+| `wgs_bacteria` | 5 | Bacterial isolate WGS: fastp → SPAdes → Prokka → MLST → AMRFinderPlus. **✅ Software workflow validated** |
+| `metatranscriptomics` | 3 | Metatranscriptomics: fastp → STAR/HISAT2 → featureCounts. **✅ Software workflow validated** |
+| `easymetagenome` | 10 | P0 shotgun metagenomics: fastp → kneaddata → kraken2 → bracken → humann4 + HUMAnN utilities → seqkit. 3 workflow presets (taxonomy, functional, full), DAG-driven planner, internal handlers. **✅ Software workflow validated** |
+| `viral_viwrap` | 1 | Viral metagenomics: wraps ViWrap 1.3.1 — binning → taxonomy → host prediction → quality filtering. Managed external CLI plugin with environment checker. **✅ Software workflow validated** |
+| `metagenomic_plasmid` | 64 | Flagship plasmid analysis: QC → assembly → plasmid detection → annotation → abundance → community analysis → visualization. 10 conda envs, **90-node declarative DAG**, 16 standard tables, 8 sciplot figures. **⚠️ Software workflow validated; full-database biological validation pending** |
 
 The `autoplasm` CLI is preserved for backward compatibility:
 
@@ -112,7 +127,7 @@ autoplasm dry-run --config examples/config_minimal.yaml --profile dry_run
 
 ## Docker
 
-Pre-built Docker images for all 5 plugins:
+Pre-built Docker images for 5 of 7 plugins (`easymetagenome` and `viral_viwrap` run locally):
 
 ```bash
 # Build a plugin image
@@ -143,16 +158,16 @@ ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch / query
 ABI Core            schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
                     contracts│  dag         │  figures      │  dag_planner
-                    tsv_mapping  │  sciplot
+                    tsv_mapping  │  sciplot  │  resources  │  workflow
+                    tool_descriptors  │  internal  │  results
         │
         v
 Plugins             amplicon_16s/  rnaseq_expression/  wgs_bacteria/
-                    metatranscriptomics/  metagenomic_plasmid/
-                        (community_analysis, comparative_genomics,
-                         visualization, co-occurrence_network)
+                    metatranscriptomics/  easymetagenome/
+                    viral_viwrap/  metagenomic_plasmid/
         │
         v
-Runtimes            local  │  Docker  │  Nextflow  │  HPC  │  cloud
+Runtimes            local  │  Docker  │  Nextflow  │  HPC (SLURM/PBS)  │  cloud  │  Job Service
 ```
 
 ### Design Principles
@@ -224,6 +239,13 @@ ruff format --check src/ tests/
 mypy src/abi/ --ignore-missing-imports
 pytest tests/ -v --tb=short
 
+# CI-equivalent tests, branch coverage, and risk-based module gates
+python -m pytest tests/ src/abi/sciplot/tests/ \
+  -m "not requires_tools" --strict-markers \
+  --cov=src/abi --cov-branch --cov-report=json:coverage.json \
+  --cov-fail-under=75
+python scripts/check_module_coverage.py --coverage coverage.json
+
 python -m build
 python -m twine check dist/*
 ```
@@ -235,7 +257,7 @@ default `.mamba` root; `AUTOPLASM_MAMBA_ROOT` remains accepted for compatibility
 More details:
 
 - [ABI Spec v0.1](docs/en/abi_spec_v0.1.md)
-- [Development Plan](docs/en/next_development_plan.md)
+- [Development Guide](docs/en/development.md)
 - [API Reference](docs/en/api.rst) — Sphinx auto-generated from docstrings
 - [abi_sciplot Design](docs/en/abi_sciplot_design.md) — Scientific figure compiler
 - [Plugin Development Guide](docs/en/plugin_development_guide.md)
@@ -247,7 +269,6 @@ More details:
 - [Job Service Guide](docs/en/job_service.md)
 - [Release Guide](docs/en/release.md)
 - [Dev Log](docs/en/devlog.md)
-- [Work Report 2026-06-20](docs/en/work_report_2026-06-20.md) — 最新工作报告
 
 ## Public SDK
 
@@ -255,17 +276,22 @@ Plugin authors should depend on these public modules:
 
 | Module | Contents |
 | --- | --- |
-| `abi.interfaces` | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin` |
+| `abi.interfaces` | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin`, `ABIResourcePlugin`, `ABIResultValidationPlugin` |
 | `abi.schemas` | `SampleInput`, `SampleContext`, `PlanStep`, `ExecutionPlan` (`ABI`-prefixed aliases available) |
 | `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
 | `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV provenance writers |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError`, `MissingTemplateParamError` |
 | `abi.contracts` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, `save_checksums_atomic`, `run_contract_lint`, `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec` |
 | `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with L1 (literature) / L2 (path) / L3 (validation) layers |
-| `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation from `pipeline_dag.yaml`. Replaces all hand-written `build_plan()` boilerplate; used by all 5 plugins including plasmid. (v1.3.2) |
+| `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation from `pipeline_dag.yaml`. Replaces all hand-written `build_plan()` boilerplate; used by all 7 plugins. (v1.3.2) |
 | `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML-driven TSV/JSON/log parsing with 3 source types (tsv_mapping, json_mapping, key_value_log). Replaces ~14 boilerplate parser functions. (v1.3.2) |
 | `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure` — publication-grade scientific figure compiler. Pydantic schema, 15 plot types (including PCoA, volcano, stacked bar, heatmap, phylogeny), plotnine+seaborn backends, PDF/SVG/PNG/TIFF export, 3 themes, FigureLint, SHA256 provenance. (v1.4.0) |
 | `abi.tool_descriptors` | `ABI_AGENT_TOOLS`, `TOOL_ALIASES`, `export_openai_compatible`, `export_anthropic`, `export_gemini`, `PROVIDER_PROFILES` |
+| `abi.resources` | `check_resources`, `setup_resources` — plugin-capability-based resource discovery and managed setup |
+| `abi.internal` | `ABIInternalHandler`, `InternalHandlerContext`, `InternalHandlerResult` — transport-neutral internal DAG nodes for steps without external tools |
+| `abi.results` | `ABIResultWriter`, `validate_abi_result_dir` — shared result/provenance writer |
+| `abi.tables` | `StandardTableManager` — YAML-driven table normalization |
+| `abi.config` | `resolved_mamba_root`, `PROJECT_ROOT`, `load_yaml`, `deep_merge` — env resolution with 4-level priority |
 | `abi.testing` | `assert_plugin_contract` |
 
 Register third-party plugins with:

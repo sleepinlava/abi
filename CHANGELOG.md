@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.5.1] - 2026-06-23
+
+### Changed
+
+- Made package metadata the single runtime version source and added strict
+  tag/wheel/runtime/CHANGELOG release identity checks.
+- Removed the legacy handwritten plasmid planner; all 7 built-in workflows now
+  use declarative `pipeline_dag.yaml` planning.
+- Replaced core imports of concrete plugin implementations with optional
+  resource and result-validation capability protocols.
+- Raised the branch-aware global coverage gate to 75% and added risk-based
+  module line/branch gates for DAG, executor, resources, local/HPC runtimes,
+  internal handlers, and step execution.
+
+### Fixed
+
+- Corrected wheel-installed plasmid configuration discovery outside the source
+  checkout, PBS scheduler job-ID validation, resource selection filtering, and
+  dry-run resource setup side effects.
+- Made release and PyPI publication consume the exact wheel that passed the
+  complete quality gate.
+
 ## [1.5.0] - 2026-06-23
 
 ### Added
