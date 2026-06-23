@@ -150,11 +150,12 @@ select = ["E", "F", "I", "W"]
 exclude = ["*.R"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
 disable_error_code = ["import-untyped", "no-any-return"]
+exclude = ["/(?:opt|usr)/(?:hostedtoolcache/)?[^/]*/.*site-packages/"]
 
 [[tool.mypy.overrides]]
 module = "abi.sciplot.adapters"

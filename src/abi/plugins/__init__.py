@@ -15,7 +15,7 @@ def _entry_points() -> Iterable[Any]:
     discovered = entry_points()
     if hasattr(discovered, "select"):
         return discovered.select(group=ENTRY_POINT_GROUP)
-    return discovered.get(ENTRY_POINT_GROUP, ())
+    return discovered.get(ENTRY_POINT_GROUP, ())  # type: ignore[attr-defined]  # present on 3.10/3.11
 
 
 def _load_entry_point_plugins() -> Dict[str, ABIPlugin]:
