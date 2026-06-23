@@ -6,7 +6,11 @@ on:
       - "v*"
 
 jobs:
+  quality-gate:
+    uses: ./.github/workflows/ci.yml
+
   release:
+    needs: quality-gate
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -19,14 +23,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Lint and format check
+      - name: Install release dependencies
         run: |
-          pip install ruff
-          ruff check src/ tests/
-          ruff format --check src/ tests/
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,docs,report]"
 
-      - name: Install build tools
-        run: pip install build twine
+      - name: Verify tag and package identity
+        run: python scripts/check_release_identity.py --tag "${GITHUB_REF_NAME}"
 
       - name: Build package
         run: python -m build
@@ -36,22 +39,26 @@ jobs:
 
       - name: Verify wheel contents
         run: |
-          pip install dist/*.whl
-          python -c "import abi; print(f'abi-agent {abi.__version__} imported successfully')"
-          abi list-types
-          autoplasm --help
-          abi dry-run \
+          python -m venv /tmp/abi-wheel-smoke
+          /tmp/abi-wheel-smoke/bin/pip install dist/*.whl
+          /tmp/abi-wheel-smoke/bin/python -c "import abi; from importlib.metadata import version; assert abi.__version__ == version('abi-agent')"
+          /tmp/abi-wheel-smoke/bin/abi list-types
+          /tmp/abi-wheel-smoke/bin/autoplasm --help
+          /tmp/abi-wheel-smoke/bin/abi dry-run \
             --type metagenomic_plasmid \
             --config examples/config_minimal.yaml \
             --profile dry_run \
             --outdir /tmp/abi-release-plasmid \
             --log-dir /tmp/abi-release-plasmid-log \
             --no-progress
-          abi dry-run \
-            --type metatranscriptomics \
-            --outdir /tmp/abi-release-rnaseq \
-            --log-dir /tmp/abi-release-rnaseq-log \
-            --no-progress
+          for plugin in rnaseq_expression wgs_bacteria amplicon_16s metatranscriptomics easymetagenome viral_viwrap; do
+            /tmp/abi-wheel-smoke/bin/abi dry-run \
+              --type "$plugin" \
+              --outdir "/tmp/abi-release-$plugin" \
+              --log-dir "/tmp/abi-release-$plugin-log" \
+              --no-check-files \
+              --no-progress
+          done
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

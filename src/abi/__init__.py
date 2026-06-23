@@ -34,13 +34,18 @@ Module                    Purpose
 ========================  ======================================================
 """
 
+from importlib.metadata import PackageNotFoundError, version
+
 __all__ = [
     "__version__",
     "get_agent_guide",
     "list_plugins_summary",
 ]
 
-__version__ = "1.3.3"
+try:
+    __version__ = version("abi-agent")
+except PackageNotFoundError:  # pragma: no cover - source tree without an installed distribution
+    __version__ = "0+unknown"
 
 
 def get_agent_guide() -> str:

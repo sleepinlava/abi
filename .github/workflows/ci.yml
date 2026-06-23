@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_call:
   push:
     branches: [main, master]
   pull_request:
@@ -27,7 +28,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev,report]"
+
+      - name: Verify release identity
+        run: python scripts/check_release_identity.py
 
       - name: Lint with ruff
         run: ruff check src/ tests/
@@ -38,20 +42,34 @@ jobs:
       - name: Type check with mypy
         run: mypy src/abi/ --ignore-missing-imports
 
+      - name: Lint built-in plugin contracts
+        if: matrix.python-version == '3.12'
+        run: |
+          for plugin in metagenomic_plasmid rnaseq_expression wgs_bacteria amplicon_16s metatranscriptomics easymetagenome viral_viwrap; do
+            abi contract-lint --type "$plugin" --strict
+          done
+
       - name: Run tests
-        run: pytest tests/ -v --tb=short
+        if: matrix.python-version != '3.12'
+        run: |
+          python -m pytest tests/ src/abi/sciplot/tests/ -v --tb=short \
+            --strict-markers -m "not requires_tools"
 
       - name: Run tests with coverage
         if: matrix.python-version == '3.12'
         run: |
           pip install pytest-cov
-          pytest tests/ -v --tb=short --cov=src/abi --cov-report=term --cov-report=xml --cov-fail-under=60
+          python -m pytest tests/ src/abi/sciplot/tests/ -v --tb=short \
+            --strict-markers -m "not requires_tools" \
+            --cov=src/abi --cov-branch --cov-report=term --cov-report=xml \
+            --cov-report=json:coverage.json --cov-fail-under=75
+          python scripts/check_module_coverage.py --coverage coverage.json
 
       - name: Build docs (Sphinx)
         if: matrix.python-version == '3.12'
         run: |
           pip install -e ".[docs,report]"
-          bash docs/build_docs.sh 2>&1 || echo "WARNING: docs build had warnings (non-fatal)"
+          bash docs/build_docs.sh
 
       - name: Verify package builds
         if: matrix.python-version == '3.12'
@@ -65,14 +83,22 @@ jobs:
           python -m pip install --force-reinstall dist/*.whl
           abi list-types
           autoplasm --help
+          abi dry-run \
+            --type metagenomic_plasmid \
+            --config examples/config_minimal.yaml \
+            --profile dry_run \
+            --outdir /tmp/abi-ci-metagenomic_plasmid \
+            --log-dir /tmp/abi-ci-metagenomic_plasmid-log \
+            --no-progress
           # Smoke-test each plugin with dry-run
-          for plugin in metagenomic_plasmid rnaseq_expression wgs_bacteria amplicon_16s metatranscriptomics; do
+          for plugin in rnaseq_expression wgs_bacteria amplicon_16s metatranscriptomics easymetagenome viral_viwrap; do
             echo "=== Smoke-test: $plugin ==="
             abi dry-run \
               --type "$plugin" \
               --outdir "/tmp/abi-ci-$plugin" \
               --log-dir "/tmp/abi-ci-$plugin-log" \
-              --no-progress || echo "WARNING: $plugin dry-run failed (may need config)"
+              --no-check-files \
+              --no-progress
           done
 
   deploy-docs:
@@ -105,8 +131,7 @@ jobs:
           pip install -e ".[docs,report]"
 
       - name: Build Sphinx docs
-        run: |
-          bash docs/build_docs.sh 2>&1 || echo "WARNING: docs build had warnings (non-fatal)"
+        run: bash docs/build_docs.sh
 
       - name: Create .nojekyll
         run: touch docs/_build/.nojekyll

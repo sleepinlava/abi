@@ -68,14 +68,48 @@ def test_rebuild_documentation_deliverables_exist() -> None:
     assert missing == []
 
 
-def test_release_workflow_smoke_tests_installed_demo_dry_runs() -> None:
+def test_release_workflow_uses_full_gate_and_clean_wheel_smoke() -> None:
     root = Path(__file__).resolve().parents[1]
     release_workflow = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")
 
-    assert "abi dry-run" in release_workflow
+    assert "uses: ./.github/workflows/ci.yml" in release_workflow
+    assert "needs: quality-gate" in release_workflow
+    assert "scripts/check_release_identity.py --tag" in release_workflow
+    assert "python -m venv /tmp/abi-wheel-smoke" in release_workflow
+    assert "/tmp/abi-wheel-smoke/bin/abi dry-run" in release_workflow
     assert "--type metagenomic_plasmid" in release_workflow
     assert "--config examples/config_minimal.yaml" in release_workflow
-    assert "--type metatranscriptomics" in release_workflow
+    for plugin in (
+        "rnaseq_expression",
+        "wgs_bacteria",
+        "amplicon_16s",
+        "metatranscriptomics",
+        "easymetagenome",
+        "viral_viwrap",
+    ):
+        assert plugin in release_workflow
+
+
+def test_ci_treats_sciplot_docs_and_dry_runs_as_required_gates() -> None:
+    root = Path(__file__).resolve().parents[1]
+    ci_workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "src/abi/sciplot/tests/" in ci_workflow
+    assert "--cov-branch" in ci_workflow
+    assert "--cov-fail-under=75" in ci_workflow
+    assert "--cov-report=json:coverage.json" in ci_workflow
+    assert "python scripts/check_module_coverage.py" in ci_workflow
+    assert "scripts/check_release_identity.py" in ci_workflow
+    assert "|| echo" not in ci_workflow
+
+
+def test_pypi_publishes_the_github_release_artifacts_without_rebuilding() -> None:
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/publish-pypi.yml").read_text(encoding="utf-8")
+
+    assert "gh release download" in workflow
+    assert "python -m twine check dist/*" in workflow
+    assert "python -m build" not in workflow
 
 
 def test_ci_includes_github_pages_deployment() -> None:

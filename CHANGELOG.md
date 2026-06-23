@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.5.0] - 2026-06-23
+
+### Added
+
+- HPC runtime overhaul with SLURM/PBS execution support and transport-neutral
+  internal DAG handlers.
+- `easymetagenome` and `viral_viwrap` analysis plugins.
+- Expanded SciPlot biological renderers, workflow validation, performance gates,
+  security regression tests, and golden traces for all built-in workflow families.
+
+### Changed
+
+- Unified tool-to-environment declarations in `environments.yaml` and expanded
+  multi-platform ONT, PacBio HiFi, hybrid, and assembly-only planning.
+- Hardened executor contracts, resource setup, diagnostics, permission enforcement,
+  result validation, and CI packaging checks.
+
+### Fixed
+
+- Corrected environment mappings, parser/output alignment, optional-node conditions,
+  timeout handling, path safety, and documentation drift identified by the 1.5 audit.
+
 ## [1.3.3] - 2026-06-19
 
 ### Added
