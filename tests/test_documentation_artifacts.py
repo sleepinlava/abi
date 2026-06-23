@@ -29,7 +29,6 @@ def test_rebuild_documentation_deliverables_exist() -> None:
     required = [
         # Core English docs (moved to docs/en/ in v1.3.0)
         "docs/en/abi_spec_v0.1.md",
-        "docs/en/next_development_plan.md",
         "docs/en/plugin_development_guide.md",
         "docs/en/openai_interface_standard.md",
         "docs/en/job_service.md",

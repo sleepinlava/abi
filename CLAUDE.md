@@ -275,7 +275,6 @@ Do not claim that a workflow is biologically validated from dry-run alone or fro
 | `docs/zh/` | Chinese documentation (Sphinx source, 10 files) |
 | `docs/_base.py` | Shared Sphinx config for both language builds |
 | `docs/build_docs.sh` | One-command bilingual docs build |
-| `docs/en/next_development_plan.md` | Full 15-section development plan + implementation status |
 | `docs/en/abi_sciplot_design.md` | abi_sciplot figure compiler design doc — FigureSpec protocol, themes, lint, provenance |
 | `docs/en/plugin_report_figure_spec.md` | Report/figure system reference for plugin authors |
 | `docs/en/rnaseq_expression_workflow.md` | RNA-seq workflow reference |
