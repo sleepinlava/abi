@@ -164,6 +164,17 @@ def test_parse_vsearch_derep():
     assert int(row["output_reads"]) == 5  # 5 unique sequences
 
 
+def test_parse_vsearch_derep_accepts_runtime_filename(tmp_path):
+    (tmp_path / "S1_derep.fasta").write_text(">S1.1;size=7;\nACGT\n", encoding="utf-8")
+
+    rows = get_plugin("amplicon_16s").parse_outputs("vsearch_derep", tmp_path, "S1")[
+        "denoising_stats"
+    ]
+
+    assert rows[0]["input_reads"] == 7
+    assert rows[0]["output_reads"] == 1
+
+
 def test_parse_vsearch_denoise():
     """vsearch UNOISE3 output → denoising_stats."""
     plugin = get_plugin("amplicon_16s")
@@ -172,6 +183,7 @@ def test_parse_vsearch_denoise():
     assert len(rows) == 1
     row = rows[0]
     assert row["stage"] == "denoising"
+    assert row["input_reads"] == ""
     assert int(row["output_reads"]) == 3  # 3 ASVs
 
 

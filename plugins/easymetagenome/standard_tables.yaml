@@ -1,5 +1,23 @@
 tables:
   qc_summary: [sample_id, tool, metric, value, unit, source_file]
-  host_removal_summary: [sample_id]
-  taxonomy_abundance: [sample_id]
-  functional_abundance: [sample_id, feature_type, feature_id, value, stratified, source_file]
+  host_removal_summary: [sample_id, dehost_read_pairs, tool, source_file]
+  taxonomy_abundance:
+    - sample_id
+    - name
+    - taxonomy_id
+    - taxonomy_level
+    - fraction_total_reads
+    - fraction_classified_reads
+    - new_est_reads
+    - kraken_assigned_reads
+    - added_reads
+    - tool
+    - source_file
+  functional_abundance:
+    - sample_id
+    - feature_type
+    - feature_id
+    - value
+    - stratified
+    - tool
+    - source_file

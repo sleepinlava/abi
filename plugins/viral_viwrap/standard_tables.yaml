@@ -1,5 +1,46 @@
 tables:
-  virus_summary: [sample_id]
-  viral_taxonomy: [sample_id]
-  viral_hosts: [sample_id]
-  viral_abundance_normalized: [sample_id]
+  virus_summary:
+    - sample_id
+    - virus_id
+    - length
+    - circularity
+    - checkv_quality
+    - completeness
+    - contamination
+    - taxonomy
+    - lifestyle
+    - gene_count
+    - source_file
+    - raw_record_json
+  viral_taxonomy:
+    - sample_id
+    - virus_id
+    - taxonomy
+    - realm
+    - kingdom
+    - phylum
+    - class
+    - order
+    - family
+    - genus
+    - species
+    - confidence
+    - source_file
+    - raw_record_json
+  viral_hosts:
+    - sample_id
+    - virus_id
+    - host_id
+    - host_taxonomy
+    - host_genus
+    - method
+    - score
+    - source_file
+    - raw_record_json
+  viral_abundance_normalized:
+    - sample_id
+    - virus_id
+    - abundance
+    - unit
+    - source_file
+    - raw_record_json

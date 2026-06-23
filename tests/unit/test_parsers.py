@@ -6,8 +6,66 @@ from abi.autoplasm.standard_tables import (
     read_standard_table,
     write_consensus_table,
 )
+from abi.plugins import get_plugin
 
 FIXTURES = Path("tests/fixtures/tool_outputs")
+
+
+def test_every_registered_plasmid_tool_has_a_standard_parser():
+    registry = get_plugin("metagenomic_plasmid").registry()
+
+    assert all(supports_standard_parsing(tool_id) for tool_id in registry.ids())
+
+
+def test_alignment_assembly_annotation_binning_and_artifact_parsers(tmp_path):
+    alignment = tmp_path / "alignment"
+    alignment.mkdir()
+    (alignment / "S1.sam").write_text(
+        "@HD\tVN:1.6\n"
+        "r1\t0\tcontig_1\t1\t60\t4M\t*\t0\t0\tACGT\tIIII\n"
+        "r2\t4\t*\t0\t0\t*\t*\t0\t0\tTGCA\tIIII\n",
+        encoding="utf-8",
+    )
+    alignment_rows = parse_standard_outputs("bowtie2", alignment, "S1")["alignment_summary"]
+    assert alignment_rows[0]["record_count"] == 2
+    assert alignment_rows[0]["mapped_records"] == 1
+    assert alignment_rows[0]["unmapped_records"] == 1
+
+    assembly = tmp_path / "assembly"
+    assembly.mkdir()
+    (assembly / "contigs.fasta").write_text(">c1\nACGT\n>c2\nACGTAC\n", encoding="utf-8")
+    assembly_rows = parse_standard_outputs("metaspades", assembly, "S1")["assembly_summary"]
+    assert next(row for row in assembly_rows if row["metric"] == "contig_count")["value"] == 2
+
+    annotation = tmp_path / "annotation"
+    annotation.mkdir()
+    (annotation / "genes.gff").write_text(
+        "##gff-version 3\nc1\tProdigal\tCDS\t1\t4\t.\t+\t0\tID=gene1;product=enzyme\n",
+        encoding="utf-8",
+    )
+    annotation_rows = parse_standard_outputs("prodigal", annotation, "S1")["annotations"]
+    assert annotation_rows[0]["gene"] == "gene1"
+
+    bins = tmp_path / "bins"
+    bins.mkdir()
+    (bins / "bin.1.fa").write_text(">c1\nACGT\n>c2\nACGTAC\n", encoding="utf-8")
+    bin_rows = parse_standard_outputs("metabat2", bins, "S1")
+    assert bin_rows["plasmid_bins"][0]["contig_count"] == 2
+    assert len(bin_rows["bin_to_contig"]) == 2
+
+    quality = tmp_path / "quality"
+    quality.mkdir()
+    (quality / "quality_report.tsv").write_text(
+        "Name\tCompleteness\tContamination\nBin_1\t95.0\t1.2\n", encoding="utf-8"
+    )
+    quality_rows = parse_standard_outputs("checkm2", quality, "S1")["mag_quality"]
+    assert quality_rows[0]["completeness"] == "95.0"
+
+    visual = tmp_path / "visual"
+    visual.mkdir()
+    (visual / "network.html").write_text("<html></html>\n", encoding="utf-8")
+    visual_rows = parse_standard_outputs("pyvis", visual, "")["visualization_outputs"]
+    assert visual_rows[0]["output_type"] == "html"
 
 
 def test_core_parsers_emit_standard_rows(tmp_path):

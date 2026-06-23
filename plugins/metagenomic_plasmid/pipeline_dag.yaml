@@ -2854,42 +2854,6 @@ nodes:
       field: annotation.optional_tools
       operator: list_contains
       value: eggnog_mapper
-  mag_maxbin2:
-    tool_id: maxbin2
-    category: mag_host_genomes
-    scope: per_sample
-    name: MaxBin2 metagenomic binning (alternative)
-    platforms:
-    - illumina
-    - hybrid
-    optional: true
-    enable_condition:
-      field: mag_host_genomes.tools
-      operator: list_contains
-      value: maxbin2
-    depends_on:
-    - contig_coverage_samtools
-    inputs:
-      assembly:
-        type: file
-        format: fasta
-        source: '{active_assembly_node}.assembly'
-      read1:
-        type: file
-        format: fastq.gz
-        source: host_removal_bowtie2.clean_read1
-        fallback: qc_fastp.clean_read1
-      read2:
-        type: file
-        format: fastq.gz
-        source: host_removal_bowtie2.clean_read2
-        fallback: qc_fastp.clean_read2
-      threads:
-        type: integer
-        default: 1
-    outputs:
-      output_dir:
-        type: directory
   mag_concoct:
     tool_id: concoct
     category: mag_host_genomes
@@ -2971,7 +2935,6 @@ nodes:
       value: das_tool
     depends_on:
     - mag_metabat2
-    - mag_maxbin2
     - mag_concoct
     inputs:
       assembly:

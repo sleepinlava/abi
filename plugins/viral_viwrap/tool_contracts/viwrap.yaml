@@ -13,6 +13,8 @@ outputs:
 execution:
   executable: ViWrap
   command_template: ViWrap run --input_metagenome {input_metagenome} --out_dir {output_dir}
+    --db_dir {db_dir} --conda_env_dir {conda_env_dir} --identify_method {identify_method}
+    --threads {threads} --input_length_limit {input_length_limit}
   network: false
   writes_output: true
 normalization:

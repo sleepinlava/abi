@@ -387,7 +387,8 @@ def test_dag_encodes_hard_tool_policy():
         )
 
     assert tool_nodes["genomad"][0][1]["optional"] is False
-    for tool_id in {"metabat2", "maxbin2", "concoct", "semibin"}:
+    assert "maxbin2" not in tool_nodes
+    for tool_id in {"metabat2", "concoct", "semibin"}:
         assert all(node["category"] == "mag_host_genomes" for _, node in tool_nodes[tool_id])
 
 

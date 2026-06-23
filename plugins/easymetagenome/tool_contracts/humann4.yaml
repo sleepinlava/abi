@@ -13,7 +13,14 @@ outputs:
   genefamilies: {type: file, format: tsv}
   pathabundance: {type: file, format: tsv}
   pathcoverage: {type: file, format: tsv}
-execution: {executable: humann, network: false, writes_output: true}
+execution:
+  executable: humann
+  command_template: humann --input {merged_reads} --output {output_dir}
+    --output-basename {sample_id} --threads {threads}
+    --nucleotide-database {humann_nucleotide_db} --protein-database {humann_protein_db}
+    --metaphlan-options "--bowtie2db {metaphlan_db}"
+  network: false
+  writes_output: true
 normalization: {tables: [functional_abundance]}
 failure_handling:
   missing_input: {hint: Check host-filtered reads and all HUMAnN/MetaPhlAn databases.}

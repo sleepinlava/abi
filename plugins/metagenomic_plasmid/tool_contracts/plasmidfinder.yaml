@@ -17,7 +17,7 @@ outputs:
     type: path
 execution:
   executable: plasmidfinder.py
-  command_template: plasmidfinder.py -i {assembly} -o {output_dir} -p {database}
+  command_template: plasmidfinder.py -i {plasmid_contigs} -o {output_dir} -p {database}
   network: false
   writes_output: true
 normalization:

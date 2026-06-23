@@ -3,6 +3,7 @@ import json
 from typer.testing import CliRunner
 
 from abi.cli import app
+from abi.plugins import get_plugin
 
 
 def _fake_nextflow(path):
@@ -394,7 +395,8 @@ def test_abi_metagenomic_plasmid_no_progress_writes_progress_artifacts(tmp_path)
     version_lines = (
         (outdir / "provenance" / "tool_versions.tsv").read_text(encoding="utf-8").splitlines()
     )
-    assert len(version_lines) >= 66  # header + 65 DAG-reachable registered tools
+    registry_tool_count = len(get_plugin("metagenomic_plasmid").registry().ids())
+    assert len(version_lines) >= 1 + registry_tool_count
     assert all(line.endswith("\tnot_captured") for line in version_lines[1:])
     resources = json.loads((outdir / "provenance" / "resources.json").read_text(encoding="utf-8"))[
         "resources"

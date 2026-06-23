@@ -5,7 +5,12 @@ category: functional_summary
 purpose: Join per-sample HUMAnN tables into a cohort matrix.
 inputs: {humann_samples_dir: {type: directory, required: true}}
 outputs: {joined_table: {type: file, format: tsv}}
-execution: {executable: humann_join_tables, network: false, writes_output: true}
+execution:
+  executable: humann_join_tables
+  command_template: humann_join_tables --input {humann_samples_dir} --file_name {file_name}
+    --output {joined_table}
+  network: false
+  writes_output: true
 normalization: {tables: [functional_abundance]}
 failure_handling: {tool_not_found: {hint: Create the easymeta-humann environment.}}
 resources: {cpu: 1, memory: 8GB, walltime: "02:00:00"}

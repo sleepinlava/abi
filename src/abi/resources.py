@@ -92,6 +92,14 @@ def setup_resources(
             dry_run=dry_run,
             mock=mock,
         )
+    if analysis_type in {"easymetagenome", "viral_viwrap"}:
+        return _setup_manual_resource_bundle(
+            analysis_type,
+            config,
+            resource_ids=resource_ids,
+            dry_run=dry_run,
+            mock=mock,
+        )
     if not dry_run and not mock:
         raise ABIError(
             f"Resource setup is not implemented for analysis type {analysis_type!r}. "
@@ -114,6 +122,57 @@ def setup_resources(
             planned_row["status"] = "ok"
             planned_row["message"] = "Mock resource directory prepared."
         planned.append(planned_row)
+    return planned
+
+
+def _setup_manual_resource_bundle(
+    analysis_type: str,
+    config: Mapping[str, Any],
+    *,
+    resource_ids: Optional[Sequence[str]],
+    dry_run: bool,
+    mock: bool,
+) -> List[Dict[str, Any]]:
+    """Prepare mock bundles or report explicit manual setup requirements.
+
+    These plugins depend on organism/site-specific databases or an upstream
+    multi-environment installation.  Automatically choosing or partially
+    downloading such resources would create a misleading runnable state.
+    """
+    rows = _check_generic_resources(analysis_type, config, resource_ids=resource_ids)
+    planned: List[Dict[str, Any]] = []
+    for row in rows:
+        current = dict(row)
+        target = _configured_or_default_resource_path(config, str(current["resource_id"]))
+        current["path"] = str(target)
+        if current["status"] == "ok":
+            current["message"] = "Configured resource exists."
+        elif mock:
+            target.mkdir(parents=True, exist_ok=True)
+            (target / ".abi_mock_resource").write_text(
+                f"{analysis_type}:{current['resource_id']}\n",
+                encoding="utf-8",
+            )
+            current["status"] = "ok"
+            current["message"] = "Mock resource directory prepared."
+        elif dry_run:
+            current["status"] = "planned"
+            current["message"] = (
+                "Would verify this manually provisioned resource; no implicit "
+                "database or environment selection is performed."
+            )
+        else:
+            current["status"] = "manual_required"
+            current["message"] = (
+                "Provision the upstream database/environment bundle, then set "
+                f"resources.{current['resource_id']} to its validated path."
+            )
+        current.setdefault("command", [])
+        current.setdefault("ready_check", "non_empty_directory")
+        current.setdefault("source_url", "")
+        current.setdefault("version", "")
+        current.setdefault("checksum", "")
+        planned.append(current)
     return planned
 
 

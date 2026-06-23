@@ -12,7 +12,13 @@ outputs:
   dehost_read1: {type: file, format: fastq.gz}
   dehost_read2: {type: file, format: fastq.gz}
   output_dir: {type: directory}
-execution: {executable: kneaddata, command_template: "kneaddata -i1 {clean_read1} -i2 {clean_read2} -o {output_dir} -db {host_db}", network: false, writes_output: true}
+execution:
+  executable: kneaddata
+  command_template: kneaddata -i1 {clean_read1} -i2 {clean_read2} -o {output_dir}
+    -db {host_db} -t {threads} --bypass-trim --bypass-trf --reorder
+    --remove-intermediate-output
+  network: false
+  writes_output: true
 normalization: {tables: [host_removal_summary]}
 failure_handling:
   missing_input: {hint: Check fastp outputs and host database.}

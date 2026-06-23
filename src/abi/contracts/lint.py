@@ -334,6 +334,7 @@ def lint_assertion_syntax(
 def lint_tool_contracts(
     contracts: Dict[str, Dict[str, Any]],
     registry_tool_ids: Optional[Set[str]] = None,
+    registry_tools: Optional[Mapping[str, Mapping[str, Any]]] = None,
 ) -> List[LintFinding]:
     """Check tool contracts for consistency with the registry.
 
@@ -341,6 +342,10 @@ def lint_tool_contracts(
         contracts: Dict of ``tool_id → contract_dict`` from ``load_tool_contracts()``.
         registry_tool_ids: Optional set of tool IDs from the registry for
             cross-referencing.
+        registry_tools: Optional registry metadata keyed by tool ID.  When
+            provided, executable, category, and command template parity are
+            enforced so the contract cannot describe a command different from
+            the one the runtime actually executes.
 
     Returns:
         List of ``LintFinding``.
@@ -409,6 +414,37 @@ def lint_tool_contracts(
                 )
             )
 
+    if registry_tools:
+        for tool_id in sorted(set(contracts) & set(registry_tools)):
+            contract = contracts[tool_id]
+            registry = registry_tools[tool_id]
+            execution = contract.get("execution", {})
+            if not isinstance(execution, Mapping):
+                continue
+            comparisons = {
+                "category": (registry.get("category"), contract.get("category")),
+                "executable": (registry.get("executable"), execution.get("executable")),
+                "command_template": (
+                    registry.get("command_template"),
+                    execution.get("command_template"),
+                ),
+            }
+            for field, (runtime_value, contract_value) in comparisons.items():
+                runtime_normalized = " ".join(str(runtime_value or "").split())
+                contract_normalized = " ".join(str(contract_value or "").split())
+                if runtime_normalized == contract_normalized:
+                    continue
+                findings.append(
+                    LintFinding(
+                        severity="error",
+                        check="registry_contract_mismatch",
+                        detail=(
+                            f"Tool {tool_id!r}: registry {field} differs from tool contract {field}"
+                        ),
+                        location=tool_id,
+                    )
+                )
+
     return findings
 
 
@@ -467,6 +503,7 @@ def run_contract_lint(
     dag_spec: Mapping[str, Any],
     contracts: Dict[str, Dict[str, Any]] | None = None,
     registry_tool_ids: Set[str] | None = None,
+    registry_tools: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     """Run all contract lint checks and return a structured result.
 
@@ -474,6 +511,7 @@ def run_contract_lint(
         dag_spec: Parsed ``pipeline_dag.yaml``.
         contracts: Optional parsed tool contracts (tool_id → contract).
         registry_tool_ids: Optional set of tool IDs from the registry.
+        registry_tools: Optional runtime registry metadata keyed by tool ID.
 
     Returns:
         A dict with keys ``findings`` (list of LintFinding as dicts),
@@ -489,7 +527,13 @@ def run_contract_lint(
 
     # Contract checks
     if contracts is not None:
-        all_findings.extend(lint_tool_contracts(contracts, registry_tool_ids))
+        all_findings.extend(
+            lint_tool_contracts(
+                contracts,
+                registry_tool_ids,
+                registry_tools=registry_tools,
+            )
+        )
         all_findings.extend(lint_resource_blocks(contracts))
 
     error_count = sum(1 for f in all_findings if f.severity == "error")

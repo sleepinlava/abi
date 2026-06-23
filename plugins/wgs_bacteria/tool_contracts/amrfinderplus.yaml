@@ -45,7 +45,6 @@ failure_handling:
   tool_not_found:
     hint: 'AMRFinderPlus not found. Install: conda install -c bioconda ncbi-amrfinderplus'
 normalization:
-  parser: abi.plugins.wgs_bacteria:_parse_amrfinderplus
   tables:
   - amr_profile
 resources:

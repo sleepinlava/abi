@@ -10,6 +10,7 @@ Clinical/food/environmental bacterial isolate analysis pipeline:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
@@ -182,6 +183,7 @@ def _parse_spades(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
         total = sum(lengths)
         n50 = _compute_n50(lengths)
         gc = _compute_gc_content(path)
+        coverage = _compute_spades_coverage(path)
         rows.append(
             {
                 "sample_id": sample_id,
@@ -190,7 +192,7 @@ def _parse_spades(output_dir: Path, sample_id: str) -> List[Dict[str, Any]]:
                 "n50": n50,
                 "max_contig_length": max(lengths),
                 "gc_content": round(gc, 2) if gc is not None else "",
-                "coverage": "",
+                "coverage": round(coverage, 2) if coverage is not None else "",
                 "tool": "spades",
                 "source_file": str(path),
             }
@@ -288,6 +290,33 @@ def _compute_gc_content(path: Path) -> Optional[float]:
     if total == 0:
         return None
     return (gc / total) * 100.0
+
+
+def _compute_spades_coverage(path: Path) -> Optional[float]:
+    """Return length-weighted coverage encoded in SPAdes FASTA headers."""
+    weighted_coverage = 0.0
+    total_length = 0
+    current_coverage: float | None = None
+    current_length = 0
+
+    def add_record() -> None:
+        nonlocal weighted_coverage, total_length
+        if current_coverage is not None and current_length > 0:
+            weighted_coverage += current_coverage * current_length
+            total_length += current_length
+
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if line.startswith(">"):
+                add_record()
+                match = re.search(r"(?:^|_)cov_([0-9]+(?:\.[0-9]+)?)", line)
+                current_coverage = float(match.group(1)) if match else None
+                current_length = 0
+            else:
+                current_length += len(line)
+    add_record()
+    return weighted_coverage / total_length if total_length else None
 
 
 def _parse_gff_attributes(attr_string: str) -> Dict[str, str]:

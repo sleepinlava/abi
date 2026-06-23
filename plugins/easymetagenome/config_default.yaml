@@ -11,7 +11,6 @@ resources:
   humann_nucleotide_db: HUMANN_NUCLEOTIDE_DB_NOT_CONFIGURED
   humann_protein_db: HUMANN_PROTEIN_DB_NOT_CONFIGURED
   metaphlan_db: METAPHLAN_DB_NOT_CONFIGURED
-  read_length: 150
 workflow:
   preset: p0_taxonomy
 tool_params:

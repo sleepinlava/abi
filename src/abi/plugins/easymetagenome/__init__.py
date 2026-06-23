@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import gzip
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional
 
@@ -243,12 +244,24 @@ class EasyMetagenomePlugin:
         self, tool_id: str, output_dir: str | Path, sample_id: str
     ) -> Mapping[str, Iterable[Mapping[str, Any]]]:
         root = Path(output_dir)
+        if tool_id == "seqkit":
+            return {"qc_summary": _parse_seqkit(root, sample_id)}
         if tool_id == "fastp":
             return {"qc_summary": _parse_fastp(root, sample_id)}
         if tool_id == "kneaddata":
-            return {"host_removal_summary": _read_tabular(root, "*.log", sample_id)}
+            return {"host_removal_summary": _parse_kneaddata(root, sample_id)}
+        if tool_id == "kraken2":
+            return {"taxonomy_abundance": _parse_kraken2(root, sample_id)}
         if tool_id == "bracken":
-            return {"taxonomy_abundance": _read_tabular(root, "*.brk", sample_id)}
+            return {"taxonomy_abundance": _parse_bracken(root, sample_id)}
+        if tool_id in {
+            "humann4",
+            "humann_join_tables",
+            "humann_renorm_table",
+            "humann_regroup_table",
+            "humann_split_stratified_table",
+        }:
+            return {"functional_abundance": _parse_humann(root, tool_id, sample_id)}
         return {}
 
     def write_report(self, plan: Any, result_dir: str | Path) -> Dict[str, Path]:
@@ -258,18 +271,154 @@ class EasyMetagenomePlugin:
         return P0Workflow.from_yaml(self.root / "workflows" / "preprocessing_kraken2_bracken.yaml")
 
 
-def _read_tabular(root: Path, pattern: str, sample_id: str) -> list[dict[str, str]]:
-    rows: list[dict[str, str]] = []
-    for path in root.glob(pattern):
+def _parse_seqkit(root: Path, sample_id: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for path in sorted(root.glob("*.seqkit.tsv")):
         try:
             with path.open("r", encoding="utf-8", errors="replace", newline="") as handle:
-                for row in csv.DictReader(handle, delimiter="\t"):
+                for record in csv.DictReader(handle, delimiter="\t"):
+                    for metric, value in record.items():
+                        if metric == "file":
+                            continue
+                        rows.append(
+                            {
+                                "sample_id": sample_id,
+                                "tool": "seqkit",
+                                "metric": metric,
+                                "value": value or "",
+                                "unit": "",
+                                "source_file": str(path),
+                            }
+                        )
+        except (OSError, csv.Error):
+            continue
+    return rows
+
+
+def _fastq_record_count(path: Path) -> int:
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt", encoding="utf-8", errors="replace") as handle:
+        return sum(1 for _ in handle) // 4
+
+
+def _parse_kneaddata(root: Path, sample_id: str) -> list[dict[str, Any]]:
+    candidates = sorted(root.glob("*paired_1.fastq*"))
+    if not candidates:
+        return []
+    path = candidates[0]
+    try:
+        count = _fastq_record_count(path)
+    except OSError:
+        return []
+    return [
+        {
+            "sample_id": sample_id,
+            "dehost_read_pairs": count,
+            "tool": "kneaddata",
+            "source_file": str(path),
+        }
+    ]
+
+
+def _parse_kraken2(root: Path, sample_id: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for path in sorted(root.glob("*.kraken2.report")):
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    fields = line.rstrip("\n").split("\t")
+                    if len(fields) < 6:
+                        continue
                     rows.append(
                         {
                             "sample_id": sample_id,
-                            **{str(key): str(value or "") for key, value in row.items()},
+                            "name": fields[5].strip(),
+                            "taxonomy_id": fields[4].strip(),
+                            "taxonomy_level": fields[3].strip(),
+                            "fraction_total_reads": fields[0].strip(),
+                            "fraction_classified_reads": "",
+                            "new_est_reads": "",
+                            "kraken_assigned_reads": fields[2].strip(),
+                            "added_reads": "",
+                            "tool": "kraken2",
+                            "source_file": str(path),
+                        }
+                    )
+        except OSError:
+            continue
+    return rows
+
+
+def _parse_bracken(root: Path, sample_id: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for path in sorted(root.glob("*.brk")):
+        try:
+            with path.open("r", encoding="utf-8", errors="replace", newline="") as handle:
+                for record in csv.DictReader(handle, delimiter="\t"):
+                    rows.append(
+                        {
+                            "sample_id": sample_id,
+                            "name": record.get("name", ""),
+                            "taxonomy_id": record.get("taxonomy_id", ""),
+                            "taxonomy_level": record.get("taxonomy_lvl", ""),
+                            "fraction_total_reads": record.get("fraction_total_reads", ""),
+                            "fraction_classified_reads": record.get(
+                                "fraction_classified_reads", ""
+                            ),
+                            "new_est_reads": record.get("new_est_reads", ""),
+                            "kraken_assigned_reads": record.get("kraken_assigned_reads", ""),
+                            "added_reads": record.get("added_reads", ""),
+                            "tool": "bracken",
+                            "source_file": str(path),
                         }
                     )
         except (OSError, csv.Error):
             continue
     return rows
+
+
+def _parse_humann(root: Path, tool_id: str, fallback_sample_id: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for path in sorted(root.rglob("*.tsv")):
+        try:
+            with path.open("r", encoding="utf-8", errors="replace", newline="") as handle:
+                reader = csv.reader(handle, delimiter="\t")
+                header: list[str] | None = None
+                for values in reader:
+                    if not values:
+                        continue
+                    if values[0].startswith("#"):
+                        if len(values) > 1:
+                            header = values
+                        continue
+                    if header is None:
+                        continue
+                    feature_id = values[0]
+                    feature_type = _humann_feature_type(path)
+                    for column, value in zip(header[1:], values[1:]):
+                        sample_id = column.rsplit("-RPKs", 1)[0].lstrip("#")
+                        rows.append(
+                            {
+                                "sample_id": sample_id or fallback_sample_id,
+                                "feature_type": feature_type,
+                                "feature_id": feature_id,
+                                "value": value,
+                                "stratified": "|" in feature_id,
+                                "tool": tool_id,
+                                "source_file": str(path),
+                            }
+                        )
+        except (OSError, csv.Error):
+            continue
+    return rows
+
+
+def _humann_feature_type(path: Path) -> str:
+    name = path.name.lower()
+    if "pathabundance" in name:
+        return "pathway"
+    if "pathcoverage" in name:
+        return "pathway_coverage"
+    if "ko" in name:
+        return "ko"
+    return "gene_family"

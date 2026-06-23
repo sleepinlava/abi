@@ -7,6 +7,10 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence
 
+from abi.plugins.metagenomic_plasmid._engine.normalize.plasmid_prediction import (
+    integrate_calls,
+)
+
 logger = logging.getLogger(__name__)
 
 TABLE_SCHEMAS: Dict[str, List[str]] = {
@@ -205,6 +209,33 @@ TABLE_SCHEMAS: Dict[str, List[str]] = {
     ],
     "qc_summary": ["sample_id", "tool", "metric", "value", "unit", "source_file"],
     "assembly_summary": ["sample_id", "tool", "metric", "value", "unit", "source_file"],
+    "alignment_summary": [
+        "sample_id",
+        "tool",
+        "artifact_type",
+        "record_count",
+        "mapped_records",
+        "unmapped_records",
+        "size_bytes",
+        "source_file",
+    ],
+    "mag_quality": [
+        "sample_id",
+        "bin_id",
+        "completeness",
+        "contamination",
+        "taxonomy",
+        "tool",
+        "source_file",
+    ],
+    "artifacts": [
+        "sample_id",
+        "tool",
+        "artifact_type",
+        "path",
+        "size_bytes",
+        "description",
+    ],
     "plasmid_typing": [
         "sample_id",
         "contig_id",
@@ -630,21 +661,23 @@ def write_consensus_table(
         total_tools = max(len(tools_for_denominator), len(support_tools), 1)
         support_count = len(support_tools)
 
-        # ── Weighted-vote: compute weighted score ──
+        # Build an explicit boolean call matrix and delegate the policy
+        # decision to the normalization module used by public callers.
+        calls_by_tool = {tool: {contig_id: tool in support_tools} for tool in tools_for_denominator}
+        decision_calls = calls_by_tool
+        if strategy == "single_tool":
+            primary_tool = (configured_tools or tools_for_denominator)[0]
+            decision_calls = {primary_tool: calls_by_tool[primary_tool]}
+
+        # ── Weighted-vote: compute weighted score for provenance ──
         weighted_score: float | None = None
         if strategy == "weighted_vote":
             weighted_score = sum(resolved_weights.get(tool, 1.0) for tool in support_tools)
-            total_weight = (
-                sum(resolved_weights.values()) if resolved_weights else float(total_tools)
-            )
-            final_call = weighted_score >= (total_weight / 2.0)
-        elif strategy == "single_tool" and configured_tools:
-            # The first configured detector is authoritative. Additional tools
-            # enrich the evidence columns but cannot create a positive call on
-            # their own; metagenomic_plasmid config places geNomad first.
-            final_call = configured_tools[0] in support_tools
-        else:
-            final_call = _consensus_call(strategy, support_count, total_tools)
+        final_call = integrate_calls(
+            decision_calls,
+            strategy=strategy,
+            weights=resolved_weights or None,
+        ).get(contig_id, False)
 
         confidence = _consensus_confidence(rows, support_count, total_tools)
         if weighted_score is not None and resolved_weights:
@@ -692,21 +725,6 @@ def write_consensus_table(
         table_path(tables_dir, "plasmid_consensus"),
     )
     return write_standard_table(tables_dir, "plasmid_consensus", consensus_rows, append=False)
-
-
-def _consensus_call(strategy: str, support_count: int, total_tools: int) -> bool:
-    """Simple (unweighted) consensus decision.
-
-    For ``"weighted_vote"``, callers must compute the decision themselves
-    using per-tool weights and pass the result directly to the caller site
-    in :func:`write_consensus_table`.  This function treats
-    ``"weighted_vote"`` as a degenerate majority-vote fallback.
-    """
-    if strategy == "intersection":
-        return support_count == total_tools
-    if strategy in {"majority_vote", "weighted_vote"}:
-        return support_count > total_tools / 2
-    return support_count > 0
 
 
 def _consensus_confidence(

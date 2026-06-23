@@ -364,7 +364,7 @@ def _parse_vsearch_derep(output_dir: Path, sample_id: str) -> List[Dict[str, Any
     rows: List[Dict[str, Any]] = []
     seq_count = 0
     total_size = 0
-    for path in sorted(output_dir.glob("derep.fasta")):
+    for path in sorted(output_dir.glob("*derep.fasta")):
         with path.open("r", encoding="utf-8") as handle:
             for line in handle:
                 if line.startswith(">"):
@@ -412,7 +412,11 @@ def _parse_vsearch_denoise(output_dir: Path, sample_id: str) -> List[Dict[str, A
             {
                 "sample_id": sample_id,
                 "stage": "denoising",
-                "input_reads": 0,
+                # UNOISE3 does not report an input count and parse_outputs only
+                # receives this step's output directory.  Blank is explicit
+                # missing data; zero would incorrectly mean no sequences were
+                # provided to a successful denoising run.
+                "input_reads": "",
                 "output_reads": asv_count,
                 "tool": "vsearch",
                 "source_file": str(output_dir),

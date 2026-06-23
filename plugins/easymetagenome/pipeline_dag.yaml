@@ -293,6 +293,7 @@ nodes:
       humann_samples_dir: {type: directory}
     outputs:
       joined_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/genefamilies.tsv", contract: {min_size: "10B"}}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}"}
   humann_renorm_genefamilies:
     tool_id: humann_renorm_table
     category: functional_summary
@@ -305,6 +306,7 @@ nodes:
       input_table: {type: file, source: humann_join_genefamilies.joined_table}
     outputs:
       normalized_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/genefamilies_relab.tsv", contract: {min_size: "10B"}}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}"}
   humann_regroup_ko:
     tool_id: humann_regroup_table
     category: functional_summary
@@ -317,6 +319,7 @@ nodes:
       input_table: {type: file, source: humann_renorm_genefamilies.normalized_table}
     outputs:
       regrouped_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/ko_relab.tsv", contract: {min_size: "10B"}}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}"}
   humann_split_ko:
     tool_id: humann_split_stratified_table
     category: functional_summary
@@ -328,6 +331,7 @@ nodes:
       input_table: {type: file, source: humann_regroup_ko.regrouped_table}
     outputs:
       split_dir: {type: directory, path: "{outdir}/{category_dir}/ko_split"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/ko_split"}
   humann_join_pathabundance:
     tool_id: humann_join_tables
     category: functional_summary
@@ -340,6 +344,7 @@ nodes:
       humann_samples_dir: {type: directory}
     outputs:
       joined_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/pathabundance.tsv", contract: {min_size: "10B"}}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}"}
   humann_renorm_pathabundance:
     tool_id: humann_renorm_table
     category: functional_summary
@@ -352,6 +357,7 @@ nodes:
       input_table: {type: file, source: humann_join_pathabundance.joined_table}
     outputs:
       normalized_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/pathabundance_relab.tsv", contract: {min_size: "10B"}}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}"}
   humann_split_pathabundance:
     tool_id: humann_split_stratified_table
     category: functional_summary
@@ -363,6 +369,7 @@ nodes:
       input_table: {type: file, source: humann_renorm_pathabundance.normalized_table}
     outputs:
       split_dir: {type: directory, path: "{outdir}/{category_dir}/pathabundance_split"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/pathabundance_split"}
   functional_report:
     tool_id: internal
     internal_handler: easymetagenome.functional_report

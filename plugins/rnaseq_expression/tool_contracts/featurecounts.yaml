@@ -28,7 +28,6 @@ execution:
   network: false
   writes_output: true
 normalization:
-  parser: abi.plugins.metatranscriptomics:_parse_featurecounts
   tables:
   - gene_expression
 failure_handling:

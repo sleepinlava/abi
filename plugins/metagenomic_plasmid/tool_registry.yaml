@@ -352,8 +352,8 @@ tools:
   executable: coverm
   default_enabled: true
   required: false
-  command_template: coverm contig --bam-files {bam} --output-file {abundance} --threads
-    {threads}
+  command_template: coverm contig --bam-files {bam} --output-file {abundance} --methods
+    mean tpm rpkm --min-covered-fraction 0 --threads {threads}
   inputs:
   - bam
 - id: kraken2
@@ -427,10 +427,10 @@ tools:
 - id: report_markdown
   name: AutoPlasm Markdown report
   category: report
-  executable: autoplasm
+  executable: abi
   default_enabled: true
   required: false
-  command_template: autoplasm report --result-dir {project_outdir}
+  command_template: abi report --type metagenomic_plasmid --result-dir {project_outdir}
 - id: metabat2
   name: MetaBAT2
   category: mag_host_genomes
@@ -576,19 +576,6 @@ tools:
   inputs:
   - plasmid_contigs
   limitations: Requires eggNOG database download; functional annotation.
-- id: maxbin2
-  name: MaxBin2 (PERMANENTLY DISABLED — perl-lwp-simple compilation failure)
-  category: mag_host_genomes
-  executable: run_MaxBin.pl
-  default_enabled: false
-  required: false
-  deprecated: true
-  command_template: run_MaxBin.pl -contig {assembly} -reads {read1} -reads2 {read2}
-    -out {output_dir}/{sample_id}.maxbin2 -thread {threads}
-  inputs:
-  - assembly
-  - read1
-  - read2
 - id: concoct
   name: CONCOCT
   category: mag_host_genomes
@@ -606,7 +593,7 @@ tools:
   executable: SemiBin2
   default_enabled: false
   required: false
-  command_template: SemiBin single_easy_bin --input_contigs {assembly} --input_bam
+  command_template: SemiBin2 single_easy_bin --input_contigs {assembly} --input_bam
     {bam} --output {output_dir} --threads {threads}
   inputs:
   - assembly
@@ -617,12 +604,12 @@ tools:
   executable: DAS_Tool
   default_enabled: false
   required: false
-  command_template: DAS_Tool --inputbasenames {output_dir}/metabat2,{output_dir}/maxbin2,{output_dir}/concoct
+  command_template: DAS_Tool --inputbasenames {output_dir}/metabat2,{output_dir}/concoct
     --contigs {assembly} --outputbasename {output_dir}/{sample_id}.das_tool --threads
     {threads}
   inputs:
   - assembly
-  limitations: Meta-binner aggregator; requires upstream bins from MetaBAT2/MaxBin2/CONCOCT.
+  limitations: Meta-binner aggregator; requires upstream bins from MetaBAT2 and CONCOCT.
 - id: hybridspades
   name: hybridSPAdes
   category: assembly

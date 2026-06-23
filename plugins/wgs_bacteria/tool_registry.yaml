@@ -17,8 +17,8 @@ tools:
   executable: spades.py
   default_enabled: true
   required: true
-  command_template: spades.py --careful --cov-cutoff auto -1 {clean_read1} -2 {clean_read2}
-    -o {output_dir} -t {threads}
+  command_template: spades.py --isolate -1 {clean_read1} -2 {clean_read2} -o
+    {output_dir} -t {threads}
   inputs:
   - clean_read1
   - clean_read2

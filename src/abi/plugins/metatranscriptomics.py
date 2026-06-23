@@ -20,11 +20,9 @@ Tool chain / 工具链
 
 Standard table / 标准表格
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
-The primary output is ``gene_expression`` (written to
-``<tables_dir>/gene_expression.tsv``) with columns: ``sample_id``, ``gene_id``,
-``count``, ``tpm``, ``tool``, ``source_file``.  Only ``featureCounts`` results
-are parsed into this table; QC and alignment tools produce no standard-table
-data.
+The workflow emits ``qc_summary``, ``alignment_summary``, and
+``gene_expression`` standard tables.  fastp and STAR use shared Python parsers;
+featureCounts uses the declarative TSV mapper in ``parsers.yaml``.
 
 Architecture / 架构
 ~~~~~~~~~~~~~~~~~~~
@@ -35,7 +33,8 @@ Architecture / 架构
 * ``build_plan`` constructs a linear 3-step-per-sample plan (QC → align →
   quantify) -- no DAG, no auto-detection -- so the code is intentionally
   simple and readable.
-* ``parse_outputs`` only handles ``featurecounts``; other tools return ``{}``.
+* ``parse_outputs`` handles fastp and STAR through shared parsers and
+  featureCounts through the declarative TSV mapper.
 * ``write_report`` delegates to the generic ``write_generic_report`` helper
   from ``abi.report``.
 * ``_validate_config`` checks for mandatory top-level keys and a positive
@@ -90,8 +89,7 @@ class MetatranscriptomicsPlugin:
     * No ``sample_context`` object is handed to the plan builder; the
       sample sheet is parsed once in ``build_sample_context`` and the
       resulting ``ABISampleContext`` is stored on the plan.
-    * ``parse_outputs`` only targets ``featurecounts`` because QC and
-      alignment outputs are not tabular by nature.
+    * ``parse_outputs`` normalizes all three tools into standard tables.
     """
 
     # Static metadata for ABI agent discovery / ABI agent 发现用的静态元数据

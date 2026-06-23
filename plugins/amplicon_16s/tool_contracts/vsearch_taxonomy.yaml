@@ -27,7 +27,7 @@ outputs:
 execution:
   executable: vsearch
   command_template: vsearch --sintax {asv_fasta} --db {taxonomy_db} --sintax_cutoff
-    0.8 --tabbedout {output_dir}/taxonomy.tsv
+    0.8 --tabbedout {output_dir}/{sample_id}_taxonomy.tsv
   network: false
   writes_output: true
 failure_handling:

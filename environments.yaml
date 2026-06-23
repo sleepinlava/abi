@@ -125,7 +125,6 @@ environments:
     dependencies:
     - python=3.10
     - metabat2
-    - maxbin2
     - concoct
     - semibin
   autoplasm-integronfinder:
@@ -332,7 +331,6 @@ tool_assignments:
     plasx: autoplasm-plasmid-detect
     platon: autoplasm-plasmid-detect
     metabat2: autoplasm-plasmid-binning
-    maxbin2: autoplasm-plasmid-binning
     concoct: autoplasm-plasmid-binning
     semibin: autoplasm-plasmid-binning
     plasmaag: autoplasm-plasmid-binning

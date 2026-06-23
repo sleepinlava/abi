@@ -162,6 +162,7 @@ def test_parse_spades():
     gc = row["gc_content"]
     if gc != "":
         assert 0.0 <= float(gc) <= 100.0
+    assert 0.0 < float(row["coverage"]) < 100.0
 
 
 def test_parse_prokka():

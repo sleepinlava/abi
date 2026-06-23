@@ -12,7 +12,12 @@ outputs:
   clean_read2: {type: file, format: fastq.gz}
   json: {type: file, format: json}
   html: {type: file, format: html}
-execution: {executable: fastp, command_template: "fastp -i {read1} -I {read2} -o {clean_read1} -O {clean_read2}", network: false, writes_output: true}
+execution:
+  executable: fastp
+  command_template: fastp -i {read1} -I {read2} -o {clean_read1} -O {clean_read2}
+    -j {json} -h {html} --thread {threads}
+  network: false
+  writes_output: true
 normalization: {tables: [qc_summary]}
 failure_handling:
   missing_input: {hint: Check manifest r1/r2 paths.}

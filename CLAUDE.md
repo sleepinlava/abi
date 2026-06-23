@@ -51,7 +51,7 @@ abi contract-lint --type metagenomic_plasmid [--strict]  # Static DAG/contract v
 abi check-resources --type metagenomic_plasmid           # Check resource/database availability
 abi setup-resources --type metagenomic_plasmid --confirm  # Resource setup (confirmation required)
 
-# Figure compiler (v1.4.0)
+# Figure compiler
 abi-sciplot validate --spec figure.yaml   # Validate a FigureSpec
 abi-sciplot render --spec figure.yaml     # Render a figure (PDF+SVG+PNG+TIFF)
 abi-sciplot lint --spec figure.yaml       # Lint a rendered figure
@@ -68,19 +68,21 @@ ABI is a **Python library + CLI + Agent tool layer** for AI-driven bioinformatic
 ```
 Agent Platforms (Claude / ChatGPT / Cursor)
         │
-Transport Layer   CLI JSON  │  OpenAI Tools  │  MCP  │  HTTP Job API  │  Query
+Transport Layer   CLI JSON  │  OpenAI Tools  │  Anthropic Tools  │  Gemini Tools  │  MCP  │  HTTP Job API  │  Query
         │
 ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch / query
         │
 ABI Core            schemas  │  provenance  │  permissions  │  diagnostics
                     tables   │  tools       │  executor     │  report
                     contracts│  dag         │  figures      │  dag_planner
-                    tsv_mapping  │  sciplot  │  resources
+                    tsv_mapping  │  sciplot  │  resources   │  workflow
+                    tool_descriptors  │  internal  │  results
+        │
+Runtimes            local  │  Docker  │  Nextflow  │  HPC (SLURM/PBS)  │  cloud  │  Job Service
         │
 Plugins             metagenomic_plasmid/  rnaseq_expression/  wgs_bacteria/
                     amplicon_16s/  metatranscriptomics/
-        │
-Runtimes            local  │  Docker  │  Nextflow  │  HPC  │  cloud  │  Job Service
+                    easymetagenome/  viral_viwrap/
 ```
 
 ### Design Principles
@@ -101,50 +103,73 @@ src/abi/
                       (write_plugin_report supports abi.sciplot via use_sciplot=True)
   workflow/           ResourceManifest, workflow validation, figure_specs loading
   plugins/
-    metagenomic_plasmid/   Self-contained package (engine in _engine/), 67 tools
+    metagenomic_plasmid/   Self-contained package (engine in _engine/, ~40 modules), 67 tools
     rnaseq_expression.py   Inline plugin (6 tools, DESeq2 R script bundled)
     wgs_bacteria.py        Inline plugin (5 tools, SPAdes/Prokka/AMR parsers)
     amplicon_16s.py        Inline plugin (8 tools, cutadapt/vsearch/diversity parsers)
     metatranscriptomics.py Inline plugin (3 tools, shared parsers from _shared)
+    easymetagenome/        P0 shotgun metagenomics — 12 tools, 3 workflow presets,
+                           internal handlers, manifest validation, schema-driven
+    viral_viwrap/          Managed external CLI plugin — wraps ViWrap 1.3.1,
+                           1 tool, custom tool skill, environment checker
   scripts/              Bundled scripts: amplicon_diversity.py, install_deseq2.R,
                         setup_rnaseq_env.sh, download_rdp_sintax.sh, etc.
   docker/               Dockerfiles + docker-compose.yml for containerized execution
-  autoplasm/          Backward-compatible re-export shim → metagenomic_plasmid/_engine/
-  _shared.py          Shared utilities: _read_tsv, _display_command, _plan_dict,
-                      _common_overrides, _clean, _resolve_path,
-                      _parse_fastp, _parse_star (373 lines)
-  provenance.py       RunLogger, PipelineProgressRecorder, TSV writers (900 lines)
-  tools.py            ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1858 lines)
-  schemas.py          Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext (511 lines)
-  executor.py         GenericABIExecutor — step iteration, tool invocation, contract enforcement.
-                      Supports sample-level parallel execution via ThreadPoolExecutor
-                      (config.execution.parallel + config.execution.workers). (1551 lines)
-  dag_planner.py      Universal DAG planner — generates ExecutionPlan from pipeline_dag.yaml
-                      (replaces hand-written build_plan() boilerplate, added 2026-06-18) (1106 lines)
-  tsv_mapping.py      Declarative TSV column mapper — YAML-driven output parsing
-                      with 3 source types (tsv_mapping, json_mapping, key_value_log).
-                      Replaces ~14 csv.DictReader → remap columns parser functions. (added 2026-06-18) (446 lines)
-  sciplot/            Publication-grade scientific figure compiler — FigureSpec →
-                      Validate → Render → Export → Lint → Provenance.
-                      Pydantic schema, 15 plot types, 3 themes, plotnine+seaborn
-                      backends, SHA256 provenance. (32 files, 4516 lines, added 2026-06-19, v1.4.0)
-  dag.py              DAG inference engine — L1 (literature) / L2 (path) / L3 (validation) (316 lines)
-  contracts/          WorkflowSpec, step contract enforcement, checksum chaining, assertion eval
-    __init__.py         WorkflowSpec, WorkflowStepSpec, load_workflow_spec, run_contract_lint (468 lines)
-    step_contract.py    ContractViolation, validate_output_contract, evaluate_assertions (961 lines)
-  permissions.py      read_only / planning_write / execution levels
-  diagnostics.py      Error taxonomy + DiagnosticHint + classify_exception (402 lines)
-  jobs/service.py     HTTP Job Service with subprocess force-kill (SIGTERM → SIGKILL) (1397 lines)
-  json_utils.py       JSON file/payload loading with ABIJSONError wrapping
-  timeouts.py         Timeout parsing: parse_timeout_seconds, timeout_from_env_or_value
-  resources.py        Resource discovery + auto-install: check_resources, setup_resources,
-                      ResourceSpec with install_post hooks (e.g. makeblastdb) (484 lines)
-  cli.py              Typer CLI: abi + autoplasm entry points (2163 lines)
-  skills/             Agent skill files (abi_agent + per-tool), installed via ``abi install-skills``
+  runtimes/             Execution runtime backends (1195 lines)
+    base.py               ABIRuntime protocol + RuntimeOptions, RuntimeResult
+    local.py              LocalRuntime — direct subprocess execution
+    nextflow.py           NextflowRuntime — NF config generation, trace parsing, submit
+    hpc.py                HpcRuntime — SLURM/PBS script generation, job submission, polling
+  exporters/            Plan exporters: nextflow.py (NextflowExporter)
+  mcp/                  MCP stdio server — auto-generates tool registrations from tool_descriptors SSOT
+  autoplasm/            Backward-compatible re-export shim → metagenomic_plasmid/_engine/
+  _shared.py            Shared utilities: _read_tsv, _display_command, _plan_dict,
+                        _common_overrides, _clean, _resolve_path,
+                        _parse_fastp, _parse_star (373 lines)
+  provenance.py         RunLogger, PipelineProgressRecorder, TSV writers (900 lines)
+  tools.py              ToolRegistry, ToolSkill, GenericCommandSkill, SafeFormatDict, RunResult (1858 lines)
+  schemas.py            Canonical types: SampleInput, ExecutionPlan, PlanStep, SampleContext (511 lines)
+  executor.py           GenericABIExecutor — step iteration, tool invocation, contract enforcement.
+                        Supports sample-level parallel execution via ThreadPoolExecutor
+                        (config.execution.parallel + config.execution.workers). (1551 lines)
+  dag_planner.py        Universal DAG planner — generates ExecutionPlan from pipeline_dag.yaml
+                        (replaces hand-written build_plan() boilerplate) (1106 lines)
+  tsv_mapping.py        Declarative TSV column mapper — YAML-driven output parsing
+                        with 3 source types (tsv_mapping, json_mapping, key_value_log).
+                        Replaces ~14 csv.DictReader → remap columns parser functions. (446 lines)
+  tool_descriptors.py   Unified LLM tool descriptor SSOT — provider-agnostic tool metadata
+                        with PROVIDER_PROFILES for OpenAI-compatible, Anthropic, Gemini formats.
+                        Replaces hand-duplicated tool definitions. (776 lines)
+  internal.py           Transport-neutral internal DAG handler protocol —
+                        ABIInternalHandler, InternalHandlerContext, InternalHandlerResult.
+                        Plugins register Python functions for steps without external tools. (111 lines)
+  step_runner.py        Single-step execution used by native HPC worker jobs —
+                        deserializes a PlanStep dict, resolves internal/external handlers,
+                        executes, and writes StepExecutionResult. (232 lines)
+  results.py            Shared result/provenance writer — ABIResultWriter,
+                        validate_abi_result_dir, REQUIRED_RESULT_ARTIFACTS. (411 lines)
+  tables.py             StandardTableManager — YAML-driven table normalization. (209 lines)
+  sciplot/              Publication-grade scientific figure compiler — FigureSpec →
+                        Validate → Render → Export → Lint → Provenance.
+                        Pydantic schema, 15 plot types, 3 themes, plotnine+seaborn
+                        backends, SHA256 provenance. (32 files, 4516 lines)
+  dag.py                DAG inference engine — L1 (literature) / L2 (path) / L3 (validation) (316 lines)
+  contracts/            WorkflowSpec, step contract enforcement, checksum chaining, assertion eval
+    __init__.py           WorkflowSpec, WorkflowStepSpec, load_workflow_spec, run_contract_lint (468 lines)
+    step_contract.py      ContractViolation, validate_output_contract, evaluate_assertions (961 lines)
+  permissions.py        read_only / planning_write / execution levels
+  diagnostics.py        Error taxonomy + DiagnosticHint + classify_exception (402 lines)
+  jobs/service.py       HTTP Job Service with subprocess force-kill (SIGTERM → SIGKILL) (1397 lines)
+  json_utils.py         JSON file/payload loading with ABIJSONError wrapping
+  timeouts.py           Timeout parsing: parse_timeout_seconds, timeout_from_env_or_value
+  resources.py           Resource discovery + auto-install: check_resources, setup_resources,
+                        ResourceSpec with install_post hooks (e.g. makeblastdb) (484 lines)
+  cli.py                Typer CLI: abi + autoplasm entry points (2163 lines)
+  skills/               Agent skill files (abi_agent + per-tool), installed via ``abi install-skills``
 
-environments.yaml      Single source of truth: 20 conda envs + 93 tool→env assignments
-                      (2026-06-21: fixed stats env mapping; mmseqs2 ResourceSpec added;
-                      amrfinderplus install_post: makeblastdb; kraken2 aria2c S3 download)
+environments.yaml      Single source of truth: 25 conda envs + 100+ tool→env assignments
+                       (2026-06: fixed stats env mapping; mmseqs2 ResourceSpec added;
+                       amrfinderplus install_post: makeblastdb; kraken2 aria2c S3 download)
 scripts/emit_env_yamls.py  Generates per-environment ``envs/*.yml`` from environments.yaml
 ```
 
@@ -156,13 +181,16 @@ scripts/emit_env_yamls.py  Generates per-environment ``envs/*.yml`` from environ
 | `abi.schemas` | `SampleInput`, `SampleContext`, `PlanStep`, `ExecutionPlan` |
 | `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
 | `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV provenance writers |
-| `abi.contracts` | `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec` — literature-backed workflow declarations (added 2026-06-17) |
+| `abi.contracts` | `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec` — literature-backed workflow declarations |
 | `abi.contracts.step_contract` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, checksum chaining |
-| `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with L1 (literature) / L2 (path) / L3 (validation) |
-| `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation from `pipeline_dag.yaml`. Replaces all hand-written `build_plan()`; plasmid planner also migrated to UniversalDAG. (added 2026-06-18) |
-| `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML-driven TSV/JSON/log column mapping with 3 source types (tsv_mapping, json_mapping, key_value_log), replaces ~14 boilerplate parsers (added 2026-06-18) |
-| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure`, `load_spec` — scientific figure compiler (Pydantic schema, 15 plot types, 3 themes, PDF/SVG/PNG/TIFF, lint, provenance). (32 files, 4516 lines, added 2026-06-19, v1.4.0) |
-| `abi.resources` | `check_resources`, `setup_resources`, `ResourceSpec` — resource discovery + auto-install with install_post hooks (e.g. makeblastdb) |
+| `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with L1/L2/L3 |
+| `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation from `pipeline_dag.yaml`; replaces all hand-written `build_plan()` |
+| `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML-driven TSV/JSON/log column mapping |
+| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure`, `load_spec` — scientific figure compiler (PDF/SVG/PNG/TIFF, lint, provenance) |
+| `abi.resources` | `check_resources`, `setup_resources`, `ResourceSpec` — resource discovery + auto-install with install_post hooks |
+| `abi.internal` | `ABIInternalHandler`, `InternalHandlerContext`, `InternalHandlerResult` — transport-neutral internal DAG nodes for steps without external tools |
+| `abi.results` | `ABIResultWriter`, `validate_abi_result_dir` — shared result/provenance writer |
+| `abi.tables` | `StandardTableManager` — YAML-driven table normalization |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
 | `abi.config` | `resolved_mamba_root()`, `PROJECT_ROOT`, `load_yaml`, `deep_merge` — env resolution with 4-level priority (ABI_MAMBA_ROOT > AUTOPLASM_MAMBA_ROOT > .mamba > abi-envs) |
 | `abi.testing` | `assert_plugin_contract` |
@@ -182,43 +210,40 @@ Every `ABIAgentInterface` method returns a JSON string with exactly one of three
 - `planning_write`: `plan`, `dry_run`, `report`, `export_nextflow` — writes plans/provenance, no tool execution
 - `execution`: `run` — **requires `confirm_execution=true`**, writes provenance, executes real tools
 
-### The five plugins (v1.4.0, 2026-06-21)
+### The seven plugins
 
-All five plugins have complete tool chains, parsers, report generation, tests, benchmark datasets, and Docker images. All use DAG-driven plan generation via `UniversalDAG`. All 4 inline plugins verified via end-to-end real execution with 16-thread demo data. **723 tests passing, 4 skipped, 0 ruff errors, 0 mypy errors.**
+All seven plugins have complete tool chains, parsers, report generation, tests, benchmark datasets, and Docker images. All use DAG-driven plan generation via `UniversalDAG`. **856 passed, 10 skipped, 0 ruff errors, 0 mypy errors.**
 
-- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (40 modules, 9,859 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 3,054 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner using `UniversalDAG` with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments. 8 sciplot figures (barplot × 3, scatterplot, stacked_barplot, heatmap × 5) with `abi_nature` theme + `colorblind_safe` palette. **Assembly platform verified**: 19/19 steps passed (3 samples, NC_002127_1/NC_002483_1/NC_011977_1). **Illumina platform planned**: 33 unique tools, 71 steps across 2 samples. **10 databases** (genomad 2.9GB, bakta 4.2GB, mob_suite 3.0GB, plasmidfinder, amrfinderplus 251MB, platon, macsyfinder, metaphlan 34GB, mmseqs2 1.6GB, kraken2 pending). 24/24 default_enabled tools confirmed working.
-- **`rnaseq_expression`**: 6-tool standard RNA-seq. fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. All 6 parsers working. Uses `build_plan_from_dag()` with TSVMapper for featureCounts. DESeq2 R script bundled, automated conda+BiocManager install.
-- **`wgs_bacteria`**: 5-tool bacterial isolate analysis. fastp → SPAdes → Prokka → MLST → AMRFinderPlus. All 5 parsers working. Uses `build_plan_from_dag()` with TSVMapper for AMRFinderPlus + MLST.
-- **`amplicon_16s`**: 8-tool microbial community analysis. cutadapt → vsearch_mergepairs → vsearch_derep → UNOISE3 denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta via `scripts/amplicon_diversity.py`). All 8 tools have parsers. Uses `build_plan_from_dag()`.
-- **`metatranscriptomics`**: 3-tool demo. fastp, STAR/HISAT2, featureCounts. All 3 parsers working via shared imports from `abi._shared` and TSVMapper for featureCounts. Uses `build_plan_from_dag()`.
+- **`metagenomic_plasmid`**: The flagship complex plugin. Engine in `_engine/` (40 modules, 9,859 lines). 67 tool contracts, 84-node DAG (`pipeline_dag.yaml`, 3,054 lines), plasmid detection/annotation/abundance pipeline. DAG-driven planner using `UniversalDAG` with platform routing, fallback chains, assertions, consensus algorithms, custom reports, dashboard. 10 conda environments. 8 sciplot figures. **Assembly platform verified**: 19/19 steps passed. **10 databases** (genomad 2.9GB, bakta 4.2GB, mob_suite 3.0GB, plasmidfinder, amrfinderplus 251MB, platon, macsyfinder, metaphlan 34GB, mmseqs2 1.6GB, kraken2 pending).
+- **`easymetagenome`**: P0 shotgun metagenomics — 12 tools (fastp, kneaddata, kraken2, bracken, humann4 + 6 HUMAnN utilities, seqkit). 3 workflow presets (`p0_taxonomy`, `p1_humann4`, `full_read_based`). DAG-driven planner with 34-node DAG. Uses internal handlers + manifest validation with JSON Schema. Schema-driven report generation. 2 new conda environments (humann, kneaddata).
+- **`rnaseq_expression`**: 6-tool standard RNA-seq. fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. Uses `build_plan_from_dag()` with TSVMapper. DESeq2 R script bundled, automated BiocManager install.
+- **`wgs_bacteria`**: 5-tool bacterial isolate analysis. fastp → SPAdes → Prokka → MLST → AMRFinderPlus. Uses `build_plan_from_dag()` with TSVMapper.
+- **`amplicon_16s`**: 8-tool microbial community analysis. cutadapt → vsearch_mergepairs → vsearch_derep → UNOISE3 denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta via bundled script).
+- **`metatranscriptomics`**: 3-tool demo. fastp, STAR/HISAT2, featureCounts. All 3 parsers working via shared imports from `abi._shared`.
+- **`viral_viwrap`**: Managed external CLI plugin wrapping ViWrap 1.3.1. 1 tool with custom ToolSkill (typed command builder), environment checker, artifact mapper. Identifies viruses from metagenomic assemblies — binning, taxonomy, host prediction, quality filtering.
 
 All plugins share the same `ABIAgentInterface` contract, tool contract format, `write_plugin_report()` template, and workflow declaration pattern. Each has a `pipeline_dag.yaml` for L1/L2/L3 DAG validation.
 
-### Shared plugin utilities (`abi._shared`, v0.1.6)
+### Runtime backends (`abi.runtimes`)
 
-Three shared parser functions eliminate duplication across inline plugins:
+Four execution runtimes implement the `ABIRuntime` protocol (check / dry_run / run):
+- **LocalRuntime**: Direct subprocess execution with conda env activation.
+- **NextflowRuntime**: Generates Nextflow DSL2 config + main.nf, submits via `nextflow run`, parses trace files.
+- **HpcRuntime**: Generates SLURM/PBS batch scripts with resource directives (cpus, mem, time, gpus), dependency chaining via `--dependency=afterok`, poll-until-complete.
+- **Docker**: Containerized execution via docker-compose (separate Dockerfiles per plugin).
 
-| Function | Used by | Purpose |
-| --- | --- | --- |
-| `_parse_fastp` | rnaseq_expression, wgs_bacteria, metatranscriptomics | fastp JSON → qc_summary |
-| `_parse_star` | rnaseq_expression, metatranscriptomics | STAR Log.final.out → alignment_summary |
-| `_clean`, `_resolve_path` | All 4 inline plugins | String cleaning, safe path resolution |
+### Internal handler system (`abi.internal`)
 
-### Report template (`abi.report.write_plugin_report`)
+For DAG steps that don't correspond to external tools (e.g., table joining, filtering, validation), plugins register `ABIInternalHandler` implementations — Python functions that receive `InternalHandlerContext` (outdir, provenance_dir, tables_dir, dry_run flag) and return `InternalHandlerResult` (status, message, tables, artifacts). This replaces the pattern of faking "tools" whose `build_command` returned `/bin/true`. Both `easymetagenome` and `viral_viwrap` use internal handlers.
 
-All 4 inline plugins delegate `write_report()` to `write_plugin_report(self, plan, result_dir)` which handles: table summarization, citation/limitation loading, FigureEngine rendering, methods generation, and resource manifest creation.
+### Tool descriptor unification (`abi.tool_descriptors`)
 
-### DAG inference with L1/L2/L3 (added 2026-06-17)
+`tool_descriptors.py` is the **single source of truth** for LLM tool metadata. It defines:
+- `ABI_AGENT_TOOLS` — canonical tool parameter definitions
+- `PROVIDER_PROFILES` — provider-specific quirks (strict mode, naming)
+- Three format families: OpenAI-compatible (DeepSeek, Zhipu, Kimi, Qwen, MiniMax), Anthropic Claude, Google Gemini
 
-`infer_dag()` now supports a three-layer correctness model via an optional `workflow_spec` parameter:
-
-- **L1 (Literature)**: Plugins declare a `workflow` section in `abi-plugin.yaml` with explicit `after` dependencies and literature citations. These are the ground-truth edges.
-- **L2 (Path)**: Path-level dataflow inference cross-validates declared edges by matching output→input file paths.
-- **L3 (Validation)**: Mismatches between L1 and L2 emit a `WARNING`. Declared edges take priority; inferred edges supplement gaps.
-
-When no `workflow_spec` is provided, `infer_dag()` behaves identically to the pre-L1/L2/L3 version (no regression).
-
-See: `abi.contracts.WorkflowSpec`, `abi.contracts.WorkflowStepSpec`, `abi.contracts.load_workflow_spec`.
+The MCP server (`abi/mcp/server.py`) auto-generates its tool registrations from this SSOT. `cli.py` `export-tools` command delegates to it. Never add a new agent tool without updating `tool_descriptors.py`.
 
 ### autoplasm/ is a backward-compat shim
 
@@ -228,13 +253,7 @@ See: `abi.contracts.WorkflowSpec`, `abi.contracts.WorkflowStepSpec`, `abi.contra
 
 The lifecycle for any tool is: `check_installation → plan → validate_inputs → select_params → build_command → run → parse_outputs → normalize_outputs`. GenericCommandSkill handles this from YAML tool_contracts; only tools with complex post-processing need Python subclasses.
 
-Each contract may declare a `normalization` block (`parser` + `tables`) that maps tool outputs to standard tables via `abi.autoplasm.parsers` functions. 32 tools have custom parsers; the remaining 35 use generic TSV import or are intermediate steps whose output is consumed by downstream tools.
-
-For simple TSV/JSON/log output parsing, use `TSVMapper` with `parsers.yaml` declarations
-instead of writing Python parser functions. Supports 3 source types: `tsv_mapping`
-(column remap), `json_mapping` (nested JSON flatten), and `key_value_log`
-(pipe-delimited log parsing). See `src/abi/tsv_mapping.py` and each plugin's
-`parsers.yaml` for examples.
+Each contract may declare a `normalization` block (`parser` + `tables`) that maps tool outputs to standard tables. For simple TSV/JSON/log output parsing, use `TSVMapper` with `parsers.yaml` declarations instead of writing Python parser functions. Supports 3 source types: `tsv_mapping` (column remap), `json_mapping` (nested JSON flatten), and `key_value_log` (pipe-delimited log parsing).
 
 ### Step contract enforcement
 
@@ -246,10 +265,7 @@ instead of writing Python parser functions. Supports 3 source types: `tsv_mappin
 
 Contract violations raise `ContractViolationError` with structured diagnostics. Checksums are persisted to `provenance/checksums.json` for downstream verification.
 
-Do not claim that a workflow is biologically validated from dry-run alone or
-from individual tool papers alone. Use `docs/workflow_validation.md` to assess
-the gap between the current constrained control layer and a fully validated,
-literature-backed, reproducible scientific workflow.
+Do not claim that a workflow is biologically validated from dry-run alone or from individual tool papers alone. Use `docs/workflow_validation.md` to assess the gap between the current constrained control layer and a fully validated, literature-backed, reproducible scientific workflow.
 
 ## Key documentation
 
@@ -278,13 +294,15 @@ literature-backed, reproducible scientific workflow.
 | `_read_tsv` | Read TSV → list[dict] (returns [] if missing) | cli, agent, results, engine.result_validation, engine.dashboard |
 | `_display_command` | Format token list → human-readable shell command | provenance, executor, engine.logger, engine.pipeline |
 | `_plan_dict` | Serialize plan + inject analysis_type | cli, agent |
-| `_common_overrides` | Build compact overrides dict from CLI flags | cli, agent (engine.cli has an extended version with parallel/dashboard) |
+| `_common_overrides` | Build compact overrides dict from CLI flags | cli, agent |
 
 All ABI core modules and `_engine/` subpackages import these from `abi._shared`. When adding a new caller, import from here rather than copying the function.
 
 ### Provenance artifacts
 
 Every run writes to `<outdir>/provenance/`: `commands.tsv`, `resolved_inputs.tsv`, `tool_versions.tsv`, `resources.json`, `environment.yml`, `run_summary.json`, `checksums.json`, `progress.json`/`progress.jsonl`, `step_logs/`. These are always written even on failure — post-mortem inspection is always possible.
+
+Additionally, `ABIResultWriter` (in `results.py`) writes `execution_plan.json`, `report/report.md`, and optional per-plugin artifacts (standard tables, figures). `validate_abi_result_dir()` checks that all `REQUIRED_RESULT_ARTIFACTS` exist.
 
 ### Job Service execution modes
 
@@ -297,7 +315,7 @@ Every run writes to `<outdir>/provenance/`: `commands.tsv`, `resolved_inputs.tsv
 - `tests/unit/test_job_service.py` — thread synchronization via `threading.Event` for worker state control.
 - `tests/integration/test_dry_run.py` — end-to-end dry runs against real plugin configuration.
 - Fixtures live in `tests/fixtures/`; curated example data in `data/examples/`.
-- Current suite: **723 passed, 4 skipped, 62 test files** (2026-06-21).
+- Current suite: **856 passed, 10 skipped, 0 ruff errors, 0 mypy errors** (2026-06-23).
 
 ## Adding a new analysis type
 
@@ -306,5 +324,6 @@ Every run writes to `<outdir>/provenance/`: `commands.tsv`, `resolved_inputs.tsv
 3. Add tool contracts as `tool_contracts/*.yaml`.
 4. Create `pipeline_dag.yaml` with `category_dirs`, `scope` (per_sample/cross_sample), and `path` templates — use `abi.dag_planner.build_plan_from_dag()` as the sole `build_plan()` implementation.
 5. For simple TSV/JSON output parsers, create `parsers.yaml` and use `abi.tsv_mapping.TSVMapper` instead of writing hand-coded Python parsers.
-6. Register in `pyproject.toml` under `[project.entry-points."abi.plugins"]`.
-7. Verify with `assert_plugin_contract(plugin)` in tests.
+6. For steps that don't map to external tools, register `ABIInternalHandler` implementations using the `@internal_handler` decorator from `abi.internal`.
+7. Register in `pyproject.toml` under `[project.entry-points."abi.plugins"]`.
+8. Verify with `assert_plugin_contract(plugin)` in tests.

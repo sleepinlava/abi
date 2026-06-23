@@ -26,7 +26,7 @@ outputs:
 execution:
   executable: vsearch
   command_template: vsearch --cluster_size {asv_fasta} --id 0.97 --centroids {output_dir}/otus.fasta
-    --uc {output_dir}/otu.uc --otutabout {output_dir}/otu_table.tsv
+    --uc {output_dir}/otu.uc --otutabout {output_dir}/{sample_id}_otu.tsv
   network: false
   writes_output: true
 failure_handling:

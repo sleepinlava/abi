@@ -307,6 +307,23 @@ def test_metatranscriptomics_mock_resources_create_expected_shapes(tmp_path):
     assert paths["annotation_gtf"].is_file()
 
 
+def test_large_plugin_resource_bundles_report_manual_and_support_mock(tmp_path):
+    for analysis_type, resource_id in (
+        ("easymetagenome", "kraken2_db"),
+        ("viral_viwrap", "db_dir"),
+    ):
+        config = {
+            "outdir": str(tmp_path / analysis_type),
+            "resources": {resource_id: f"{resource_id.upper()}_NOT_CONFIGURED"},
+        }
+        manual = setup_abi_resources(analysis_type=analysis_type, config=config)
+        mocked = setup_abi_resources(analysis_type=analysis_type, config=config, mock=True)
+
+        assert manual[0]["status"] == "manual_required"
+        assert mocked[0]["status"] == "ok"
+        assert Path(mocked[0]["path"]).is_dir()
+
+
 # ---- New tests for Level 1 + Level 2 resources (2026-06-20) ----
 
 

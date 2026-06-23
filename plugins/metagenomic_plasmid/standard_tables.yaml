@@ -187,6 +187,30 @@ tables:
     - value
     - unit
     - source_file
+  alignment_summary:
+    - sample_id
+    - tool
+    - artifact_type
+    - record_count
+    - mapped_records
+    - unmapped_records
+    - size_bytes
+    - source_file
+  mag_quality:
+    - sample_id
+    - bin_id
+    - completeness
+    - contamination
+    - taxonomy
+    - tool
+    - source_file
+  artifacts:
+    - sample_id
+    - tool
+    - artifact_type
+    - path
+    - size_bytes
+    - description
   plasmid_typing:
     - sample_id
     - contig_id

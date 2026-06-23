@@ -20,8 +20,8 @@ outputs:
     format: fasta
 execution:
   executable: vsearch
-  command_template: vsearch --derep_fulllength {merged_fasta} --output {output_dir}/derep.fasta
-    --sizeout --relabel uniq.
+  command_template: vsearch --derep_fulllength {merged_fasta} --output {output_dir}/{sample_id}_derep.fasta
+    --sizeout --relabel {sample_id}.
   network: false
   writes_output: true
 failure_handling:

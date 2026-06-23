@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 
 import pytest
 
+from abi.executor import GenericABIExecutor
 from abi.plugins import get_plugin
 from abi.plugins.viral_viwrap.artifact_mapper import collect_artifacts
 from abi.plugins.viral_viwrap.checker import (
@@ -15,6 +18,8 @@ from abi.plugins.viral_viwrap.command_builder import build_viwrap_command
 from abi.plugins.viral_viwrap.errors import ViWrapConfigError
 from abi.plugins.viral_viwrap.parser import parse_viwrap_outputs
 from abi.plugins.viral_viwrap.runner import run_viwrap
+from abi.provenance import RunLogger
+from abi.tables import StandardTableManager
 
 
 def _config(tmp_path: Path) -> dict[str, object]:
@@ -92,6 +97,23 @@ def test_viwrap_parser_and_artifact_manifest(tmp_path):
     assert artifacts["artifacts"][0]["category"] == "summary"
 
 
+def test_viwrap_abi_tables_preserve_canonical_and_raw_columns(tmp_path):
+    summary = tmp_path / "08_ViWrap_summary_outdir"
+    summary.mkdir()
+    (summary / "Virus_summary_info.txt").write_text(
+        "Virus ID\tLength\tCheckV quality\tupstream_extra\nvirus_1\t5000\thigh-quality\tkept\n",
+        encoding="utf-8",
+    )
+    plugin = get_plugin("viral_viwrap")
+
+    row = plugin.parse_outputs("viwrap", tmp_path, "S1")["virus_summary"][0]
+
+    assert row["virus_id"] == "virus_1"
+    assert row["length"] == "5000"
+    assert row["checkv_quality"] == "high-quality"
+    assert '"upstream_extra": "kept"' in row["raw_record_json"]
+
+
 def test_viwrap_is_registered_and_plannable_offline():
     plugin = get_plugin("viral_viwrap")
     config = plugin.load_config()
@@ -130,3 +152,55 @@ def test_viwrap_plugin_reads_example_builds_complete_dry_run_command(tmp_path):
 
     assert "--input_reads" in command
     assert "--input_cov" not in command
+
+
+def test_viwrap_dag_executes_end_to_end_with_fixture_tool(tmp_path, monkeypatch):
+    config = _config(tmp_path)
+    config.update(
+        {
+            "outdir": str(tmp_path / "abi-result"),
+            "log_dir": str(tmp_path / "logs"),
+            "skip_runtime_check": True,
+        }
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    executable = bin_dir / "ViWrap"
+    executable.write_text(
+        """#!/usr/bin/env python3
+import pathlib
+import sys
+args = sys.argv[1:]
+if '--version' in args or '-h' in args:
+    print('ViWrap 1.3.1')
+    raise SystemExit(0)
+out = pathlib.Path(args[args.index('--out_dir') + 1]) / '08_ViWrap_summary_outdir'
+out.mkdir(parents=True, exist_ok=True)
+(out / 'Virus_summary_info.txt').write_text('virus_id\\tlength\\nvirus_1\\t5000\\n')
+""",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    shared_bin = Path(str(config["conda_env_dir"])) / "ViWrap/bin"
+    shared_bin.mkdir(parents=True, exist_ok=True)
+    (shared_bin / "ViWrap").symlink_to(executable)
+    (bin_dir / "conda").symlink_to(executable)
+    monkeypatch.setenv("PATH", str(bin_dir) + os.pathsep + os.environ["PATH"])
+
+    plugin = get_plugin("viral_viwrap")
+    loaded = plugin.load_config(overrides=config)
+    plan = plugin.build_plan(loaded)
+    executor = GenericABIExecutor(
+        plugin.registry(),
+        RunLogger(loaded["log_dir"]),
+        table_manager=StandardTableManager(plugin.table_schemas()),
+        parse_outputs=plugin.parse_outputs,
+        internal_handlers=plugin.internal_handlers(),
+    )
+
+    outputs = executor.run(plan, loaded)
+
+    summary = json.loads(outputs["summary"].read_text(encoding="utf-8"))
+    assert summary["status"] == "success"
+    virus_table = Path(loaded["outdir"]) / "tables/virus_summary.tsv"
+    assert "virus_1" in virus_table.read_text(encoding="utf-8")

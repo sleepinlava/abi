@@ -303,6 +303,69 @@ class TestLintToolContracts:
         missing = [f for f in findings if "star" in f.detail]
         assert len(missing) >= 1
 
+    def test_registry_contract_command_mismatch_is_error(self):
+        contracts = {
+            "spades": {
+                "tool_id": "spades",
+                "name": "SPAdes",
+                "category": "assembly",
+                "purpose": "assemble",
+                "execution": {
+                    "executable": "spades.py",
+                    "command_template": "spades.py --isolate -1 {read1}",
+                },
+            }
+        }
+        registry_tools = {
+            "spades": {
+                "id": "spades",
+                "category": "assembly",
+                "executable": "spades.py",
+                "command_template": "spades.py --careful -1 {read1}",
+            }
+        }
+
+        findings = lint_tool_contracts(
+            contracts,
+            registry_tool_ids={"spades"},
+            registry_tools=registry_tools,
+        )
+
+        assert any(
+            finding.severity == "error" and finding.check == "registry_contract_mismatch"
+            for finding in findings
+        )
+
+    def test_registry_contract_whitespace_differences_are_ignored(self):
+        contracts = {
+            "fastp": {
+                "tool_id": "fastp",
+                "name": "fastp",
+                "category": "qc",
+                "purpose": "trim",
+                "execution": {
+                    "executable": "fastp",
+                    "command_template": "fastp  -i {read1}\n-o {clean_read1}",
+                },
+            }
+        }
+        registry_tools = {
+            "fastp": {
+                "id": "fastp",
+                "category": "qc",
+                "executable": "fastp",
+                "command_template": "fastp -i {read1} -o {clean_read1}",
+            }
+        }
+
+        findings = lint_tool_contracts(
+            contracts,
+            registry_tool_ids={"fastp"},
+            registry_tools=registry_tools,
+        )
+
+        assert not any(f.check == "registry_contract_mismatch" for f in findings)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Integration

@@ -1028,6 +1028,199 @@ def parse_fastspar(output_dir: Path, sample_id: str) -> StandardRows:
     return {"network_edges": edges, "network_nodes": node_rows}
 
 
+def parse_alignment(output_dir: Path, sample_id: str, tool: str) -> StandardRows:
+    """Describe SAM/BAM artifacts and count SAM alignment records."""
+    rows = []
+    for path in _candidate_files(output_dir, ("*.sam", "*.bam", "*.cram")):
+        record_count: int | str = ""
+        mapped_records: int | str = ""
+        unmapped_records: int | str = ""
+        if path.suffix.lower() == ".sam":
+            record_count = 0
+            mapped_records = 0
+            unmapped_records = 0
+            try:
+                with path.open("r", encoding="utf-8", errors="replace") as handle:
+                    for line in handle:
+                        if not line or line.startswith("@"):
+                            continue
+                        fields = line.rstrip("\n").split("\t")
+                        if len(fields) < 2:
+                            continue
+                        try:
+                            flag = int(fields[1])
+                        except ValueError:
+                            continue
+                        record_count += 1
+                        if flag & 4:
+                            unmapped_records += 1
+                        else:
+                            mapped_records += 1
+            except OSError:
+                continue
+        rows.append(
+            {
+                "sample_id": sample_id,
+                "tool": tool,
+                "artifact_type": path.suffix.lower().lstrip("."),
+                "record_count": record_count,
+                "mapped_records": mapped_records,
+                "unmapped_records": unmapped_records,
+                "size_bytes": path.stat().st_size,
+                "source_file": str(path),
+            }
+        )
+    return {"alignment_summary": rows}
+
+
+def parse_fastq_artifacts(output_dir: Path, sample_id: str, tool: str) -> StandardRows:
+    rows = []
+    for path in _candidate_files(
+        output_dir,
+        ("*.fastq", "*.fq", "*.fastq.gz", "*.fq.gz"),
+    ):
+        rows.append(
+            {
+                "sample_id": sample_id,
+                "tool": tool,
+                "metric": "output_size_bytes",
+                "value": path.stat().st_size,
+                "unit": "bytes",
+                "source_file": str(path),
+            }
+        )
+    return {"qc_summary": rows}
+
+
+def parse_assembly_fasta(output_dir: Path, sample_id: str, tool: str) -> StandardRows:
+    rows = []
+    for path in _candidate_files(
+        output_dir,
+        ("contigs.fasta", "contigs.fa", "assembly.fasta", "consensus.fasta", "*.fna"),
+    ):
+        rows.extend(_assembly_fasta_summary_rows(path, sample_id, tool))
+    return {"assembly_summary": rows}
+
+
+def parse_generic_annotations(output_dir: Path, sample_id: str, tool: str) -> StandardRows:
+    rows = []
+    for path in _candidate_files(output_dir, ("*.gff", "*.gff3")):
+        for row in _read_gff_features(path):
+            rows.append(
+                {
+                    "sample_id": sample_id,
+                    "contig_id": _get(row, "seqid", "contig", "contig_id"),
+                    "start": _get(row, "start"),
+                    "end": _get(row, "end"),
+                    "strand": _get(row, "strand"),
+                    "gene": _get(row, "gene", "name", "id"),
+                    "product": _get(row, "product", "description"),
+                    "category": _get(row, "type") or "feature",
+                    "tool": tool,
+                    "evidence": _get(row, "dbxref", "inference", "score"),
+                    "identity": _get(row, "identity", "percent_identity"),
+                    "coverage": _get(row, "coverage", "percent_coverage"),
+                    "source_file": str(path),
+                }
+            )
+    for path in _candidate_files(output_dir, ("*.tsv", "*.csv", "*.txt")):
+        for row in _read_table(path):
+            contig = _get(row, "contig", "contig_id", "sequence", "query", "seqid")
+            gene = _get(row, "gene", "gene_id", "protein", "model", "hit")
+            product = _get(row, "product", "description", "annotation", "function")
+            if not contig and not gene and not product:
+                continue
+            rows.append(
+                {
+                    "sample_id": sample_id,
+                    "contig_id": contig,
+                    "start": _get(row, "start"),
+                    "end": _get(row, "end", "stop"),
+                    "strand": _get(row, "strand"),
+                    "gene": gene,
+                    "product": product,
+                    "category": _get(row, "category", "type", "class") or "feature",
+                    "tool": tool,
+                    "evidence": _evidence(row, ["database", "score", "evalue"]),
+                    "identity": _get(row, "identity", "percent_identity"),
+                    "coverage": _get(row, "coverage", "percent_coverage"),
+                    "source_file": str(path),
+                }
+            )
+    return {"annotations": rows}
+
+
+def parse_mag_quality(output_dir: Path, sample_id: str, tool: str) -> StandardRows:
+    rows = []
+    for path in _candidate_files(output_dir, ("*.tsv", "*.csv", "*.txt")):
+        for row in _read_table(path):
+            bin_id = _get(row, "bin_id", "bin", "name", "user_genome")
+            completeness = _get(row, "completeness")
+            contamination = _get(row, "contamination")
+            taxonomy = _get(row, "taxonomy", "classification")
+            if not any((bin_id, completeness, contamination, taxonomy)):
+                continue
+            rows.append(
+                {
+                    "sample_id": sample_id,
+                    "bin_id": bin_id,
+                    "completeness": completeness,
+                    "contamination": contamination,
+                    "taxonomy": taxonomy,
+                    "tool": tool,
+                    "source_file": str(path),
+                }
+            )
+    return {"mag_quality": rows}
+
+
+def parse_visualization_artifacts(output_dir: Path, sample_id: str, tool: str) -> StandardRows:
+    rows = []
+    for path in _candidate_files(output_dir, ("*.html", "*.svg", "*.png", "*.pdf")):
+        rows.append(
+            {
+                "sample_id": sample_id,
+                "output_type": path.suffix.lower().lstrip("."),
+                "path": str(path),
+                "tool": tool,
+                "description": f"{tool} visualization artifact",
+            }
+        )
+    return {"visualization_outputs": rows}
+
+
+def parse_generic_artifacts(output_dir: Path, sample_id: str, tool: str) -> StandardRows:
+    rows: List[Dict[str, Any]] = []
+    if not output_dir.exists():
+        return {"artifacts": rows}
+    for path in sorted(item for item in output_dir.rglob("*") if item.is_file()):
+        rows.append(
+            {
+                "sample_id": sample_id,
+                "tool": tool,
+                "artifact_type": path.suffix.lower().lstrip(".") or "file",
+                "path": str(path),
+                "size_bytes": path.stat().st_size,
+                "description": f"Output artifact produced by {tool}",
+            }
+        )
+    return {"artifacts": rows}
+
+
+def _bind_parser(parser: Callable[[Path, str, str], StandardRows], tool: str) -> Parser:
+    def bound(output_dir: Path, sample_id: str) -> StandardRows:
+        return parser(output_dir, sample_id, tool)
+
+    return bound
+
+
+def _bind_binning_parser(tool: str) -> Parser:
+    def bound(output_dir: Path, sample_id: str) -> StandardRows:
+        return _parse_binning_tool(output_dir, sample_id, tool)
+
+    return bound
+
+
 PARSERS: Dict[str, Parser] = {
     "genomad": parse_genomad,
     "plasme": parse_plasme,
@@ -1065,6 +1258,34 @@ PARSERS: Dict[str, Parser] = {
     "hifiasm_meta": parse_hifiasm_meta,
     "opera_ms": parse_opera_ms,
     "quast": parse_quast,
+    "bowtie2": _bind_parser(parse_alignment, "bowtie2"),
+    "minimap2": _bind_parser(parse_alignment, "minimap2"),
+    "samtools": _bind_parser(parse_alignment, "samtools"),
+    "bowtie2_host_removal": _bind_parser(parse_fastq_artifacts, "bowtie2_host_removal"),
+    "minimap2_host_removal": _bind_parser(parse_fastq_artifacts, "minimap2_host_removal"),
+    "samtools_fastq": _bind_parser(parse_fastq_artifacts, "samtools_fastq"),
+    "dorado": _bind_parser(parse_fastq_artifacts, "dorado"),
+    "metaspades": _bind_parser(parse_assembly_fasta, "metaspades"),
+    "hybridspades": _bind_parser(parse_assembly_fasta, "hybridspades"),
+    "medaka": _bind_parser(parse_assembly_fasta, "medaka"),
+    "prodigal": _bind_parser(parse_generic_annotations, "prodigal"),
+    "rgi": _bind_parser(parse_generic_annotations, "rgi"),
+    "eggnog_mapper": _bind_parser(parse_generic_annotations, "eggnog_mapper"),
+    "minced": _bind_parser(parse_generic_annotations, "minced"),
+    "macsyfinder": _bind_parser(parse_generic_annotations, "macsyfinder"),
+    "conjscan": _bind_parser(parse_generic_annotations, "conjscan"),
+    "metabat2": _bind_binning_parser("metabat2"),
+    "concoct": _bind_binning_parser("concoct"),
+    "semibin": _bind_binning_parser("semibin"),
+    "das_tool": _bind_binning_parser("das_tool"),
+    "scapp": _bind_binning_parser("scapp"),
+    "recycler": _bind_binning_parser("recycler"),
+    "checkm2": _bind_parser(parse_mag_quality, "checkm2"),
+    "gtdbtk": _bind_parser(parse_mag_quality, "gtdbtk"),
+    "dna_features_viewer": _bind_parser(parse_visualization_artifacts, "dna_features_viewer"),
+    "pycirclize": _bind_parser(parse_visualization_artifacts, "pycirclize"),
+    "pyvis": _bind_parser(parse_visualization_artifacts, "pyvis"),
+    "report_markdown": _bind_parser(parse_generic_artifacts, "report_markdown"),
 }
 
 
@@ -1116,8 +1337,8 @@ def _mge_annotation_row(
 
 
 def _parse_binning_tool(output_dir: Path, sample_id: str, tool: str) -> StandardRows:
-    bin_rows = []
-    membership_rows = []
+    bin_rows: List[Dict[str, Any]] = []
+    membership_rows: List[Dict[str, Any]] = []
     for path in _candidate_files(output_dir, ("*.tsv", "*.csv", "*.txt")):
         for row in _read_table(path):
             bin_id = _get(row, "bin_id", "bin", "plasmid_bin", "cluster")
@@ -1148,6 +1369,50 @@ def _parse_binning_tool(output_dir: Path, sample_id: str, tool: str) -> Standard
                         "source_file": str(path),
                     }
                 )
+    seen_bins = {str(row["bin_id"]) for row in bin_rows}
+    for path in _candidate_files(output_dir, ("*.fa", "*.fasta", "*.fna")):
+        members: list[tuple[str, int]] = []
+        contig_id = ""
+        length = 0
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                line = line.strip()
+                if line.startswith(">"):
+                    if contig_id:
+                        members.append((contig_id, length))
+                    contig_id = line[1:].split()[0]
+                    length = 0
+                elif line:
+                    length += len(line)
+        if contig_id:
+            members.append((contig_id, length))
+        if not members:
+            continue
+        bin_id = path.stem
+        if bin_id not in seen_bins:
+            bin_rows.append(
+                {
+                    "sample_id": sample_id,
+                    "bin_id": bin_id,
+                    "method": tool,
+                    "contig_count": len(members),
+                    "total_length_bp": sum(item[1] for item in members),
+                    "confidence": "unknown",
+                    "evidence": "bin_fasta",
+                    "source_file": str(path),
+                }
+            )
+        membership_rows.extend(
+            {
+                "sample_id": sample_id,
+                "bin_id": bin_id,
+                "contig_id": member_id,
+                "membership_score": "",
+                "tool": tool,
+                "source_file": str(path),
+            }
+            for member_id, _ in members
+        )
     return {"plasmid_bins": bin_rows, "bin_to_contig": membership_rows}
 
 

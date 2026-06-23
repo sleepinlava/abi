@@ -14,8 +14,8 @@ outputs:
     type: file
     format: markdown
 execution:
-  executable: autoplasm
-  command_template: autoplasm report --result-dir {project_outdir}
+  executable: abi
+  command_template: abi report --type metagenomic_plasmid --result-dir {project_outdir}
   network: false
   writes_output: true
 failure_handling:

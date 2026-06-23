@@ -5,7 +5,11 @@ category: functional_summary
 purpose: Split community-total and taxon-stratified HUMAnN features.
 inputs: {input_table: {type: file, formats: [tsv], required: true}}
 outputs: {split_dir: {type: directory}}
-execution: {executable: humann_split_stratified_table, network: false, writes_output: true}
+execution:
+  executable: humann_split_stratified_table
+  command_template: humann_split_stratified_table --input {input_table} --output {split_dir}
+  network: false
+  writes_output: true
 normalization: {tables: [functional_abundance]}
 failure_handling: {tool_not_found: {hint: Create the easymeta-humann environment.}}
 resources: {cpu: 1, memory: 8GB, walltime: "02:00:00"}

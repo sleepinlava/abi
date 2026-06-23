@@ -11,7 +11,13 @@ inputs:
 outputs:
   report: {type: file, format: tsv}
   classifications: {type: file, format: tsv}
-execution: {executable: kraken2, command_template: "kraken2 --db {kraken2_db} --paired {dehost_read1} {dehost_read2}", network: false, writes_output: true}
+execution:
+  executable: kraken2
+  command_template: kraken2 --db {kraken2_db} --paired {dehost_read1} {dehost_read2}
+    --threads {threads} --use-names --report-zero-counts --report {report}
+    --output {classifications}
+  network: false
+  writes_output: true
 normalization: {tables: [taxonomy_abundance]}
 failure_handling:
   missing_input: {hint: Check KneadData outputs and Kraken2 database.}

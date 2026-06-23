@@ -2138,6 +2138,7 @@ def contract_lint_command(
         # Load tool contracts if available
         contracts = None
         registry_ids = None
+        registry_tools = None
         contracts_dir = root / "tool_contracts"
         if contracts_dir.exists():
             from abi.contracts import load_tool_contracts
@@ -2148,9 +2149,15 @@ def contract_lint_command(
                 contracts = None
             if hasattr(plugin, "registry"):
                 registry = plugin.registry()
-                registry_ids = {str(t.get("id", "")) for t in registry.list_tools()}
+                registry_tools = {str(tool.get("id", "")): tool for tool in registry.list_tools()}
+                registry_ids = set(registry_tools)
 
-        result = run_contract_lint(dag_spec, contracts=contracts, registry_tool_ids=registry_ids)
+        result = run_contract_lint(
+            dag_spec,
+            contracts=contracts,
+            registry_tool_ids=registry_ids,
+            registry_tools=registry_tools,
+        )
 
         typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
 

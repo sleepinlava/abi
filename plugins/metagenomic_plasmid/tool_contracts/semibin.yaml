@@ -23,8 +23,8 @@ outputs:
   output_dir:
     type: directory
 execution:
-  executable: SemiBin
-  command_template: SemiBin single_easy_bin --input_contigs {assembly} --input_bam
+  executable: SemiBin2
+  command_template: SemiBin2 single_easy_bin --input_contigs {assembly} --input_bam
     {bam} --output {output_dir} --threads {threads}
   network: false
   writes_output: true

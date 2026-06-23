@@ -41,7 +41,7 @@ outputs:
 execution:
   executable: prokka
   command_template: prokka --outdir {output_dir} --prefix {sample_id} --cpus {threads}
-    --genus {genus} --species {species} {assembly_fasta}
+    --genus {genus} --species {species} --force {assembly_fasta}
   network: false
   writes_output: true
 failure_handling:
