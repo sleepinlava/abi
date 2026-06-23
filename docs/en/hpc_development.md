@@ -147,7 +147,7 @@ abi setup-resources --type metagenomic_plasmid --confirm
 | amplicon_16s | amplicon | cutadapt, vsearch, python-diversity |
 | metatranscriptomics | abi-qc, abi-stats | fastp, star, featurecounts |
 
-### Container support (planned)
+### Container support
 
 Docker/Singularity images as an alternative to conda environments:
 

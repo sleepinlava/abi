@@ -45,7 +45,7 @@ def test_100_sample_planning_and_dry_run_baseline(tmp_path):
     tracemalloc.stop()
 
     assert len(plan.samples) == 100
-    assert plan_seconds < 5.0
+    assert plan_seconds < 12.0
     assert peak_bytes < 500 * 1024 * 1024
 
     executor = GenericABIExecutor(

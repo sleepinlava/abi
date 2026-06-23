@@ -1,6 +1,6 @@
 # ABI Testing Guide
 
-> **Current state (2026-06-21)**: 723 tests passed, 4 skipped, 62 test files, 0 ruff errors, 0 mypy errors.
+> **Current state (2026-06-23)**: 856 tests passed, 14 skipped, 0 ruff errors, 0 mypy errors.
 
 This guide covers the ABI testing infrastructure: test taxonomy, shared fixtures, the benchmark framework, contract validation, golden traces, smoke tests, CI/CD, and conventions for plugin authors.
 

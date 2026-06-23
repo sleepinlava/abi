@@ -2,7 +2,6 @@
 
 > **Plugin**: `rnaseq_expression`
 > **Status**: Active (2026-06-18)
-> **Canonical reference**: `docs/next_development_plan.md` §6.2
 
 ## Workflow
 

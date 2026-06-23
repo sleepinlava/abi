@@ -515,9 +515,7 @@ Week 9-12:  Paper writing + figure polishing + submission
 
 ## 8. References
 
-- `docs/en/next_development_plan.md` — Full 15-section development plan
 - `docs/en/workflow_validation.md` — Scientific validation methodology
 - `docs/en/hpc_development.md` — HPC deployment guide
 - `docs/en/plugin_development_guide.md` — Plugin development guide
 - `docs/en/devlog.md` — Development log (daily, 2026-06-18 to 2026-06-21)
-- `docs/en/next_development_plan.md` — Full 15-section development plan + Phase 1-3 engineering fixes

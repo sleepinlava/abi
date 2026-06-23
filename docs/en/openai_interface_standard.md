@@ -1,12 +1,17 @@
-# OpenAI-Compatible Interface Standard
+# Multi-LLM Tool Descriptor Export
 
-ABI exports provider-neutral descriptors for agent platforms with:
+ABI exports provider-neutral tool descriptors for AI agent platforms via the
+unified `tool_descriptors` SSOT. The canonical command is:
 
 ```bash
-abi export-openai-tools --type metagenomic_plasmid --format responses
-abi export-openai-tools --type metagenomic_plasmid --format apps-sdk
-abi export-openai-tools --type metagenomic_plasmid --format json
+abi export-tools --type metagenomic_plasmid --format openai --provider openai
+abi export-tools --type metagenomic_plasmid --format openai --provider deepseek
+abi export-tools --type metagenomic_plasmid --format anthropic
+abi export-tools --type metagenomic_plasmid --format gemini
 ```
+
+Supported provider profiles: OpenAI, Anthropic Claude, Google Gemini,
+DeepSeek, Zhipu (GLM), Kimi (Moonshot), Qwen (Tongyi), MiniMax.
 
 ## Default Tools
 
@@ -24,12 +29,15 @@ Default exports include:
 
 `abi_run` is omitted unless `--include-execution` is passed.
 
-## Schema Rules
+## Format Families
 
-- Descriptor input schemas use `additionalProperties: false`.
-- Responses descriptors set `strict: true`.
-- Apps SDK descriptors include `readOnlyHint` where appropriate.
-- JSON descriptors include `permission` and `requires_confirmation`.
+Three format families are supported:
+
+- **OpenAI-compatible** (`--format openai`): function descriptors for OpenAI,
+  DeepSeek, Zhipu, Kimi, Qwen, MiniMax. Uses `additionalProperties: false`,
+  `strict: true` (Responses API), and `readOnlyHint` (Apps SDK).
+- **Anthropic** (`--format anthropic`): `tool_use` descriptors for Claude.
+- **Gemini** (`--format gemini`): `function_declarations` for Google Gemini.
 
 ## Agent Context
 
@@ -45,7 +53,7 @@ codes, and recovery rules.
 
 ## Agent Skills (Claude Code)
 
-ABI bundles 41 SKILL.md files (one for each bioinformatics tool plus an
+ABI bundles SKILL.md files (one for each bioinformatics tool plus an
 ``abi_agent`` operating skill) inside the package at ``src/abi/skills/``.
 Install them into Claude Code with:
 

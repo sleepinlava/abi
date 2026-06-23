@@ -12,11 +12,13 @@ src/abi/
                       citations, limitations, html — generic report system
   workflow/           ResourceManifest, workflow validation, figure_specs loading
   plugins/            Built-in analysis-type plugins
-    metagenomic_plasmid/   Self-contained plugin package (engine in _engine/, 67 tools, 84+ nodes)
+    metagenomic_plasmid/   Self-contained plugin package (engine in _engine/, 67 tools, 84-node DAG)
+	    easymetagenome/        P0 shotgun metagenomics (12 tools, 3 presets, internal handlers)
+	    viral_viwrap/          Managed external CLI plugin wrapping ViWrap 1.3.1 (1 tool)
     rnaseq_expression.py   Bulk RNA-seq (6 tools)
     wgs_bacteria.py        Bacterial WGS (5 tools)
     amplicon_16s.py        16S microbiome (8 tools)
-    metatranscriptomics.py Metatranscriptomics (4 tools)
+    metatranscriptomics.py Metatranscriptomics (3 tools)
   autoplasm/          Backward-compatible re-export shim → plugins/metagenomic_plasmid/_engine/
   sciplot/            Publication-grade scientific figure compiler — FigureSpec → Validate →
                       Render → Export → Lint → Provenance. Pydantic schema, 15 plot types,

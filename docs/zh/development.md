@@ -12,9 +12,9 @@ src/abi/
                       citations、limitations、html — 通用报告系统
   workflow/           ResourceManifest、工作流验证、figure_specs 加载
   plugins/            内置分析类型插件
-    metagenomic_plasmid/   自包含插件包（引擎在 _engine/ 中，67 工具，84+ 节点）
-                          Assembly 平台：19/19 步骤通过（3 RefSeq 质粒）
-                          Illumina 平台：33 工具，71 步骤（121 真实样本）
+    metagenomic_plasmid/   自包含插件包（引擎在 _engine/ 中，67 工具，84 节点 DAG）
+	    easymetagenome/        P0 猎枪宏基因组（12 工具，3 预设，内部处理器）
+	    viral_viwrap/          托管外部 CLI 插件包装 ViWrap 1.3.1（1 工具）
     rnaseq_expression.py   批量 RNA-seq（6 工具）
     wgs_bacteria.py        细菌 WGS（5 工具）
     amplicon_16s.py        16S 微生物组（8 工具）

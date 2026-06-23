@@ -1,12 +1,16 @@
-# OpenAI 兼容接口标准
+# 多 LLM 工具描述符导出
 
-ABI 为 Agent 平台导出与提供商无关的描述符：
+ABI 通过统一的 `tool_descriptors` SSOT 为 AI Agent 平台导出与提供商无关的工具描述符。标准命令为：
 
 ```bash
-abi export-openai-tools --type metagenomic_plasmid --format responses
-abi export-openai-tools --type metagenomic_plasmid --format apps-sdk
-abi export-openai-tools --type metagenomic_plasmid --format json
+abi export-tools --type metagenomic_plasmid --format openai --provider openai
+abi export-tools --type metagenomic_plasmid --format openai --provider deepseek
+abi export-tools --type metagenomic_plasmid --format anthropic
+abi export-tools --type metagenomic_plasmid --format gemini
 ```
+
+支持的提供商配置文件：OpenAI、Anthropic Claude、Google Gemini、
+DeepSeek、智谱 (GLM)、Kimi (Moonshot)、通义 (Qwen)、MiniMax。
 
 ## 默认工具
 
@@ -24,12 +28,15 @@ abi export-openai-tools --type metagenomic_plasmid --format json
 
 `abi_run` 默认不导出，除非传入 `--include-execution`。
 
-## Schema 规则
+## 格式家族
 
-- 描述符输入 schema 使用 `additionalProperties: false`。
-- Responses 描述符设置 `strict: true`。
-- Apps SDK 描述符在适当位置包含 `readOnlyHint`。
-- JSON 描述符包含 `permission` 和 `requires_confirmation`。
+支持三种格式家族：
+
+- **OpenAI 兼容** (`--format openai`): 适用于 OpenAI、DeepSeek、智谱、
+  Kimi、通义、MiniMax 的函数描述符。使用 `additionalProperties: false`、
+  `strict: true` (Responses API) 和 `readOnlyHint` (Apps SDK)。
+- **Anthropic** (`--format anthropic`): Claude 的 `tool_use` 描述符。
+- **Gemini** (`--format gemini`): Google Gemini 的 `function_declarations`。
 
 ## Agent 上下文
 
@@ -44,7 +51,7 @@ abi doctor-agent --type metagenomic_plasmid
 
 ## Agent 技能 (Claude Code)
 
-ABI 在包内的 `src/abi/skills/` 中捆绑了 41 个 SKILL.md 文件（每个生物信息学工具一个，外加一个 `abi_agent` 操作技能）。通过以下命令安装到 Claude Code：
+ABI 在包内的 `src/abi/skills/` 中捆绑了 SKILL.md 文件（每个生物信息学工具一个，外加一个 `abi_agent` 操作技能）。通过以下命令安装到 Claude Code：
 
 ```bash
 abi install-skills         # → ~/.claude/skills/abi/

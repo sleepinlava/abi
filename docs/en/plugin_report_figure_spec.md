@@ -1,18 +1,24 @@
 # Plugin Report & Figure Specification System
 
-> **Status**: Implemented (2026-06-18)
-> **Canonical reference**: `docs/next_development_plan.md` §4
+> **Status**: Implemented (2026-06-18); sciplot integration (2026-06-20, v1.4.0)
 
 ## Overview
 
 The ABI report & figure system provides a **declarative, plugin-agnostic** way to generate publication-ready reports and figures from standard tables. Plugins declare *what* to output; the ABI core handles *how* to render.
+
+ABI now has **two figure systems**:
+
+| System | Module | Status | Use |
+|--------|--------|--------|-----|
+| **abi.sciplot** | `abi.sciplot` | v1.4.0, 15 plot types | **Recommended** for new plugins |
+| **FigureEngine** | `abi.figures` | 7 plot types, maintained | Legacy plugins, backward compat |
 
 ## Architecture
 
 ```text
 Plugin declaration (YAML)          ABI Core (Python)
 ─────────────────────────         ──────────────────
-figure_specs.yaml          →      abi.figures.FigureEngine
+figure_specs.yaml          →      abi.sciplot (primary) / abi.figures.FigureEngine (legacy)
 citation_registry.yaml     →      abi.report.citations.CitationRegistry
 limitations.yaml           →      abi.report.limitations.load_limitations
 standard_tables.yaml       →      abi.tables.StandardTableManager
@@ -21,7 +27,27 @@ abi-plugin.yaml            →      abi.workflow.manifest.ResourceManifest
 
 ## Module Reference
 
-### `abi.figures` — Figure Engine
+### `abi.sciplot` — Scientific Figure Compiler (Recommended)
+
+```python
+from abi.sciplot import render_figure, validate_spec, lint_figure, load_spec
+
+spec = load_spec("plugins/rnaseq/figure_specs.yaml")
+validate_spec(spec)
+renderings = render_figure(spec, output_dir="figures/")
+# Renders to PDF + SVG + PNG + TIFF
+lint_result = lint_figure(renderings)
+```
+
+**15 supported plot types** (v1.4.0): bar, scatter, volcano, heatmap, boxplot,
+stacked_bar, pca, line, histogram, venn, upset, enrichment_dot, ma, density,
+qq. Three themes: `abi_nature`, `abi_cell`, `abi_report`. Backends: plotnine
+(ggplot2 grammar) + seaborn. Includes SHA256 provenance, 17 lint rules, and
+colorblind-safe palettes.
+
+**Requirements**: `plotnine`, `seaborn` (install with `pip install abi-agent[sciplot]`).
+
+### `abi.figures` — Figure Engine (Legacy)
 
 ```python
 from abi.figures import FigureEngine, FigureSpec
@@ -40,10 +66,11 @@ rendered = engine.render_all()
 
 | Function | Purpose |
 | --- | --- |
-| `write_generic_report()` | Simple Markdown + HTML + JSON summary (legacy) |
+| `write_plugin_report()` | Markdown + HTML + JSON summary with sciplot integration |
 | `write_full_report()` | Complete report with methods, figures, citations, limitations, resource manifest |
 | `write_methods()` | Standalone `methods.md` generator |
 | `write_html_report()` | Full styled HTML report renderer |
+| `write_generic_report()` | Simple Markdown + HTML + JSON summary (legacy) |
 
 **Submodules**:
 
@@ -97,6 +124,7 @@ def write_report(self, plan: Any, result_dir: str | Path) -> Dict[str, Path]:
         title=self.report_title,
         citations=citations,
         limitations=limitations,
+        use_sciplot=True,  # Enable sciplot rendering for figures
     )
 ```
 
@@ -114,21 +142,24 @@ results/<analysis_type>/<run_id>/
   provenance/
     resource_manifest.json # Resource inventory with checksums
   figures/
-    *.png                  # Rendered figures
+    *.png / *.pdf / *.svg  # Rendered figures (sciplot: PDF+SVG+PNG+TIFF)
   tables/
     *.tsv                  # Standard tables
 ```
 
 ## Figure Spec Format
 
+### sciplot format (recommended)
+
 ```yaml
 figures:
   - id: qc_read_counts
-    type: bar
+    type: barplot
     source_table: qc_summary
     x: sample_id
     y: reads_after_filtering
     title: "Reads Retained After QC"
+    theme: abi_nature
     required: true        # If true, missing data → error
 
   - id: volcano_deg
@@ -138,6 +169,18 @@ figures:
     y: padj
     label: gene_id
     top_n: 30             # Label top N significant points
+```
+
+### FigureEngine format (legacy)
+
+```yaml
+figures:
+  - id: qc_read_counts
+    type: bar
+    source_table: qc_summary
+    x: sample_id
+    y: reads_after_filtering
+    title: "Reads Retained After QC"
 ```
 
 ## Citation Format
@@ -161,6 +204,7 @@ limitations:
 
 1. **Declarative**: Plugins declare what to output; core handles rendering.
 2. **Schema-validated**: Figure specs validated against standard table schemas before rendering.
-3. **Lazy imports**: matplotlib imported only at render time.
+3. **Lazy imports**: Plotting backends imported only at render time.
 4. **Self-contained**: HTML reports use inline CSS, no external dependencies.
 5. **Backward compatible**: `write_generic_report()` still works; existing plugins upgraded via `write_full_report()`.
+6. **Provenance-tracked**: sciplot figures carry SHA256 checksums and render metadata.

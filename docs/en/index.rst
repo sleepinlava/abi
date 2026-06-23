@@ -4,7 +4,7 @@ ABI Documentation
 **Agent-Bioinformatics Interface** — a Python control plane between AI agents
 and bioinformatics tools.  Not a workflow engine, but a structured interface
 layer that provides standardized JSON envelopes, provenance tracking, tool
-contracts, and execution gating across five bioinformatics analysis types. (v1.4.0, 2026-06-21 — 723 tests, 0 ruff/mypy errors, 5/5 plugins real-execution verified)
+contracts, and execution gating across seven bioinformatics analysis types. (v1.4.0, 2026-06-23 — 856 tests, 0 ruff/mypy errors, 7/7 plugins verified)
 
 .. image:: https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=1e6fba
    :target: https://pypi.org/project/abi-agent/
@@ -102,6 +102,18 @@ Built-In Analysis Types
        parallel execution, 8 sciplot figures (barplot×3, scatterplot,
        stacked_barplot, heatmap×5). 10 conda envs, 84-node DAG (3054 lines),
        10 databases.
+   * - ``easymetagenome``
+     - 12
+       P0 shotgun metagenomics: fastp → kneaddata → kraken2 → bracken →
+       humann4 + 6 HUMAnN utilities → seqkit. 3 workflow presets
+       (p0_taxonomy, p1_humann4, full_read_based). DAG-driven planner
+       with 34-node DAG, internal handlers, manifest validation, schema-driven
+       reports.
+   * - ``viral_viwrap``
+     - 1
+       Viral metagenomics via ViWrap 1.3.1: binning → taxonomy → host
+       prediction → quality filtering. Managed external CLI plugin with
+       custom ToolSkill, environment checker, and artifact mapper.
 
 Quick Start
 -----------
@@ -182,7 +194,6 @@ All agent-facing commands support ``--output-json``.
    job_service
    release
    devlog
-   next_development_plan
    paper_execution_plan
 
 Quick Links
@@ -196,8 +207,7 @@ Quick Links
 - :doc:`openai_interface_standard` — Multi-LLM tool descriptor export
 - :doc:`agent_usage` — Agent integration guide (MCP, Skills, dispatch)
 - :doc:`devlog` — Development log
-- :doc:`paper_execution_plan` — Paper execution plan
-- :doc:`next_development_plan` — Next-stage development plan + Phase 1-3 fixes
+- :doc:`paper_execution_plan` — Paper execution stratification and verification
 
 Indices and Tables
 ------------------

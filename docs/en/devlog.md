@@ -411,7 +411,6 @@ build:           abi_agent-1.3.3.tar.gz + wheel OK
 | `plugins/metagenomic_plasmid/pipeline_dag.yaml` | Fixed | 12 enable_conditions + input bindings |
 | `src/abi/tools.py` | Fixed | OMP_NUM_THREADS, env_prefix resolution |
 | `src/abi/dag_planner.py` | Fixed | `_resolve_script_path()` auto-discovery |
-| `docs/en/work_report_2026-06-20.md` | New | Comprehensive work status report |
 
 ### Commits
 

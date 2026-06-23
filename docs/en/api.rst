@@ -74,6 +74,24 @@ Diagnostics & Permissions
    :members:
    :undoc-members:
 
+DAG Planner & TSV Mapping
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: abi.dag_planner
+   :members:
+   :undoc-members:
+
+.. automodule:: abi.tsv_mapping
+   :members:
+   :undoc-members:
+
+Tool Descriptors
+~~~~~~~~~~~~~~~
+
+.. automodule:: abi.tool_descriptors
+   :members:
+   :undoc-members:
+
 Execution & Workflow
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -82,6 +100,49 @@ Execution & Workflow
    :undoc-members:
 
 .. automodule:: abi.workflow.validation
+   :members:
+   :undoc-members:
+
+Runtimes
+~~~~~~~~
+
+.. automodule:: abi.runtimes.base
+   :members:
+   :undoc-members:
+
+.. automodule:: abi.runtimes.local
+   :members:
+   :undoc-members:
+
+.. automodule:: abi.runtimes.hpc
+   :members:
+   :undoc-members:
+
+Internal Handlers
+~~~~~~~~~~~~~~~~
+
+.. automodule:: abi.internal
+   :members:
+   :undoc-members:
+
+Resource Management
+~~~~~~~~~~~~~~~~~~
+
+.. automodule:: abi.resources
+   :members:
+   :undoc-members:
+
+Tables
+~~~~~~
+
+.. automodule:: abi.tables
+   :members:
+   :undoc-members:
+
+Results
+~~~~~~~
+
+.. automodule:: abi.results
    :members:
    :undoc-members:
 
@@ -96,10 +157,28 @@ Report & Figures
    :members:
    :undoc-members:
 
+.. automodule:: abi.sciplot
+   :members:
+   :undoc-members:
+
 Shared Utilities
 ~~~~~~~~~~~~~~~~
 
 .. automodule:: abi._shared
+   :members:
+   :undoc-members:
+
+Timeouts
+~~~~~~~~
+
+.. automodule:: abi.timeouts
+   :members:
+   :undoc-members:
+
+MCP Server
+~~~~~~~~~~
+
+.. automodule:: abi.mcp.server
    :members:
    :undoc-members:
 
@@ -114,6 +193,18 @@ Plugin API Reference
 --------------------
 
 Each plugin implements the :class:`abi.interfaces.ABIPlugin` protocol.
+
+.. automodule:: abi.plugins.metagenomic_plasmid
+   :members:
+   :undoc-members:
+
+.. automodule:: abi.plugins.easymetagenome
+   :members:
+   :undoc-members:
+
+.. automodule:: abi.plugins.viral_viwrap
+   :members:
+   :undoc-members:
 
 .. automodule:: abi.plugins.rnaseq_expression
    :members:
