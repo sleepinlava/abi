@@ -112,6 +112,7 @@ def test_pypi_publishes_the_github_release_artifacts_without_rebuilding() -> Non
     workflow = (root / ".github/workflows/publish-pypi.yml").read_text(encoding="utf-8")
 
     assert "gh release download" in workflow
+    assert "python -m pip install --upgrade twine packaging" in workflow
     assert "python -m twine check dist/*" in workflow
     assert "python -m build" not in workflow
     assert "workflow_call:" in workflow
