@@ -7,6 +7,10 @@ on:
 
 jobs:
   quality-gate:
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     uses: ./.github/workflows/ci.yml
 
   release:

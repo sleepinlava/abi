@@ -73,6 +73,8 @@ def test_release_workflow_uses_full_gate_and_clean_wheel_smoke() -> None:
     release_workflow = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")
 
     assert "uses: ./.github/workflows/ci.yml" in release_workflow
+    assert "pages: write" in release_workflow
+    assert "id-token: write" in release_workflow
     assert "needs: quality-gate" in release_workflow
     assert "scripts/check_release_identity.py --tag" in release_workflow
     assert "python -m venv /tmp/abi-wheel-smoke" in release_workflow
