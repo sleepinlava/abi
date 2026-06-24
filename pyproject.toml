@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "abi-agent"
-version = "1.5.1"
+version = "1.5.2"
 description = "Agent-Bioinformatics Interface: plugin-based abstraction for AI-driven bioinformatics analysis"
 readme = "README.md"
 license = "MIT"
@@ -120,7 +120,6 @@ include = [
     "demo_artifacts",
     "baseline_comparison",
     "figures",
-    "metrics.tsv",
 ]
 
 # Hatch treats directories named ``envs`` as virtual-environment artifacts by
