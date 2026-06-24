@@ -777,6 +777,21 @@ class GenericABIExecutor:
         params["stdout_path"] = str(step_log_dir / f"{step.step_id}.stdout.log")
         params["stderr_path"] = str(step_log_dir / f"{step.step_id}.stderr.log")
 
+        # Smoke mode renders and validates the command but must never invoke
+        # the executable or enforce output contracts for artifacts that a mock
+        # run intentionally does not create.
+        if self.mock_tools:
+            skill.run(params, dry_run=True)
+            Path(params["stdout_path"]).touch()
+            Path(params["stderr_path"]).touch()
+            return {
+                "status": "success",
+                "return_code": 0,
+                "reason": "mock tool execution skipped",
+                "parsed_status": "not_applicable",
+                "standard_tables": "",
+            }
+
         # ── Pre-execution contract: invalidate stale checksums + verify inputs ──
         # 执行前契约：清除过期校验和 + 验证输入校验和
         contract = params.get("_contract", {})

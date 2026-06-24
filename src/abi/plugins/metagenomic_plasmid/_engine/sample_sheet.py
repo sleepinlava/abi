@@ -70,6 +70,15 @@ def parse_sample_sheet(path: str | Path, check_files: bool = True) -> SampleCont
     if not samples:
         raise SampleSheetError("Sample sheet contains no sample rows")
 
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for sample in samples:
+        if sample.sample_id in seen:
+            duplicates.add(sample.sample_id)
+        seen.add(sample.sample_id)
+    if duplicates:
+        raise SampleSheetError(f"Duplicate sample_id values: {sorted(duplicates)}")
+
     if check_files:
         validate_sample_files(samples)
 

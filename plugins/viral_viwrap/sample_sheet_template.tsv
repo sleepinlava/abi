@@ -1,0 +1,4 @@
+sample_id	input_metagenome	input_reads	input_cov	input_sample2read_info
+viral_sample	assemblies/viral_sample.fasta			
+viral_sample_with_reads	assemblies/viral_sample_with_reads.fasta	raw/sample_R1.fastq.gz,raw/sample_R2.fastq.gz		metadata/sample2read_info.tsv
+viral_sample_with_coverage	assemblies/viral_sample_with_coverage.fasta		metadata/coverage.tsv	

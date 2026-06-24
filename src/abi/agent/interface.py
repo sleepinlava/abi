@@ -503,6 +503,32 @@ class ABIAgentInterface:
             analysis_type=analysis_type,
         )
 
+    def check_resources(
+        self,
+        *,
+        analysis_type: str,
+        config_path: Optional[Union[str, Path]] = None,
+        resource_ids: Optional[List[str]] = None,
+        profile: str = "local",
+        mode: Optional[str] = None,
+        threads: Optional[int] = None,
+        outdir: Optional[str] = None,
+        log_dir: Optional[str] = None,
+    ) -> str:
+        """Check configured resources and return the uniform agent envelope."""
+        return self._call(
+            "check_resources",
+            self._check_resources,
+            analysis_type=analysis_type,
+            config_path=config_path,
+            resource_ids=resource_ids,
+            profile=profile,
+            mode=mode,
+            threads=threads,
+            outdir=outdir,
+            log_dir=log_dir,
+        )
+
     def doctor_agent(self, *, analysis_type: str) -> str:
         """Return a short human-readable operating guide for an ABI analysis type.
 
@@ -1171,6 +1197,38 @@ class ABIAgentInterface:
         """
         plugin = get_plugin(analysis_type)
         return build_agent_context(plugin)
+
+    def _check_resources(
+        self,
+        *,
+        analysis_type: str,
+        config_path: Optional[Union[str, Path]],
+        resource_ids: Optional[List[str]],
+        profile: str,
+        mode: Optional[str],
+        threads: Optional[int],
+        outdir: Optional[str],
+        log_dir: Optional[str],
+    ) -> Dict[str, Any]:
+        from abi.resources import check_resources
+
+        plugin = get_plugin(analysis_type)
+        config = plugin.load_config(
+            _optional_path(config_path),
+            profile=profile,
+            overrides=_common_overrides(
+                mode=mode,
+                threads=threads,
+                outdir=outdir,
+                log_dir=log_dir,
+            ),
+        )
+        rows = check_resources(
+            analysis_type=analysis_type,
+            config=config,
+            resource_ids=resource_ids,
+        )
+        return {"analysis_type": analysis_type, "resources": rows, "count": len(rows)}
 
     def _doctor_agent(self, *, analysis_type: str) -> Dict[str, Any]:
         """Delegate to ``abi.agent.context.render_doctor_agent`` for the plugin.

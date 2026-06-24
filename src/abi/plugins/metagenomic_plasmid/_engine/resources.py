@@ -72,6 +72,7 @@ class ResourceStatus:
     directory_size_bytes: int = 0
     message: str = ""
     last_checked_at: str = ""
+    mock: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
@@ -531,6 +532,7 @@ def setup_resources(
                 status_override="planned",
                 command=command,
                 message="Download was planned but not executed.",
+                mock=mock,
             )
             statuses.append(status)
             _notify_progress(progress_callback, "finish", spec.resource_id, status.status)
@@ -547,6 +549,7 @@ def setup_resources(
                 status_override="ok",
                 command=command,
                 message="Mock resource prepared.",
+                mock=mock,
             )
             statuses.append(status)
             _notify_progress(progress_callback, "finish", spec.resource_id, status.status)
@@ -558,6 +561,7 @@ def setup_resources(
                 status_override="ok",
                 command=command,
                 message="Existing database found; download skipped.",
+                mock=mock,
             )
             statuses.append(status)
             _notify_progress(progress_callback, "finish", spec.resource_id, status.status)
@@ -572,6 +576,7 @@ def setup_resources(
                     "Existing resource path is not a complete database; download skipped "
                     "to avoid overwriting. Remove it or configure another path before rerun."
                 ),
+                mock=mock,
             )
             statuses.append(status)
             _notify_progress(progress_callback, "finish", spec.resource_id, status.status)
@@ -589,6 +594,7 @@ def setup_resources(
                 status_override="ok" if _resource_path_ready(path, spec) else "partial",
                 command=command,
                 message="Resource command completed.",
+                mock=mock,
             )
             statuses.append(status)
             _notify_progress(progress_callback, "finish", spec.resource_id, status.status)
@@ -601,6 +607,7 @@ def setup_resources(
                 status_override="failed",
                 command=command,
                 message=str(exc),
+                mock=mock,
             )
             statuses.append(status)
             _notify_progress(progress_callback, "finish", spec.resource_id, status.status)
@@ -776,6 +783,7 @@ def _status_for_spec(
     status_override: str | None = None,
     command: List[str] | None = None,
     message: str = "",
+    mock: bool = False,
 ) -> ResourceStatus:
     path = _configured_resource_path(config, spec)
     if status_override:
@@ -814,6 +822,7 @@ def _status_for_spec(
         directory_size_bytes=size_bytes,
         message=message,
         last_checked_at=checked_at,
+        mock=mock,
     )
 
 

@@ -78,7 +78,6 @@ ABI CLI 命令行界面。
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
@@ -86,12 +85,12 @@ import typer
 
 from abi._shared import _common_overrides
 from abi.agent import ABIAgentInterface
-from abi.agent.context import build_agent_context, render_doctor_agent
+from abi.agent.context import render_doctor_agent
 from abi.exporters import NextflowExporter
 from abi.json_utils import load_json_object, loads_json
 from abi.openai_contracts import export_openai_tools  # backward compat
 from abi.plugins import get_plugin, list_plugins
-from abi.resources import check_resources, setup_resources
+from abi.resources import setup_resources
 from abi.results import validate_abi_result_dir
 from abi.schemas import ABIError
 from abi.skill_installer import install_bundled_skills
@@ -286,11 +285,35 @@ def init_command(
             (root / "config_default.yaml", outdir / "config" / f"{analysis_type}.yaml"),
             (root / "sample_sheet_template.tsv", outdir / "samples.tsv"),
         ]
+        # Validate every source and overwrite conflict before creating any
+        # destination file.  A missing template must leave no half-initialized
+        # workspace behind.
+        template_contents = []
         for source, target in targets:
+            if not source.is_file():
+                raise ABIError(f"Plugin init template is missing: {source}")
             if target.exists() and not force:
                 raise ABIError(f"Refusing to overwrite existing file without --force: {target}")
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, target)
+            template_contents.append((target, source.read_bytes()))
+
+        previous: Dict[Path, bytes | None] = {
+            target: target.read_bytes() if target.is_file() else None
+            for target, _content in template_contents
+        }
+        written: List[Path] = []
+        try:
+            for target, content in template_contents:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+                written.append(target)
+        except Exception:
+            for target in reversed(written):
+                old_content = previous[target]
+                if old_content is None:
+                    target.unlink(missing_ok=True)
+                else:
+                    target.write_bytes(old_content)
+            raise
         typer.echo(
             json.dumps(
                 {
@@ -580,7 +603,7 @@ def query_command(
     output_json: bool = typer.Option(
         False,
         "--output-json",
-        help="Emit the agent JSON envelope.",
+        help="Compatibility flag; query always emits the agent JSON envelope.",
     ),
 ) -> None:
     """Lightweight metadata query — no plan construction, no config loading.
@@ -598,31 +621,14 @@ def query_command(
     轻量级元数据查询 — 不构建执行计划，不加载配置。
     仅读取 pipeline_dag.yaml 和工具注册表，比 plan 快 (~50ms vs ~300ms)。
     """
-    if output_json:
-        _emit_agent_json(
-            ABIAgentInterface().query(
-                analysis_type=analysis_type,
-                what=what,
-                step=step,
-            )
+    del output_json  # Query is machine-readable and always uses the standard envelope.
+    _emit_agent_json(
+        ABIAgentInterface().query(
+            analysis_type=analysis_type,
+            what=what,
+            step=step,
         )
-        return
-    try:
-        payload = json.loads(
-            ABIAgentInterface().query(
-                analysis_type=analysis_type,
-                what=what,
-                step=step,
-            )
-        )
-        if payload.get("status") == "error":
-            typer.echo(json.dumps(payload, indent=2), err=True)
-            raise typer.Exit(1)
-        typer.echo(json.dumps(payload.get("result", payload), indent=2))
-    except typer.Exit:
-        raise
-    except Exception as exc:
-        _fail(exc)
+    )
 
 
 @app.command("report")
@@ -1311,13 +1317,9 @@ def export_agent_context_command(
     产生一个 JSON 对象，描述插件的能力、工具、配置模式和样本表格式。
     Agent 调用者使用此信息来理解插件的功能，而无需解析其源代码。
     """
-    try:
-        if context_format != "json":
-            raise ABIError("Unsupported agent context format. Expected: json.")
-        plugin = get_plugin(analysis_type)
-        _emit_json_payload(build_agent_context(plugin))
-    except Exception as exc:
-        _fail(exc)
+    if context_format != "json":
+        _fail(ABIError("Unsupported agent context format. Expected: json."))
+    _emit_agent_json(ABIAgentInterface().export_agent_context(analysis_type=analysis_type))
 
 
 @app.command("check-resources")
@@ -1342,29 +1344,27 @@ def check_resources_command(
     """Check configured database, index, and model resources without downloading them.
 
     Read-only operation: inspects whether each resource (database, index, model)
-    is present at its configured path. Returns a JSON array with status per
-    resource. Use ``--resource`` to limit checks to specific resource IDs.
+    is present at its configured path. Returns a standard success/error JSON
+    envelope containing status rows. Use ``--resource`` to limit checks to
+    specific resource IDs.
 
     检查配置的数据库、索引和模型资源，而不下载它们。
     只读操作：检查每个资源（数据库、索引、模型）是否存在于其配置的路径。
-    返回带有每个资源状态的 JSON 数组。使用 ``--resource`` 将检查限制到特定资源 ID。
+    返回标准 success/error JSON 信封，其中包含每个资源的状态行。
+    使用 ``--resource`` 将检查限制到特定资源 ID。
     """
-    try:
-        cfg = _load_plugin_config(
+    _emit_agent_json(
+        ABIAgentInterface().check_resources(
             analysis_type=analysis_type,
-            config=config,
+            config_path=config,
+            resource_ids=resource,
             profile=profile,
-            overrides=_common_overrides(
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-            ),
+            mode=mode,
+            threads=threads,
+            outdir=outdir,
+            log_dir=log_dir,
         )
-        rows = check_resources(analysis_type=analysis_type, config=cfg, resource_ids=resource)
-        _emit_json_payload(rows)
-    except Exception as exc:
-        _fail(exc)
+    )
 
 
 @app.command("setup-resources")

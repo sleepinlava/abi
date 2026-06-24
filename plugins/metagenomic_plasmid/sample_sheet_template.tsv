@@ -1,0 +1,5 @@
+sample_id	group	platform	read1	read2	long_reads	assembly	technology	host_reference	notes
+sample1	case	illumina	raw/sample1_R1.fastq.gz	raw/sample1_R2.fastq.gz			NovaSeq		paired-end metagenome
+sample2	control	illumina	raw/sample2_R1.fastq.gz	raw/sample2_R2.fastq.gz			NovaSeq		paired-end metagenome
+sample3	case	ont			raw/sample3.fastq.gz		Oxford Nanopore		long-read metagenome
+sample4	control	assembly				assemblies/sample4.fasta	assembly		pre-assembled metagenome

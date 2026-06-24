@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from typer.testing import CliRunner
 
 from abi.cli import app
@@ -524,8 +525,11 @@ def test_abi_export_agent_context_outputs_machine_readable_guidance():
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["analysis_type"] == "metatranscriptomics"
-    assert payload["safe_sequence"] == [
+    assert payload["status"] == "success"
+    assert payload["command"] == "export_agent_context"
+    context = payload["result"]
+    assert context["analysis_type"] == "metatranscriptomics"
+    assert context["safe_sequence"] == [
         "list_types",
         "plan",
         "dry_run",
@@ -533,10 +537,10 @@ def test_abi_export_agent_context_outputs_machine_readable_guidance():
         "run",
         "report",
     ]
-    assert payload["execution_requires_confirmation"] is True
-    assert "abi_run" in payload["unsafe_tools"]
-    assert "abi_run" not in payload["default_exported_tools"]
-    assert "gene_expression" in payload["standard_tables"]
+    assert context["execution_requires_confirmation"] is True
+    assert "abi_run" in context["unsafe_tools"]
+    assert "abi_run" not in context["default_exported_tools"]
+    assert "gene_expression" in context["standard_tables"]
 
 
 def test_abi_doctor_agent_outputs_short_operating_guide():
@@ -567,7 +571,10 @@ def test_abi_check_resources_reports_generic_plugin_placeholders():
     result = runner.invoke(app, ["check-resources", "--type", "metatranscriptomics"])
 
     assert result.exit_code == 0, result.output
-    rows = json.loads(result.output)
+    payload = json.loads(result.output)
+    assert payload["status"] == "success"
+    assert payload["command"] == "check_resources"
+    rows = payload["result"]["resources"]
     by_id = {row["resource_id"]: row for row in rows}
     assert by_id["genome_index"]["status"] == "not_configured"
     assert by_id["annotation_gtf"]["status"] == "not_configured"
@@ -597,3 +604,70 @@ def test_abi_setup_resources_dry_run_uses_metagenomic_resource_manager():
     assert rows[0]["resource_id"] == "genomad"
     assert rows[0]["status"] == "planned"
     assert rows[0]["command"][0] == "genomad"
+
+
+def test_abi_query_always_uses_agent_envelope():
+    result = CliRunner().invoke(
+        app,
+        ["query", "--type", "rnaseq_expression", "--what", "platforms"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "success"
+    assert payload["command"] == "query"
+    assert payload["result"]["platforms"] == ["illumina"]
+
+
+@pytest.mark.parametrize(
+    "analysis_type",
+    [
+        "amplicon_16s",
+        "easymetagenome",
+        "metagenomic_plasmid",
+        "metatranscriptomics",
+        "rnaseq_expression",
+        "viral_viwrap",
+        "wgs_bacteria",
+    ],
+)
+def test_abi_init_creates_workspace_for_every_plugin(tmp_path, analysis_type):
+    workspace = tmp_path / analysis_type
+
+    result = CliRunner().invoke(
+        app,
+        ["init", "--type", analysis_type, "--outdir", str(workspace)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (workspace / "config" / f"{analysis_type}.yaml").is_file()
+    sample_sheet = workspace / "samples.tsv"
+    assert sample_sheet.is_file()
+    assert sample_sheet.read_text(encoding="utf-8").startswith("sample_id\t")
+
+
+def test_abi_local_smoke_skips_external_tools_and_writes_provenance(tmp_path):
+    outdir = tmp_path / "local_smoke"
+    result = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--type",
+            "metatranscriptomics",
+            "--outdir",
+            str(outdir),
+            "--log-dir",
+            str(tmp_path / "logs"),
+            "--smoke",
+            "--confirm-execution",
+            "--output-json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "success"
+    summary = json.loads((outdir / "provenance" / "run_summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "success"
+    commands = (outdir / "provenance" / "commands.tsv").read_text(encoding="utf-8")
+    assert "mock tool execution skipped" in commands

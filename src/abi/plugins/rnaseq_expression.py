@@ -119,8 +119,12 @@ class RNASeqExpressionPlugin:
     ) -> list[dict[str, Any]]:
         from abi.resources import _setup_rnaseq_expression
 
-        del mock
-        return _setup_rnaseq_expression(config, resource_ids=resource_ids, dry_run=dry_run)
+        return _setup_rnaseq_expression(
+            config,
+            resource_ids=resource_ids,
+            dry_run=dry_run,
+            mock=mock,
+        )
 
     # ── Sample context ───────────────────────────────────────────────────
 
@@ -232,6 +236,7 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
         sample_sheet,
         check_files=check_files,
         base_dirs=[PROJECT_ROOT],
+        allowed_platforms=("illumina", "rna_seq"),
     )
     samples = [
         ABISample(

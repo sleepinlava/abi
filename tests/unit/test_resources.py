@@ -18,12 +18,48 @@ def test_setup_resources_mock_writes_manifest(tmp_path):
 
     assert {row["resource_id"] for row in rows} == {"genomad", "bakta"}
     assert all(row["status"] == "ok" for row in rows)
+    assert all(row["mock"] is True for row in rows)
     assert (tmp_path / "resources" / "resources.json").exists()
     genomad = check_resources(config, resource_ids=["genomad"])[0]
     assert genomad["status"] == "ok"
     assert genomad["ready_check"] == "ready sentinel found"
     assert genomad["directory_file_count"] >= 1
     assert "directory_size_bytes" in genomad
+
+
+def test_wgs_mock_resource_uses_safe_outdir_for_placeholder_path(tmp_path):
+    config = {
+        "outdir": str(tmp_path / "results"),
+        "resources": {"amrfinder_db": "/path/to/amrfinderplus/database"},
+    }
+
+    rows = setup_abi_resources(
+        analysis_type="wgs_bacteria",
+        config=config,
+        resource_ids=["amrfinder_db"],
+        mock=True,
+    )
+
+    target = tmp_path / "results" / "resources" / "amrfinder_db"
+    assert rows[0]["path"] == str(target)
+    assert (target / ".abi_mock_resource").is_file()
+
+
+def test_rnaseq_resource_filter_is_exact():
+    config = {
+        "resources": {
+            "annotation_gtf": "ANNOTATION_GTF_NOT_CONFIGURED",
+            "genome_index": "GENOME_INDEX_NOT_CONFIGURED",
+        }
+    }
+
+    rows = check_abi_resources(
+        analysis_type="rnaseq_expression",
+        config=config,
+        resource_ids=["annotation_gtf"],
+    )
+
+    assert [row["resource_id"] for row in rows] == ["annotation_gtf"]
 
 
 def test_setup_resources_reports_progress(tmp_path):
@@ -272,8 +308,10 @@ def test_wgs_resource_setup_has_real_dry_run_and_mock_paths(tmp_path):
     mocked = setup_abi_resources(analysis_type="wgs_bacteria", config=config, mock=True)
 
     assert planned[0]["status"] == "planned"
+    assert planned[0]["mock"] is False
     assert planned[0]["command"][0] == "amrfinder_update"
     assert mocked[0]["status"] == "ok"
+    assert mocked[0]["mock"] is True
     assert Path(mocked[0]["path"]).is_dir()
 
 
@@ -348,7 +386,7 @@ def test_core_resource_orchestrator_delegates_to_plugin_capability(monkeypatch):
         resource_ids=["db"],
         dry_run=True,
         mock=True,
-    ) == [{"status": "planned"}]
+    ) == [{"status": "planned", "mock": True}]
     assert calls == [
         ("check", {"value": 1}, ["db"]),
         ("setup", {"value": 2}, ["db"], True, True),
