@@ -80,12 +80,20 @@ def test_internal_handler_spec_is_defensive(params, expected) -> None:
     assert internal_handler_spec(SimpleNamespace(params=params)) == expected
 
 
-def test_preflight_defaults_to_pass_for_plugins_without_capability() -> None:
-    plugin = SimpleNamespace(plugin_id="plain")
-    assert run_plugin_preflight(plugin, {}, engine="local") == {
-        "status": "pass",
-        "plugin": "plain",
-    }
+def test_preflight_without_custom_capability_validates_inputs() -> None:
+    plugin = SimpleNamespace(
+        plugin_id="plain",
+        build_sample_context=lambda config, check_files: (_ for _ in ()).throw(
+            ValueError("Input files do not exist: missing.fastq")
+        ),
+        check_resources=lambda config: [],
+    )
+
+    report = run_plugin_preflight(plugin, {}, engine="local", check_runtime=False)
+
+    assert report["status"] == "fail"
+    assert report["checks"][0]["name"] == "inputs"
+    assert "missing.fastq" in report["checks"][0]["message"]
 
 
 def test_preflight_forwards_runtime_flag_and_validates_mapping() -> None:

@@ -80,6 +80,26 @@ def test_sample_sheet_checks_only_file_fields(tmp_path):
     assert rows[0]["sample_id"] == "S1"
 
 
+@pytest.mark.parametrize(
+    "rows,error",
+    [
+        (
+            "S1\tillumina\tR1.fastq\tR2.fastq\nS1\tillumina\tA.fastq\tB.fastq\n",
+            "duplicate sample_id",
+        ),
+        ("S1\tinvalid_xyz\tR1.fastq\tR2.fastq\n", "invalid platform"),
+        ("S1\tillumina\tR1.fastq\t\n", "incomplete FASTQ pair"),
+        ("\tillumina\tR1.fastq\tR2.fastq\n", "missing sample_id"),
+    ],
+)
+def test_sample_sheet_rejects_invalid_sample_identity_and_pairs(tmp_path, rows, error):
+    sheet = tmp_path / "samples.tsv"
+    sheet.write_text("sample_id\tplatform\tread1\tread2\n" + rows, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=error):
+        _parse_sample_sheet_tabular(sheet, check_files=False)
+
+
 def test_shared_fastp_and_star_parsers_ignore_malformed_files(tmp_path):
     (tmp_path / "bad.json").write_text("{bad", encoding="utf-8")
     (tmp_path / "good.json").write_text(

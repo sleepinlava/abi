@@ -189,3 +189,5 @@ bench/Bench_1/bench/results/
 bench/results/
 
 sample_sheet_illumina_test.tsv
+docs/en/abi_hpc_validation_guide.md
+docs/zh/production_manual_acceptance_checklist.md

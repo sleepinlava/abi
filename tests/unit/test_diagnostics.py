@@ -124,3 +124,14 @@ class TestClassifyException:
         exc = FileNotFoundError("Input does not exist: reads.fastq")
         _, hints = self._classify(exc)
         assert hints[0]["artifact"] == "reads.fastq"
+
+    def test_sample_sheet_validation_errors_have_precise_codes(self):
+        cases = {
+            "Row 2: missing sample_id": "missing_sample_id",
+            "Row 3: duplicate sample_id 'S1'": "duplicate_sample_id",
+            "Row 2: incomplete FASTQ pair": "incomplete_pairs",
+            "Row 2: invalid platform 'bad'": "invalid_platform",
+        }
+        for message, expected in cases.items():
+            code, _ = self._classify(ValueError(message), command="plan")
+            assert code == expected

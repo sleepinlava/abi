@@ -136,9 +136,18 @@ def _setup_manual_resource_bundle(
 def _configured_or_default_resource_path(config: Mapping[str, Any], resource_id: str) -> Path:
     resources = config.get("resources", {})
     value = resources.get(resource_id) if isinstance(resources, Mapping) else None
-    if value and not any(marker in str(value) for marker in _PLACEHOLDER_MARKERS):
+    if value and not _is_placeholder_resource_value(value):
         return Path(str(value))
     return Path(str(config.get("outdir", "results"))) / "resources" / resource_id
+
+
+def _is_placeholder_resource_value(value: Any) -> bool:
+    text = str(value).strip()
+    upper = text.upper()
+    if any(marker in upper for marker in _PLACEHOLDER_MARKERS):
+        return True
+    normalized = text.replace("\\", "/").lower()
+    return normalized.startswith(("/path/to/", "path/to/", "/your/path/", "your/path/"))
 
 
 def _setup_wgs_bacteria(

@@ -1,7 +1,9 @@
 from pathlib import Path
 
+import pytest
+
 from abi.autoplasm.config import PROJECT_ROOT
-from abi.autoplasm.sample_sheet import parse_sample_sheet
+from abi.autoplasm.sample_sheet import SampleSheetError, parse_sample_sheet
 
 
 def test_parse_sample_sheet_detects_multi_sample_and_groups():
@@ -40,3 +42,16 @@ def test_parse_sample_sheet_accepts_ont_pod5_and_hifi_bam(tmp_path):
 
     assert context.samples[0].pod5 == str(pod5)
     assert context.samples[1].bam == str(bam)
+
+
+def test_parse_sample_sheet_rejects_duplicate_sample_ids(tmp_path):
+    assembly = tmp_path / "contigs.fasta"
+    assembly.write_text(">c1\nACGT\n", encoding="utf-8")
+    sheet = tmp_path / "samples.tsv"
+    sheet.write_text(
+        f"sample_id\tplatform\tassembly\nS1\tassembly\t{assembly}\nS1\tassembly\t{assembly}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SampleSheetError, match="Duplicate sample_id"):
+        parse_sample_sheet(sheet)

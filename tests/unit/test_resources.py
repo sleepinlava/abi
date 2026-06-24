@@ -26,6 +26,41 @@ def test_setup_resources_mock_writes_manifest(tmp_path):
     assert "directory_size_bytes" in genomad
 
 
+def test_wgs_mock_resource_uses_safe_outdir_for_placeholder_path(tmp_path):
+    config = {
+        "outdir": str(tmp_path / "results"),
+        "resources": {"amrfinder_db": "/path/to/amrfinderplus/database"},
+    }
+
+    rows = setup_abi_resources(
+        analysis_type="wgs_bacteria",
+        config=config,
+        resource_ids=["amrfinder_db"],
+        mock=True,
+    )
+
+    target = tmp_path / "results" / "resources" / "amrfinder_db"
+    assert rows[0]["path"] == str(target)
+    assert (target / ".abi_mock_resource").is_file()
+
+
+def test_rnaseq_resource_filter_is_exact():
+    config = {
+        "resources": {
+            "annotation_gtf": "ANNOTATION_GTF_NOT_CONFIGURED",
+            "genome_index": "GENOME_INDEX_NOT_CONFIGURED",
+        }
+    }
+
+    rows = check_abi_resources(
+        analysis_type="rnaseq_expression",
+        config=config,
+        resource_ids=["annotation_gtf"],
+    )
+
+    assert [row["resource_id"] for row in rows] == ["annotation_gtf"]
+
+
 def test_setup_resources_reports_progress(tmp_path):
     config = {"resources": {"root": str(tmp_path / "resources")}}
     events = []

@@ -327,6 +327,7 @@ def _parse_sample_sheet_tabular(
     extra_fields: Iterable[str] = ("group", "condition", "platform"),
     file_fields: Iterable[str] = ("read1", "read2", "long_reads", "assembly"),
     base_dirs: Iterable[Path] = (),
+    allowed_platforms: Iterable[str] = ("illumina",),
 ) -> List[Dict[str, Any]]:
     """Parse a tab-separated sample sheet into a list of row dicts.
 
@@ -351,6 +352,8 @@ def _parse_sample_sheet_tabular(
         if missing:
             raise ValueError(f"Sample sheet missing required columns: {sorted(missing)}")
         rows: List[Dict[str, Any]] = []
+        seen_sample_ids: set[str] = set()
+        valid_platforms = {str(value).strip().lower() for value in allowed_platforms}
         for index, row in enumerate(reader, start=2):
             cleaned: Dict[str, Any] = {}
             for key, val in row.items():
@@ -358,10 +361,30 @@ def _parse_sample_sheet_tabular(
             # Skip completely empty rows
             if not any(cleaned.values()):
                 continue
-            # Validate required columns
+            # Validate required columns and cross-field invariants before
+            # resolving paths.  These failures must be reported at plan time;
+            # allowing them through can overwrite per-sample outputs.
             for col in required_columns:
                 if not cleaned.get(col):
+                    if col == "sample_id":
+                        raise ValueError(f"Row {index}: missing sample_id")
+                    if col in {"read1", "read2"}:
+                        raise ValueError(
+                            f"Row {index}: incomplete FASTQ pair; "
+                            "read1 and read2 must both be provided"
+                        )
                     raise ValueError(f"Row {index}: {col} is required")
+            sample_id = str(cleaned["sample_id"])
+            if sample_id in seen_sample_ids:
+                raise ValueError(f"Row {index}: duplicate sample_id {sample_id!r}")
+            seen_sample_ids.add(sample_id)
+            platform = str(cleaned.get("platform") or "illumina").lower()
+            if valid_platforms and platform not in valid_platforms:
+                raise ValueError(
+                    f"Row {index} sample {sample_id}: invalid platform {platform!r}; "
+                    f"expected one of {sorted(valid_platforms)}"
+                )
+            cleaned["platform"] = platform
             for field in file_fields:
                 value = cleaned.get(field)
                 if value:

@@ -86,6 +86,10 @@ ERROR_CODES = {
     "unknown_analysis_type",
     "invalid_config",
     "invalid_sample_sheet",
+    "missing_sample_id",
+    "duplicate_sample_id",
+    "incomplete_pairs",
+    "invalid_platform",
     "missing_input",
     "missing_resource",
     "missing_database",
@@ -240,6 +244,30 @@ def classify_exception(exc: Exception, *, command: str) -> tuple[str, List[Dict[
             "A required resource is missing or still set to a placeholder.",
             "Configure the resource path or run a dry-run with --no-check-files if only planning.",
             artifact=_extract_path(message),
+        )
+    if "missing sample_id" in lowered or "sample_id is required" in lowered:
+        return _diagnosis(
+            "missing_sample_id",
+            "A sample row does not define sample_id.",
+            "Set a non-empty, unique sample_id for every sample row, then retry.",
+        )
+    if "duplicate sample_id" in lowered:
+        return _diagnosis(
+            "duplicate_sample_id",
+            "The sample sheet contains duplicate sample IDs.",
+            "Rename duplicate sample_id values so every sample is unique, then retry.",
+        )
+    if "incomplete fastq pair" in lowered:
+        return _diagnosis(
+            "incomplete_pairs",
+            "A paired-end sample is missing read1 or read2.",
+            "Provide both FASTQ mates for every paired-end sample, then retry.",
+        )
+    if "invalid platform" in lowered or "platform must be one of" in lowered:
+        return _diagnosis(
+            "invalid_platform",
+            "A sample declares an unsupported sequencing platform.",
+            "Use one of the platforms declared by the selected analysis plugin.",
         )
     if "database" in lowered or "db_path" in lowered or "db_dir" in lowered:
         # Classify database failures before generic missing-file phrases.

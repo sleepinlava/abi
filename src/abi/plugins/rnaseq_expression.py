@@ -232,6 +232,7 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
         sample_sheet,
         check_files=check_files,
         base_dirs=[PROJECT_ROOT],
+        allowed_platforms=("illumina", "rna_seq"),
     )
     samples = [
         ABISample(

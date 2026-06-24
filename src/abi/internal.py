@@ -104,8 +104,74 @@ def run_plugin_preflight(
     """Invoke an optional plugin preflight and enforce its structured result."""
     preflight = getattr(plugin, "preflight", None)
     if preflight is None:
-        return {"status": "pass", "plugin": getattr(plugin, "plugin_id", "")}
+        return _run_generic_preflight(plugin, config, check_runtime=check_runtime)
     report = preflight(config, engine=engine, check_runtime=check_runtime)
     if not isinstance(report, Mapping):
         raise TypeError("plugin.preflight() must return a mapping")
     return report
+
+
+def _run_generic_preflight(
+    plugin: Any,
+    config: Mapping[str, Any],
+    *,
+    check_runtime: bool,
+) -> Mapping[str, Any]:
+    """Provide a strict baseline preflight for plugins without a custom hook."""
+    checks: list[dict[str, Any]] = []
+
+    try:
+        context = plugin.build_sample_context(config, check_files=True)
+        checks.append(
+            {
+                "name": "inputs",
+                "status": "pass",
+                "sample_count": len(getattr(context, "samples", [])),
+            }
+        )
+    except Exception as exc:
+        checks.append({"name": "inputs", "status": "fail", "message": str(exc)})
+
+    resource_checker = getattr(plugin, "check_resources", None)
+    if callable(resource_checker):
+        try:
+            for row in resource_checker(config):
+                status = str(row.get("status", "missing"))
+                checks.append(
+                    {
+                        "name": f"resource:{row.get('resource_id', 'unknown')}",
+                        "status": "pass" if status in {"ok", "not_required"} else "fail",
+                        "details": dict(row),
+                    }
+                )
+        except Exception as exc:
+            checks.append({"name": "resources", "status": "fail", "message": str(exc)})
+
+    if check_runtime:
+        try:
+            for row in plugin.registry().check_tools(config=config):
+                if not bool(row.get("required", True)):
+                    continue
+                installed = bool(row.get("installed"))
+                resource_status = str(row.get("resource_status", "ok"))
+                checks.append(
+                    {
+                        "name": f"tool:{row.get('tool_id', 'unknown')}",
+                        "status": (
+                            "pass"
+                            if installed and resource_status in {"ok", "not_required"}
+                            else "fail"
+                        ),
+                        "details": dict(row),
+                    }
+                )
+        except Exception as exc:
+            checks.append({"name": "runtime", "status": "fail", "message": str(exc)})
+
+    failures = [item for item in checks if item["status"] == "fail"]
+    return {
+        "plugin": getattr(plugin, "plugin_id", ""),
+        "status": "fail" if failures else "pass",
+        "checks": checks,
+        "recommendations": [f"Fix failed preflight check: {item['name']}" for item in failures],
+    }
