@@ -51,12 +51,13 @@ def setup_resources(
     """Prepare or plan resources for an ABI analysis type."""
     plugin = get_plugin(analysis_type)
     if isinstance(plugin, ABIResourcePlugin):
-        return plugin.setup_resources(
+        rows = plugin.setup_resources(
             config,
             resource_ids=resource_ids,
             dry_run=dry_run,
             mock=mock,
         )
+        return _mark_mock_mode(rows, mock=mock)
     if not dry_run and not mock:
         raise ABIError(
             f"Resource setup is not implemented for analysis type {analysis_type!r}. "
@@ -66,6 +67,7 @@ def setup_resources(
     planned = []
     for row in rows:
         planned_row = dict(row)
+        planned_row["mock"] = mock
         if dry_run:
             planned_row["status"] = "planned"
             planned_row["message"] = "No downloader is registered; configure this path manually."
@@ -80,6 +82,11 @@ def setup_resources(
             planned_row["message"] = "Mock resource directory prepared."
         planned.append(planned_row)
     return planned
+
+
+def _mark_mock_mode(rows: Sequence[Mapping[str, Any]], *, mock: bool) -> List[Dict[str, Any]]:
+    """Return resource setup rows with an explicit mock-mode marker."""
+    return [dict(row, mock=mock) for row in rows]
 
 
 def _setup_manual_resource_bundle(
@@ -100,9 +107,18 @@ def _setup_manual_resource_bundle(
     planned: List[Dict[str, Any]] = []
     for row in rows:
         current = dict(row)
+        current["mock"] = mock
         target = _configured_or_default_resource_path(config, str(current["resource_id"]))
         current["path"] = str(target)
-        if current["status"] == "ok":
+        if dry_run:
+            current["status"] = "planned"
+            current["message"] = (
+                "Would prepare a mock resource directory for smoke testing."
+                if mock
+                else "Would verify this manually provisioned resource; no implicit "
+                "database or environment selection is performed."
+            )
+        elif current["status"] == "ok":
             current["message"] = "Configured resource exists."
         elif mock:
             target.mkdir(parents=True, exist_ok=True)
@@ -112,12 +128,6 @@ def _setup_manual_resource_bundle(
             )
             current["status"] = "ok"
             current["message"] = "Mock resource directory prepared."
-        elif dry_run:
-            current["status"] = "planned"
-            current["message"] = (
-                "Would verify this manually provisioned resource; no implicit "
-                "database or environment selection is performed."
-            )
         else:
             current["status"] = "manual_required"
             current["message"] = (
@@ -205,6 +215,7 @@ def _setup_wgs_bacteria(
             "directory_file_count": _directory_file_count(target),
             "directory_size_bytes": 0,
             "message": message,
+            "mock": mock,
         }
     ]
 
@@ -230,12 +241,16 @@ def _setup_reference_resources(
         if selected and resource_id not in selected:
             continue
         target = _configured_or_default_resource_path(config, resource_id)
-        if target.exists():
+        if dry_run:
+            status = "planned"
+            message = (
+                "Would prepare a mock reference resource for smoke testing."
+                if mock
+                else "Select an organism/genome build and configure this reference path."
+            )
+        elif target.exists():
             status = "ok"
             message = "Configured reference resource exists."
-        elif dry_run:
-            status = "planned"
-            message = "Select an organism/genome build and configure this reference path."
         elif mock:
             if resource_id == "genome_index":
                 target.mkdir(parents=True, exist_ok=True)
@@ -271,6 +286,7 @@ def _setup_reference_resources(
                 "directory_file_count": _directory_file_count(target),
                 "directory_size_bytes": 0,
                 "message": message,
+                "mock": mock,
             }
         )
     return rows
@@ -413,6 +429,7 @@ def _setup_rnaseq_expression(
     *,
     resource_ids: Optional[Sequence[str]] = None,
     dry_run: bool = False,
+    mock: bool = False,
 ) -> List[Dict[str, Any]]:
     """Set up the rnaseq_expression conda environment and R packages.
 
@@ -427,7 +444,10 @@ def _setup_rnaseq_expression(
 
     selected = set(resource_ids or [])
     if selected and "rnaseq_environment" not in selected:
-        return _check_generic_resources("rnaseq_expression", config, resource_ids=resource_ids)
+        return _mark_mock_mode(
+            _check_generic_resources("rnaseq_expression", config, resource_ids=resource_ids),
+            mock=mock,
+        )
 
     setup_script = PROJECT_ROOT / "scripts" / "setup_rnaseq_env.sh"
     if not setup_script.exists():
@@ -485,6 +505,7 @@ def _setup_rnaseq_expression(
             "directory_file_count": 0,
             "directory_size_bytes": 0,
             "message": (f"DESeq2 installed: {deseq2_installed}. Env path: {rnaseq_env}. {message}"),
+            "mock": mock,
         }
     )
 
@@ -492,7 +513,7 @@ def _setup_rnaseq_expression(
     generic_rows = _check_generic_resources("rnaseq_expression", config, resource_ids=resource_ids)
     for gr in generic_rows:
         if gr["resource_id"] != "rnaseq_environment":
-            rows.append(gr)
+            rows.append(dict(gr, mock=mock))
 
     return rows
 
@@ -613,6 +634,7 @@ def _setup_amplicon_16s(
                     else "Synthetic taxonomy DB generated for TESTING only. "
                     "For real analysis, run without --mock to download the RDP training set."
                 ),
+                "mock": mock,
             }
         ]
 
@@ -666,6 +688,7 @@ def _setup_amplicon_16s(
             "directory_file_count": 0,
             "directory_size_bytes": 0,
             "message": message,
+            "mock": mock,
         }
     ]
 

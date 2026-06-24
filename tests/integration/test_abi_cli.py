@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from typer.testing import CliRunner
 
 from abi.cli import app
@@ -618,17 +619,31 @@ def test_abi_query_always_uses_agent_envelope():
     assert payload["result"]["platforms"] == ["illumina"]
 
 
-def test_abi_init_missing_template_leaves_no_partial_files(tmp_path):
-    workspace = tmp_path / "workspace"
+@pytest.mark.parametrize(
+    "analysis_type",
+    [
+        "amplicon_16s",
+        "easymetagenome",
+        "metagenomic_plasmid",
+        "metatranscriptomics",
+        "rnaseq_expression",
+        "viral_viwrap",
+        "wgs_bacteria",
+    ],
+)
+def test_abi_init_creates_workspace_for_every_plugin(tmp_path, analysis_type):
+    workspace = tmp_path / analysis_type
 
     result = CliRunner().invoke(
         app,
-        ["init", "--type", "amplicon_16s", "--outdir", str(workspace)],
+        ["init", "--type", analysis_type, "--outdir", str(workspace)],
     )
 
-    assert result.exit_code == 1
-    assert not (workspace / "config" / "amplicon_16s.yaml").exists()
-    assert not (workspace / "samples.tsv").exists()
+    assert result.exit_code == 0, result.output
+    assert (workspace / "config" / f"{analysis_type}.yaml").is_file()
+    sample_sheet = workspace / "samples.tsv"
+    assert sample_sheet.is_file()
+    assert sample_sheet.read_text(encoding="utf-8").startswith("sample_id\t")
 
 
 def test_abi_local_smoke_skips_external_tools_and_writes_provenance(tmp_path):

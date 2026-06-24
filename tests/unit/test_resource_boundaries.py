@@ -25,7 +25,9 @@ def test_public_generic_setup_requires_explicit_mode_and_supports_dry_run_and_mo
     planned = resources.setup_resources(analysis_type="custom", config=config, dry_run=True)[0]
     mocked = resources.setup_resources(analysis_type="custom", config=config, mock=True)[0]
     assert planned["status"] == "planned"
+    assert planned["mock"] is False
     assert mocked["status"] == "ok"
+    assert mocked["mock"] is True
     assert (tmp_path / "database" / ".abi_mock_resource").is_file()
 
 
@@ -94,8 +96,10 @@ def test_manual_bundle_distinguishes_existing_mock_dry_run_and_manual(tmp_path: 
 
     assert ready["status"] == "ok"
     assert mocked["status"] == "ok"
+    assert mocked["mock"] is True
     assert Path(mocked["path"], ".abi_mock_resource").is_file()
     assert planned["status"] == "planned"
+    assert planned["mock"] is False
     assert manual["status"] == "manual_required"
 
 
@@ -140,7 +144,9 @@ def test_reference_setup_covers_existing_mock_planned_manual_and_selection(tmp_p
     )[0]
 
     assert Path(mocked["path"], ".abi_mock_resource").is_file()
+    assert mocked["mock"] is True
     assert planned["status"] == "planned"
+    assert planned["mock"] is False
     assert manual["status"] == "manual_required"
 
 
@@ -242,6 +248,15 @@ def test_rnaseq_setup_missing_script_and_selected_generic_resource(
         resource_ids=["genome_index"],
     )
     assert [(row["resource_id"], row["status"]) for row in rows] == [("genome_index", "ok")]
+    assert rows[0]["mock"] is False
+
+    mock_preview = resources._setup_rnaseq_expression(
+        {"resources": {"genome_index": str(genome)}},
+        resource_ids=["genome_index"],
+        dry_run=True,
+        mock=True,
+    )
+    assert mock_preview[0]["mock"] is True
 
 
 def test_rnaseq_setup_records_environment_marker_and_generic_resources(
@@ -316,9 +331,44 @@ def test_amplicon_mock_dry_run_is_planned_and_does_not_execute(tmp_path: Path, m
     )
 
     assert rows[0]["status"] == "planned"
+    assert rows[0]["mock"] is True
     assert "Would generate" in rows[0]["message"]
     assert not (tmp_path / "output" / "taxonomy").exists()
     assert resources._setup_amplicon_16s({}, resource_ids=["other"], dry_run=True, mock=True) == []
+
+
+@pytest.mark.parametrize(
+    ("analysis_type", "resource_id"),
+    [
+        ("amplicon_16s", "taxonomy_db"),
+        ("easymetagenome", "kraken2_db"),
+        ("metagenomic_plasmid", "genomad"),
+        ("metatranscriptomics", "genome_index"),
+        ("rnaseq_expression", "genome_index"),
+        ("viral_viwrap", "db_dir"),
+        ("wgs_bacteria", "amrfinder_db"),
+    ],
+)
+def test_every_plugin_marks_mock_dry_run_without_writing(
+    tmp_path: Path, analysis_type: str, resource_id: str
+) -> None:
+    target = tmp_path / analysis_type / resource_id
+    config = {
+        "outdir": str(tmp_path / analysis_type),
+        "resources": {"root": str(tmp_path / analysis_type), resource_id: str(target)},
+    }
+
+    rows = resources.setup_resources(
+        analysis_type=analysis_type,
+        config=config,
+        resource_ids=[resource_id],
+        dry_run=True,
+        mock=True,
+    )
+
+    assert rows
+    assert all(row["mock"] is True for row in rows)
+    assert not target.exists()
 
 
 def test_amplicon_download_failure_uses_synthetic_fallback(tmp_path: Path, monkeypatch) -> None:

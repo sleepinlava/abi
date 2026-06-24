@@ -119,8 +119,12 @@ class RNASeqExpressionPlugin:
     ) -> list[dict[str, Any]]:
         from abi.resources import _setup_rnaseq_expression
 
-        del mock
-        return _setup_rnaseq_expression(config, resource_ids=resource_ids, dry_run=dry_run)
+        return _setup_rnaseq_expression(
+            config,
+            resource_ids=resource_ids,
+            dry_run=dry_run,
+            mock=mock,
+        )
 
     # ── Sample context ───────────────────────────────────────────────────
 

@@ -18,6 +18,7 @@ def test_setup_resources_mock_writes_manifest(tmp_path):
 
     assert {row["resource_id"] for row in rows} == {"genomad", "bakta"}
     assert all(row["status"] == "ok" for row in rows)
+    assert all(row["mock"] is True for row in rows)
     assert (tmp_path / "resources" / "resources.json").exists()
     genomad = check_resources(config, resource_ids=["genomad"])[0]
     assert genomad["status"] == "ok"
@@ -307,8 +308,10 @@ def test_wgs_resource_setup_has_real_dry_run_and_mock_paths(tmp_path):
     mocked = setup_abi_resources(analysis_type="wgs_bacteria", config=config, mock=True)
 
     assert planned[0]["status"] == "planned"
+    assert planned[0]["mock"] is False
     assert planned[0]["command"][0] == "amrfinder_update"
     assert mocked[0]["status"] == "ok"
+    assert mocked[0]["mock"] is True
     assert Path(mocked[0]["path"]).is_dir()
 
 
@@ -383,7 +386,7 @@ def test_core_resource_orchestrator_delegates_to_plugin_capability(monkeypatch):
         resource_ids=["db"],
         dry_run=True,
         mock=True,
-    ) == [{"status": "planned"}]
+    ) == [{"status": "planned", "mock": True}]
     assert calls == [
         ("check", {"value": 1}, ["db"]),
         ("setup", {"value": 2}, ["db"], True, True),

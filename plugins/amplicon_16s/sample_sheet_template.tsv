@@ -1,0 +1,5 @@
+sample_id	group	condition	platform	read1	read2
+sample1	treatment	treated	illumina	raw/sample1_R1.fastq.gz	raw/sample1_R2.fastq.gz
+sample2	treatment	treated	illumina	raw/sample2_R1.fastq.gz	raw/sample2_R2.fastq.gz
+sample3	control	untreated	illumina	raw/sample3_R1.fastq.gz	raw/sample3_R2.fastq.gz
+sample4	control	untreated	illumina	raw/sample4_R1.fastq.gz	raw/sample4_R2.fastq.gz
