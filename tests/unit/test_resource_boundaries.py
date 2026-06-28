@@ -161,6 +161,9 @@ def test_wgs_resource_setup_safe_non_network_paths(
     if mode == "existing":
         target.mkdir()
         (target / "database_format_version.txt").write_text("1", encoding="utf-8")
+        # A prior successful install writes the ready sentinel; without it a
+        # non-empty dir is now correctly reported as "incomplete" (M6 fix).
+        (target / ".abi_ready").write_text("amrfinderplus\n", encoding="utf-8")
     row = resources._setup_wgs_bacteria(
         {"resources": {"amrfinder_db": str(target)}},
         resource_ids=["amrfinder_db"],
@@ -382,7 +385,13 @@ def test_amplicon_download_failure_uses_synthetic_fallback(tmp_path: Path, monke
         lambda *args, **kwargs: SimpleNamespace(returncode=1, stdout="", stderr="offline"),
     )
     called = []
-    monkeypatch.setattr(resources, "_generate_synthetic_fallback", lambda path: called.append(path))
+
+    def _fake_fallback(path: Path) -> bool:
+        called.append(path)
+        (path / "synthetic_sintax.fa").write_text(">seq1;tax=Bacteria\nACGT\n", encoding="utf-8")
+        return True
+
+    monkeypatch.setattr(resources, "_generate_synthetic_fallback", _fake_fallback)
 
     row = resources._setup_amplicon_16s(
         {"outdir": str(tmp_path / "output")},
@@ -393,3 +402,7 @@ def test_amplicon_download_failure_uses_synthetic_fallback(tmp_path: Path, monke
 
     assert row["status"] == "fallback"
     assert called == [tmp_path / "output" / "taxonomy"]
+    # M7 fix: the returned path must point to the synthetic file that actually
+    # exists, not the missing RDP FASTA path.
+    assert Path(row["path"]).exists()
+    assert row["path"].endswith("synthetic_sintax.fa")

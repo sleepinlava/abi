@@ -37,7 +37,7 @@ failure_handling:
   missing_input:
     hint: Check the plasmid abundance table path.
   tool_not_found:
-    hint: Install fastspar in the autoplasm-stats environment.
+    hint: Install fastspar in the stats environment.
 resources:
   cpu: 4
   memory: 8GB

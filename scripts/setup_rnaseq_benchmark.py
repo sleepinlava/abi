@@ -14,36 +14,68 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
+import time
 from pathlib import Path
-from urllib.request import urlretrieve
+from urllib.request import urlopen
 
 # ── Constants ────────────────────────────────────────────────────────────────
 GENOME_ACC = "NC_000913.3"
 GENOME_URL = "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/005/845/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_genomic.fna.gz"
 GTF_URL = "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/005/845/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_genomic.gtf.gz"
-# Fallback: use the refseq representative genome
-GENOME_URL_FALLBACK = "https://ftp.ncbi.nlm.nih.gov/genomes/refseq/bacteria/Escherichia_coli/reference/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_genomic.fna.gz"
-GTF_URL_FALLBACK = "https://ftp.ncbi.nlm.nih.gov/genomes/refseq/bacteria/Escherichia_coli/reference/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_genomic.gtf.gz"
+# Fallback: Ensembl mirror (the deprecated refseq/bacteria/.../reference path
+# style has been phased out by NCBI; Ensembl provides a stable alternative).
+GENOME_URL_FALLBACK = "https://ftp.ensembl.org/bacteria/escherichia_coli_str_k_12_substr_mg1655/dna/escherichia_coli_str_k_12_substr_mg1655.ASM584v2.dna.toplevel.fa.gz"
+GTF_URL_FALLBACK = "https://ftp.ensembl.org/bacteria/escherichia_coli_str_k_12_substr_mg1655/gtf/escherichia_coli_str_k_12_substr_mg1655.ASM584v2.111.gtf.gz"
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "resources" / "star_index"
 MARKER_FILE = ".abi_star_index_built"
+DOWNLOAD_TIMEOUT = 300
+MAX_RETRIES = 3
 
 
 def _download(url: str, dest: Path, label: str) -> bool:
-    """Download a file with progress reporting. Returns True on success."""
-    if dest.exists():
+    """Download a file atomically with timeout and retry.
+
+    Writes to ``dest.with_suffix(dest.suffix + ".part")`` and atomically
+    renames on success, so a partial download is never reused as a valid file
+    (the previous version treated a leftover partial as "already exists").
+    Retries up to ``MAX_RETRIES`` times with exponential backoff and enforces
+    a per-request timeout so a stalled connection cannot hang forever.
+    Returns True on success.
+    """
+    if dest.exists() and dest.stat().st_size > 0:
         print(f"  {label}: already exists ({dest.stat().st_size:,} bytes)")
         return True
 
-    print(f"  Downloading {label}...")
-    try:
-        urlretrieve(url, dest)
-        print(f"    → {dest.stat().st_size:,} bytes")
-        return True
-    except Exception as exc:
-        print(f"    Download failed: {exc}")
-        return False
+    part = dest.with_suffix(dest.suffix + ".part")
+    part.unlink(missing_ok=True)
+    print(f"  Downloading {label} from {url}...")
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            with urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response:
+                with part.open("wb") as fh:
+                    while True:
+                        chunk = response.read(65536)
+                        if not chunk:
+                            break
+                        fh.write(chunk)
+            if part.stat().st_size == 0:
+                raise OSError("downloaded file is empty")
+            os.replace(part, dest)
+            print(f"    → {dest.stat().st_size:,} bytes")
+            return True
+        except Exception as exc:
+            part.unlink(missing_ok=True)
+            if attempt >= MAX_RETRIES:
+                print(f"    Download failed after {attempt} attempts: {exc}")
+                return False
+            backoff = 2 ** (attempt - 1)
+            print(f"    attempt {attempt} failed ({exc}); retrying in {backoff}s")
+            time.sleep(backoff)
+    return False
 
 
 def _sha256(path: Path) -> str:
@@ -93,18 +125,29 @@ def setup_reference(
     if not ok:
         raise RuntimeError("Failed to download annotation GTF")
 
-    # 3. Decompress
+    # 3. Decompress (atomic: write to .tmp then rename, so a partial
+    #    decompression is never reused as a valid reference).
     import gzip
 
     if not genome_fa.exists():
         print(f"  Decompressing {genome_gz.name}...")
-        with gzip.open(genome_gz, "rb") as src, genome_fa.open("wb") as dst:
-            dst.write(src.read())
+        tmp = genome_fa.with_suffix(genome_fa.suffix + ".tmp")
+        try:
+            with gzip.open(genome_gz, "rb") as src, tmp.open("wb") as dst:
+                dst.write(src.read())
+            os.replace(tmp, genome_fa)
+        finally:
+            tmp.unlink(missing_ok=True)
 
     if not gtf.exists():
         print(f"  Decompressing {gtf_gz.name}...")
-        with gzip.open(gtf_gz, "rb") as src, gtf.open("wb") as dst:
-            dst.write(src.read())
+        tmp = gtf.with_suffix(gtf.suffix + ".tmp")
+        try:
+            with gzip.open(gtf_gz, "rb") as src, tmp.open("wb") as dst:
+                dst.write(src.read())
+            os.replace(tmp, gtf)
+        finally:
+            tmp.unlink(missing_ok=True)
 
     manifest["resources"].append(
         {

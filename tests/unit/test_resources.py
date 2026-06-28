@@ -509,14 +509,14 @@ def test_gtdbtk_env_var_injection(tmp_path):
         resource_id="gtdbtk",
         tool_id="gtdbtk",
         field="database",
-        env_name="autoplasm-stats",
+        env_name="stats",
         executable="gtdbtk",
         default_subdir="gtdbtk",
         source_url="https://example.com",
         command_template=["gtdbtk", "db", "download"],
     )
 
-    env = _resource_runtime_env(config, "autoplasm-stats", spec)
+    env = _resource_runtime_env(config, "stats", spec)
     assert "GTDBTK_DATA_PATH" in env
     assert env["GTDBTK_DATA_PATH"] == str(root / "gtdbtk")
 
@@ -539,14 +539,14 @@ def test_checkm2_env_var_injection(tmp_path):
         resource_id="checkm2",
         tool_id="checkm2",
         field="database",
-        env_name="autoplasm-stats",
+        env_name="stats",
         executable="checkm2",
         default_subdir="checkm2",
         source_url="https://example.com",
         command_template=["checkm2", "download"],
     )
 
-    env = _resource_runtime_env(config, "autoplasm-stats", spec)
+    env = _resource_runtime_env(config, "stats", spec)
     assert "CHECKM2DB" in env
     assert env["CHECKM2DB"] == str(db_path)
 
@@ -593,3 +593,166 @@ def test_all_resources_in_check_resources(tmp_path):
         "conjscan_tool",
     }
     assert ids == expected_db | expected_tools
+
+
+# ── Regression tests for download-hardening fixes (Phase 4) ───────────────
+
+
+def test_kraken2_command_is_safe_list_form(tmp_path):
+    """M1: kraken2 download must not use `bash -c` with raw path interpolation."""
+    from abi.autoplasm.resources import _resolved_resource_command, default_resource_specs
+
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    spec = next(s for s in default_resource_specs(config) if s.resource_id == "kraken2")
+    path = tmp_path / "resources" / "kraken2"
+    command = _resolved_resource_command(config, spec, path)
+
+    assert command[0] != "bash"
+    assert "bash" not in command
+    assert "-c" not in command
+    assert command[0] == "aria2c"
+
+
+def test_kraken2_url_uses_config_version(tmp_path):
+    """M5: kraken2 URL version must be configurable, not hardcoded."""
+    from abi.autoplasm.resources import _kraken2_version, default_resource_specs
+
+    config = {
+        "resources": {
+            "root": str(tmp_path / "resources"),
+            "kraken2": {"version": "standard_20240115"},
+        }
+    }
+    spec = next(s for s in default_resource_specs(config) if s.resource_id == "kraken2")
+    assert _kraken2_version(config, spec) == "standard_20240115"
+
+    # Falls back to spec default when version is a placeholder.
+    config_placeholder = {
+        "resources": {
+            "root": str(tmp_path / "resources"),
+            "kraken2": {"version": "KRAKEN2_VERSION_NOT_CONFIGURED"},
+        }
+    }
+    assert _kraken2_version(config_placeholder, spec) == "standard_20260226"
+
+
+def test_tool_download_command_does_not_double_path(tmp_path):
+    """M3: tool_download command must not append default_subdir twice."""
+    from abi.autoplasm.resources import _resolved_resource_command, default_resource_specs
+
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    spec = next(s for s in default_resource_specs(config) if s.resource_id == "copla_tool")
+    # _configured_resource_path already appends default_subdir → root/COPLA
+    path = tmp_path / "resources" / "COPLA"
+    command = _resolved_resource_command(config, spec, path)
+
+    assert command[0] == "wget"
+    assert command[1] == "-O"
+    # The -O target should be path/executable, NOT path/default_subdir/executable.
+    out_target = Path(command[2])
+    assert out_target == path / spec.executable
+
+
+def test_git_clone_uses_shallow_depth(tmp_path):
+    """m2: git clone commands must use --depth 1 --single-branch."""
+    from abi.autoplasm.resources import _resolved_resource_command, default_resource_specs
+
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    spec = next(s for s in default_resource_specs(config) if s.resource_id == "plasmidfinder")
+    path = tmp_path / "resources" / "plasmidfinder_db"
+    command = _resolved_resource_command(config, spec, path)
+
+    assert command[:3] == ["git", "clone", "--depth"]
+    assert "1" in command
+    assert "--single-branch" in command
+
+
+def test_tool_git_ready_check_validates_worktree(tmp_path):
+    """M10: a partial git clone (only .git, no valid HEAD) must not be 'ready'."""
+    from abi.autoplasm.resources import _resource_path_ready, default_resource_specs
+
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    spec = next(s for s in default_resource_specs(config) if s.resource_id == "plasmidfinder")
+    path = tmp_path / "fake_clone"
+    path.mkdir()
+    (path / ".git").mkdir()  # partial clone: .git exists but no valid worktree
+
+    assert not _resource_path_ready(path, spec)
+
+
+def test_efetch_url_encodes_accession():
+    """m1: _efetch_url must URL-encode the accession to avoid query corruption."""
+    from abi.autoplasm.resources import _efetch_url
+
+    url = _efetch_url("NC_002127.1")
+    # The dot is safe, but an accession with special chars must be encoded.
+    assert "id=NC_002127.1" in url
+    url_special = _efetch_url("weird&accession#1")
+    # The raw & and # from the accession must be percent-encoded.
+    id_value = url_special.split("id=")[1].split("&rettype=")[0]
+    assert "&" not in id_value
+    assert "#" not in id_value
+    assert "%26" in id_value
+    assert "%23" in id_value
+
+
+def test_fetch_example_dataset_atomic_and_resilient(tmp_path, monkeypatch):
+    """M4: a single accession failure must not abort the whole dataset or leave
+    partial files; already-downloaded accessions are retained."""
+    import urllib.error
+
+    from abi.autoplasm.resources import fetch_example_dataset
+
+    calls = {"count": 0}
+
+    class _FakeResponse:
+        def __init__(self, data: bytes) -> None:
+            self._data = data
+            self.status = 200
+
+        def read(self) -> bytes:
+            return self._data
+
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+    def _fake_urlopen(url, timeout=60):
+        calls["count"] += 1
+        # The second accession always fails (simulates NCBI 429/timeout).
+        if calls["count"] == 2:
+            raise urllib.error.URLError("transient 429")
+        return _FakeResponse(b">NC_002127.1 fake\nACGTACGT\n")
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    outputs = fetch_example_dataset("plasmid_refseq_smoke", tmp_path, mock=False)
+    files = outputs["files"]
+    # Only the accessions that succeeded are recorded.
+    assert len(files) >= 1
+    # No .part files left behind.
+    assert not list(tmp_path.glob("*.part"))
+    # The sample sheet is still written (best-effort completion).
+    assert Path(outputs["sample_sheet"]).exists()
+
+
+def test_fetch_example_dataset_all_failures_raises(tmp_path, monkeypatch):
+    """M4: if every accession fails, fetch_example_dataset raises ResourceError."""
+    import urllib.error
+
+    from abi.autoplasm.resources import ResourceError, fetch_example_dataset
+
+    def _always_fail(url, timeout=60):
+        raise urllib.error.URLError("offline")
+
+    monkeypatch.setattr("urllib.request.urlopen", _always_fail)
+    monkeypatch.setattr("time.sleep", lambda _: None)
+
+    try:
+        fetch_example_dataset("plasmid_refseq_smoke", tmp_path, mock=False)
+    except ResourceError:
+        pass
+    else:
+        raise AssertionError("expected ResourceError when all accessions fail")

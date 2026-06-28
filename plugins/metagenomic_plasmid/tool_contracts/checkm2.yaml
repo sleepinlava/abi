@@ -25,7 +25,7 @@ failure_handling:
   missing_input:
     hint: Check MAG bins directory path.
   tool_not_found:
-    hint: Install checkm2 in the autoplasm-stats environment.
+    hint: Install checkm2 in the stats environment.
   nonzero_exit:
     hint: Inspect CheckM2 log in provenance/step_logs.
 resources:

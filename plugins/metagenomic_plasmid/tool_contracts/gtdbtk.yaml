@@ -28,7 +28,7 @@ failure_handling:
   missing_database:
     hint: Configure GTDB-Tk database with 'gtdbtk db download'.
   tool_not_found:
-    hint: Install gtdbtk in the autoplasm-stats environment.
+    hint: Install gtdbtk in the stats environment.
   nonzero_exit:
     hint: Inspect GTDB-Tk log in provenance/step_logs.
 resources:

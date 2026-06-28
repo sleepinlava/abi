@@ -77,7 +77,10 @@ def test_amplicon_benchmark_assertions(tmp_path: Path) -> None:
     assert len(samples) == 3
 
     # 3. Build config and execute pipeline
+    from abi.config import PROJECT_ROOT
+
     results_dir = tmp_path / "results"
+    diversity_script = str(PROJECT_ROOT / "scripts" / "amplicon_diversity.py")
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.dump(
@@ -88,7 +91,10 @@ def test_amplicon_benchmark_assertions(tmp_path: Path) -> None:
                 "outdir": str(results_dir),
                 "log_dir": str(results_dir / "logs"),
                 "input": {"sample_sheet": str(sample_sheet)},
-                "resources": {"taxonomy_db": str(tax_db)},
+                "resources": {
+                    "taxonomy_db": str(tax_db),
+                    "diversity_script": diversity_script,
+                },
                 "primers": {
                     "forward": "GTGCCAGCMGCCGCGGTAA",
                     "reverse": "GGACTACHVGGGTWTCTAAT",

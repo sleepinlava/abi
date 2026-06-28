@@ -32,7 +32,7 @@ failure_handling:
   missing_input:
     hint: Check assembly FASTA and BAM paths.
   tool_not_found:
-    hint: Install SemiBin in the autoplasm-stats environment.
+    hint: Install SemiBin in the stats environment.
   nonzero_exit:
     hint: Inspect SemiBin stderr log in provenance/step_logs.
 resources:

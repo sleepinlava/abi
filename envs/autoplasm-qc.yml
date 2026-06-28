@@ -7,14 +7,11 @@ channels:
 dependencies:
 - python=3.10
 - fastp
-- fastplong
 - fastqc
 - multiqc
 - trimmomatic
 - cutadapt
 - nanoplot
 - filtlong
-- chopper
-- porechop
 - hifiadapterfilt
-- kneaddata
+- ont-dorado

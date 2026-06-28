@@ -13,7 +13,6 @@ primers:
 
 resources:
   taxonomy_db: TAXONOMY_DB_NOT_CONFIGURED
-  phylogeny_tree: PHYLOGENY_TREE_NOT_CONFIGURED
   diversity_script: DIVERSITY_SCRIPT_NOT_CONFIGURED
 
 otu_clustering:
