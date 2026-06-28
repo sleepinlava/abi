@@ -189,6 +189,9 @@ def test_amplicon_real_execution(tmp_path: Path) -> None:
 
     plugin = Amplicon16SPlugin()
     results_dir = tmp_path / "results"
+    diversity_script = str(
+        PROJECT_ROOT / "scripts" / "amplicon_diversity.py"
+    )
     config = plugin.load_config(
         overrides={
             "project_name": "smoke-amplicon",
@@ -197,7 +200,10 @@ def test_amplicon_real_execution(tmp_path: Path) -> None:
             "outdir": str(results_dir),
             "log_dir": str(results_dir / "logs"),
             "input": {"sample_sheet": str(sample_sheet)},
-            "resources": {"taxonomy_db": str(tax_db)},
+            "resources": {
+                "taxonomy_db": str(tax_db),
+                "diversity_script": diversity_script,
+            },
         },
     )
     plan = plugin.build_plan(config, check_files=True)
@@ -226,7 +232,10 @@ def test_amplicon_real_execution(tmp_path: Path) -> None:
                 "outdir": str(results_dir),
                 "log_dir": str(results_dir / "logs"),
                 "input": {"sample_sheet": str(sample_sheet)},
-                "resources": {"taxonomy_db": str(tax_db)},
+                "resources": {
+                    "taxonomy_db": str(tax_db),
+                    "diversity_script": diversity_script,
+                },
                 "primers": {
                     "forward": "GTGCCAGCMGCCGCGGTAA",
                     "reverse": "GGACTACHVGGGTWTCTAAT",

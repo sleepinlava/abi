@@ -160,6 +160,7 @@ envs/*.yml
 Singularity.lock
 environment.lock.yml
 conda.lock
+.key
 
 # Claude Code / Codex project files
 .claude/

@@ -6,7 +6,8 @@ FROM condaforge/miniforge3:latest AS base
 
 # ── Mirror configuration for China ──────────────────────────────────────
 COPY docker/.condarc /root/.condarc
-ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+ARG PIP_INDEX_URL=
+ENV PIP_INDEX_URL=${PIP_INDEX_URL}
 
 RUN conda install -y -n base -c conda-forge mamba && \
     mamba clean -afy

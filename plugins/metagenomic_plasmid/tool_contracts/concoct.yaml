@@ -32,7 +32,7 @@ failure_handling:
   missing_input:
     hint: Check assembly FASTA and coverage TSV paths.
   tool_not_found:
-    hint: Install concoct in the autoplasm-stats environment.
+    hint: Install concoct in the stats environment.
   nonzero_exit:
     hint: Inspect CONCOCT stderr log in provenance/step_logs.
 resources:

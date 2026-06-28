@@ -7,7 +7,8 @@ FROM condaforge/miniforge3:latest AS base
 
 # ── Mirror configuration for China ──────────────────────────────────────
 COPY docker/.condarc /root/.condarc
-ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+ARG PIP_INDEX_URL=
+ENV PIP_INDEX_URL=${PIP_INDEX_URL}
 
 RUN conda install -y -n base -c conda-forge mamba && \
     mamba clean -afy
@@ -37,8 +38,8 @@ RUN mamba env create -f /tmp/envs/autoplasm-plasmid-detect.yml && rm /tmp/envs/a
 COPY envs/autoplasm-plasmid-binning.yml /tmp/envs/autoplasm-plasmid-binning.yml
 RUN mamba env create -f /tmp/envs/autoplasm-plasmid-binning.yml && rm /tmp/envs/autoplasm-plasmid-binning.yml
 
-COPY envs/autoplasm-stats.yml /tmp/envs/autoplasm-stats.yml
-RUN mamba env create -f /tmp/envs/autoplasm-stats.yml && rm /tmp/envs/autoplasm-stats.yml
+COPY envs/stats.yml /tmp/envs/stats.yml
+RUN mamba env create -f /tmp/envs/stats.yml && rm /tmp/envs/stats.yml
 
 COPY envs/autoplasm-visualization.yml /tmp/envs/autoplasm-visualization.yml
 RUN mamba env create -f /tmp/envs/autoplasm-visualization.yml && rm /tmp/envs/autoplasm-visualization.yml

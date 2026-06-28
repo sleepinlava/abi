@@ -46,99 +46,34 @@ if(MAMBA_EXE)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Checking mamba or micromamba"
   )
-  add_custom_target(create_envs
-    COMMAND ${CMAKE_COMMAND}
-            -D MAMBA_EXE=${MAMBA_EXE}
-            -D MAMBA_ROOT=${AUTOPLASM_MAMBA_ROOT}
-            -D ENV_PREFIX=${AUTOPLASM_MAMBA_ROOT}/envs/autoplasm-base
-            -D ENV_FILE=${CMAKE_SOURCE_DIR}/envs/base.yml
-            -P ${CMAKE_SOURCE_DIR}/cmake/CreateLocalEnv.cmake
-    COMMAND ${CMAKE_COMMAND}
-            -D MAMBA_EXE=${MAMBA_EXE}
-            -D MAMBA_ROOT=${AUTOPLASM_MAMBA_ROOT}
-            -D ENV_PREFIX=${AUTOPLASM_MAMBA_ROOT}/envs/autoplasm-qc
-            -D ENV_FILE=${CMAKE_SOURCE_DIR}/envs/qc.yml
-            -P ${CMAKE_SOURCE_DIR}/cmake/CreateLocalEnv.cmake
-    COMMAND ${CMAKE_COMMAND}
-            -D MAMBA_EXE=${MAMBA_EXE}
-            -D MAMBA_ROOT=${AUTOPLASM_MAMBA_ROOT}
-            -D ENV_PREFIX=${AUTOPLASM_MAMBA_ROOT}/envs/autoplasm-assembly
-            -D ENV_FILE=${CMAKE_SOURCE_DIR}/envs/assembly.yml
-            -P ${CMAKE_SOURCE_DIR}/cmake/CreateLocalEnv.cmake
-    COMMAND ${CMAKE_COMMAND}
-            -D MAMBA_EXE=${MAMBA_EXE}
-            -D MAMBA_ROOT=${AUTOPLASM_MAMBA_ROOT}
-            -D ENV_PREFIX=${AUTOPLASM_MAMBA_ROOT}/envs/autoplasm-plasmid-detect
-            -D ENV_FILE=${CMAKE_SOURCE_DIR}/envs/plasmid_detect.yml
-            -P ${CMAKE_SOURCE_DIR}/cmake/CreateLocalEnv.cmake
-    COMMAND ${CMAKE_COMMAND}
-            -D MAMBA_EXE=${MAMBA_EXE}
-            -D MAMBA_ROOT=${AUTOPLASM_MAMBA_ROOT}
-            -D ENV_PREFIX=${AUTOPLASM_MAMBA_ROOT}/envs/autoplasm-plasmid-binning
-            -D ENV_FILE=${CMAKE_SOURCE_DIR}/envs/plasmid_binning.yml
-            -P ${CMAKE_SOURCE_DIR}/cmake/CreateLocalEnv.cmake
-    COMMAND ${CMAKE_COMMAND}
-            -D MAMBA_EXE=${MAMBA_EXE}
-            -D MAMBA_ROOT=${AUTOPLASM_MAMBA_ROOT}
-            -D ENV_PREFIX=${AUTOPLASM_MAMBA_ROOT}/envs/autoplasm-annotation
-            -D ENV_FILE=${CMAKE_SOURCE_DIR}/envs/annotation.yml
-            -P ${CMAKE_SOURCE_DIR}/cmake/CreateLocalEnv.cmake
-    COMMAND ${CMAKE_COMMAND}
-            -D MAMBA_EXE=${MAMBA_EXE}
-            -D MAMBA_ROOT=${AUTOPLASM_MAMBA_ROOT}
-            -D ENV_PREFIX=${AUTOPLASM_MAMBA_ROOT}/envs/autoplasm-integronfinder
-            -D ENV_FILE=${CMAKE_SOURCE_DIR}/envs/integronfinder.yml
-            -P ${CMAKE_SOURCE_DIR}/cmake/CreateLocalEnv.cmake
-    COMMAND ${CMAKE_COMMAND}
-            -D MAMBA_EXE=${MAMBA_EXE}
-            -D MAMBA_ROOT=${AUTOPLASM_MAMBA_ROOT}
-            -D ENV_PREFIX=${AUTOPLASM_MAMBA_ROOT}/envs/autoplasm-abundance
-            -D ENV_FILE=${CMAKE_SOURCE_DIR}/envs/abundance.yml
-            -P ${CMAKE_SOURCE_DIR}/cmake/CreateLocalEnv.cmake
-    COMMAND ${CMAKE_COMMAND}
-            -D MAMBA_EXE=${MAMBA_EXE}
-            -D MAMBA_ROOT=${AUTOPLASM_MAMBA_ROOT}
-            -D ENV_PREFIX=${AUTOPLASM_MAMBA_ROOT}/envs/autoplasm-stats
-            -D ENV_FILE=${CMAKE_SOURCE_DIR}/envs/stats.yml
-            -P ${CMAKE_SOURCE_DIR}/cmake/CreateLocalEnv.cmake
-    COMMAND ${CMAKE_COMMAND}
-            -D MAMBA_EXE=${MAMBA_EXE}
-            -D MAMBA_ROOT=${AUTOPLASM_MAMBA_ROOT}
-            -D ENV_PREFIX=${AUTOPLASM_MAMBA_ROOT}/envs/autoplasm-visualization
-            -D ENV_FILE=${CMAKE_SOURCE_DIR}/envs/visualization.yml
-            -P ${CMAKE_SOURCE_DIR}/cmake/CreateLocalEnv.cmake
-    COMMAND ${CMAKE_COMMAND}
-            -D MAMBA_EXE=${MAMBA_EXE}
-            -D MAMBA_ROOT=${AUTOPLASM_MAMBA_ROOT}
-            -D ENV_PREFIX=${AUTOPLASM_MAMBA_ROOT}/envs/autoplasm-nextflow
-            -D ENV_FILE=${CMAKE_SOURCE_DIR}/envs/nextflow.yml
-            -P ${CMAKE_SOURCE_DIR}/cmake/CreateLocalEnv.cmake
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Creating or updating repository-local AutoPlasm mamba environments"
-  )
 else()
   add_custom_target(check_mamba
     COMMAND ${CMAKE_COMMAND} -E echo "mamba or micromamba was not found."
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
-  add_custom_target(create_envs
-    COMMAND ${CMAKE_COMMAND} -E echo "mamba or micromamba was not found; install it before creating environments."
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
 endif()
 
-if(CONDA_LOCK_EXE)
-  add_custom_target(lock_envs
-    COMMAND ${CONDA_LOCK_EXE} -f ${CMAKE_SOURCE_DIR}/envs/base.yml -p linux-64
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Locking AutoPlasm conda environment"
-  )
-else()
-  add_custom_target(lock_envs
-    COMMAND ${CMAKE_COMMAND} -E echo "conda-lock was not found; install it to generate conda-lock.yml."
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-endif()
+# The create_envs and lock_envs targets previously referenced stale env
+# filenames (base.yml, qc.yml, ...) that no longer exist. Environment
+# creation is now driven by scripts/cloud/01_envs.sh, which regenerates
+# envs/*.yml from environments.yaml and creates all environments via
+# mamba. These targets are kept as deprecation stubs to avoid breaking
+# existing automation that calls them.
+add_custom_target(create_envs
+  COMMAND ${CMAKE_COMMAND} -E echo
+          "create_envs is deprecated; use: bash scripts/cloud/01_envs.sh"
+  COMMAND ${CMAKE_COMMAND} -E false
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "[DEPRECATED] Use scripts/cloud/01_envs.sh instead"
+)
+
+add_custom_target(lock_envs
+  COMMAND ${CMAKE_COMMAND} -E echo
+          "lock_envs is deprecated; use conda-lock against envs/*.yml directly"
+  COMMAND ${CMAKE_COMMAND} -E false
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "[DEPRECATED] Use conda-lock against envs/*.yml directly"
+)
 
 add_custom_target(check_tools
   COMMAND ${AUTOPLASM_ENV} ${AUTOPLASM_PYTHON} -m abi.autoplasm.cli check-tools

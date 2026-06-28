@@ -52,17 +52,20 @@ echo "  Target: $FASTA_FILE"
 
 mkdir -p "$OUTPUT_DIR"
 
-# ── Download ──────────────────────────────────────────────────────────────
+# ── Download (with retry/timeout) ───────────────────────────────────────────
 if command -v wget &>/dev/null; then
   echo "Downloading with wget..."
-  wget -q --show-progress -O "$GZ_FILE" "$RDP_URL" || {
+  wget -q --show-progress --tries=3 --timeout=300 --retry-connrefused \
+    -O "$GZ_FILE" "$RDP_URL" || {
+    rm -f "$GZ_FILE"
     echo "ERROR: Download failed. Check network or try manually:"
     echo "  wget $RDP_URL -O $GZ_FILE"
     exit 1
   }
 elif command -v curl &>/dev/null; then
   echo "Downloading with curl..."
-  curl -L -o "$GZ_FILE" "$RDP_URL" || {
+  curl -L --retry 3 --max-time 600 -o "$GZ_FILE" "$RDP_URL" || {
+    rm -f "$GZ_FILE"
     echo "ERROR: Download failed."
     exit 1
   }
@@ -71,17 +74,21 @@ else
   exit 1
 fi
 
-# ── Decompress ────────────────────────────────────────────────────────────
+# ── Decompress (atomic: write to .tmp, verify, then mv) ────────────────────
 echo "Decompressing..."
-gunzip -c "$GZ_FILE" > "$FASTA_FILE" || {
+FASTA_TMP="$FASTA_FILE.tmp"
+cleanup() { rm -f "$FASTA_TMP"; }
+trap cleanup EXIT
+gunzip -c "$GZ_FILE" > "$FASTA_TMP" || {
   echo "ERROR: Decompression failed."
+  rm -f "$FASTA_TMP"
   exit 1
 }
 
-# Verify the file looks like SINTAX-formatted FASTA
-SEQ_COUNT=$(grep -c "^>" "$FASTA_FILE" || echo "0")
-TAX_COUNT=$(grep -c ";tax=" "$FASTA_FILE" || echo "0")
-SIZE_MB=$(du -m "$FASTA_FILE" | cut -f1)
+# Verify the decompressed file looks like SINTAX-formatted FASTA
+SEQ_COUNT=$(grep -c "^>" "$FASTA_TMP" || echo "0")
+TAX_COUNT=$(grep -c ";tax=" "$FASTA_TMP" || echo "0")
+SIZE_MB=$(du -m "$FASTA_TMP" | cut -f1)
 
 echo ""
 echo "── Download complete ──────────────────────────────────────"
@@ -90,7 +97,12 @@ echo "  Size:        ${SIZE_MB} MB"
 echo "  Sequences:   $SEQ_COUNT"
 echo "  With tax:    $TAX_COUNT"
 
-if [[ "$SEQ_COUNT" -gt 0 ]] && [[ "$TAX_COUNT" -gt 0 ]]; then
+# Require a reasonable fraction of sequences to carry SINTAX taxonomy
+# (the previous check accepted a DB where 1 of 10,000 seqs was annotated).
+if [[ "$SEQ_COUNT" -gt 0 ]] && [[ "$TAX_COUNT" -gt 0 ]] && \
+   [[ $((TAX_COUNT * 10)) -ge $SEQ_COUNT ]]; then
+  mv "$FASTA_TMP" "$FASTA_FILE"
+  trap - EXIT
   # Write marker for abi check-resources
   echo "downloaded_at: $(date -Iseconds)" > "$MARKER_FILE"
   echo "source_url: $RDP_URL" >> "$MARKER_FILE"
@@ -98,6 +110,7 @@ if [[ "$SEQ_COUNT" -gt 0 ]] && [[ "$TAX_COUNT" -gt 0 ]]; then
   echo "tax_annotated: $TAX_COUNT" >> "$MARKER_FILE"
   echo "✓ RDP SINTAX database ready."
 else
-  echo "WARNING: Downloaded file may be corrupted (no valid sequences found)."
+  echo "WARNING: Downloaded file may be corrupted (insufficient SINTAX-annotated sequences)."
+  rm -f "$FASTA_TMP"
   exit 1
 fi

@@ -38,7 +38,7 @@ failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.
   tool_not_found:
-    hint: Install kraken2 in the autoplasm-stats environment.
+    hint: Install kraken2 in the stats environment.
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.

@@ -21,7 +21,7 @@ Kraken2 classification output and report.
 
 ## Environment
 - Environment file: `envs/stats.yml` when present.
-- Runtime environment: `autoplasm-stats`.
+- Runtime environment: `stats`.
 - Executable: `kraken2`.
 - The CLI resolves the executable from `.mamba/envs/{env_name}/bin`; do not depend on a global conda/mamba environment.
 

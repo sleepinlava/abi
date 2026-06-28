@@ -1,4 +1,4 @@
-name: autoplasm-plasmid-binning
+name: easymeta-p0
 channel_priority: strict
 channels:
 - conda-forge
@@ -6,6 +6,8 @@ channels:
 - defaults
 dependencies:
 - python=3.10
-- metabat2
-- concoct
-- semibin
+- seqkit
+- fastp
+- kneaddata
+- kraken2
+- bracken

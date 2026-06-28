@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Dict, Mapping, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
@@ -69,20 +70,31 @@ def request_json(
         headers["Content-Type"] = "application/json"
     url = _join_url(base_url, path)
     request = Request(url, data=body, headers=headers, method=method)
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            return response.status, _read_json_response(response.read())
-    except HTTPError as exc:
-        payload = _read_json_response(exc.read())
-        raise JobClientError(exc.code, payload) from exc
-    except (URLError, TimeoutError, OSError) as exc:
-        raise JobClientError(
-            0,
-            {
-                "status": "connection_error",
-                "error": f"Unable to reach ABI Job Service at {url}: {exc}",
-            },
-        ) from exc
+    # Retry on connection-refused only (the Job Service is localhost and may
+    # still be starting up); HTTP errors and other failures are not retried.
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                return response.status, _read_json_response(response.read())
+        except HTTPError as exc:
+            payload = _read_json_response(exc.read())
+            raise JobClientError(exc.code, payload) from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            is_connection_refused = isinstance(exc, URLError) and isinstance(
+                exc.reason, ConnectionRefusedError
+            )
+            if is_connection_refused and attempt < max_attempts:
+                time.sleep(0.5 * (2 ** (attempt - 1)))
+                continue
+            raise JobClientError(
+                0,
+                {
+                    "status": "connection_error",
+                    "error": f"Unable to reach ABI Job Service at {url}: {exc}",
+                },
+            ) from exc
+    raise JobClientError(0, {"status": "connection_error", "error": "unreachable"})
 
 
 def _join_url(base_url: str, path: str) -> str:

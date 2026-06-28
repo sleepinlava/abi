@@ -168,23 +168,32 @@ def _setup_wgs_bacteria(
     mock: bool,
 ) -> List[Dict[str, Any]]:
     """Prepare the AMRFinderPlus database used by the WGS DAG."""
+    import shutil
     import subprocess
 
     if resource_ids and "amrfinder_db" not in resource_ids:
         return []
     target = _configured_or_default_resource_path(config, "amrfinder_db")
     command = ["amrfinder_update", "--database", str(target)]
+    ready_sentinel = target / ".abi_ready"
     if dry_run:
         status = "planned"
         message = "Would download/update the AMRFinderPlus database."
     elif mock:
         target.mkdir(parents=True, exist_ok=True)
         (target / ".abi_mock_resource").write_text("wgs_bacteria:amrfinder_db\n", encoding="utf-8")
+        ready_sentinel.write_text("mock\n", encoding="utf-8")
         status = "ok"
         message = "Mock AMRFinderPlus database prepared."
-    elif target.exists() and any(target.iterdir()):
+    elif ready_sentinel.exists():
         status = "ok"
-        message = "Existing AMRFinderPlus database found; update skipped."
+        message = "Existing AMRFinderPlus database found (ready sentinel); update skipped."
+    elif target.exists() and any(target.iterdir()):
+        status = "incomplete"
+        message = (
+            "Existing AMRFinderPlus directory is non-empty but lacks the ready "
+            "sentinel; a prior update may have failed. Remove it or rerun setup."
+        )
     else:
         target.mkdir(parents=True, exist_ok=True)
         try:
@@ -195,11 +204,20 @@ def _setup_wgs_bacteria(
                 check=False,
                 timeout=_resource_timeout(config),
             )
-            status = "ok" if result.returncode == 0 else "error"
-            message = (result.stdout or result.stderr or "").strip()[-500:]
+            if result.returncode == 0:
+                ready_sentinel.write_text("amrfinderplus\n", encoding="utf-8")
+                status = "ok"
+                message = "AMRFinderPlus database downloaded successfully."
+            else:
+                status = "error"
+                message = (result.stdout or result.stderr or "").strip()[-500:]
+                # Clean up partial files so a retry isn't blocked by a
+                # non-empty-but-incomplete directory (false-positive "ok").
+                shutil.rmtree(target, ignore_errors=True)
         except (OSError, subprocess.TimeoutExpired) as exc:
             status = "error"
             message = str(exc)
+            shutil.rmtree(target, ignore_errors=True)
     return [
         {
             "resource_id": "amrfinder_db",
@@ -641,6 +659,8 @@ def _setup_amplicon_16s(
     # Primary: download RDP training set
     download_script = PROJECT_ROOT / "scripts" / "download_rdp_sintax.sh"
     tax_fasta = outdir / "rdp_16s_v16.fa"
+    synthetic_fasta = outdir / "synthetic_sintax.fa"
+    effective_path = tax_fasta
 
     if tax_fasta.exists():
         status = "ok"
@@ -665,20 +685,29 @@ def _setup_amplicon_16s(
                 status = "fallback"
                 message = "RDP download failed; generating synthetic fallback."
                 _generate_synthetic_fallback(outdir)
+                effective_path = synthetic_fasta
         except (subprocess.TimeoutExpired, OSError):
             status = "fallback"
             message = "RDP download timed out; generated synthetic fallback."
             _generate_synthetic_fallback(outdir)
+            effective_path = synthetic_fasta
     else:
         status = "error"
         message = f"Download script not found: {download_script}"
+
+    if status == "fallback" and not synthetic_fasta.exists():
+        status = "error"
+        message = (
+            "RDP download failed and synthetic fallback generation did not "
+            f"produce {synthetic_fasta}."
+        )
 
     return [
         {
             "resource_id": "taxonomy_db",
             "tool_id": "vsearch_taxonomy",
             "field": "taxonomy_db",
-            "path": str(tax_fasta),
+            "path": str(effective_path),
             "status": status,
             "version": "",
             "source_url": "https://www.drive5.com/sintax/rdp_16s_v16_sp.fa.gz",
@@ -693,24 +722,31 @@ def _setup_amplicon_16s(
     ]
 
 
-def _generate_synthetic_fallback(outdir: Path) -> None:
-    """Generate a synthetic taxonomy DB when RDP download fails."""
+def _generate_synthetic_fallback(outdir: Path) -> bool:
+    """Generate a synthetic taxonomy DB when RDP download fails.
+
+    Returns True if the synthetic FASTA was produced, False otherwise so the
+    caller can report an error instead of silently pointing at a missing file.
+    """
     import subprocess
 
     from abi.config import PROJECT_ROOT
 
     generate_script = PROJECT_ROOT / "scripts" / "generate_synthetic_taxonomy.py"
-    if generate_script.exists():
-        subprocess.run(
-            [
-                "python",
-                str(generate_script),
-                "--output",
-                str(outdir / "synthetic_sintax.fa"),
-                "--entries",
-                "100",
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+    synthetic_path = outdir / "synthetic_sintax.fa"
+    if not generate_script.exists():
+        return False
+    result = subprocess.run(
+        [
+            "python",
+            str(generate_script),
+            "--output",
+            str(synthetic_path),
+            "--entries",
+            "100",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0 and synthetic_path.exists()

@@ -31,7 +31,7 @@ failure_handling:
   missing_input:
     hint: Ensure MetaBAT2 and CONCOCT have completed.
   tool_not_found:
-    hint: Install das_tool in the autoplasm-stats environment.
+    hint: Install das_tool in the stats environment.
   nonzero_exit:
     hint: Inspect DAS Tool stderr log in provenance/step_logs.
 resources:

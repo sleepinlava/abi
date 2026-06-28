@@ -38,7 +38,7 @@ failure_handling:
   missing_database:
     hint: Configure the MetaPhlAn database directory.
   tool_not_found:
-    hint: Install metaphlan in the autoplasm-stats environment.
+    hint: Install metaphlan in the stats environment.
 resources:
   cpu: 8
   memory: 32GB

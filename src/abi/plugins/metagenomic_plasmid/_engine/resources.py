@@ -7,6 +7,9 @@ import json
 import os
 import shutil
 import subprocess
+import time
+import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -182,7 +185,7 @@ def default_resource_specs(config: Mapping[str, Any]) -> List[ResourceSpec]:
                 "-d",
                 str(root / "amrfinderplus"),
             ],
-            install_post="makeblastdb -in latest/AMRProt.fa -dbtype prot -out latest/AMRProt.fa",
+            install_post="__amrfinderplus_post__",
         ),
         ResourceSpec(
             resource_id="card",
@@ -203,14 +206,18 @@ def default_resource_specs(config: Mapping[str, Any]) -> List[ResourceSpec]:
             executable="kraken2-build",
             default_subdir="kraken2",
             source_url="https://benlangmead.github.io/aws-indexes/k2",
+            # command_template is a dry-run placeholder; the real download is
+            # driven by _run_kraken2_download (aria2c + tar, atomic). The
+            # version is resolved from config.resources.kraken2.version or the
+            # ``version`` field below.
             command_template=[
-                "kraken2-build",
-                "--standard",
-                "--use-ftp",
-                "--db",
-                str(root / "kraken2"),
-                "--threads",
+                "aria2c",
+                "-x",
                 "8",
+                "-s",
+                "8",
+                "--continue=true",
+                "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_20260226.tar.gz",
             ],
             version="standard_20260226",
         ),
@@ -476,7 +483,8 @@ def default_resource_specs(config: Mapping[str, Any]) -> List[ResourceSpec]:
             env_name="autoplasm-annotation",
             executable="conjscan",
             default_subdir="conjscan",
-            source_url="https://github.com/ruizhang84/conjscan/releases",
+            # Direct archive URL (the previous releases-page URL returned HTML).
+            source_url="https://github.com/ruizhang84/conjscan/archive/refs/heads/master.tar.gz",
             command_template=[],
             resource_type="tool_download",
             auto_setup=False,
@@ -600,6 +608,20 @@ def setup_resources(
             _notify_progress(progress_callback, "finish", spec.resource_id, status.status)
         except MemoryError:
             raise
+        except ResourceError as exc:
+            # A ResourceError indicates a real command/environment failure for
+            # this resource; record it and continue so one bad DB doesn't abort
+            # the whole batch, but surface the structured error distinctly.
+            status = _status_for_spec(
+                config,
+                spec,
+                status_override="failed",
+                command=command,
+                message=f"ResourceError: {exc}",
+                mock=mock,
+            )
+            statuses.append(status)
+            _notify_progress(progress_callback, "finish", spec.resource_id, status.status)
         except Exception as exc:  # pragma: no cover - external command boundary
             status = _status_for_spec(
                 config,
@@ -683,6 +705,7 @@ def fetch_example_dataset(
     output_dir = ensure_directory(outdir, label="Example dataset output directory")
     rows = []
     files = []
+    failures = []
     for accession in EXAMPLE_ACCESSIONS[dataset]:
         url = _efetch_url(accession)
         fasta_path = output_dir / f"{accession}.fasta"
@@ -690,8 +713,9 @@ def fetch_example_dataset(
             text = f">{accession} mock plasmid sequence\nATGCATGCATGCATGCATGC\n"
             fasta_path.write_text(text, encoding="utf-8")
         else:
-            with urllib.request.urlopen(url, timeout=60) as response:  # noqa: S310
-                fasta_path.write_bytes(response.read())
+            if not _fetch_fasta_atomically(url, fasta_path, accession):
+                failures.append(accession)
+                continue
         checksum = sha256_path(fasta_path)
         rows.append(
             {
@@ -741,13 +765,50 @@ def fetch_example_dataset(
                 "mock": mock,
                 "files": files,
                 "sample_sheet": str(sample_sheet),
+                "failures": failures,
             },
             indent=2,
             ensure_ascii=False,
         ),
         encoding="utf-8",
     )
+    if failures and not rows:
+        raise ResourceError(
+            f"Failed to download any accessions for dataset {dataset!r}: {failures}"
+        )
     return {"dataset": dataset, "sample_sheet": sample_sheet, "manifest": manifest, "files": files}
+
+
+def _fetch_fasta_atomically(url: str, fasta_path: Path, accession: str) -> bool:
+    """Download a single FASTA accession atomically with retry/backoff.
+
+    Writes to a ``.part`` file and atomically renames on success, so a partial
+    download is never reported as a valid file. Retries up to 3 times with
+    exponential backoff to tolerate NCBI eutils 429/timeout transients. Returns
+    True on success, False if all retries are exhausted (caller continues with
+    remaining accessions).
+    """
+    part_path = fasta_path.with_suffix(".fasta.part")
+    part_path.unlink(missing_ok=True)
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with urllib.request.urlopen(url, timeout=60) as response:  # noqa: S310
+                data = response.read()
+            if not data:
+                raise ResourceError("empty response")
+            part_path.write_bytes(data)
+            os.replace(part_path, fasta_path)
+            return True
+        except (urllib.error.URLError, TimeoutError, OSError, ResourceError) as exc:
+            part_path.unlink(missing_ok=True)
+            if attempt >= max_attempts:
+                print(f"  {accession}: download failed after {attempt} attempts: {exc}")
+                return False
+            backoff = 2 ** (attempt - 1)
+            print(f"  {accession}: attempt {attempt} failed ({exc}); retrying in {backoff}s")
+            time.sleep(backoff)
+    return False
 
 
 def required_resource_issues(
@@ -882,19 +943,44 @@ def _resource_block(config: Mapping[str, Any], resource_id: str) -> Mapping[str,
     return block if isinstance(block, Mapping) else {}
 
 
+def _kraken2_version(config: Mapping[str, Any], spec: ResourceSpec) -> str:
+    """Resolve the Kraken2 database version from config or spec default."""
+    block = _resource_block(config, spec.resource_id)
+    configured = str(block.get("version") or "").strip()
+    if configured and not _is_placeholder_text(configured):
+        return configured
+    return str(spec.version or "standard_20260226")
+
+
+def _is_placeholder_text(value: str) -> bool:
+    upper = value.upper()
+    return any(marker in upper for marker in ("NOT_CONFIGURED", "TODO", "PLACEHOLDER"))
+
+
 def _resolved_resource_command(
     config: Mapping[str, Any], spec: ResourceSpec, target_path: Path
 ) -> List[str]:
     # ── tool install commands (resource_type-prefixed) ──
     if spec.resource_type == "tool_git":
-        return ["git", "clone", spec.source_url, str(target_path)]
+        return [
+            "git",
+            "clone",
+            "--depth",
+            "1",
+            "--single-branch",
+            spec.source_url,
+            str(target_path),
+        ]
     if spec.resource_type == "tool_pip":
         return ["pip", "install", spec.source_url, "--target", str(target_path)]
     if spec.resource_type == "tool_download":
+        # Return a dry-run placeholder; the real download (with parent-dir
+        # creation, tarball extraction, and atomic write) is driven by
+        # _run_tool_download to avoid path-doubling and partial-file reuse.
         return [
             "wget",
             "-O",
-            str(target_path / spec.default_subdir),
+            str(target_path / spec.executable),
             spec.source_url,
         ]
     # ── database download commands (resource_id-specific fallback) ──
@@ -915,21 +1001,25 @@ def _resolved_resource_command(
         return [
             "git",
             "clone",
+            "--depth",
+            "1",
+            "--single-branch",
             source_url,
             str(target_path),
         ]
     if spec.resource_id == "amrfinderplus":
         return ["amrfinder_update", "-d", str(target_path)]
     if spec.resource_id == "kraken2":
+        version = _kraken2_version(config, spec)
         return [
-            "bash",
-            "-c",
-            f"mkdir -p {target_path} && "
-            f"aria2c -x 8 -s 8 "
-            f"https://genome-idx.s3.amazonaws.com/kraken/k2_standard_20260226.tar.gz "
-            f"-d {target_path.parent} -o kraken2.tar.gz && "
-            f"tar xzf {target_path.parent / 'kraken2.tar.gz'} -C {target_path} && "
-            f"rm -f {target_path.parent / 'kraken2.tar.gz'}",
+            "aria2c",
+            "-x",
+            "8",
+            "-s",
+            "8",
+            "--continue=true",
+            "--max-tries=3",
+            f"https://genome-idx.s3.amazonaws.com/kraken/k2_{version}.tar.gz",
         ]
     if spec.resource_id == "gtdbtk":
         return ["gtdbtk", "db", "download"]
@@ -976,6 +1066,17 @@ def _raise_on_timeout(
 def _run_resource_command(
     config: Mapping[str, Any], spec: ResourceSpec, command: List[str]
 ) -> None:
+    # Kraken2 uses a multi-step atomic download (mkdir → aria2c → tar → rm)
+    # run as separate safe list-form subprocess calls instead of a shell
+    # string, to avoid command injection and partial-download wedging.
+    if spec.resource_id == "kraken2":
+        _run_kraken2_download(config, spec)
+        return
+    # tool_download resources need parent-dir creation + optional tarball
+    # extraction handled atomically (see _run_tool_download).
+    if spec.resource_type == "tool_download":
+        _run_tool_download(config, spec)
+        return
     executable = command[0]
     resolved = _resolve_executable(config, spec.env_name, executable)
     run_command = [str(resolved), *command[1:]]
@@ -1001,6 +1102,9 @@ def _run_resource_command(
     # Post-install command (e.g. "pip install -e ." after git clone)
     if spec.install_post:
         target_path = _configured_resource_path(config, spec)
+        if spec.install_post == "__amrfinderplus_post__":
+            _run_amrfinderplus_post(config, spec, target_path, timeout_seconds)
+            return
         post_cmd = spec.install_post.split()
         post_resolved = _resolve_executable(config, spec.env_name, post_cmd[0])
         post_run = [str(post_resolved), *post_cmd[1:]]
@@ -1018,6 +1122,200 @@ def _run_resource_command(
                 f"{spec.resource_id} post-install '{spec.install_post}' failed: "
                 f"{post_completed.stderr.strip()}"
             )
+
+
+def _run_amrfinderplus_post(
+    config: Mapping[str, Any],
+    spec: ResourceSpec,
+    target_path: Path,
+    timeout_seconds: float | None,
+) -> None:
+    """Build a BLAST protein index from AMRProt.fa after amrfinder_update.
+
+    Discovers the AMRProt.fa location dynamically instead of assuming a
+    hardcoded ``latest/`` layout, so this survives upstream layout changes
+    or pinned versioned paths.
+    """
+    candidates = list(target_path.rglob("AMRProt.fa"))
+    if not candidates:
+        raise ResourceError(f"amrfinderplus post-install: AMRProt.fa not found under {target_path}")
+    amr_prot = candidates[0]
+    makeblastdb = _resolve_executable(config, spec.env_name, "makeblastdb")
+    completed = subprocess.run(
+        [
+            str(makeblastdb),
+            "-in",
+            str(amr_prot),
+            "-dbtype",
+            "prot",
+            "-out",
+            str(amr_prot),
+        ],
+        check=False,
+        text=True,
+        capture_output=True,
+        cwd=str(target_path),
+        env=_resource_runtime_env(config, spec.env_name, spec),
+        timeout=timeout_seconds,
+    )
+    if completed.returncode != 0:
+        raise ResourceError(
+            f"amrfinderplus post-install 'makeblastdb' failed: {completed.stderr.strip()}"
+        )
+
+
+def _run_kraken2_download(config: Mapping[str, Any], spec: ResourceSpec) -> None:
+    """Download and extract the Kraken2 standard database atomically.
+
+    Avoids the shell-injection and partial-download-wedge bugs by running
+    aria2c / tar / rm as separate list-form subprocess calls, writing the
+    tarball to a ``.part`` path, extracting into a staging directory, and
+    swapping it into place only on full success.
+    """
+    target_path = _configured_resource_path(config, spec)
+    version = _kraken2_version(config, spec)
+    url = f"https://genome-idx.s3.amazonaws.com/kraken/k2_{version}.tar.gz"
+    timeout_seconds = _resource_timeout_seconds(config)
+    runtime_env = _resource_runtime_env(config, spec.env_name, spec)
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    tarball = target_path.parent / "kraken2.tar.gz.part"
+    staging = target_path.parent / "kraken2.staging"
+
+    # Clean up any leftovers from a previous interrupted attempt.
+    tarball.unlink(missing_ok=True)
+    if staging.exists():
+        shutil.rmtree(staging, ignore_errors=True)
+
+    try:
+        aria2c = _resolve_executable(config, spec.env_name, "aria2c")
+        completed = subprocess.run(
+            [
+                str(aria2c),
+                "-x",
+                "8",
+                "-s",
+                "8",
+                "--continue=true",
+                "--max-tries=3",
+                "--retry-wait=5",
+                "-d",
+                str(target_path.parent),
+                "-o",
+                tarball.name,
+                url,
+            ],
+            check=False,
+            text=True,
+            capture_output=True,
+            env=runtime_env,
+            timeout=timeout_seconds,
+        )
+        if completed.returncode != 0:
+            details = "\n".join(
+                text for text in [completed.stderr.strip(), completed.stdout.strip()] if text
+            )
+            raise ResourceError(
+                f"kraken2 download failed with code {completed.returncode}: {details}"
+            )
+        if not tarball.exists() or tarball.stat().st_size == 0:
+            raise ResourceError("kraken2 download produced an empty tarball")
+
+        staging.mkdir(parents=True, exist_ok=True)
+        tar = _resolve_executable(config, spec.env_name, "tar")
+        completed = subprocess.run(
+            [str(tar), "xzf", str(tarball), "-C", str(staging)],
+            check=False,
+            text=True,
+            capture_output=True,
+            env=runtime_env,
+            timeout=timeout_seconds,
+        )
+        if completed.returncode != 0:
+            details = "\n".join(
+                text for text in [completed.stderr.strip(), completed.stdout.strip()] if text
+            )
+            raise ResourceError(
+                f"kraken2 extraction failed with code {completed.returncode}: {details}"
+            )
+        # Atomic swap: remove any prior partial target, then move staging in.
+        if target_path.exists():
+            shutil.rmtree(target_path, ignore_errors=True)
+        os.replace(staging, target_path)
+    except subprocess.TimeoutExpired as exc:
+        _raise_on_timeout(spec, timeout_seconds, exc)
+    finally:
+        tarball.unlink(missing_ok=True)
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
+
+
+def _run_tool_download(config: Mapping[str, Any], spec: ResourceSpec) -> None:
+    """Download a tool resource atomically with parent-dir creation.
+
+    Fixes the previous ``wget -O target/default_subdir url`` issues:
+    missing ``mkdir``, path doubling (``_configured_resource_path`` already
+    appends ``default_subdir``), and no extraction for tarball URLs. The
+    download goes to a ``.part`` file, then is atomically renamed; tarball
+    sources are extracted into the target directory.
+    """
+    target_path = _configured_resource_path(config, spec)
+    timeout_seconds = _resource_timeout_seconds(config)
+    runtime_env = _resource_runtime_env(config, spec.env_name, spec)
+
+    target_path.mkdir(parents=True, exist_ok=True)
+    is_tarball = spec.source_url.lower().endswith((".tar.gz", ".tgz", ".tar"))
+    part_file = target_path.with_suffix(target_path.suffix + ".part")
+
+    # Clean up leftovers from a previous interrupted attempt.
+    part_file.unlink(missing_ok=True)
+
+    try:
+        wget = _resolve_executable(config, spec.env_name, "wget")
+        completed = subprocess.run(
+            [str(wget), "-O", str(part_file), spec.source_url],
+            check=False,
+            text=True,
+            capture_output=True,
+            env=runtime_env,
+            timeout=timeout_seconds,
+        )
+        if completed.returncode != 0:
+            details = "\n".join(
+                text for text in [completed.stderr.strip(), completed.stdout.strip()] if text
+            )
+            raise ResourceError(
+                f"{spec.resource_id} download failed with code {completed.returncode}: {details}"
+            )
+        if not part_file.exists() or part_file.stat().st_size == 0:
+            raise ResourceError(f"{spec.resource_id} download produced an empty file")
+
+        if is_tarball:
+            tar = _resolve_executable(config, spec.env_name, "tar")
+            completed = subprocess.run(
+                [str(tar), "xf", str(part_file), "-C", str(target_path)],
+                check=False,
+                text=True,
+                capture_output=True,
+                env=runtime_env,
+                timeout=timeout_seconds,
+            )
+            if completed.returncode != 0:
+                details = "\n".join(
+                    text for text in [completed.stderr.strip(), completed.stdout.strip()] if text
+                )
+                raise ResourceError(
+                    f"{spec.resource_id} extraction failed with code "
+                    f"{completed.returncode}: {details}"
+                )
+        else:
+            # Plain file: place it as the executable name inside the target.
+            dest = target_path / spec.executable
+            os.replace(part_file, dest)
+    except subprocess.TimeoutExpired as exc:
+        _raise_on_timeout(spec, timeout_seconds, exc)
+    finally:
+        part_file.unlink(missing_ok=True)
 
 
 def _run_plasmidfinder_install(config: Mapping[str, Any], path: Path) -> None:
@@ -1114,6 +1412,29 @@ def _resource_runtime_env(
     return env
 
 
+def _git_worktree_valid(path: Path) -> bool:
+    """Return True if ``path`` is a valid git worktree (not a partial clone).
+
+    A failed/interrupted ``git clone`` often leaves a ``.git`` directory, so
+    checking only ``.git`` presence yields false positives. This runs
+    ``git -C path rev-parse --is-inside-work-tree`` which only succeeds for a
+    usable worktree with a valid HEAD.
+    """
+    if not (path.exists() and (path / ".git").exists()):
+        return False
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "--is-inside-work-tree"],
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return completed.returncode == 0 and completed.stdout.strip() == "true"
+
+
 def _resource_path_ready(path: Path, spec: ResourceSpec) -> bool:
     if not path.exists():
         return False
@@ -1161,7 +1482,7 @@ def _resource_path_ready(path: Path, spec: ResourceSpec) -> bool:
         return (path / "config").exists() and any(path.glob("*.fsa"))
     # ── tool type readiness ──
     if spec.resource_type == "tool_git":
-        return path.exists() and (path / ".git").exists()
+        return _git_worktree_valid(path)
     if spec.resource_type == "tool_pip":
         return path.exists() and any(path.iterdir())
     if spec.resource_type == "tool_download":
@@ -1267,11 +1588,11 @@ def _resource_ready_check(path: Path, spec: ResourceSpec) -> str:
         )
     # ── tool type ready checks ──
     if spec.resource_type == "tool_git":
-        if path.exists() and (path / ".git").exists():
+        if _git_worktree_valid(path):
             return f"tool '{spec.resource_id}' cloned successfully (git repo found)"
         return (
-            f"tool '{spec.resource_id}' not installed. "
-            f"Run 'git clone {spec.source_url} {path}' to install."
+            f"tool '{spec.resource_id}' not installed or clone is incomplete. "
+            f"Run 'git clone --depth 1 --single-branch {spec.source_url} {path}' to install."
         )
     if spec.resource_type == "tool_pip":
         if path.exists() and any(path.iterdir()):
@@ -1346,5 +1667,5 @@ def _notify_progress(
 def _efetch_url(accession: str) -> str:
     return (
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
-        f"?db=nuccore&id={accession}&rettype=fasta&retmode=text"
+        f"?db=nuccore&id={urllib.parse.quote(accession)}&rettype=fasta&retmode=text"
     )

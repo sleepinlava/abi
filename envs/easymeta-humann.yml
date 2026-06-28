@@ -1,4 +1,4 @@
-name: autoplasm-plasmid-binning
+name: easymeta-humann
 channel_priority: strict
 channels:
 - conda-forge
@@ -6,6 +6,5 @@ channels:
 - defaults
 dependencies:
 - python=3.10
-- metabat2
-- concoct
-- semibin
+- humann>=4
+- metaphlan>=4

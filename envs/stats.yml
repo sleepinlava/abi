@@ -1,4 +1,4 @@
-name: autoplasm-stats
+name: stats
 channel_priority: strict
 channels:
 - conda-forge

@@ -389,4 +389,4 @@ tool_assignments:
     humann_regroup_table: easymeta-humann
     humann_split_stratified_table: easymeta-humann
   viral_viwrap:
-    viwrap: abi-base
+    viwrap: autoplasm-base
