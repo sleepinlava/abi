@@ -756,3 +756,83 @@ def test_fetch_example_dataset_all_failures_raises(tmp_path, monkeypatch):
         pass
     else:
         raise AssertionError("expected ResourceError when all accessions fail")
+
+
+def test_tool_download_flattens_github_archive(tmp_path):
+    """_flatten_single_top_level_dir must lift content out of a lone
+    top-level directory (GitHub archives wrap content in <repo>-<branch>/).
+    Without this, conjscan_tool readiness checks look for
+    target_path/conjscan but it lives at target_path/conjscan-master/conjscan.
+    """
+    from abi.autoplasm.resources import _flatten_single_top_level_dir
+
+    target = tmp_path / "conjscan"
+    nested = target / "conjscan-master"
+    nested.mkdir(parents=True)
+    (nested / "conjscan").write_text("#!/usr/bin/env python\n")
+    (nested / "README.md").write_text("readme\n")
+    # a hidden file at top level must not count as a second child
+    (target / ".abi_marker").write_text("x\n")
+
+    _flatten_single_top_level_dir(target)
+
+    assert (target / "conjscan").exists()
+    assert (target / "README.md").exists()
+    assert not (target / "conjscan-master").exists()
+    # hidden file preserved
+    assert (target / ".abi_marker").exists()
+
+
+def test_tool_download_flatten_noop_when_multiple_children(tmp_path):
+    """_flatten_single_top_level_dir must NOT flatten when there are multiple
+    top-level entries (that would be a real multi-root tarball, not a wrapper)."""
+    from abi.autoplasm.resources import _flatten_single_top_level_dir
+
+    target = tmp_path / "realdb"
+    target.mkdir()
+    (target / "file1").write_text("a\n")
+    (target / "file2").write_text("b\n")
+
+    _flatten_single_top_level_dir(target)
+
+    assert (target / "file1").exists()
+    assert (target / "file2").exists()
+
+
+def test_kraken2_version_constant_referenced():
+    """KRAKEN2_DEFAULT_VERSION must be the single source for the default
+    Kraken2 snapshot date — referenced by both the ResourceSpec default and
+    the _kraken2_version fallback, so updating it in one place suffices."""
+    from abi.autoplasm.resources import (
+        KRAKEN2_DEFAULT_VERSION,
+        _kraken2_version,
+        default_resource_specs,
+    )
+
+    # The constant is non-empty and looks like a dated snapshot.
+    assert KRAKEN2_DEFAULT_VERSION.startswith("standard_")
+    # The kraken2 ResourceSpec uses the constant as its default version.
+    spec = next(s for s in default_resource_specs({}) if s.resource_id == "kraken2")
+    assert spec.version == KRAKEN2_DEFAULT_VERSION
+    # _kraken2_version falls back to the same constant when config is empty.
+    assert _kraken2_version({}, spec) == KRAKEN2_DEFAULT_VERSION
+
+
+def test_autoplasm_setup_resources_requires_confirm():
+    """The autoplasm setup-resources CLI must require --confirm for real
+    execution (mirroring abi.cli.setup_resources_command), so a bare real
+    run does not silently start multi-GB downloads."""
+    from typer.testing import CliRunner
+
+    from abi.plugins.metagenomic_plasmid._engine.cli import app
+
+    runner = CliRunner()
+    # No --confirm, no --dry-run, no --mock → must exit non-zero with the
+    # confirm-required message, not attempt any download.
+    result = runner.invoke(app, ["setup-resources"])
+    assert result.exit_code != 0
+    assert "confirm" in result.output.lower()
+    # --dry-run must still be allowed without --confirm (planning only).
+    result_dry = runner.invoke(app, ["setup-resources", "--dry-run"])
+    # dry-run path proceeds to planning; it does not exit 2 for lack of confirm
+    assert result_dry.exit_code != 2

@@ -450,13 +450,27 @@ def setup_resources_command(
     resume: bool = typer.Option(False, "--resume", help=RESUME_HELP),
     force: bool = typer.Option(False, "--force", help=FORCE_HELP),
     dry_run: bool = typer.Option(False, "--dry-run", help=DRY_RUN_HELP),
+    confirm: bool = typer.Option(
+        False,
+        "--confirm",
+        help="确认执行 / Confirm real execution (required unless --dry-run or --mock).",
+    ),
 ) -> None:
     """下载或准备核心资源 / Download or prepare core resources.
 
     默认准备 geNomad、Bakta light、MOB-suite 和 PlasmidFinder 资源。真实下载会写入
     resources.root；--dry-run 只输出计划，--mock 只创建测试目录和 manifest。
     By default this prepares geNomad, Bakta light, MOB-suite, and PlasmidFinder.
+    Real execution requires --confirm for safety, mirroring ``abi setup-resources``.
     """
+    if not dry_run and not mock and not confirm:
+        typer.echo(
+            "Resource setup requires --confirm for real execution. "
+            "Use --dry-run to preview or --mock for smoke testing, "
+            "then re-run with --confirm to proceed.",
+            err=True,
+        )
+        raise typer.Exit(2)
     try:
         cfg = _load(
             config,

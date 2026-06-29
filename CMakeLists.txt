@@ -94,7 +94,7 @@ add_custom_target(fetch_examples
 
 add_custom_target(setup_resources
   COMMAND ${AUTOPLASM_ENV} ${AUTOPLASM_PYTHON} -m abi.autoplasm.cli setup-resources
-          --config ${AUTOPLASM_ASSEMBLY_CONFIG}
+          --config ${AUTOPLASM_ASSEMBLY_CONFIG} --confirm
           --profile local
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Preparing lightweight AutoPlasm core databases"

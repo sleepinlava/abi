@@ -11,10 +11,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 RESOURCES_DIR="${PROJECT_ROOT}/resources/autoplasm"
 
-# Mamba root for resolving conda-env executables (mob_suite lives in a env,
-# not necessarily the system python3).
+# Mamba root for resolving conda-env executables (each tool lives in its own
+# conda env, so we must NOT rely on system PATH for the prerequisite check).
 MAMBA_ROOT="${ABI_MAMBA_ROOT:-${AUTOPLASM_MAMBA_ROOT:-${PROJECT_ROOT}/.mamba}}"
-ANNOTATION_PYTHON="${MAMBA_ROOT}/envs/autoplasm-annotation/bin/python"
+ANNOTATION_ENV="${MAMBA_ROOT}/envs/autoplasm-annotation"
+PLASMID_DETECT_ENV="${MAMBA_ROOT}/envs/autoplasm-plasmid-detect"
+BAKTA_DB_BIN="${ANNOTATION_ENV}/bin/bakta_db"
+GENOMAD_BIN="${PLASMID_DETECT_ENV}/bin/genomad"
+MOB_INIT_BIN="${ANNOTATION_ENV}/bin/mob_init"
 
 # Colors for output
 RED='\033[0;31m'
@@ -24,22 +28,26 @@ NC='\033[0m' # No Color
 
 log_info()  { echo -e "${GREEN}[INFO]${NC}  $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC}  $1"; }
 
 # ---------------------------------------------------------------------------
 # Check prerequisites
 # ---------------------------------------------------------------------------
-check_cmd() {
-    if ! command -v "$1" >/dev/null 2>&1; then
-        log_error "$1 is not installed. Please install it first."
+# check_cmd_abs <abs_path> <label>  — verify an env-scoped executable exists.
+# Each tool lives in its own conda env, so a plain `command -v` would miss it
+# when the env is not activated and could also match an unrelated system copy.
+check_cmd_abs() {
+    if [[ ! -x "$1" ]]; then
+        log_error "$2 not found at $1. Run scripts/cloud/01_envs.sh first."
         exit 1
     fi
 }
 
 log_info "Checking prerequisites..."
-check_cmd bakta_db
-check_cmd genomad
-# mob_suite init is done via Python module, no standalone CLI to check here
+check_cmd_abs "${BAKTA_DB_BIN}" bakta_db
+check_cmd_abs "${GENOMAD_BIN}" genomad
+# mob_init is invoked below via CLI with --database_directory; check it too.
+check_cmd_abs "${MOB_INIT_BIN}" mob_init
 
 mkdir -p "${RESOURCES_DIR}"
 
@@ -61,7 +69,7 @@ else
     log_info "Downloading Bakta FULL database (~30 GB compressed, ~84 GB unpacked)..."
     log_info "This will take a while depending on your network speed."
     mkdir -p "${BAKTA_DIR}"
-    bakta_db download --output "${BAKTA_DIR}" --type full
+    "${BAKTA_DB_BIN}" download --output "${BAKTA_DIR}" --type full
     if [[ ! -f "${BAKTA_DIR}/bakta.db" ]]; then
         log_error "Bakta download completed but bakta.db is missing; download may have failed."
         exit 1
@@ -83,7 +91,7 @@ else
     fi
     log_info "Downloading geNomad database..."
     mkdir -p "${RESOURCES_DIR}/genomad"
-    genomad download-database "${RESOURCES_DIR}/genomad/"
+    "${GENOMAD_BIN}" download-database "${RESOURCES_DIR}/genomad/"
     if [[ ! -f "${GENOMAD_DIR}/genomad_db" ]]; then
         log_error "geNomad download completed but genomad_db is missing; download may have failed."
         exit 1
@@ -102,20 +110,12 @@ if [[ -f "${MOB_DIR}/.autoplasm_resource_ready" ]]; then
 else
     log_info "Initializing mob_suite databases..."
     mkdir -p "${MOB_DIR}"
-    # Use the autoplasm-annotation env python (where mob_suite is installed)
-    # rather than the system python3, which may not have mob_suite importable.
-    if [[ -x "${ANNOTATION_PYTHON}" ]]; then
-        "${ANNOTATION_PYTHON}" -c "
-import mob_suite.mob_init
-mob_suite.mob_init.mob_init()
-"
-    else
-        log_warn "autoplasm-annotation env python not found at ${ANNOTATION_PYTHON}; falling back to system python3."
-        python3 -c "
-import mob_suite.mob_init
-mob_suite.mob_init.mob_init()
-"
-    fi
+    # Use the autoplasm-annotation env mob_init CLI with --database_directory
+    # so the DB lands in ${MOB_DIR} (the previous Python-inline mob_init() call
+    # ignored ${MOB_DIR} and wrote to mob_suite's package default, after which
+    # the BLAST-index check below always failed). This mirrors the path used by
+    # abi.plugins.metagenomic_plasmid._engine.resources._resolved_resource_command.
+    "${MOB_INIT_BIN}" --database_directory "${MOB_DIR}"
     # Verify mob_suite BLAST indices exist before touching the ready marker
     # (mob_init can exit 0 while leaving an incomplete DB).
     MOB_BLAST_FOUND=false

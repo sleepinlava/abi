@@ -93,6 +93,11 @@ EXAMPLE_ACCESSIONS = {
 PLASMIDFINDER_DB_URL = "https://bitbucket.org/genomicepidemiology/plasmidfinder_db.git"
 RESOURCE_READY_SENTINEL = ".autoplasm_resource_ready"
 MAX_DIRECTORY_SUMMARY_ENTRIES = 100_000
+# Default Kraken2 standard database snapshot. Update periodically by checking
+# https://benlangmead.github.io/aws-indexes/k2 — a stale date still downloads
+# successfully but ships older taxonomy. Users can override via
+# config.resources.kraken2.version.
+KRAKEN2_DEFAULT_VERSION = "standard_20260226"
 ResourceProgressCallback = Callable[[str, str, str], None]
 
 
@@ -219,7 +224,7 @@ def default_resource_specs(config: Mapping[str, Any]) -> List[ResourceSpec]:
                 "--continue=true",
                 "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_20260226.tar.gz",
             ],
-            version="standard_20260226",
+            version=KRAKEN2_DEFAULT_VERSION,
         ),
         ResourceSpec(
             resource_id="gtdbtk",
@@ -949,7 +954,7 @@ def _kraken2_version(config: Mapping[str, Any], spec: ResourceSpec) -> str:
     configured = str(block.get("version") or "").strip()
     if configured and not _is_placeholder_text(configured):
         return configured
-    return str(spec.version or "standard_20260226")
+    return str(spec.version or KRAKEN2_DEFAULT_VERSION)
 
 
 def _is_placeholder_text(value: str) -> bool:
@@ -1250,6 +1255,25 @@ def _run_kraken2_download(config: Mapping[str, Any], spec: ResourceSpec) -> None
             shutil.rmtree(staging, ignore_errors=True)
 
 
+def _flatten_single_top_level_dir(target_path: Path) -> None:
+    """Lift contents of a lone top-level directory up to ``target_path``.
+
+    GitHub source archives (``.../archive/refs/heads/<branch>.tar.gz``) and
+    many Zenodo tarballs wrap their content in a single top-level directory
+    named ``<repo>-<branch>/``. After ``tar xf -C target_path`` the real
+    executable ends up at ``target_path/<repo>-<branch>/executable`` while
+    readiness checks look for ``target_path/executable`` and fail. This helper
+    detects that single-wrapper case and moves the inner entries up one level.
+    """
+    children = [c for c in target_path.iterdir() if not c.name.startswith(".")]
+    if len(children) != 1 or not children[0].is_dir():
+        return
+    nested = children[0]
+    for entry in nested.iterdir():
+        os.replace(entry, target_path / entry.name)
+    nested.rmdir()
+
+
 def _run_tool_download(config: Mapping[str, Any], spec: ResourceSpec) -> None:
     """Download a tool resource atomically with parent-dir creation.
 
@@ -1308,6 +1332,11 @@ def _run_tool_download(config: Mapping[str, Any], spec: ResourceSpec) -> None:
                     f"{spec.resource_id} extraction failed with code "
                     f"{completed.returncode}: {details}"
                 )
+            # Flatten a single top-level directory (GitHub archives put content
+            # under <repo>-<branch>/, e.g. conjscan-master/conjscan). Without
+            # this, ready_check looks for the executable at target_path/executable
+            # but it actually lives at target_path/<repo>-<branch>/executable.
+            _flatten_single_top_level_dir(target_path)
         else:
             # Plain file: place it as the executable name inside the target.
             dest = target_path / spec.executable

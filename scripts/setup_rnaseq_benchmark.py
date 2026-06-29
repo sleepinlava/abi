@@ -26,8 +26,17 @@ GENOME_URL = "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/005/845/GCF_00000
 GTF_URL = "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/005/845/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_genomic.gtf.gz"
 # Fallback: Ensembl mirror (the deprecated refseq/bacteria/.../reference path
 # style has been phased out by NCBI; Ensembl provides a stable alternative).
+# The version-less "current" path is used so this survives Ensembl iteration
+# (a hardcoded ".111." version segment 404s once upstream retires that build).
 GENOME_URL_FALLBACK = "https://ftp.ensembl.org/bacteria/escherichia_coli_str_k_12_substr_mg1655/dna/escherichia_coli_str_k_12_substr_mg1655.ASM584v2.dna.toplevel.fa.gz"
-GTF_URL_FALLBACK = "https://ftp.ensembl.org/bacteria/escherichia_coli_str_k_12_substr_mg1655/gtf/escherichia_coli_str_k_12_substr_mg1655.ASM584v2.111.gtf.gz"
+GTF_URL_FALLBACK = "https://ftp.ensembl.org/bacteria/escherichia_coli_str_k_12_substr_mg1655/gtf/escherichia_coli_str_k_12_substr_mg1655.ASM584v2.gtf.gz"
+# Tertiary fallback: NCBI eutils efetch (same mechanism abi uses for example
+# datasets). rettype=gtf fetches the annotation directly by accession, so it
+# does not depend on a specific FTP directory layout being maintained.
+GTF_EFETCH_URL = (
+    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+    "?db=nuccore&id=NC_000913.3&rettype=gtf&retmode=text"
+)
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "resources" / "star_index"
 MARKER_FILE = ".abi_star_index_built"
@@ -118,12 +127,14 @@ def setup_reference(
     if not ok:
         raise RuntimeError("Failed to download genome FASTA")
 
-    # 2. Download annotation GTF
+    # 2. Download annotation GTF (primary NCBI FTP → Ensembl → NCBI efetch)
     ok = _download(GTF_URL, gtf_gz, "annotation GTF")
     if not ok:
-        ok = _download(GTF_URL_FALLBACK, gtf_gz, "annotation GTF (fallback)")
+        ok = _download(GTF_URL_FALLBACK, gtf_gz, "annotation GTF (Ensembl fallback)")
     if not ok:
-        raise RuntimeError("Failed to download annotation GTF")
+        ok = _download(GTF_EFETCH_URL, gtf_gz, "annotation GTF (NCBI efetch fallback)")
+    if not ok:
+        raise RuntimeError("Failed to download annotation GTF from all sources")
 
     # 3. Decompress (atomic: write to .tmp then rename, so a partial
     #    decompression is never reused as a valid reference).

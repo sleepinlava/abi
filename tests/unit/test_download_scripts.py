@@ -154,3 +154,54 @@ def test_download_databases_script_no_destructive_rm():
     assert 'rm -rf "${GENOMAD_DIR}"' not in content
     assert "mv" in content
     assert ".bak." in content
+
+
+def test_download_databases_uses_mob_init_cli_with_directory():
+    """download_databases.sh must invoke mob_init via CLI with
+    --database_directory so the DB lands in ${MOB_DIR}. The previous
+    Python-inline mob_init() call ignored ${MOB_DIR} and wrote to the
+    package default, making the subsequent BLAST-index check always fail."""
+    script = SCRIPTS_DIR / "download_databases.sh"
+    content = script.read_text(encoding="utf-8")
+    # CLI invocation passes --database_directory to ${MOB_DIR}.
+    assert '--database_directory "${MOB_DIR}"' in content
+    # The buggy Python-inline form must be gone.
+    assert "mob_suite.mob_init.mob_init()" not in content
+    # mob_init is resolved from the annotation env, not system PATH.
+    assert "MOB_INIT_BIN" in content
+    assert "envs/autoplasm-annotation" in content
+    assert "/bin/mob_init" in content
+
+
+def test_download_databases_checks_env_abs_paths():
+    """download_databases.sh must check bakta_db/genomad/mob_init via their
+    conda-env absolute paths, not `command -v` on system PATH (the tools live
+    in autoplasm-annotation / autoplasm-plasmid-detect envs that may not be
+    activated when the script runs)."""
+    script = SCRIPTS_DIR / "download_databases.sh"
+    content = script.read_text(encoding="utf-8")
+    # Env-scoped absolute path variables are defined.
+    assert "envs/autoplasm-annotation" in content
+    assert "envs/autoplasm-plasmid-detect" in content
+    assert "BAKTA_DB_BIN" in content
+    assert "GENOMAD_BIN" in content
+    # Absolute-path checker is used instead of system-PATH `command -v`.
+    assert "check_cmd_abs" in content
+    # The old system-PATH check for these tools is gone.
+    assert "check_cmd bakta_db" not in content
+    assert "check_cmd genomad" not in content
+
+
+def test_rnaseq_benchmark_has_ncbi_efetch_fallback():
+    """setup_rnaseq_benchmark.py must have a tertiary NCBI efetch fallback for
+    the GTF (the Ensembl fallback URL previously hardcoded a ".111." version
+    segment that 404s once upstream retires that build)."""
+    script = SCRIPTS_DIR / "setup_rnaseq_benchmark.py"
+    content = script.read_text(encoding="utf-8")
+    # Tertiary efetch fallback URL is present.
+    assert "eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi" in content
+    assert "rettype=gtf" in content
+    # The old hardcoded Ensembl ".111." version segment is gone.
+    assert "ASM584v2.111.gtf.gz" not in content
+    # The GTF download chain references the efetch fallback.
+    assert "GTF_EFETCH_URL" in content

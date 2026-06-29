@@ -248,9 +248,9 @@ def resolve_nextflow_bin(
             return candidate.resolve()
     raise ABIError(
         "Nextflow executable was not found. Create the repository-local environment with "
-        "`cmake --build build --target create_envs` or "
+        "`bash scripts/cloud/01_envs.sh --env autoplasm-nextflow` or "
         "`.mamba/bin/micromamba create -y -p .mamba/envs/autoplasm-nextflow "
-        "-f envs/nextflow.yml`, or pass --nextflow-bin."
+        "-f envs/autoplasm-nextflow.yml`, or pass --nextflow-bin."
     )
 
 
