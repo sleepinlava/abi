@@ -34,6 +34,7 @@ resources/*
 !resources/.gitkeep
 results/*
 !results/.gitkeep
+logs/
 log/*
 !log/.gitkeep
 *.log
@@ -140,6 +141,9 @@ plugins/*/report/*
 
 # Jupyter notebook checkpoints
 .ipynb_checkpoints/
+
+# Cloud/download scratch outputs
+/merged.tab
 
 # Temporary analysis outputs
 tmp/

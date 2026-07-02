@@ -12,5 +12,4 @@ dependencies:
 - hifiasm
 - raven-assembler
 - quast
-- perl-opera-ms
 - medaka

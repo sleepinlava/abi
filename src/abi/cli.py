@@ -182,6 +182,26 @@ def _agent_result(payload: str) -> Dict[str, Any]:
     return result
 
 
+def _split_resource_args(
+    resource: Optional[List[str]],
+) -> tuple[Optional[List[str]], list[str]]:
+    """Separate resource filter IDs from resource path overrides.
+
+    Items containing ``=`` are treated as path overrides (e.g. ``bakta=/path``).
+    All others are plain resource ID filters.
+    """
+    filters: list[str] = []
+    overrides: list[str] = []
+    if not resource:
+        return None, []
+    for item in resource:
+        if "=" in item:
+            overrides.append(item)
+        else:
+            filters.append(item)
+    return filters or None, overrides
+
+
 def _emit_json_payload(payload: Any) -> None:
     """Emit a JSON payload to stdout with consistent formatting.
 
@@ -195,6 +215,7 @@ def _load_plugin_config(
     analysis_type: str,
     config: Optional[Path],
     profile: str,
+    db_profile: Optional[str] = None,
     overrides: Mapping[str, Any],
 ) -> Dict[str, Any]:
     """Load and resolve a plugin configuration.
@@ -208,7 +229,7 @@ def _load_plugin_config(
     结果是一个完全解析的配置字典，包含所有默认值、profile 层和 CLI 覆盖项。
     """
     plugin = get_plugin(analysis_type)
-    return plugin.load_config(config, profile=profile, overrides=overrides)
+    return plugin.load_config(config, profile=profile, db_profile=db_profile, overrides=overrides)
 
 
 @app.command("list-types")
@@ -345,6 +366,23 @@ def plan_command(
         "--output-json",
         help="Emit the agent JSON envelope.",
     ),
+    db_profile: Optional[str] = typer.Option(
+        None,
+        "--db-profile",
+        envvar="ABI_DB_PROFILE",
+        help="Database profile name (e.g. light, full, shared).",
+    ),
+    resource_root: Optional[str] = typer.Option(
+        None,
+        "--resource-root",
+        envvar="ABI_RESOURCE_ROOT",
+        help="Override resource root directory.",
+    ),
+    resource: Optional[List[str]] = typer.Option(
+        None,
+        "--resource",
+        help="Resource path override (id=path). Repeatable.",
+    ),
 ) -> None:
     """Build and write an ABI execution plan to ``<outdir>/execution_plan.json``.
 
@@ -359,35 +397,26 @@ def plan_command(
     该命令解析插件配置，通过 ``plugin.build_plan()`` 构建步骤计划，并持久化为 JSON。
     计划编码了每个步骤：tool_id、inputs、params、outputs 以及要运行的命令。
     """
+    resource_overrides_list = [r for r in (resource or []) if "=" in r]
+    plan_kwargs = dict(
+        analysis_type=analysis_type,
+        config_path=config,
+        sample_sheet=sample_sheet,
+        profile=profile,
+        mode=mode,
+        threads=threads,
+        outdir=outdir,
+        log_dir=log_dir,
+        check_files=check_files,
+        db_profile=db_profile,
+        resource_root=resource_root,
+        resource_overrides_list=resource_overrides_list or None,
+    )
     if output_json:
-        _emit_agent_json(
-            ABIAgentInterface().plan(
-                analysis_type=analysis_type,
-                config_path=config,
-                sample_sheet=sample_sheet,
-                profile=profile,
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-                check_files=check_files,
-            )
-        )
+        _emit_agent_json(ABIAgentInterface().plan(**plan_kwargs))  # type: ignore[arg-type]
         return
     try:
-        result = _agent_result(
-            ABIAgentInterface().plan(
-                analysis_type=analysis_type,
-                config_path=config,
-                sample_sheet=sample_sheet,
-                profile=profile,
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-                check_files=check_files,
-            )
-        )
+        result = _agent_result(ABIAgentInterface().plan(**plan_kwargs))  # type: ignore[arg-type]
         typer.echo(
             json.dumps({"plan": str(result["plan_path"]), "steps": result["steps"]}, indent=2)
         )
@@ -406,8 +435,26 @@ def check_command(
         True, "--check-runtime/--no-check-runtime", help="Check installed executables."
     ),
     output_json: bool = typer.Option(False, "--output-json", help="Emit the agent JSON envelope."),
+    db_profile: Optional[str] = typer.Option(
+        None,
+        "--db-profile",
+        envvar="ABI_DB_PROFILE",
+        help="Database profile name (e.g. light, full, shared).",
+    ),
+    resource_root: Optional[str] = typer.Option(
+        None,
+        "--resource-root",
+        envvar="ABI_RESOURCE_ROOT",
+        help="Override resource root directory.",
+    ),
+    resource: Optional[List[str]] = typer.Option(
+        None,
+        "--resource",
+        help="Resource path override (id=path). Repeatable.",
+    ),
 ) -> None:
     """Run side-effect-free input, resource, and runtime preflight checks."""
+    resource_overrides_list = [r for r in (resource or []) if "=" in r]
     try:
         payload = ABIAgentInterface().check(
             analysis_type=analysis_type,
@@ -416,6 +463,9 @@ def check_command(
             profile=profile,
             engine=engine,
             check_runtime=check_runtime,
+            db_profile=db_profile,
+            resource_root=resource_root,
+            resource_overrides_list=resource_overrides_list or None,
         )
         if output_json:
             typer.echo(payload)
@@ -486,6 +536,23 @@ def dry_run_command(
         "--container-runtime",
         help="Container runtime: docker, singularity, podman, apptainer.",
     ),
+    db_profile: Optional[str] = typer.Option(
+        None,
+        "--db-profile",
+        envvar="ABI_DB_PROFILE",
+        help="Database profile name (e.g. light, full, shared).",
+    ),
+    resource_root: Optional[str] = typer.Option(
+        None,
+        "--resource-root",
+        envvar="ABI_RESOURCE_ROOT",
+        help="Override resource root directory.",
+    ),
+    resource: Optional[List[str]] = typer.Option(
+        None,
+        "--resource",
+        help="Resource path override (id=path). Repeatable.",
+    ),
 ) -> None:
     """Run a plugin dry-run and write ABI provenance artifacts.
 
@@ -501,51 +568,34 @@ def dry_run_command(
     预演验证执行计划而不调用任何真实的外部工具。它产生与实际运行相同的溯源产物，
     但每个步骤都标记为 ``"dry_run"``，且不发生实际计算。
     """
+    resource_overrides_list = [r for r in (resource or []) if "=" in r]
+    dry_run_kwargs = dict(
+        analysis_type=analysis_type,
+        config_path=config,
+        sample_sheet=sample_sheet,
+        profile=profile,
+        mode=mode,
+        threads=threads,
+        outdir=outdir,
+        log_dir=log_dir,
+        progress=progress,
+        check_files=check_files,
+        resource_profile=resource_profile,
+        cpu_override=cpu_override,
+        memory_override=memory_override,
+        walltime_override=walltime_override,
+        accelerator_override=accelerator_override,
+        container_image=container_image,
+        container_runtime=container_runtime,
+        db_profile=db_profile,
+        resource_root=resource_root,
+        resource_overrides_list=resource_overrides_list or None,
+    )
     if output_json:
-        _emit_agent_json(
-            ABIAgentInterface().dry_run(
-                analysis_type=analysis_type,
-                config_path=config,
-                sample_sheet=sample_sheet,
-                profile=profile,
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-                progress=progress,
-                check_files=check_files,
-                resource_profile=resource_profile,
-                cpu_override=cpu_override,
-                memory_override=memory_override,
-                walltime_override=walltime_override,
-                accelerator_override=accelerator_override,
-                container_image=container_image,
-                container_runtime=container_runtime,
-            )
-        )
+        _emit_agent_json(ABIAgentInterface().dry_run(**dry_run_kwargs))  # type: ignore[arg-type]
         return
     try:
-        result = _agent_result(
-            ABIAgentInterface().dry_run(
-                analysis_type=analysis_type,
-                config_path=config,
-                sample_sheet=sample_sheet,
-                profile=profile,
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-                progress=progress,
-                check_files=check_files,
-                resource_profile=resource_profile,
-                cpu_override=cpu_override,
-                memory_override=memory_override,
-                walltime_override=walltime_override,
-                accelerator_override=accelerator_override,
-                container_image=container_image,
-                container_runtime=container_runtime,
-            )
-        )
+        result = _agent_result(ABIAgentInterface().dry_run(**dry_run_kwargs))  # type: ignore[arg-type]
         typer.echo(json.dumps(result["outputs"], indent=2))
     except Exception as exc:
         _fail(exc)
@@ -891,6 +941,23 @@ def run_command(
     poll_interval_seconds: float = typer.Option(
         30.0, "--poll-interval", help="Scheduler polling interval in seconds."
     ),
+    db_profile: Optional[str] = typer.Option(
+        None,
+        "--db-profile",
+        envvar="ABI_DB_PROFILE",
+        help="Database profile name (e.g. light, full, shared).",
+    ),
+    resource_root: Optional[str] = typer.Option(
+        None,
+        "--resource-root",
+        envvar="ABI_RESOURCE_ROOT",
+        help="Override resource root directory.",
+    ),
+    resource: Optional[List[str]] = typer.Option(
+        None,
+        "--resource",
+        help="Resource path override (id=path). Repeatable.",
+    ),
 ) -> None:
     """Run an ABI execution plan through a selected runtime backend.
 
@@ -913,47 +980,51 @@ def run_command(
     执行流程：加载插件配置，构建计划，按 ``--engine`` 选择本地、Nextflow 或
     原生 HPC 运行时，然后执行。
     """
+    resource_overrides_list = [r for r in (resource or []) if "=" in r]
+    run_kwargs = dict(
+        analysis_type=analysis_type,
+        engine=engine,
+        config_path=config,
+        sample_sheet=sample_sheet,
+        profile=profile,
+        mode=mode,
+        threads=threads,
+        outdir=outdir,
+        log_dir=log_dir,
+        workflow=workflow,
+        work_dir=work_dir,
+        nxf_home=nxf_home,
+        nextflow_bin=nextflow_bin,
+        nextflow_profile=nextflow_profile,
+        executor=executor,
+        resume=resume,
+        mamba_root=mamba_root,
+        smoke=smoke,
+        check_files=check_files,
+        resource_profile=resource_profile,
+        cpu_override=cpu_override,
+        memory_override=memory_override,
+        walltime_override=walltime_override,
+        accelerator_override=accelerator_override,
+        container_image=container_image,
+        container_runtime=container_runtime,
+        scheduler=scheduler,
+        partition=partition,
+        account=account,
+        qos=qos,
+        hpc_timeout_seconds=hpc_timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
+        db_profile=db_profile,
+        resource_root=resource_root,
+        resource_overrides_list=resource_overrides_list or None,
+    )
     if not confirm_execution:
         # No confirmation and not in output-json mode — route through agent
         # interface to get the confirmation_required envelope (exit code 2).
         # 未确认且不在 output-json 模式——通过 agent 接口路由以获取
         # confirmation_required 信封（退出码 2）。
         _emit_agent_json(
-            ABIAgentInterface().run(
-                analysis_type=analysis_type,
-                engine=engine,
-                config_path=config,
-                sample_sheet=sample_sheet,
-                profile=profile,
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-                workflow=workflow,
-                work_dir=work_dir,
-                nxf_home=nxf_home,
-                nextflow_bin=nextflow_bin,
-                nextflow_profile=nextflow_profile,
-                executor=executor,
-                resume=resume,
-                mamba_root=mamba_root,
-                smoke=smoke,
-                check_files=check_files,
-                confirm_execution=False,
-                resource_profile=resource_profile,
-                cpu_override=cpu_override,
-                memory_override=memory_override,
-                walltime_override=walltime_override,
-                accelerator_override=accelerator_override,
-                container_image=container_image,
-                container_runtime=container_runtime,
-                scheduler=scheduler,
-                partition=partition,
-                account=account,
-                qos=qos,
-                hpc_timeout_seconds=hpc_timeout_seconds,
-                poll_interval_seconds=poll_interval_seconds,
-            )
+            ABIAgentInterface().run(**{**run_kwargs, "confirm_execution": False})  # type: ignore[arg-type]
         )
         return
     if output_json:
@@ -962,78 +1033,14 @@ def run_command(
         # 已确认执行且带有 --output-json：agent 接口在运行完成后返回结果信封。
         _emit_agent_json(
             ABIAgentInterface().run(
-                analysis_type=analysis_type,
-                engine=engine,
-                config_path=config,
-                sample_sheet=sample_sheet,
-                profile=profile,
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-                workflow=workflow,
-                work_dir=work_dir,
-                nxf_home=nxf_home,
-                nextflow_bin=nextflow_bin,
-                nextflow_profile=nextflow_profile,
-                executor=executor,
-                resume=resume,
-                mamba_root=mamba_root,
-                smoke=smoke,
-                check_files=check_files,
-                confirm_execution=confirm_execution,
-                resource_profile=resource_profile,
-                cpu_override=cpu_override,
-                memory_override=memory_override,
-                walltime_override=walltime_override,
-                accelerator_override=accelerator_override,
-                container_image=container_image,
-                container_runtime=container_runtime,
-                scheduler=scheduler,
-                partition=partition,
-                account=account,
-                qos=qos,
-                hpc_timeout_seconds=hpc_timeout_seconds,
-                poll_interval_seconds=poll_interval_seconds,
+                **{**run_kwargs, "confirm_execution": confirm_execution}  # type: ignore[arg-type]
             )
         )
         return
     try:
         result = _agent_result(
             ABIAgentInterface().run(
-                analysis_type=analysis_type,
-                engine=engine,
-                config_path=config,
-                sample_sheet=sample_sheet,
-                profile=profile,
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-                workflow=workflow,
-                work_dir=work_dir,
-                nxf_home=nxf_home,
-                nextflow_bin=nextflow_bin,
-                nextflow_profile=nextflow_profile,
-                executor=executor,
-                resume=resume,
-                mamba_root=mamba_root,
-                smoke=smoke,
-                check_files=check_files,
-                confirm_execution=True,
-                resource_profile=resource_profile,
-                cpu_override=cpu_override,
-                memory_override=memory_override,
-                walltime_override=walltime_override,
-                accelerator_override=accelerator_override,
-                container_image=container_image,
-                container_runtime=container_runtime,
-                scheduler=scheduler,
-                partition=partition,
-                account=account,
-                qos=qos,
-                hpc_timeout_seconds=hpc_timeout_seconds,
-                poll_interval_seconds=poll_interval_seconds,
+                **{**run_kwargs, "confirm_execution": True}  # type: ignore[arg-type]
             )
         )
         typer.echo(json.dumps(result["outputs"], indent=2))
@@ -1333,13 +1340,25 @@ def check_resources_command(
     resource: Optional[List[str]] = typer.Option(
         None,
         "--resource",
-        help="Resource id to check. Repeatable.",
+        help="Resource id to check (use id=path to override path). Repeatable.",
     ),
     profile: str = typer.Option("local", "--profile", help="Profile for adapter plugins."),
     mode: Optional[str] = typer.Option(None, "--mode", help="Execution mode."),
     threads: Optional[int] = typer.Option(None, "--threads", help="Thread count."),
     outdir: Optional[str] = typer.Option(None, "--outdir", help="Output directory."),
     log_dir: Optional[str] = typer.Option(None, "--log-dir", help="Log directory."),
+    db_profile: Optional[str] = typer.Option(
+        None,
+        "--db-profile",
+        envvar="ABI_DB_PROFILE",
+        help="Database profile name (e.g. light, full, shared).",
+    ),
+    resource_root: Optional[str] = typer.Option(
+        None,
+        "--resource-root",
+        envvar="ABI_RESOURCE_ROOT",
+        help="Override resource root directory.",
+    ),
 ) -> None:
     """Check configured database, index, and model resources without downloading them.
 
@@ -1353,16 +1372,20 @@ def check_resources_command(
     返回标准 success/error JSON 信封，其中包含每个资源的状态行。
     使用 ``--resource`` 将检查限制到特定资源 ID。
     """
+    resource_ids, resource_overrides_list = _split_resource_args(resource)
     _emit_agent_json(
         ABIAgentInterface().check_resources(
             analysis_type=analysis_type,
             config_path=config,
-            resource_ids=resource,
+            resource_ids=resource_ids,
             profile=profile,
             mode=mode,
             threads=threads,
             outdir=outdir,
             log_dir=log_dir,
+            db_profile=db_profile,
+            resource_root=resource_root,
+            resource_overrides_list=resource_overrides_list or None,
         )
     )
 
@@ -1391,6 +1414,18 @@ def setup_resources_command(
         False,
         "--confirm",
         help="Confirm execution. Required for real resource setup (S13 fix).",
+    ),
+    db_profile: Optional[str] = typer.Option(
+        None,
+        "--db-profile",
+        envvar="ABI_DB_PROFILE",
+        help="Database profile name (e.g. light, full, shared).",
+    ),
+    resource_root: Optional[str] = typer.Option(
+        None,
+        "--resource-root",
+        envvar="ABI_RESOURCE_ROOT",
+        help="Override resource root directory.",
     ),
 ) -> None:
     """Download, mock, or plan setup for ABI analysis resources.
@@ -1422,16 +1457,20 @@ def setup_resources_command(
         )
         raise typer.Exit(2)
     try:
+        overrides = _common_overrides(
+            mode=mode,
+            threads=threads,
+            outdir=outdir,
+            log_dir=log_dir,
+        )
+        if resource_root:
+            overrides.setdefault("resources", {})["root"] = resource_root
         cfg = _load_plugin_config(
             analysis_type=analysis_type,
             config=config,
             profile=profile,
-            overrides=_common_overrides(
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-            ),
+            db_profile=db_profile,
+            overrides=overrides,
         )
         rows = setup_resources(
             analysis_type=analysis_type,

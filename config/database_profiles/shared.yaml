@@ -1,0 +1,13 @@
+# ABI Database Profile: shared
+# HPC 共享文件系统模板 — 所有数据库相对一个共享 root
+# HPC shared filesystem template — all databases relative to a shared root.
+#
+# 用法 / Usage:
+#   abi check-resources --type metagenomic_plasmid --db-profile shared
+#
+# 部署时只需修改下面的 `root` 字段为实际共享路径（或用 --resource-root 覆盖）。
+# Deploy by editing the `root` field below (or override with --resource-root).
+
+resources:
+  root: /shared/databases/autoplasm
+  # Subdir names follow ResourceSpec.default_subdir; no per-resource override needed.

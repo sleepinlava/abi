@@ -54,10 +54,19 @@ def resolved_mamba_root() -> Path:
     2. ``AUTOPLASM_MAMBA_ROOT`` env var (legacy compat)
     3. ``PROJECT_ROOT / ".mamba"`` (default local install)
     4. ``PROJECT_ROOT.parent / "abi-envs"`` (sibling dir, common in dev/deploy)
+
+    Env overrides that point at non-existent or empty directories fall through
+    to default/sibling so one misconfigured export cannot silently break tool
+    discovery.
     """
-    env_override = os.environ.get("ABI_MAMBA_ROOT") or os.environ.get("AUTOPLASM_MAMBA_ROOT")
-    if env_override:
-        return Path(env_override)
+    for var in ("ABI_MAMBA_ROOT", "AUTOPLASM_MAMBA_ROOT"):
+        env_override = os.environ.get(var)
+        if env_override:
+            candidate = Path(env_override)
+            envs_dir = candidate / "envs"
+            if envs_dir.is_dir() and any(envs_dir.iterdir()):
+                return candidate
+            # Fall through to default/sibling on empty/missing override.
     default = PROJECT_ROOT / ".mamba"
     if default.exists():
         return default

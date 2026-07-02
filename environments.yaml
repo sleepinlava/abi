@@ -49,7 +49,7 @@ environments:
     - nanoplot
     - filtlong
     - hifiadapterfilt
-    - ont-dorado
+    # ont-dorado removed from bioconda — install manually if needed
   autoplasm-assembly:
     channels:
     - conda-forge
@@ -64,7 +64,7 @@ environments:
     - hifiasm
     - raven-assembler
     - quast
-    - perl-opera-ms
+    # perl-opera-ms removed from bioconda — install manually if needed
     - medaka
   autoplasm-annotation:
     channels:

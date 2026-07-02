@@ -71,6 +71,7 @@ def test_generic_resource_check_handles_nested_values_filters_and_statuses(tmp_p
 def test_manual_bundle_distinguishes_existing_mock_dry_run_and_manual(tmp_path: Path) -> None:
     existing = tmp_path / "existing"
     existing.mkdir()
+    (existing / ".autoplasm_resource_ready").write_text("ok", encoding="utf-8")
     base = {
         "outdir": str(tmp_path / "out"),
         "resources": {
@@ -250,7 +251,7 @@ def test_rnaseq_setup_missing_script_and_selected_generic_resource(
         {"resources": {"genome_index": str(genome)}},
         resource_ids=["genome_index"],
     )
-    assert [(row["resource_id"], row["status"]) for row in rows] == [("genome_index", "ok")]
+    assert [(row["resource_id"], row["status"]) for row in rows] == [("genome_index", "incomplete")]
     assert rows[0]["mock"] is False
 
     mock_preview = resources._setup_rnaseq_expression(

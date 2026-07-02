@@ -10,7 +10,7 @@ from abi.interfaces import ABIResourcePlugin
 from abi.plugins import get_plugin
 from abi.timeouts import DEFAULT_RESOURCE_TIMEOUT_SECONDS, timeout_from_env_or_value
 
-__all__ = ["check_resources", "setup_resources"]
+__all__ = ["check_resources", "setup_resources", "apply_resource_overrides"]
 
 _PLACEHOLDER_MARKERS = ("NOT_CONFIGURED", "TODO", "PLACEHOLDER")
 
@@ -360,7 +360,11 @@ def _generic_resource_status(value: Any) -> str:
     if any(marker in text for marker in _PLACEHOLDER_MARKERS):
         return "not_configured"
     path = Path(text)
-    return "ok" if path.exists() else "missing"
+    if not path.exists():
+        return "missing"
+    if path.is_dir() and not any(path.iterdir()):
+        return "incomplete"
+    return "ok"
 
 
 def _generic_resource_message(status: str) -> str:
@@ -368,6 +372,8 @@ def _generic_resource_message(status: str) -> str:
         return "Configured resource path exists."
     if status == "missing":
         return "Configured resource path does not exist."
+    if status == "incomplete":
+        return "Configured resource directory is empty; database setup may be incomplete."
     return "Resource path is not configured."
 
 
@@ -750,3 +756,31 @@ def _generate_synthetic_fallback(outdir: Path) -> bool:
         check=False,
     )
     return result.returncode == 0 and synthetic_path.exists()
+
+
+def apply_resource_overrides(
+    config: Dict[str, Any], overrides: Sequence[str]
+) -> None:
+    """Apply ``--resource id=path`` overrides to a config dict in-place.
+
+    Handles ``id=path`` syntax: sets ``config.resources.<id>`` to ``<path>``.
+    For the full ``id:field=path`` syntax, use the plugin's version directly.
+    """
+    resources = config.setdefault("resources", {})
+    if not isinstance(resources, Mapping):
+        resources = {}
+        config["resources"] = resources
+    for item in overrides:
+        key, _, path = item.partition("=")
+        key = key.strip()
+        path = path.strip()
+        if not key or not path:
+            raise ABIError(
+                f"Invalid --resource override (expected id=path): {item!r}"
+            )
+        resource_id = key
+        block = resources.setdefault(resource_id, {})
+        if not isinstance(block, dict):
+            block = {}
+            resources[resource_id] = block
+        block["path"] = path

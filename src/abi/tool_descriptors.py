@@ -93,6 +93,13 @@ COMMON_PLAN_PROPERTIES: Dict[str, Mapping[str, Any]] = {
     "outdir": _string("Output directory for generated ABI artifacts."),
     "log_dir": _string("Optional log directory override."),
     "check_files": _boolean("Check input paths when planning."),
+    "db_profile": _string("Optional database profile name (e.g. light, full, shared)."),
+    "resource_root": _string("Optional resource root directory override."),
+    "resource_overrides_list": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Optional resource path overrides (id=path).",
+    },
 }
 
 RESOURCE_RUNTIME_PROPERTIES: Dict[str, Mapping[str, Any]] = {
@@ -152,6 +159,13 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
                 "description": "Target runtime backend.",
             },
             "check_runtime": _boolean("Check installed executables and environments."),
+            "db_profile": _string("Optional database profile name (e.g. light, full, shared)."),
+            "resource_root": _string("Optional resource root directory override."),
+            "resource_overrides_list": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional resource path overrides (id=path).",
+            },
         },
         "required": ["analysis_type"],
         "read_only": True,
@@ -296,6 +310,13 @@ ABI_AGENT_TOOLS: Dict[str, ToolMetadata] = {
             "poll_interval_seconds": {
                 "type": "number",
                 "description": "Scheduler polling interval in seconds.",
+            },
+            "db_profile": _string("Optional database profile name (e.g. light, full, shared)."),
+            "resource_root": _string("Optional resource root directory override."),
+            "resource_overrides_list": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional resource path overrides (id=path).",
             },
         },
         "required": ["analysis_type", "confirm_execution"],

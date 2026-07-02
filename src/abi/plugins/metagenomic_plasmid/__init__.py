@@ -95,6 +95,7 @@ class MetagenomicPlasmidPlugin:
         config_path: str | Path | None = None,
         *,
         profile: str | None = None,
+        db_profile: str | None = None,
         overrides: Optional[Mapping[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Load and normalize the pipeline configuration.
@@ -108,7 +109,12 @@ class MetagenomicPlasmidPlugin:
         合并默认配置与用户提供的覆盖项。``profile`` 默认为 ``"dry_run"``，
         确保即使没有真实 profile 也能安全加载配置。
         """
-        return load_autoplasm_config(config_path, profile=profile or "dry_run", overrides=overrides)
+        return load_autoplasm_config(
+            config_path,
+            profile=profile or "dry_run",
+            db_profile=db_profile,
+            overrides=overrides,
+        )
 
     def check_resources(
         self,

@@ -1,0 +1,23 @@
+# ABI Database Profile: full
+# 生产级完整数据库 — 用于真实宏基因组/质粒分析
+# Production-grade full databases for real metagenomic/plasmid analysis.
+#
+# 用法 / Usage:
+#   abi check-resources --type metagenomic_plasmid --db-profile full
+#   abi run --type metagenomic_plasmid --db-profile full --confirm-execution
+#
+# 注：bakta full (~84GB) 需单独下载；如未下载，将回退到 light 或报 incomplete。
+# Note: bakta full (~84GB) must be downloaded separately; if absent, falls back
+# to light or reports incomplete.
+
+resources:
+  root: /root/autodl-tmp/resources/autoplasm
+
+  bakta:
+    # Bakta full database (~84GB) — production genome annotation.
+    database: bakta_full/db
+  kraken2:
+    # Kraken2 standard plus regex/shadow targets — broader recall.
+    database: kraken2_full
+    version: standard_20260226
+  # Other databases inherit from default / light profile; only override what differs.

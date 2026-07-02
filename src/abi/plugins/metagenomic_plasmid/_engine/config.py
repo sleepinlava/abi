@@ -119,6 +119,7 @@ def _resolve_input_path(value: str | Path, base_dirs: list[Path]) -> Path:
 def load_config(
     config_path: str | Path | None = None,
     profile: str | None = None,
+    db_profile: str | None = None,
     overrides: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     config = load_yaml(DEFAULT_CONFIG)
@@ -128,6 +129,13 @@ def load_config(
     if profile_path.exists():
         config = deep_merge(config, load_yaml(profile_path))
 
+    # Database profile (orthogonal to exec profile): overrides resources.* paths.
+    if db_profile:
+        db_profile_path = PROJECT_ROOT / "config" / "database_profiles" / f"{db_profile}.yaml"
+        if not db_profile_path.exists():
+            raise ConfigError(f"Database profile not found: {db_profile_path}")
+        config = deep_merge(config, load_yaml(db_profile_path))
+
     resolved_config_path = _resolve_existing_path(config_path) if config_path else None
     if resolved_config_path:
         config = deep_merge(config, load_yaml(resolved_config_path))
@@ -135,6 +143,8 @@ def load_config(
     config = deep_merge(config, compact_overrides(overrides))
     _resolve_input_paths(config, resolved_config_path)
     config["profile"] = selected_profile
+    if db_profile:
+        config["db_profile"] = db_profile
     validate_config(config)
     return config
 
@@ -285,11 +295,20 @@ def resolved_mamba_root() -> Path:
     2. ``AUTOPLASM_MAMBA_ROOT`` env var (legacy compat)
     3. ``PROJECT_ROOT / ".mamba"`` (default local install)
     4. ``PROJECT_ROOT.parent / "abi-envs"`` (sibling dir, common in dev/deploy)
+
+    Env overrides that point at non-existent or empty directories fall through
+    to default/sibling so one misconfigured export cannot silently break tool
+    discovery.
     """
     # Env var overrides come FIRST
-    env_override = os.environ.get("ABI_MAMBA_ROOT") or os.environ.get("AUTOPLASM_MAMBA_ROOT")
-    if env_override:
-        return Path(env_override)
+    for var in ("ABI_MAMBA_ROOT", "AUTOPLASM_MAMBA_ROOT"):
+        env_override = os.environ.get(var)
+        if env_override:
+            candidate = Path(env_override)
+            envs_dir = candidate / "envs"
+            if envs_dir.is_dir() and any(envs_dir.iterdir()):
+                return candidate
+            # Fall through on empty/missing override.
     default = PROJECT_ROOT / ".mamba"
     if default.exists():
         return default

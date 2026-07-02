@@ -65,3 +65,19 @@ def tmp_project(tmp_path: Path) -> Path:
     for sub in ("results", "logs", "provenance", "tables"):
         (tmp_path / sub).mkdir(parents=True, exist_ok=True)
     return tmp_path
+
+
+@pytest.fixture(autouse=True)
+def _isolate_mamba_root_env(monkeypatch):
+    """Restore CI-clean mamba root isolation.
+
+    Shell exports of ``ABI_MAMBA_ROOT`` leak into pytest and override the
+    ``AUTOPLASM_MAMBA_ROOT`` monkeypatch used by ~19 fixtures below.  Drop both
+    env vars at session start so each fixture's setenv re-establishes its own
+    root deterministically.  Also isolate ``ABI_RESOURCE_ROOT`` so resource
+    path resolution tests are not perturbed by the host environment.
+    """
+    for var in ("ABI_MAMBA_ROOT", "AUTOPLASM_MAMBA_ROOT",
+                "ABI_RESOURCE_ROOT", "AUTOPLASM_RESOURCE_ROOT"):
+        monkeypatch.delenv(var, raising=False)
+    yield

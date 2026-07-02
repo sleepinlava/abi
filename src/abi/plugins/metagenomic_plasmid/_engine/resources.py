@@ -29,6 +29,7 @@ from abi.plugins.metagenomic_plasmid._engine.timeouts import (
     mapping_block,
     timeout_from_env_or_value,
 )
+from abi.resources import _is_placeholder_resource_value
 
 
 class ResourceError(AutoPlasmError):
@@ -498,8 +499,26 @@ def default_resource_specs(config: Mapping[str, Any]) -> List[ResourceSpec]:
 
 
 def resource_root(config: Mapping[str, Any]) -> Path:
+    """Return the root directory holding ABI-managed databases.
+
+    Resolution order (highest precedence first):
+    1. ``ABI_RESOURCE_ROOT`` / ``AUTOPLASM_RESOURCE_ROOT`` env var (only when
+       the path exists and is a directory — a misconfigured export falls
+       through so it cannot silently break discovery).
+    2. ``config.resources.root`` (when not a placeholder).
+    3. ``PROJECT_ROOT / "resources" / "autoplasm"`` (default).
+    """
+    for var in ("ABI_RESOURCE_ROOT", "AUTOPLASM_RESOURCE_ROOT"):
+        env_override = os.environ.get(var)
+        if env_override:
+            candidate = Path(env_override)
+            if candidate.is_dir():
+                return candidate
+            # Fall through on missing/non-directory override.
     resources = config.get("resources", {})
     root = resources.get("root") if isinstance(resources, Mapping) else None
+    if root and not _is_placeholder_resource_value(root):
+        return Path(str(root))
     return Path(str(root or PROJECT_ROOT / "resources" / "autoplasm"))
 
 
@@ -937,7 +956,65 @@ def _directory_manifest_checksum(path: Path) -> str:
 def _configured_resource_path(config: Mapping[str, Any], spec: ResourceSpec) -> Path:
     block = _resource_block(config, spec.resource_id)
     value = block.get(spec.field)
-    return Path(str(value or resource_root(config) / spec.default_subdir))
+    if not value:
+        return resource_root(config) / spec.default_subdir
+    path = Path(str(value))
+    if path.is_absolute() or _is_placeholder_resource_value(value):
+        return path
+    return resource_root(config) / path
+
+
+def apply_resource_overrides(
+    config: Dict[str, Any], overrides: Sequence[str]
+) -> List[tuple[str, str, str]]:
+    """Apply ``--resource id=path`` / ``--resource id:field=path`` overrides.
+
+    Returns the list of ``(resource_id, field, path)`` tuples that were applied,
+    so callers can surface them in provenance.  Raises ``ResourceError`` when
+    an unknown ``resource_id`` is supplied (the field name is taken from the
+    matching ``ResourceSpec`` when not explicitly given).
+    """
+    specs = {s.resource_id: s for s in default_resource_specs(config)}
+    applied: List[tuple[str, str, str]] = []
+    resources = config.setdefault("resources", {})
+    if not isinstance(resources, Mapping):
+        resources = {}
+        config["resources"] = resources
+    for item in overrides:
+        key, _, path = item.partition("=")
+        key = key.strip()
+        path = path.strip()
+        if not key or not path:
+            raise ResourceError(
+                f"Invalid --resource override (expected id=path or id:field=path): {item!r}"
+            )
+        resource_id: str
+        field: str
+        if ":" in key:
+            resource_id, _, field = key.partition(":")
+            resource_id = resource_id.strip()
+            field = field.strip()
+            if resource_id not in specs:
+                raise ResourceError(
+                    f"Unknown resource id '{resource_id}'; available: "
+                    + ", ".join(sorted(specs))
+                )
+        else:
+            resource_id = key
+            spec = specs.get(resource_id)
+            if spec is None:
+                raise ResourceError(
+                    f"Unknown resource id '{resource_id}'; available: "
+                    + ", ".join(sorted(specs))
+                )
+            field = spec.field
+        block = resources.setdefault(resource_id, {})
+        if not isinstance(block, dict):
+            block = {}
+            resources[resource_id] = block
+        block[field] = path
+        applied.append((resource_id, field, path))
+    return applied
 
 
 def _resource_block(config: Mapping[str, Any], resource_id: str) -> Mapping[str, Any]:

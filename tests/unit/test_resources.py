@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from abi.autoplasm.config import load_config as load_autoplasm_config
 from abi.autoplasm.resources import (
     check_resources,
     fetch_example_dataset,
@@ -25,6 +26,22 @@ def test_setup_resources_mock_writes_manifest(tmp_path):
     assert genomad["ready_check"] == "ready sentinel found"
     assert genomad["directory_file_count"] >= 1
     assert "directory_size_bytes" in genomad
+
+
+def test_database_profile_resource_paths_rebase_to_resource_root(tmp_path):
+    resource_root = tmp_path / "custom-resources"
+
+    config = load_autoplasm_config(
+        db_profile="light",
+        overrides={"resources": {"root": str(resource_root)}},
+    )
+    rows = check_resources(config, resource_ids=["genomad", "bakta"])
+
+    paths = {row["resource_id"]: Path(row["path"]) for row in rows}
+    assert paths == {
+        "genomad": resource_root / "genomad",
+        "bakta": resource_root / "bakta" / "db",
+    }
 
 
 def test_wgs_mock_resource_uses_safe_outdir_for_placeholder_path(tmp_path):
@@ -402,7 +419,7 @@ def test_core_resource_orchestrator_has_generic_fallback(tmp_path, monkeypatch):
     checked = check_abi_resources(analysis_type="external", config=config)
     planned = setup_abi_resources(analysis_type="external", config=config, dry_run=True)
 
-    assert checked[0]["status"] == "ok"
+    assert checked[0]["status"] == "incomplete"
     assert planned[0]["status"] == "planned"
 
 

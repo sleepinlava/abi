@@ -153,6 +153,9 @@ class ABIAgentInterface:
         outdir: Optional[str] = None,
         log_dir: Optional[str] = None,
         check_files: bool = True,
+        db_profile: Optional[str] = None,
+        resource_root: Optional[str] = None,
+        resource_overrides_list: Optional[List[str]] = None,
     ) -> str:
         """Build and persist an ABI execution plan without running external tools.
 
@@ -188,6 +191,9 @@ class ABIAgentInterface:
             outdir=outdir,
             log_dir=log_dir,
             check_files=check_files,
+            db_profile=db_profile,
+            resource_root=resource_root,
+            resource_overrides_list=resource_overrides_list,
         )
 
     def check(
@@ -199,6 +205,9 @@ class ABIAgentInterface:
         profile: str = "dry_run",
         engine: str = "local",
         check_runtime: bool = True,
+        db_profile: Optional[str] = None,
+        resource_root: Optional[str] = None,
+        resource_overrides_list: Optional[List[str]] = None,
     ) -> str:
         """Run plugin input, resource, and optional runtime preflight checks."""
         return self._call(
@@ -210,6 +219,9 @@ class ABIAgentInterface:
             profile=profile,
             engine=engine,
             check_runtime=check_runtime,
+            db_profile=db_profile,
+            resource_root=resource_root,
+            resource_overrides_list=resource_overrides_list,
         )
 
     def dry_run(
@@ -232,6 +244,9 @@ class ABIAgentInterface:
         accelerator_override: Optional[str] = None,
         container_image: Optional[str] = None,
         container_runtime: Optional[str] = None,
+        db_profile: Optional[str] = None,
+        resource_root: Optional[str] = None,
+        resource_overrides_list: Optional[List[str]] = None,
     ) -> str:
         """Render commands and provenance artifacts without executing real tools.
 
@@ -271,6 +286,9 @@ class ABIAgentInterface:
             accelerator_override=accelerator_override,
             container_image=container_image,
             container_runtime=container_runtime,
+            db_profile=db_profile,
+            resource_root=resource_root,
+            resource_overrides_list=resource_overrides_list,
         )
 
     def inspect(self, *, result_dir: Union[str, Path]) -> str:
@@ -361,6 +379,9 @@ class ABIAgentInterface:
         qos: Optional[str] = None,
         hpc_timeout_seconds: Optional[float] = None,
         poll_interval_seconds: float = 30.0,
+        db_profile: Optional[str] = None,
+        resource_root: Optional[str] = None,
+        resource_overrides_list: Optional[List[str]] = None,
     ) -> str:
         """Run an ABI plan through a runtime backend after explicit confirmation.
 
@@ -431,6 +452,9 @@ class ABIAgentInterface:
             qos=qos,
             hpc_timeout_seconds=hpc_timeout_seconds,
             poll_interval_seconds=poll_interval_seconds,
+            db_profile=db_profile,
+            resource_root=resource_root,
+            resource_overrides_list=resource_overrides_list,
         )
 
     def export_nextflow(
@@ -514,6 +538,9 @@ class ABIAgentInterface:
         threads: Optional[int] = None,
         outdir: Optional[str] = None,
         log_dir: Optional[str] = None,
+        db_profile: Optional[str] = None,
+        resource_root: Optional[str] = None,
+        resource_overrides_list: Optional[List[str]] = None,
     ) -> str:
         """Check configured resources and return the uniform agent envelope."""
         return self._call(
@@ -527,6 +554,9 @@ class ABIAgentInterface:
             threads=threads,
             outdir=outdir,
             log_dir=log_dir,
+            db_profile=db_profile,
+            resource_root=resource_root,
+            resource_overrides_list=resource_overrides_list,
         )
 
     def doctor_agent(self, *, analysis_type: str) -> str:
@@ -804,6 +834,9 @@ class ABIAgentInterface:
         outdir: Optional[str],
         log_dir: Optional[str],
         check_files: bool,
+        db_profile: Optional[str] = None,
+        resource_root: Optional[str] = None,
+        resource_overrides_list: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Build config + plan, then persist ``execution_plan.json`` to disk.
 
@@ -822,6 +855,9 @@ class ABIAgentInterface:
             outdir=outdir,
             log_dir=log_dir,
             check_files=check_files,
+            db_profile=db_profile,
+            resource_root=resource_root,
+            resource_overrides_list=resource_overrides_list,
         )
         del plugin  # plugin reference is not needed after plan is serialized
         outdir_path = Path(str(cfg["outdir"]))
@@ -851,14 +887,24 @@ class ABIAgentInterface:
         profile: str,
         engine: str,
         check_runtime: bool,
+        db_profile: Optional[str] = None,
+        resource_root: Optional[str] = None,
+        resource_overrides_list: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Load configuration and run the plugin's side-effect-free preflight."""
         plugin = get_plugin(analysis_type)
+        overrides = _common_overrides(sample_sheet=sample_sheet)
+        if resource_root:
+            overrides.setdefault("resources", {})["root"] = resource_root
         cfg = plugin.load_config(
             _optional_path(config_path),
             profile=profile,
-            overrides=_common_overrides(sample_sheet=sample_sheet),
+            db_profile=db_profile,
+            overrides=overrides,
         )
+        if resource_overrides_list:
+            from abi.resources import apply_resource_overrides
+            apply_resource_overrides(cfg, resource_overrides_list)
         report = dict(
             run_plugin_preflight(
                 plugin,
@@ -891,6 +937,9 @@ class ABIAgentInterface:
         accelerator_override: Optional[str],
         container_image: Optional[str],
         container_runtime: Optional[str],
+        db_profile: Optional[str] = None,
+        resource_root: Optional[str] = None,
+        resource_overrides_list: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Execute a mock run: render commands + provenance, no external tools.
 
@@ -902,27 +951,33 @@ class ABIAgentInterface:
         plugin = get_plugin(analysis_type)
         # Force mock_tools=True so external commands are only rendered, not executed.
         # 强制 mock_tools=True, 确保外部命令仅渲染不执行。
+        overrides = _common_overrides(
+            mode=mode,
+            threads=threads,
+            outdir=outdir,
+            log_dir=log_dir,
+            sample_sheet=sample_sheet,
+            dry_run=True,
+            progress=progress,
+            resource_profile=resource_profile,
+            cpu_override=cpu_override,
+            memory_override=memory_override,
+            walltime_override=walltime_override,
+            accelerator_override=accelerator_override,
+            container_image=container_image,
+            container_runtime=container_runtime,
+        ) | {"mock_tools": True}
+        if resource_root:
+            overrides.setdefault("resources", {})["root"] = resource_root
         cfg = plugin.load_config(
             _optional_path(config_path),
             profile=profile,
-            overrides=_common_overrides(
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-                sample_sheet=sample_sheet,
-                dry_run=True,
-                progress=progress,
-                resource_profile=resource_profile,
-                cpu_override=cpu_override,
-                memory_override=memory_override,
-                walltime_override=walltime_override,
-                accelerator_override=accelerator_override,
-                container_image=container_image,
-                container_runtime=container_runtime,
-            )
-            | {"mock_tools": True},
+            db_profile=db_profile,
+            overrides=overrides,
         )
+        if resource_overrides_list:
+            from abi.resources import apply_resource_overrides
+            apply_resource_overrides(cfg, resource_overrides_list)
         plan = plugin.build_plan(cfg, check_files=check_files)
         if hasattr(plugin, "execute_dry_run"):
             outputs = plugin.execute_dry_run(plan, cfg)
@@ -1041,6 +1096,9 @@ class ABIAgentInterface:
         qos: Optional[str],
         hpc_timeout_seconds: Optional[float],
         poll_interval_seconds: float,
+        db_profile: Optional[str] = None,
+        resource_root: Optional[str] = None,
+        resource_overrides_list: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Execute the plan on a real runtime (local, Nextflow, or native HPC).
 
@@ -1086,9 +1144,19 @@ class ABIAgentInterface:
         # Smoke 模式 + local 引擎: 强制 mock_tools, 不执行真实工具。
         if runtime_engine == "local" and smoke:
             overrides = overrides | {"mock_tools": True}
+        if resource_root:
+            overrides.setdefault("resources", {})["root"] = resource_root
 
         plugin = get_plugin(analysis_type)
-        cfg = plugin.load_config(_optional_path(config_path), profile=profile, overrides=overrides)
+        cfg = plugin.load_config(
+            _optional_path(config_path),
+            profile=profile,
+            db_profile=db_profile,
+            overrides=overrides,
+        )
+        if resource_overrides_list:
+            from abi.resources import apply_resource_overrides
+            apply_resource_overrides(cfg, resource_overrides_list)
         plan = plugin.build_plan(cfg, check_files=check_files)
         options = RuntimeOptions(
             engine=runtime_engine,
@@ -1209,20 +1277,30 @@ class ABIAgentInterface:
         threads: Optional[int],
         outdir: Optional[str],
         log_dir: Optional[str],
+        db_profile: Optional[str] = None,
+        resource_root: Optional[str] = None,
+        resource_overrides_list: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         from abi.resources import check_resources
 
         plugin = get_plugin(analysis_type)
+        overrides = _common_overrides(
+            mode=mode,
+            threads=threads,
+            outdir=outdir,
+            log_dir=log_dir,
+        )
+        if resource_root:
+            overrides.setdefault("resources", {})["root"] = resource_root
         config = plugin.load_config(
             _optional_path(config_path),
             profile=profile,
-            overrides=_common_overrides(
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-            ),
+            db_profile=db_profile,
+            overrides=overrides,
         )
+        if resource_overrides_list:
+            from abi.resources import apply_resource_overrides
+            apply_resource_overrides(config, resource_overrides_list)
         rows = check_resources(
             analysis_type=analysis_type,
             config=config,
@@ -1314,6 +1392,9 @@ class ABIAgentInterface:
         outdir: Optional[str],
         log_dir: Optional[str],
         check_files: bool,
+        db_profile: Optional[str] = None,
+        resource_root: Optional[str] = None,
+        resource_overrides_list: Optional[List[str]] = None,
     ) -> Tuple[Any, Mapping[str, Any], Any]:
         """Shared plan construction: resolve plugin -> load config -> build plan.
 
@@ -1323,17 +1404,24 @@ class ABIAgentInterface:
         # 返回 (plugin, config, plan) 三元组, 调用者可复用插件引用。
         """
         plugin = get_plugin(analysis_type)
+        overrides = _common_overrides(
+            mode=mode,
+            threads=threads,
+            outdir=outdir,
+            log_dir=log_dir,
+            sample_sheet=sample_sheet,
+        )
+        if resource_root:
+            overrides.setdefault("resources", {})["root"] = resource_root
         cfg = plugin.load_config(
             _optional_path(config_path),
             profile=profile,
-            overrides=_common_overrides(
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-                sample_sheet=sample_sheet,
-            ),
+            db_profile=db_profile,
+            overrides=overrides,
         )
+        if resource_overrides_list:
+            from abi.resources import apply_resource_overrides
+            apply_resource_overrides(cfg, resource_overrides_list)
         plan = plugin.build_plan(cfg, check_files=check_files)
         return plugin, cfg, plan
 

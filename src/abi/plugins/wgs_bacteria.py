@@ -54,8 +54,16 @@ class WGSBacteriaPlugin:
             self._tsv_mapper_cache = TSVMapper.from_yaml(self.root / "parsers.yaml")
         return self._tsv_mapper_cache
 
-    def load_config(self, config_path=None, *, profile=None, overrides=None) -> Dict[str, Any]:
+    def load_config(
+        self,
+        config_path=None,
+        *,
+        profile=None,
+        db_profile: str | None = None,
+        overrides=None,
+    ) -> Dict[str, Any]:
         del profile
+        del db_profile
         config = load_yaml(self.root / "config_default.yaml")
         if config_path:
             config = deep_merge(config, load_yaml(config_path))
