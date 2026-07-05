@@ -2309,6 +2309,37 @@ def contract_lint_command(
         _fail(exc)
 
 
+
+@app.command("doctor")
+def doctor_command(
+    analysis_type: str | None = typer.Option(None, "--type", "-t", help="ABI analysis type to check."),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON."),
+) -> None:
+    """Run health diagnostics on the ABI installation.
+
+    Checks Python, ABI package, plugins, and optionally resources/tools
+    for a specific analysis type. Exit 0 = healthy, 1 = unhealthy.
+    """
+    try:
+        from abi.doctor import Doctor
+        doctor = Doctor()
+        report = doctor.run_all(analysis_type=analysis_type)
+        if json_output:
+            typer.echo(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
+        else:
+            for check in report.checks:
+                sym = {"passed":"OK","warning":"WARN","failed":"FAIL","skipped":"SKIP"}[check.status]
+                typer.echo(f"  [{sym}] {check.name}: {check.message}")
+            s = report.summary
+            typer.echo(f"\n  {s['passed']} passed, {s['warning']} warnings, {s['failed']} failed"
+                       f" -- {'HEALTHY' if report.passed else 'UNHEALTHY'}")
+        if not report.passed:
+            raise typer.Exit(code=1)
+    except typer.Exit:
+        raise
+    except Exception as exc:
+        _fail(exc)
+
 def main() -> None:
     """Entry point for the ``abi`` console script.
 
