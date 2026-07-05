@@ -1,7 +1,10 @@
 """Execution plan generation."""
-
 from __future__ import annotations
 
+
+
+
+import os
 from collections import Counter
 from copy import deepcopy
 from pathlib import Path
@@ -20,6 +23,7 @@ from abi.plugins.metagenomic_plasmid._engine.schemas import (
     SampleInput,
 )
 
+_LEGACY_BUILD_PLAN = os.environ.get("ABI_DAG_PLANNER_LEGACY", "1") != "0"
 STEP_DIRS = {
     "input_validation": "00_input_validation",
     "basecalling": "00_input_validation/basecalling",
@@ -92,7 +96,7 @@ def context_from_config(config: Mapping[str, Any], check_files: bool = True) -> 
     )
 
 
-def build_plan(
+def _build_plan_legacy(
     config: Mapping[str, Any],
     sample_context: Optional[SampleContext] = None,
     *,
@@ -104,6 +108,42 @@ def build_plan(
         sample_context=sample_context,
         check_files=check_files,
     )
+
+
+def _build_plan_new(
+    config: Mapping[str, Any],
+    sample_context: Optional[SampleContext] = None,
+    *,
+    check_files: bool = True,
+) -> ExecutionPlan:
+    """New DAG planner path — calls dag_planner.build_plan_from_dag with hooks."""
+    from abi.dag_planner import build_plan_from_dag as dag_planner_build_plan_from_dag
+
+    return dag_planner_build_plan_from_dag(
+        dag_spec_path=None,
+        config=config,
+        sample_context=sample_context or context_from_config(config, check_files=check_files),
+        context_resolver=None,
+        sample_config_hook=None,
+        skip_step_hook=None,
+    )
+
+
+def build_plan(
+    config: Mapping[str, Any],
+    sample_context: Optional[SampleContext] = None,
+    *,
+    check_files: bool = True,
+) -> ExecutionPlan:
+    """Entry point that dispatches based on ABI_DAG_PLANNER_LEGACY feature flag."""
+    if _LEGACY_BUILD_PLAN:
+        return _build_plan_legacy(
+            config, sample_context=sample_context, check_files=check_files
+        )
+    else:
+        return _build_plan_new(
+            config, sample_context=sample_context, check_files=check_files
+        )
 
 
 def _enable_state(config: Mapping[str, Any], key: str, default: Any = True) -> Any:
