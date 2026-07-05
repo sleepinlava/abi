@@ -322,3 +322,130 @@ class TestViolinWithBox:
             plt.close(fig)
         finally:
             tsv.unlink()
+
+
+# ── RenderResult dataclass ─────────────────────────────────────────────
+
+
+class TestRenderResult:
+    """Unit tests for the RenderResult dataclass."""
+
+    def test_status_ok_when_no_errors(self) -> None:
+        from abi.sciplot.renderers import RenderResult
+
+        rr = RenderResult(figure_id="fig1")
+        assert rr.status == "ok"
+        assert rr.errors == []
+        assert rr.warnings == []
+
+    def test_status_error_when_errors_present(self) -> None:
+        from abi.sciplot.renderers import RenderResult
+
+        rr = RenderResult(figure_id="fig1", errors=["something broke"])
+        assert rr.status == "error"
+
+    def test_to_dict_empty(self) -> None:
+        from abi.sciplot.renderers import RenderResult
+
+        rr = RenderResult(figure_id="fig1")
+        d = rr.to_dict()
+        assert d == {
+            "status": "ok",
+            "figure_id": "fig1",
+            "outputs": [],
+            "lint_report": None,
+            "provenance": None,
+            "errors": [],
+            "warnings": [],
+        }
+
+    def test_to_dict_with_output(self) -> None:
+        from pathlib import Path
+
+        from abi.sciplot.renderers import RenderResult
+
+        rr = RenderResult(
+            figure_id="fig2",
+            output_files=[Path("/tmp/fig2.png"), Path("/tmp/fig2.svg")],
+            lint_report_path=Path("/tmp/fig2.lint.json"),
+            provenance_path=Path("/tmp/fig2.prov.json"),
+            errors=["E1"],
+            warnings=["W1"],
+        )
+        d = rr.to_dict()
+        assert d["status"] == "error"
+        assert d["figure_id"] == "fig2"
+        assert d["outputs"] == ["/tmp/fig2.png", "/tmp/fig2.svg"]
+        assert d["lint_report"] == "/tmp/fig2.lint.json"
+        assert d["provenance"] == "/tmp/fig2.prov.json"
+        assert d["errors"] == ["E1"]
+        assert d["warnings"] == ["W1"]
+
+    def test_warnings_only_is_ok(self) -> None:
+        from abi.sciplot.renderers import RenderResult
+
+        rr = RenderResult(figure_id="fig1", warnings=["mild concern"])
+        assert rr.status == "ok"
+
+    def test_default_factories(self) -> None:
+        from abi.sciplot.renderers import RenderResult
+
+        rr = RenderResult(figure_id="test")
+        assert isinstance(rr.output_files, list)
+        assert isinstance(rr.errors, list)
+        assert isinstance(rr.warnings, list)
+
+
+# ── BaseRenderer ABC ────────────────────────────────────────────────────
+
+
+class TestBaseRenderer:
+    """Unit tests for the BaseRenderer abstract base class."""
+
+    def test_cannot_instantiate_abstract(self) -> None:
+        import pytest
+
+        from abi.sciplot.renderers import BaseRenderer
+
+        with pytest.raises(TypeError, match="abstract"):
+            BaseRenderer()  # type: ignore[abstract]
+
+    def test_concrete_subclass_works(self) -> None:
+        from abi.sciplot.renderers import BaseRenderer, RenderResult
+
+        class DummyRenderer(BaseRenderer):
+            def supports(self, figure_type: str) -> bool:
+                return figure_type == "dummy"
+
+            def render(self, spec) -> RenderResult:
+                return RenderResult(figure_id="ok")
+
+        renderer = DummyRenderer()
+        assert renderer.supports("dummy") is True
+        assert renderer.supports("other") is False
+        result = renderer.render(None)
+        assert result.status == "ok"
+
+    def test_supports_must_be_implemented(self) -> None:
+        import pytest
+
+        from abi.sciplot.renderers import BaseRenderer, RenderResult
+
+        class MissingSupports(BaseRenderer):
+            def render(self, spec) -> RenderResult:
+                return RenderResult(figure_id="ok")
+
+        with pytest.raises(TypeError, match="abstract"):
+            MissingSupports()  # type: ignore[abstract]
+
+    def test_render_must_be_implemented(self) -> None:
+        import pytest
+
+        from abi.sciplot.renderers import BaseRenderer
+
+        class MissingRender(BaseRenderer):
+            def supports(self, figure_type: str) -> bool:
+                return True
+
+        with pytest.raises(TypeError, match="abstract"):
+            MissingRender()  # type: ignore[abstract]
