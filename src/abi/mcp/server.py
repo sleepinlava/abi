@@ -3,10 +3,14 @@
 The MCP server auto-generates tool registrations from the unified tool
 descriptor SSOT (``abi.tool_descriptors``), eliminating the previous manual
 duplication of ~150 lines of parameter declarations.
+
+Uses ``abi.mcp._tool_factory`` to create tool functions safely with
+``inspect.Signature`` instead of ``exec()``.
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
 from abi.agent import ABIAgentInterface
@@ -19,29 +23,20 @@ except ImportError:  # pragma: no cover - exercised when optional dependency is 
 else:
     FastMCP = _ImportedFastMCP
 
-# JSON Schema type → Python type mapping for auto-generated MCP tool signatures.
-_JSON_TO_PY_TYPE: dict[str, str] = {
-    "string": "str",
-    "integer": "int",
-    "number": "float",
-    "boolean": "bool",
-    "array": "list",
-    "object": "dict",
-}
+_logger = logging.getLogger("abi.mcp.server")
 
 
 def _register_mcp_tools(mcp: Any, agent: ABIAgentInterface) -> None:
     """Auto-register MCP tool functions from the unified SSOT metadata.
 
     Reads ``ABI_AGENT_TOOLS`` and ``TOOL_ALIASES`` from
-    ``abi.tool_descriptors`` and dynamically creates properly-annotated
-    Python functions for each tool.  FastMCP introspects the type hints
-    to generate JSON Schema — the same information that was previously
-    maintained by hand in 10 separate ``@mcp.tool()`` functions.
+    ``abi.tool_descriptors`` and creates properly-annotated Python functions
+    for each tool via ``ToolDescriptor`` + ``make_tool_func`` — no ``exec()``.
 
     Legacy public aliases are included in ``ABI_AGENT_TOOLS`` so every
     transport and provider exporter exposes the same tool set.
     """
+    from abi.mcp._tool_factory import ToolDescriptor, make_tool_func
     from abi.tool_descriptors import ABI_AGENT_TOOLS, TOOL_ALIASES
 
     for tool_name, metadata in ABI_AGENT_TOOLS.items():
@@ -49,51 +44,17 @@ def _register_mcp_tools(mcp: Any, agent: ABIAgentInterface) -> None:
         if method_name is None:
             continue
 
-        props = metadata.get("properties", {})
-        required = set(metadata.get("required", []))
+        try:
+            desc = ToolDescriptor(tool_name, metadata)
+            tool_func = make_tool_func(desc, getattr(agent, method_name))
+        except (ValueError, TypeError) as exc:
+            _logger.warning(
+                "Skipping MCP tool %r: %s",
+                tool_name,
+                exc,
+            )
+            continue
 
-        # Sort parameters: required first, then optional (alphabetical within each).
-        # This avoids "non-default argument follows default argument" syntax errors.
-        param_names: list[str] = []
-        # Required params first (in definition order for determinism)
-        for pname in props:
-            if pname in required:
-                param_names.append(pname)
-        # Optional params second
-        for pname in props:
-            if pname not in required:
-                param_names.append(pname)
-
-        param_parts: list[str] = []
-        call_parts: list[str] = []
-        for pname in param_names:
-            pschema = props[pname]
-            json_type = pschema.get("type", "string")
-            py_type = _JSON_TO_PY_TYPE.get(json_type, "Any")
-            if pname in required:
-                param_parts.append(f"{pname}: {py_type}")
-            else:
-                param_parts.append(f"{pname}: Optional[{py_type}] = None")
-            call_parts.append(f"{pname}={pname}")
-
-        func_source = (
-            f"def {tool_name}({', '.join(param_parts)}) -> str:\n"
-            f'    """{metadata["description"]}"""\n'
-            f"    return agent.{method_name}({', '.join(call_parts)})\n"
-        )
-
-        namespace: dict[str, Any] = {
-            "agent": agent,
-            "Optional": Optional,
-            "str": str,
-            "int": int,
-            "float": float,
-            "bool": bool,
-            "list": list,
-            "dict": dict,
-        }
-        exec(func_source, namespace)
-        tool_func = namespace[tool_name]
         mcp.tool()(tool_func)
 
     # Preserve the pre-ABI MCP name for clients that already persisted it.
