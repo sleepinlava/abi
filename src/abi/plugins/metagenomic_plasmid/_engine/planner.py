@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
 from abi.config import PLUGIN_ROOT
+from abi.dag_planner import build_sample_context
 from abi.plugins.metagenomic_plasmid._engine.sample_sheet import (
     parse_sample_sheet,
     single_sample_context,
@@ -23,7 +24,7 @@ from abi.plugins.metagenomic_plasmid._engine.schemas import (
     SampleInput,
 )
 
-_LEGACY_BUILD_PLAN = os.environ.get("ABI_DAG_PLANNER_LEGACY", "1") != "0"
+_LEGACY_BUILD_PLAN = os.environ.get("ABI_DAG_PLANNER_LEGACY", "") == "1"
 STEP_DIRS = {
     "input_validation": "00_input_validation",
     "basecalling": "00_input_validation/basecalling",
@@ -116,18 +117,56 @@ def _build_plan_new(
     *,
     check_files: bool = True,
 ) -> ExecutionPlan:
-    """New DAG planner path — calls dag_planner.build_plan_from_dag with hooks."""
-    from abi.dag_planner import build_plan_from_dag as dag_planner_build_plan_from_dag
+    """New DAG planner path — calls dag_planner.build_plan_from_dag with hooks.
 
-    return dag_planner_build_plan_from_dag(
-        dag_spec_path=None,
-        config=config,
-        sample_context=sample_context or context_from_config(config, check_files=check_files),
-        context_resolver=None,
-        sample_config_hook=None,
-        skip_step_hook=None,
+    Stages 1-4: Replaces context_from_config, _resolve_context_conditions,
+    _config_for_sample, and _analysis_skip_steps with equivalent hooks.
+    """
+    from abi.dag_planner import build_plan_from_dag as dag_build
+    from abi.dag_planner import build_sample_context
+
+    if sample_context is None:
+        sample_context = build_sample_context(config, check_files=check_files)
+
+    # ── context_resolver hook (Stage 2) ───────────────────────────────
+    # Wraps PlasmidContextResolver to match the ContextResolverHook signature.
+    def _context_resolver_hook(cfg, ctx):
+        from abi.plugins.metagenomic_plasmid._engine.context_resolver import (
+            PlasmidContextResolver,
+        )
+        resolver = PlasmidContextResolver(cfg, ctx)
+        resolved = resolver.resolve()
+        eligibility = resolver.eligibility()
+        return resolved, eligibility
+
+    # ── skip_step_hook (Stage 4) ────────────────────────────────────
+    # The DAG's enable_conditions (evaluated by active_node_ids) and
+    # context_resolver already handle most conditional skipping.
+    # assembly-only samples skip QC, which we handle here.
+    def _skip_step_hook(node_id, tool_id, sample_config, sample):
+        if sample.platform == "assembly" and node_id in (
+            "qc_fastp", "qc_fastqc", "qc_multiqc",
+            "qc_nanoplot", "qc_filtlong", "qc_porechop",
+        ):
+            return f"Assembly-only input skips {node_id}"
+        return None
+
+    # ── sample_config_hook (Stage 5) ────────────────────────────────────
+    # Import from context_resolver to decouple from planner.py internals.
+    from abi.plugins.metagenomic_plasmid._engine.context_resolver import (
+        config_for_sample as _build_plan_sample_config,
     )
 
+    dag_path = PLUGIN_ROOT / "metagenomic_plasmid" / "pipeline_dag.yaml"
+
+    return dag_build(
+        dag_spec_path=str(dag_path),
+        config=config,
+        sample_context=sample_context,
+        context_resolver=_context_resolver_hook,
+        sample_config_hook=_build_plan_sample_config,
+        skip_step_hook=_skip_step_hook,
+    )
 
 def build_plan(
     config: Mapping[str, Any],

@@ -50,7 +50,7 @@ def check_golden_tests():
     passed = True
     for tn in ["test_golden_file_legacy_illumina_isolate",
                "test_golden_legacy_vs_new_illumina_isolate",
-               "test_feature_flag_default_legacy",
+               "test_feature_flag_default_new",
                "test_feature_flag_new_path"]:
         if tn in content:
             ok(tn)

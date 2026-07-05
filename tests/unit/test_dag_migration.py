@@ -105,15 +105,15 @@ def test_golden_legacy_vs_new_illumina_isolate():
 
 
 @pytest.mark.slow
-def test_feature_flag_default_legacy(monkeypatch):
-    """Default (no env var) should use legacy path."""
+def test_feature_flag_default_new(monkeypatch):
+    """Default (no env var) should use new path."""
     monkeypatch.delenv("ABI_DAG_PLANNER_LEGACY", raising=False)
 
     from abi.plugins.metagenomic_plasmid._engine import planner
     import importlib
     importlib.reload(planner)
 
-    assert planner._LEGACY_BUILD_PLAN is True, "Default should be legacy mode"
+    assert planner._LEGACY_BUILD_PLAN is False, "Default should be new path"
 
 
 def test_feature_flag_new_path(monkeypatch):
