@@ -49,6 +49,7 @@ tools:
   required: true
   command_template: amrfinder --plus --protein {prokka_faa} --gff {prokka_gff}
     --database {amrfinder_db} --output {output_dir}/amr.tsv --threads {threads}
+    --annotation_format prokka
   inputs:
   - prokka_faa
   - prokka_gff

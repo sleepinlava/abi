@@ -67,7 +67,7 @@ tools:
   executable: filtlong
   default_enabled: true
   required: false
-  command_template: filtlong {long_reads} > {output_dir}/{sample_id}.filtlong.fastq
+  command_template: filtlong --min_length 1000 --keep_percent 90 {long_reads} > {output_dir}/{sample_id}.filtlong.fastq
   inputs:
   - long_reads
 - id: hifiadapterfilt
@@ -125,8 +125,8 @@ tools:
   name: OPERA-MS
   category: assembly
   executable: OPERA-MS.pl
-  default_enabled: true
-  required: true
+  default_enabled: false
+  required: false
   command_template: sh -c 'mkdir -p "$1" && OPERA-MS.pl --short-read1 "$2" --short-read2
     "$3" --long-read "$4" --out-dir "$1" --num-processors "$5" && sh "$6/scripts/normalize_opera_ms_output.sh"
     "$1" "$1/contigs.fasta"' autoplasm "{output_dir}" "{read1}" "{read2}" "{long_reads}"
@@ -135,6 +135,8 @@ tools:
   - read1
   - read2
   - long_reads
+  limitations: OPERA-MS is no longer available from current bioconda channels; install
+    OPERA-MS.pl manually and enable this optional hybrid assembler only when available.
 - id: quast
   name: metaQUAST
   category: assembly_qc
@@ -167,6 +169,8 @@ tools:
   name: PLASMe
   category: plasmid_detection
   executable: PLASMe.py
+  extra_path_dirs:
+  - "{resource_root}/PLASMe"
   default_enabled: false
   required: false
   command_template: PLASMe.py {assembly} {output_dir}/{sample_id}.plasme -d {database}
@@ -175,6 +179,8 @@ tools:
   name: PlasX
   category: plasmid_detection
   executable: plasx
+  extra_path_dirs:
+  - "{resource_root}/PlasX"
   default_enabled: false
   required: false
   command_template: plasx predict -a {annotations} -g {gene_calls} -m {model} -o {output_dir}/{sample_id}.plasx.tsv
@@ -273,9 +279,11 @@ tools:
   name: ISEScan
   category: annotation
   executable: isescan.py
-  default_enabled: true
+  default_enabled: false
   required: false
   command_template: isescan.py --seqfile {plasmid_contigs} --output {output_dir}
+  limitations: ISEScan is optional and may be absent from cloud conda channels; enable
+    it only after installing isescan.py into the annotation environment.
 - id: integronfinder
   name: IntegronFinder
   category: annotation
@@ -502,6 +510,9 @@ tools:
   name: Platon
   category: plasmid_detection
   executable: platon
+  extra_path_dirs:
+  - "{resource_root}/platon/bin"
+  - "{resource_root}/platon"
   default_enabled: false
   required: false
   command_template: platon --threads {threads} --output {output_dir} --prefix {sample_id}
@@ -537,6 +548,9 @@ tools:
   name: CONJscan
   category: typing
   executable: conjscan
+  extra_path_dirs:
+  - "{resource_root}/macsyfinder/bin"
+  - "{resource_root}/macsyfinder"
   default_enabled: false
   required: false
   command_template: macsyfinder conjscan --db-type ordered_replicon --sequence-db
@@ -548,6 +562,9 @@ tools:
   name: MacSyFinder
   category: typing
   executable: macsyfinder
+  extra_path_dirs:
+  - "{resource_root}/macsyfinder/bin"
+  - "{resource_root}/macsyfinder"
   default_enabled: false
   required: false
   command_template: macsyfinder --sequence-db {plasmid_contigs} --db-type ordered_replicon
