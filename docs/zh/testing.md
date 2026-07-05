@@ -1,6 +1,6 @@
 # ABI 测试指南
 
-> **当前状态 (2026-06-23)**: 856 测试通过, 14 跳过, 0 ruff 错误, 0 mypy 错误。
+> **当前状态 (2026-07-06)**: 1364 测试通过, 11 跳过, 3 预存失败, 83% 语句覆盖率, 0 ruff 错误, 0 mypy 错误。
 
 本指南涵盖 ABI 测试基础设施：测试分类、共享 fixtures、基准框架、合约验证、黄金轨迹、冒烟测试、CI/CD 以及插件作者的测试规范。
 
@@ -309,7 +309,7 @@ ABI 使用 GitHub Actions 并包含两个工作流：
 ruff check src/ tests/        # 0 错误
 ruff format --check src/ tests/  # 236 文件已格式化
 mypy src/abi/ --ignore-missing-imports  # 0 错误
-pytest tests/ -v --tb=short   # 723+ 通过
+pytest tests/ -v --tb=short   # 1364+ 通过
 ```
 
 ### 隔离性
@@ -359,11 +359,11 @@ def test_build_plan():
 
 ## 覆盖率
 
-CI 强制最低 60% 行覆盖率。当前覆盖率基线通过以下方式维持：
+CI 强制最低 60% 行覆盖率（当前：83%）。覆盖率基线通过以下方式维持：
 
 - 所有解析器函数的单元测试
 - CLI 和 dry-run 路径的集成测试
-- 全部 5 个插件的合约测试
+- 全部 7 个插件的合约测试
 
 本地检查覆盖率：
 

@@ -1,6 +1,6 @@
 # ABI Testing Guide
 
-> **Current state (2026-06-23)**: 856 tests passed, 14 skipped, 0 ruff errors, 0 mypy errors.
+> **Current state (2026-07-06)**: 1364 tests passed, 11 skipped, 3 pre-existing failures, 83% statement coverage, 0 ruff errors, 0 mypy errors.
 
 This guide covers the ABI testing infrastructure: test taxonomy, shared fixtures, the benchmark framework, contract validation, golden traces, smoke tests, CI/CD, and conventions for plugin authors.
 
@@ -301,7 +301,7 @@ All tests must pass these gates before commit:
 ruff check src/ tests/        # 0 errors
 ruff format --check src/ tests/  # 236 files formatted
 mypy src/abi/ --ignore-missing-imports  # 0 errors
-pytest tests/ -v --tb=short   # 723+ passed
+pytest tests/ -v --tb=short   # 1364+ passed
 ```
 
 ### Isolation
@@ -351,11 +351,11 @@ Benchmark tests should target:
 
 ## Coverage
 
-CI enforces a minimum 60% line coverage floor. The current coverage baseline is maintained through:
+CI enforces a minimum 60% line coverage floor (current: 83%). The coverage baseline is maintained through:
 
 - Unit tests for all parser functions
 - Integration tests for CLI and dry-run paths
-- Contract tests for all 5 plugins
+- Contract tests for all 7 plugins
 
 To check coverage locally:
 
