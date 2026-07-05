@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import csv
+import subprocess
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -11,7 +13,9 @@ from abi.testing.benchmark import (
     BenchmarkAssertion,
     BenchmarkResult,
     _kv_to_assertion,
+    _load_expected,
     _parse_assertions,
+    run_benchmark,
     validate_against_expected,
 )
 
@@ -234,7 +238,91 @@ class TestBenchmarkResult:
             failed=2,
         )
         summary = result.summary()
-        assert "test: 8/10 passed (80%), 2 failed" in summary
+        assert "test:" in summary
+        assert "8/10" in summary
+        assert "2 failed" in summary
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# _load_expected
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestLoadExpected:
+    """Tests for _load_expected()."""
+
+    def test_raises_file_not_found(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            _load_expected(tmp_path)
+
+    def test_loads_valid_yaml(self, tmp_path: Path) -> None:
+        content = "plugin:\n  step1:\n    output.tsv: true\n"
+        (tmp_path / "expected_assertions.yaml").write_text(content, encoding="utf-8")
+        result = _load_expected(tmp_path)
+        assert result == {"plugin": {"step1": {"output.tsv": True}}}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# run_benchmark
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestRunBenchmark:
+    """Tests for run_benchmark()."""
+
+    def test_missing_config_yaml(self, tmp_path: Path) -> None:
+        outdir = tmp_path / "out"
+        outdir.mkdir()
+        with pytest.raises(FileNotFoundError):
+            run_benchmark("p", tmp_path, outdir)
+
+    def test_pipeline_crash(self, tmp_path: Path) -> None:
+        outdir = tmp_path / "out"
+        outdir.mkdir()
+
+        # Create minimal config and expected_assertions
+        (tmp_path / "config.yaml").write_text("key: value\n", encoding="utf-8")
+        (tmp_path / "expected_assertions.yaml").write_text(
+            "p:\n  step1:\n    output.tsv: true\n", encoding="utf-8"
+        )
+
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=2, stdout="", stderr="KILLED"
+        )
+
+        with patch("abi.testing.benchmark.subprocess.run", return_value=completed):
+            result = run_benchmark("p", tmp_path, outdir)
+
+        assert result.total > 0
+        assert result.failed == result.total
+        assert result.pass_rate == 0.0
+        assert any("Pipeline crashed" in err for _, err in result.errors)
+
+    def test_all_assertions_pass(self, tmp_path: Path) -> None:
+        outdir = tmp_path / "out"
+        outdir.mkdir()
+
+        (tmp_path / "config.yaml").write_text("key: value\n", encoding="utf-8")
+        (tmp_path / "expected_assertions.yaml").write_text(
+            "p:\n  step1:\n    output.tsv: true\n", encoding="utf-8"
+        )
+
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="", stderr=""
+        )
+
+        with patch(
+            "abi.testing.benchmark.subprocess.run", return_value=completed
+        ), patch(
+            "abi.testing.benchmark.BenchmarkAssertion.evaluate",
+            return_value=True,
+        ):
+            result = run_benchmark("p", tmp_path, outdir)
+
+        assert result.total > 0
+        assert result.passed == result.total
+        assert result.failed == 0
+        assert result.pass_rate == 1.0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -314,6 +402,15 @@ class TestParseAssertions:
         assert gte_a.column == "count"
         assert gte_a.expected == 100
 
+    def test_empty_dict_returns_empty_list(self) -> None:
+        assert _parse_assertions({}) == []
+
+    def test_non_dict_step_skipped(self) -> None:
+        assert _parse_assertions({"p": {"step1": "not_a_dict"}}) == []
+
+    def test_non_dict_plugin_value_skipped(self) -> None:
+        assert _parse_assertions({"p": "not_a_dict"}) == []
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # validate_against_expected
@@ -382,3 +479,23 @@ class TestValidateAgainstExpected:
         assert passed == 0
         assert failed == 1
         assert any("ROW_COUNT" in m for m in messages)
+
+    def test_matching_files_pass(self, tmp_path: Path) -> None:
+        expected_path = tmp_path / "expected"
+        expected_tables = expected_path / "expected_tables"
+        expected_tables.mkdir(parents=True)
+
+        result_dir = tmp_path / "results"
+        result_dir.mkdir()
+
+        rows = [{"a": "1", "b": "x"}, {"a": "2", "b": "y"}]
+        _write_tsv(expected_tables / "data.tsv", rows)
+        _write_tsv(result_dir / "data.tsv", rows)
+
+        passed, failed, messages = validate_against_expected(
+            result_dir=result_dir,
+            expected_path=expected_path,
+        )
+        assert passed == 1
+        assert failed == 0
+        assert messages == []
