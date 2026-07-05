@@ -188,3 +188,7 @@ bench/results/
 sample_sheet_illumina_test.tsv
 config_illumina_full.yaml
 docs/en/abi_hpc_validation_guide.md
+
+locks/
+
+locks/
