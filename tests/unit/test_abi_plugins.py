@@ -98,6 +98,29 @@ def test_abi_discovers_entry_point_plugins(monkeypatch):
         plugin_id = "fake_analysis"
         display_name = "Fake Analysis"
         description = "Test-only plugin."
+        report_title = "Fake Analysis Report"
+
+        def load_config(self, config_path=None, *, profile=None, db_profile=None, overrides=None):
+            return {}
+
+        def build_plan(self, config, check_files=True):
+            from abi.schemas import ExecutionPlan
+
+            return ExecutionPlan(pipeline_id="fake", steps=[])
+
+        def registry(self):
+            from abi.tools import ToolRegistry
+
+            return ToolRegistry({})
+
+        def table_schemas(self):
+            return {}
+
+        def parse_outputs(self, tool_id, output_dir, sample_id):
+            return {}
+
+        def write_report(self, plan, result_dir):
+            return {}
 
     class FakeEntryPoint:
         name = "fake_analysis"

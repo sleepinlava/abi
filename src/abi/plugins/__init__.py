@@ -7,6 +7,7 @@ from importlib.metadata import entry_points
 from typing import Any, Dict, Iterable, List, cast
 
 from abi.interfaces import ABIPlugin
+from abi.plugins.validator import validate_plugin_class
 
 ENTRY_POINT_GROUP = "abi.plugins"
 
@@ -23,6 +24,7 @@ def _load_entry_point_plugins() -> Dict[str, ABIPlugin]:
     for entry_point in _entry_points():
         try:
             plugin_class = entry_point.load()
+            validate_plugin_class(plugin_class)
             plugin = cast(ABIPlugin, plugin_class())
         except MemoryError:
             raise
@@ -47,15 +49,19 @@ def _builtin_plugins() -> Dict[str, ABIPlugin]:
     from abi.plugins.viral_viwrap import ViralViWrapPlugin
     from abi.plugins.wgs_bacteria import WGSBacteriaPlugin
 
-    plugins: List[ABIPlugin] = [
-        Amplicon16SPlugin(),
-        EasyMetagenomePlugin(),
-        MetagenomicPlasmidPlugin(),
-        MetatranscriptomicsPlugin(),
-        RNASeqExpressionPlugin(),
-        WGSBacteriaPlugin(),
-        ViralViWrapPlugin(),
+    plugin_classes = [
+        Amplicon16SPlugin,
+        EasyMetagenomePlugin,
+        MetagenomicPlasmidPlugin,
+        MetatranscriptomicsPlugin,
+        RNASeqExpressionPlugin,
+        WGSBacteriaPlugin,
+        ViralViWrapPlugin,
     ]
+    for cls in plugin_classes:
+        validate_plugin_class(cls)
+
+    plugins: List[ABIPlugin] = [cls() for cls in plugin_classes]
     return {str(plugin.plugin_id): plugin for plugin in plugins}
 
 
