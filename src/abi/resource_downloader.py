@@ -65,6 +65,11 @@ class DownloadSpec:
     ready_check: str = "sentinel"  # sentinel | non_empty_dir | path_exists
     custom_check: Callable[[Path], bool] | None = None
 
+    # 本地文件源（手动 bundle）
+    source_files: list[Path] = field(default_factory=list)
+    # 是否原子写入（False 时跳过 .part 中转，直接在目标目录操作）
+    atomic: bool = True
+
     # 自定义目标路径（覆盖 root + resource_id）
     destination: Path | None = None
 
@@ -260,14 +265,19 @@ class ResourceDownloader:
 
                 if spec.command:
                     work_dir = dest
-                    is_atomic = False
+                    is_atomic = spec.atomic
                 else:
-                    part = dest.with_name(dest.name + ".part")
-                    if part.exists():
-                        shutil.rmtree(part, ignore_errors=True)
-                    part.mkdir(parents=True, exist_ok=True)
-                    work_dir = part
-                    is_atomic = True
+                    if spec.atomic:
+                        part = dest.with_name(dest.name + ".part")
+                        if part.exists():
+                            shutil.rmtree(part, ignore_errors=True)
+                        part.mkdir(parents=True, exist_ok=True)
+                        work_dir = part
+                        is_atomic = True
+                    else:
+                        work_dir = dest
+                        dest.mkdir(parents=True, exist_ok=True)
+                        is_atomic = False
 
                 try:
                     if spec.command:
@@ -293,6 +303,20 @@ class ResourceDownloader:
                             spec.source_url,
                         )
                         self._download_url(spec.source_url, work_dir)
+                    elif spec.source_files:
+                        _logger.info(
+                            "Copying %d local files for %s",
+                            len(spec.source_files),
+                            spec.resource_id,
+                        )
+                        for src in spec.source_files:
+                            src_path = Path(src)
+                            if not src_path.exists():
+                                raise FileNotFoundError(
+                                    f"Source file not found: {src_path}"
+                                )
+                            dest_file = work_dir / src_path.name
+                            shutil.copy2(src_path, dest_file)
                     else:
                         raise ValueError(
                             f"No download method for {spec.resource_id}: "
@@ -338,7 +362,11 @@ class ResourceDownloader:
                     )
                 except Exception:
                     if not is_atomic:
-                        pass  # command wrote directly to dest; no cleanup needed
+                        if spec.atomic:
+                            self._cleanup_partial(work_dir)
+                        else:
+                            # non-atomic: cleanup residual files in dest
+                            self._cleanup_partial(dest)
                     elif work_dir.exists():
                         shutil.rmtree(work_dir, ignore_errors=True)
                     raise
@@ -400,6 +428,11 @@ class ResourceDownloader:
             "downloaded_at": datetime.now(timezone.utc).isoformat(),
         }
         (dest / self.SENTINEL).write_text(json.dumps(sentinel, indent=2), encoding="utf-8")
+
+    def _cleanup_partial(self, path: Path) -> None:
+        """清空部分下载的残留目录。"""
+        if path.exists():
+            shutil.rmtree(path, ignore_errors=True)
 
     def _mock_resource(self, spec: DownloadSpec, dest: Path) -> DownloadResult:
         """创建 mock 资源（空目录 + 哨兵）。"""

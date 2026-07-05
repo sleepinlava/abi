@@ -218,6 +218,7 @@ def _setup_wgs_bacteria(
         resource_id="amrfinder_db",
         tool_id="amrfinderplus",
         command=command,
+        atomic=False,
         destination=target,
         display_name="AMRFinderPlus database",
         timeout_seconds=timeout or 3600.0,
@@ -741,52 +742,49 @@ def _setup_amplicon_16s(
             )
         ]
 
-    # Primary: download RDP training set
+    # Primary: download RDP training set via ResourceDownloader (non-atomic)
     if tax_fasta.exists():
         effective_path = tax_fasta
-        status = "ok"
+        status_msg = "ok"
         message = f"RDP taxonomy DB already exists: {tax_fasta}"
         command: list[str] = []
     elif dry_run:
         effective_path = tax_fasta
-        status = "planned"
+        status_msg = "planned"
         message = "Would download RDP 16S training set from drive5.com (~50 MB)"
         command = []
     elif download_script.exists():
-        cmd = ["bash", str(download_script), "--output", str(outdir)]
-        try:
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=timeout,
-            )
-            if proc.returncode == 0 and tax_fasta.exists():
-                effective_path = tax_fasta
-                status = "ok"
-                message = "RDP 16S training set downloaded successfully."
-                command = cmd
-            else:
-                effective_path = synthetic_fasta
-                status = "fallback"
-                message = "RDP download failed; generating synthetic fallback."
-                command = cmd
-                _generate_synthetic_fallback(outdir)
-        except (subprocess.TimeoutExpired, OSError):
+        downloader = ResourceDownloader(Path(), dry_run=dry_run, mock=False)
+        spec = DownloadSpec(
+            resource_id="taxonomy_db",
+            tool_id="vsearch_taxonomy",
+            command=["bash", str(download_script), "--output", str(outdir)],
+            atomic=False,
+            destination=outdir,
+            ready_check="non_empty_dir",
+            timeout_seconds=timeout,
+            version="rdp_16s_v16",
+        )
+        result_dl = downloader.ensure(spec)
+        if result_dl.status == "ok":
+            effective_path = tax_fasta
+            status_msg = "ok"
+            message = "RDP 16S training set downloaded successfully."
+            command = result_dl.command
+        else:
             effective_path = synthetic_fasta
-            status = "fallback"
-            message = "RDP download timed out; generated synthetic fallback."
-            command = cmd
+            status_msg = "fallback"
+            message = f"RDP download failed: {result_dl.message}. Generating synthetic fallback."
+            command = result_dl.command
             _generate_synthetic_fallback(outdir)
     else:
         effective_path = tax_fasta
-        status = "error"
+        status_msg = "error"
         message = f"Download script not found: {download_script}"
         command = []
 
-    if status == "fallback" and not synthetic_fasta.exists():
-        status = "error"
+    if status_msg == "fallback" and not synthetic_fasta.exists():
+        status_msg = "error"
         message = (
             "RDP download failed and synthetic fallback generation did not "
             f"produce {synthetic_fasta}."
@@ -795,7 +793,7 @@ def _setup_amplicon_16s(
     result = DownloadResult(
         resource_id="taxonomy_db",
         path=effective_path,
-        status=status,
+        status=status_msg,
         message=message,
         command=command,
     )
