@@ -13,13 +13,13 @@ Nextflow 导出/运行支持、DAG/合约静态分析、资源自动发现 + 安
 [![PyPI](https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=blue)](https://pypi.org/project/abi-agent/)
 [![Python](https://img.shields.io/pypi/pyversions/abi-agent?style=flat-square)](https://pypi.org/project/abi-agent/)
 [![CI](https://img.shields.io/github/actions/workflow/status/sleepinlava/abi/ci.yml?branch=master&style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-75.39%25-brightgreen?style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-83%25-brightgreen?style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-Sphinx-blue?style=flat-square)](https://sleepinlava.github.io/abi/)
 [![Status](https://img.shields.io/badge/status-alpha-orange?style=flat-square)](https://github.com/sleepinlava/abi)
 [![License](https://img.shields.io/pypi/l/abi-agent?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
 
 > **工程状态（v1.5.1 源码，2026-06-23）：本地冻结候选。**
-> 980 项测试通过，分支覆盖口径为 75.39%，高风险模块覆盖率门禁全部通过，
+> 1364 项测试通过（83% 语句覆盖率），高风险模块覆盖率门禁全部通过，
 > 全新环境安装 wheel 后 7 个内置插件 dry-run 全部通过。正式硬冻结仍需：
 > 远程 Python 3.10-3.13 矩阵全绿、带生物学判定标准的固定真实工具 benchmark、
 > 连续两个仅修缺陷的候选版本，以及连续一周无新增 P0/P1 缺陷。
