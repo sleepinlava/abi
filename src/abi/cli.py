@@ -91,6 +91,7 @@ from abi.json_utils import load_json_object, loads_json
 from abi.openai_contracts import export_openai_tools  # backward compat
 from abi.plugins import get_plugin, list_plugins
 from abi.resources import setup_resources
+from abi.runtime_lock import DEFAULT_ANALYSIS_TYPES, generate_runtime_locks
 from abi.results import validate_abi_result_dir
 from abi.schemas import ABIError
 from abi.skill_installer import install_bundled_skills
@@ -1484,6 +1485,64 @@ def setup_resources_command(
         _fail(exc)
 
 
+@app.command("lock-runtime")
+def lock_runtime_command(
+    output_dir: Path = typer.Option(
+        Path("locks"),
+        "--output-dir",
+        help="Directory for generated *.lock.yaml files.",
+    ),
+    prefix: str = typer.Option("cloud", "--prefix", help="Lock filename prefix."),
+    mamba_root: Optional[Path] = typer.Option(
+        None,
+        "--mamba-root",
+        envvar="ABI_MAMBA_ROOT",
+        help="Conda/mamba root to snapshot. Defaults to ABI resolution.",
+    ),
+    resource_root: Optional[Path] = typer.Option(
+        None,
+        "--resource-root",
+        envvar="ABI_RESOURCE_ROOT",
+        help="Top-level ABI resource directory to snapshot.",
+    ),
+    conda_executable: Optional[Path] = typer.Option(
+        None,
+        "--conda-executable",
+        envvar="ABI_CONDA_EXE",
+        help="Conda executable used for package snapshots.",
+    ),
+    skip_conda_packages: bool = typer.Option(
+        False,
+        "--skip-conda-packages",
+        help="Record env presence without running conda list.",
+    ),
+    analysis_type: Optional[List[str]] = typer.Option(
+        None,
+        "--type",
+        help="Analysis type to include in the resource lock. Repeatable.",
+    ),
+) -> None:
+    """Snapshot current Conda envs, registered tools, and resources into lock files.
+
+    This is a read-only audit command. It does not install tools, download
+    databases, or mutate resource directories. Missing tools/resources are
+    preserved in the lock files as reproducibility gaps.
+    """
+    try:
+        paths = generate_runtime_locks(
+            output_dir=output_dir,
+            prefix=prefix,
+            mamba_root=mamba_root,
+            resource_root=resource_root,
+            conda_executable=conda_executable,
+            include_conda_packages=not skip_conda_packages,
+            analysis_types=tuple(analysis_type or DEFAULT_ANALYSIS_TYPES),
+        )
+        _emit_json_payload(paths)
+    except Exception as exc:
+        _fail(exc)
+
+
 @app.command("doctor-agent")
 def doctor_agent_command(
     analysis_type: str = typer.Option(..., "--type", help="ABI analysis type."),
@@ -2083,6 +2142,46 @@ def run_step_command(
         result = execute_step_payload(payload_file)
         typer.echo(json.dumps(result.to_dict(), ensure_ascii=False))
         if result.status != "success":
+            raise typer.Exit(code=1)
+    except typer.Exit:
+        raise
+    except Exception as exc:
+        _fail(exc)
+
+
+@app.command("lint-template")
+def lint_template_command(
+    analysis_type: str = typer.Option(
+        "metagenomic_plasmid",
+        "--type",
+        "-t",
+        help="ABI analysis type whose templates to lint.",
+    ),
+    config_path: str | None = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to plugin configuration YAML.",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed per-template info."),
+) -> None:
+    """Validate all command and path templates for missing parameters.
+
+    Runs every template through SafeFormatDict in strict mode to detect
+    references to undefined parameters.  Exit code 0 means no errors.
+
+    对所有命令和路径模板进行缺失参数检查。
+    """
+    try:
+        from abi.contracts.lint_template import lint_templates
+        from abi.plugins import get_plugin
+
+        plugin = get_plugin(analysis_type)
+        config = plugin.load_config(config_path)
+        result = lint_templates(analysis_type, config, plugin, verbose=verbose)
+
+        typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
+        if not result["passed"]:
             raise typer.Exit(code=1)
     except typer.Exit:
         raise
