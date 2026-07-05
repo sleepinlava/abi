@@ -42,7 +42,6 @@ writers can traverse it with attribute access.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
@@ -440,22 +439,11 @@ def build_plan_from_dag(
     *,
     check_files: bool = True,
 ) -> ExecutionPlan:
-    """Build an execution plan while preserving the legacy planner contract.
+    """Build an execution plan from the canonical declarative DAG spec.
 
-    Phase 2 keeps the declarative DAG planner available for migration work,
-    but the public metagenomic-plasmid entry point must remain backed by the
-    legacy planner until golden traces and route tests match. Set
-    ``ABI_USE_CORE_DAG_PLANNER=1`` to opt into the new core DAG path.
+    Uses the core DAG planner with plugin-specific hooks for context
+    resolution, sample config customization, and per-step skip logic.
     """
-    if os.environ.get("ABI_USE_CORE_DAG_PLANNER") != "1":
-        from ._engine.planner import build_plan_from_dag as _legacy_build_plan
-
-        return _legacy_build_plan(
-            config,
-            sample_context=sample_context,
-            check_files=check_files,
-        )
-
     ctx = sample_context or _core_build_sample_context(config, check_files=check_files)
     if not sample_context:
         has_abundance = any(s.platform != "assembly" for s in ctx.samples)

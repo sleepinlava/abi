@@ -108,10 +108,11 @@ def _setup_manual_resource_bundle(
     """Prepare mock bundles or report explicit manual setup requirements.
 
     These plugins depend on organism/site-specific databases or an upstream
-    multi-environment installation.  Automatically choosing or partially
+    multi-environment installation. Automatically choosing or partially
     downloading such resources would create a misleading runnable state.
     """
     rows = _check_generic_resources(analysis_type, config, resource_ids=resource_ids)
+    downloader = ResourceDownloader(Path(), dry_run=dry_run, mock=mock)
     planned: List[Dict[str, Any]] = []
     for row in rows:
         current = dict(row)
@@ -129,10 +130,8 @@ def _setup_manual_resource_bundle(
         elif current["status"] == "ok":
             current["message"] = "Configured resource exists."
         elif mock:
-            target.mkdir(parents=True, exist_ok=True)
-            (target / ".abi_mock_resource").write_text(
-                f"{analysis_type}:{current['resource_id']}\n",
-                encoding="utf-8",
+            downloader._mock_resource(
+                DownloadSpec(resource_id=str(current["resource_id"])), target
             )
             current["status"] = "ok"
             current["message"] = "Mock resource directory prepared."
@@ -248,12 +247,12 @@ def _setup_reference_resources(
 ) -> List[Dict[str, Any]]:
     """Plan or mock organism-specific reference resources.
 
-    Genome indices and annotations cannot be downloaded correctly without an
-    organism/build choice. Real setup therefore reports an actionable
-    ``manual_required`` status rather than raising a generic not-implemented
-    error or silently choosing the wrong reference.
+    Genome indices and annotations cannot be downloaded automatically ---
+    the user must pick an organism/genome build. Mock mode uses
+    ResourceDownloader for consistent mock resource creation.
     """
     selected = set(resource_ids or [])
+    downloader = ResourceDownloader(Path(), dry_run=dry_run, mock=mock)
     rows: List[Dict[str, Any]] = []
     for resource_id in ("genome_index", "annotation_gtf"):
         if selected and resource_id not in selected:
@@ -266,15 +265,9 @@ def _setup_reference_resources(
                 if mock
                 else "Select an organism/genome build and configure this reference path."
             )
-        elif target.exists():
-            status = "ok"
-            message = "Configured reference resource exists."
         elif mock:
             if resource_id == "genome_index":
-                target.mkdir(parents=True, exist_ok=True)
-                (target / ".abi_mock_resource").write_text(
-                    f"{analysis_type}:{resource_id}\n", encoding="utf-8"
-                )
+                downloader._mock_resource(DownloadSpec(resource_id=resource_id), target)
             else:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(
@@ -283,30 +276,31 @@ def _setup_reference_resources(
                 )
             status = "ok"
             message = "Mock reference resource prepared."
+        elif target.exists():
+            status = "ok"
+            message = "Configured reference resource exists."
         else:
             status = "manual_required"
             message = (
                 "Automatic download requires an organism/genome build choice; "
                 "configure the reference path explicitly."
             )
-        rows.append(
-            {
-                "resource_id": resource_id,
-                "tool_id": "star" if resource_id == "genome_index" else "featurecounts",
-                "field": resource_id,
-                "path": str(target),
-                "status": status,
-                "version": "",
-                "source_url": "",
-                "checksum": "",
-                "command": [],
-                "ready_check": "path_exists",
-                "directory_file_count": _directory_file_count(target),
-                "directory_size_bytes": 0,
-                "message": message,
-                "mock": mock,
-            }
-        )
+        rows.append({
+            "resource_id": resource_id,
+            "tool_id": "star" if resource_id == "genome_index" else "featurecounts",
+            "field": resource_id,
+            "path": str(target),
+            "status": status,
+            "version": "",
+            "source_url": "",
+            "checksum": "",
+            "command": [],
+            "ready_check": "path_exists",
+            "directory_file_count": _directory_file_count(target),
+            "directory_size_bytes": 0,
+            "message": message,
+            "mock": mock,
+        })
     return rows
 
 

@@ -10,7 +10,7 @@ import yaml
 from abi.plugins import get_plugin
 from abi.plugins.metagenomic_plasmid._engine.config import load_config
 from abi.plugins.metagenomic_plasmid._engine.pipeline import _terminal_overlap_length
-from abi.plugins.metagenomic_plasmid._engine.planner import build_plan_from_dag
+from abi.plugins.metagenomic_plasmid import build_plan_from_dag
 from abi.plugins.metagenomic_plasmid._engine.resources import (
     check_resources,
     default_resource_specs,

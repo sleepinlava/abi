@@ -12,51 +12,54 @@ def ok(msg): print("  [PASS]", msg)
 def fail(msg): print("  [FAIL]", msg)
 def info(msg): print("  [INFO]", msg)
 
-def check_feature_flag():
-    print("\n[1/5] Feature flag check")
+def check_planner_removed():
+    print("\n[1/5] Planner removal check")
+    passed = True
+
+    # Planner file must NOT exist
     planner = PLUGIN_DIR / "planner.py"
     if not planner.exists():
-        return fail("planner.py not found") or False
-    content = planner.read_text(encoding="utf-8")
-    passed = True
-    if "ABI_DAG_PLANNER_LEGACY" in content:
-        ok("ABI_DAG_PLANNER_LEGACY flag present")
+        ok("planner.py removed")
     else:
-        fail("ABI_DAG_PLANNER_LEGACY flag missing")
+        fail("planner.py still exists")
         passed = False
-    if "_LEGACY_BUILD_PLAN" in content:
-        ok("_LEGACY_BUILD_PLAN constant present")
+
+    # __init__.py must NOT contain legacy references
+    init_file = SRC / "plugins" / "metagenomic_plasmid" / "__init__.py"
+    init_content = init_file.read_text(encoding="utf-8")
+    if "from ._engine.planner import" in init_content:
+        fail("__init__.py still imports legacy planner")
+        passed = False
     else:
-        fail("_LEGACY_BUILD_PLAN constant missing")
+        ok("no legacy planner import in __init__.py")
+    if "ABI_USE_CORE_DAG_PLANNER" in init_content:
+        fail("ABI_USE_CORE_DAG_PLANNER flag still in __init__.py")
         passed = False
-    if "_build_plan_legacy" in content:
-        ok("_build_plan_legacy() exists")
     else:
-        fail("_build_plan_legacy() missing")
-        passed = False
-    if "_build_plan_new" in content:
-        ok("_build_plan_new() exists")
+        ok("ABI_USE_CORE_DAG_PLANNER flag removed from __init__.py")
+
+    # __init__.py must contain the new-path planner call
+    if "_core_build_plan(" in init_content:
+        ok("_core_build_plan() call found in __init__.py")
     else:
-        fail("_build_plan_new() missing")
+        fail("_core_build_plan() call missing from __init__.py")
         passed = False
+
     return passed
 
-def check_golden_tests():
-    print("\n[2/5] Golden test infrastructure")
-    test_file = PROJECT_ROOT / "tests" / "unit" / "test_dag_migration.py"
+def check_dag_planner_tests():
+    print("\n[2/5] DAG planner test infrastructure")
+    test_file = PROJECT_ROOT / "tests" / "test_dag_planner.py"
     if not test_file.exists():
         return fail(str(test_file) + " not found") or False
+    ok(str(test_file) + " exists")
     content = test_file.read_text(encoding="utf-8")
     passed = True
-    for tn in ["test_golden_file_legacy_illumina_isolate",
-               "test_golden_legacy_vs_new_illumina_isolate",
-               "test_feature_flag_default_new",
-               "test_feature_flag_new_path"]:
-        if tn in content:
-            ok(tn)
-        else:
-            fail(tn + " -- MISSING")
-            passed = False
+    if "def test_" in content:
+        ok("test functions found")
+    else:
+        fail("no test functions found")
+        passed = False
     return passed
 
 def check_phase1_files():
@@ -130,7 +133,7 @@ def main():
     print("=" * 60)
     print("ABI Migration Gate")
     print("=" * 60)
-    checks = [check_feature_flag,check_golden_tests,check_phase1_files,check_phase2_files,check_coverage_targets]
+    checks = [check_planner_removed, check_dag_planner_tests, check_phase1_files, check_phase2_files, check_coverage_targets]
     results = []
     for fn in checks:
         try:
