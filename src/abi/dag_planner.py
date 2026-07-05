@@ -30,10 +30,11 @@ Usage::
 
 from __future__ import annotations
 
+import csv
 import logging
 from collections import deque
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, TypedDict
 
 import yaml
 
@@ -43,8 +44,10 @@ _logger = logging.getLogger("abi.dag_planner")
 
 __all__ = [
     "PathTemplateContext",
+    "PluginContextResolver",
     "UniversalDAG",
     "build_plan_from_dag",
+    "build_sample_context",
     "detect_platform",
 ]
 
@@ -594,12 +597,96 @@ def detect_platform(sample: SampleInput) -> str:
 # / 替代手写 build_plan() 方法的核心逻辑。
 
 
+# ── PluginContextResolver ────────────────────────────────────────────────
+# A class that resolves auto/conditional settings from sample metadata.
+# Ported from _engine/planner.py:_resolve_context_conditions() to the
+# universal planner so all plugins share the same infrastructure.
+# / 从 sample metadata 解析自动/条件配置的类。从 _engine/planner.py 移植。
+
+
+class EligibilityResult(TypedDict):
+    """Eligibility result for a conditional pipeline feature."""
+
+    run: bool
+    sample_count: int
+    eligible_sample_count: int
+    threshold: int
+    reason: str
+
+
+class PluginContextResolver:
+    """Resolve auto/conditional configuration from sample context.
+
+    Used by plugins that need to dynamically enable/disable features
+    (diversity analysis, differential abundance, network inference, etc.)
+    based on the actual sample set.
+    """
+
+    def __init__(
+        self,
+        config: Mapping[str, Any],
+        sample_context: SampleContext,
+    ) -> None:
+        self._config = dict(config)
+        self._context = sample_context
+
+    @property
+    def config(self) -> dict[str, Any]:
+        """Resolved configuration (read-only after resolve() call)."""
+        return self._config
+
+    def resolve(self) -> dict[str, Any]:
+        """Resolve auto/conditional settings in-place.
+
+        Base implementation returns config unchanged. Subclasses override
+        to add plugin-specific logic (e.g., diversity/differential/network
+        eligibility for metagenomic_plasmid).
+        """
+        return self._config
+
+    def eligibility(self) -> dict[str, EligibilityResult]:
+        """Return eligibility results for all evaluated features.
+
+        Base implementation returns empty dict. Subclasses override to
+        report per-feature eligibility.
+        """
+        return {}
+
+
+# ── Hook type aliases ─────────────────────────────────────────────────────
+
+ContextResolverHook = Callable[
+    [Mapping[str, Any], SampleContext],
+    tuple[dict[str, Any], dict[str, dict[str, Any]]],
+]
+"""``(config, sample_context) → (resolved_config, eligibility)``.
+
+Replaces ``_engine/planner.py:_resolve_context_conditions()``.
+"""
+
+SampleConfigHook = Callable[[Mapping[str, Any], SampleInput], dict[str, Any]]
+"""``(config, sample) → sample_config``.
+
+Replaces ``_engine/planner.py:_config_for_sample()``.
+"""
+
+SkipStepHook = Callable[[str, str, Mapping[str, Any], SampleInput], Optional[str]]
+"""``(node_id, tool_id, sample_config, sample) → reason | None``.
+
+Returns a skip reason string if the step should be skipped, or ``None``
+to continue.  Replaces ``_engine/planner.py:_analysis_skip_steps()``.
+"""
+
+
 def build_plan_from_dag(
     dag_spec_path: str | Path,
     config: Mapping[str, Any],
     sample_context: SampleContext,
     *,
     plugin_root: str | Path | None = None,
+    context_resolver: ContextResolverHook | None = None,
+    sample_config_hook: SampleConfigHook | None = None,
+    skip_step_hook: SkipStepHook | None = None,
 ) -> ExecutionPlan:
     """Build an ``ExecutionPlan`` from a ``pipeline_dag.yaml`` spec.
 
@@ -615,6 +702,12 @@ def build_plan_from_dag(
         sample_context: Pre-parsed sample collection metadata.
         plugin_root: Optional plugin root directory for resolving relative
             *dag_spec_path* values.
+        context_resolver: Optional hook to resolve auto/conditional settings
+            from sample context. Replaces ``_resolve_context_conditions()``.
+        sample_config_hook: Optional hook to customize config per sample.
+            Replaces ``_config_for_sample()``.
+        skip_step_hook: Optional hook to dynamically skip steps.
+            Replaces ``_analysis_skip_steps()``.
 
     Returns:
         A complete ``ExecutionPlan`` ready for the executor.
@@ -646,6 +739,14 @@ def build_plan_from_dag(
     }
     unique_platforms = set(sample_platforms.values())
 
+    # Apply context resolver hook if provided / 应用 context_resolver 钩子
+    # MUST happen before active_node_ids so that enable_conditions in the DAG
+    # see the resolved config (e.g. sample_analysis.enable=false when sample
+    # count is below the threshold).
+    if context_resolver is not None:
+        resolved_config, _ = context_resolver(config, sample_context)
+        config = resolved_config
+
     # Compute active nodes per platform / 每个平台独立计算活跃节点
     platform_active: Dict[str, set] = {}
     for plat in unique_platforms:
@@ -658,6 +759,18 @@ def build_plan_from_dag(
     all_active: set = set()
     for active_set in platform_active.values():
         all_active |= active_set
+
+    # All per-sample nodes are added to the global active set so the
+    # per-sample loop can re-evaluate enable_conditions against the
+    # per-sample config (applied via sample_config_hook).  Nodes whose
+    # enable_conditions fail or are optional-without-condition will be
+    # excluded by ``active_node_ids`` in the per-sample loop.
+    for node_id in dag.node_ids:
+        if dag.scope_for(node_id) == "per_sample":
+            node_platforms = dag._nodes.get(node_id, {}).get("platforms", [])
+            if not node_platforms or any(p in unique_platforms for p in node_platforms):
+                all_active.add(node_id)
+
     if not all_active:
         workflow = config.get("workflow", {})
         if isinstance(workflow, Mapping) and workflow.get("include_nodes") is not None:
@@ -670,7 +783,12 @@ def build_plan_from_dag(
         fallback_plat = next(iter(unique_platforms)) if unique_platforms else "illumina"
         all_active = set(dag.active_node_ids(fallback_plat, config))
 
-    ordered_ids = dag.topological_order(list(all_active))
+    # Resolve effective dependencies (handling fallback_depends) for
+    # topological ordering so that downstream nodes that rely on fallbacks
+    # are ordered after their actual active upstreams.
+    all_active_list = list(all_active)
+    resolved_deps = dag.resolve_dependencies(all_active_list)
+    ordered_ids = dag.topological_order(resolved_deps)
 
     # Separate per_sample and cross_sample nodes / 分离逐样本和跨样本节点
     per_sample_ids = [nid for nid in ordered_ids if dag.scope_for(nid) == "per_sample"]
@@ -733,7 +851,17 @@ def build_plan_from_dag(
 
     for sample in sample_context.samples:
         sample_plat = sample_platforms[sample.sample_id]
-        sample_active = platform_active.get(sample_plat, set())
+
+        # Apply sample_config_hook first so enable_conditions that depend on
+        # per-sample fields (e.g. host_removal.host_reference, input.*) are
+        # resolvable when we compute active nodes for this sample.
+        sample_config = config
+        if sample_config_hook is not None:
+            sample_config = sample_config_hook(config, sample)
+
+        # Recompute active nodes per-sample so per-sample config fields
+        # (set by sample_config_hook) are evaluated correctly.
+        sample_active = set(dag.active_node_ids(sample_plat, sample_config))
         sample_outputs[sample.sample_id] = {}
         sample_step_ids[sample.sample_id] = {}
         upstream_outputs: Dict[str, Dict[str, Any]] = {}
@@ -741,17 +869,38 @@ def build_plan_from_dag(
         for node_id in per_sample_ids:
             if node_id not in sample_active:
                 continue  # represented in skipped_steps below
+
+            # Apply skip_step_hook if provided / 应用 skip_step_hook 钩子
+            if skip_step_hook is not None:
+                tool_id = node_id_to_tool_id(dag, node_id)
+                skip_reason = skip_step_hook(node_id, tool_id, sample_config, sample)
+                if skip_reason:
+                    step_id = f"{sample.sample_id}_{dag.node_category(node_id)}_{tool_id}"
+                    skipped_steps.append(
+                        PlanStep(
+                            step_id=step_id,
+                            sample_id=sample.sample_id,
+                            step_name=dag.node_category(node_id),
+                            tool_id=tool_id,
+                            category=dag.node_category(node_id),
+                            inputs={},
+                            outputs={},
+                            params={"_reason": skip_reason},
+                            reason=skip_reason,
+                        )
+                    )
+                    continue
             category = dag.node_category(node_id)
             category_dir = dag.category_dir_for(category)
 
             # Resolve inputs / 解析输入
             resolved_inputs = _resolve_inputs(
-                dag, node_id, sample, config, upstream_outputs, plugin_root
+                dag, node_id, sample, sample_config, upstream_outputs, plugin_root
             )
 
             # Resolve output paths / 解析输出路径
             template_ctx = PathTemplateContext(
-                config=config,
+                config=sample_config,
                 sample=sample,
                 category_dir=category_dir,
                 upstream_outputs=upstream_outputs,
@@ -762,7 +911,7 @@ def build_plan_from_dag(
             step_id = f"{sample.sample_id}_{category}_{node_id_to_tool_id(dag, node_id)}"
             if any(existing.step_id == step_id for existing in steps):
                 step_id = f"{step_id}_{node_id}"
-            params = _resolve_params(dag, node_id, sample, config, template_ctx)
+            params = _resolve_params(dag, node_id, sample, sample_config, template_ctx)
             params["_dag_node_id"] = node_id
             params["_explicit_dependencies"] = [
                 dependency_id
@@ -925,7 +1074,9 @@ def _resolve_inputs(
     Resolution order for each input key:
     1. If ``source: sample_sheet`` → look up in ``sample.to_dict()``.
     2. If ``source: UPSTREAM_NODE.OUTPUT_KEY`` → look up in *upstream_outputs*.
-    3. If ``source`` is absent → try config resources, then config, then empty.
+    3. If ``source`` is absent → try config resources, then config, then default/empty.
+    4. ``fallback`` is tried when the primary source yields an empty value.
+    5. ``default`` is used as the final fallback when nothing else resolves.
     """
     inputs_spec = dag.node_inputs(node_id)
     resolved: Dict[str, Any] = {}
@@ -942,23 +1093,57 @@ def _resolve_inputs(
             resolved[key] = _resolve_input_path(path_template, config, sample)
             continue
 
+        value: Any = ""
         source = spec.get("source")
         if source is not None:
             source_str = str(source)
             if source_str == "sample_sheet":
-                resolved[key] = sample_dict.get(key, "")
+                value = sample_dict.get(key, "")
             elif "." in source_str:
                 # Upstream reference: "NODE_ID.OUTPUT_KEY"
                 parts = source_str.split(".", 1)
                 upstream_id, upstream_key = parts[0], parts[1]
-                resolved[key] = upstream_outputs.get(upstream_id, {}).get(upstream_key, "")
+                # Handle template source like "{active_assembly_node}.assembly"
+                # by scanning all upstream outputs for the matching key.
+                if upstream_id.startswith("{") and upstream_id.endswith("}"):
+                    for uid, uouts in reversed(list(upstream_outputs.items())):
+                        val = uouts.get(upstream_key)
+                        if val:
+                            value = str(val)
+                            break
+                else:
+                    value = upstream_outputs.get(upstream_id, {}).get(upstream_key, "")
             else:
-                resolved[key] = sample_dict.get(source_str, "")
+                value = sample_dict.get(source_str, "")
         else:
             # No explicit source — try config resources, then config, then empty.
-            resolved[key] = _resolve_script_path(
+            value = _resolve_script_path(
                 key, _resolve_config_value(config, key), plugin_root
             )
+
+        # Try fallback when primary source yields nothing / 主源为空时尝试备用源
+        if not value:
+            fallback = spec.get("fallback")
+            if fallback is not None:
+                fallback_str = str(fallback)
+                if "." in fallback_str:
+                    parts = fallback_str.split(".", 1)
+                    fb_id, fb_key = parts[0], parts[1]
+                    # Handle template fallback like "{active_assembly_node}.assembly"
+                    if fb_id.startswith("{") and fb_id.endswith("}"):
+                        for uid, uouts in reversed(list(upstream_outputs.items())):
+                            val = uouts.get(fb_key)
+                            if val:
+                                value = str(val)
+                                break
+                    else:
+                        value = upstream_outputs.get(fb_id, {}).get(fb_key, "")
+
+        # Use default when all sources yield nothing / 所有源都为空时使用默认值
+        if not value:
+            value = spec.get("default", "")
+
+        resolved[key] = value
 
     return resolved
 
@@ -1291,3 +1476,175 @@ def node_id_to_tool_id(dag: UniversalDAG, node_id: str) -> str:
     if tool_id:
         return str(tool_id)
     return node_id
+
+
+def build_sample_context(
+    config: Mapping[str, Any],
+    *,
+    check_files: bool = True,
+    validate_platform: Callable[[str], None] | None = None,
+) -> SampleContext:
+    """Build a ``SampleContext`` from pipeline configuration.
+
+    Handles two modes:
+
+    1. **Sample-sheet mode**: ``config.input.sample_sheet`` points to a
+       TSV file with columns per ``SampleInput`` fields.
+    2. **Single-sample mode**: individual keys in ``config.input``
+       (``single_input``, ``platform``, ``read1``, ``read2``,
+       ``long_reads``, ``pod5``, ``bam``, ``assembly``, ``group``).
+
+    Args:
+        config: Fully-resolved pipeline configuration.
+        check_files: If True, validate that input files exist on disk.
+        validate_platform: Optional callback to validate platform strings.
+            Called with ``platform`` for single-sample mode and per-sample
+            in sample-sheet mode. Raises on invalid values.
+
+    Returns:
+        A ``SampleContext`` ready for ``build_plan_from_dag()``.
+
+    Raises:
+        ValueError: If neither sample-sheet nor single-sample input
+            is configured, or if required inputs are missing.
+    """
+    input_config = config.get("input") or {}
+    if not isinstance(input_config, Mapping):
+        raise ValueError("config.input must be a mapping")
+
+    sample_sheet = input_config.get("sample_sheet")
+    if sample_sheet:
+        return _parse_generic_sample_sheet(
+            Path(str(sample_sheet)),
+            check_files=check_files,
+            validate_platform=validate_platform,
+        )
+
+    # Single-sample mode
+    single_input = input_config.get("single_input")
+    platform = input_config.get("platform")
+    has_any_input = bool(
+        single_input
+        or any(input_config.get(key) for key in ("assembly", "long_reads", "pod5", "bam"))
+    )
+    if not has_any_input:
+        raise ValueError(
+            "No sample_sheet or single_input/assembly/long_reads/pod5/bam is configured"
+        )
+    if not platform:
+        raise ValueError("Single-sample input requires platform")
+    if validate_platform is not None:
+        validate_platform(str(platform))
+
+    sample = SampleInput(
+        sample_id=str(input_config.get("sample_id") or "single_sample"),
+        platform=str(platform),
+        read1=single_input if str(platform) == "illumina" else input_config.get("read1"),
+        read2=input_config.get("read2"),
+        long_reads=(
+            single_input
+            if str(platform) in {"ont", "pacbio_hifi"}
+            else input_config.get("long_reads")
+        ),
+        pod5=input_config.get("pod5"),
+        bam=input_config.get("bam"),
+        assembly=(single_input if str(platform) == "assembly" else input_config.get("assembly")),
+        group=input_config.get("group"),
+    )
+    _validate_sample_requirements(sample)
+    if check_files:
+        _validate_sample_files([sample])
+    return _summarize_samples([sample])
+
+
+def _parse_generic_sample_sheet(
+    path: Path,
+    *,
+    check_files: bool = True,
+    validate_platform: Callable[[str], None] | None = None,
+) -> SampleContext:
+    """Parse a TSV sample sheet into ``SampleContext``.
+
+    Expected columns: ``sample_id``, ``platform`` (required);
+    optional: ``read1``, ``read2``, ``long_reads``, ``pod5``, ``bam``,
+    ``assembly``, ``group``, ``technology``, ``host_reference``.
+    """
+    if not path.exists():
+        raise ValueError(f"Sample sheet does not exist: {path}")
+
+    samples: list[SampleInput] = []
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        if reader.fieldnames is None:
+            raise ValueError(f"Sample sheet is empty: {path}")
+
+        required = {"sample_id", "platform"}
+        missing = required - set(reader.fieldnames)
+        if missing:
+            raise ValueError(
+                f"Sample sheet {path} missing required columns: {', '.join(sorted(missing))}"
+            )
+
+        for row_number, row in enumerate(reader, start=2):
+            sid = str(row.get("sample_id", "") or "").strip()
+            platform = str(row.get("platform", "") or "").strip()
+            if not sid or not platform:
+                raise ValueError(
+                    f"Sample sheet {path} row {row_number}: sample_id and platform are required"
+                )
+            if validate_platform is not None:
+                validate_platform(platform)
+
+            raw = {k: v.strip() if v else None for k, v in row.items()}
+            samples.append(
+                SampleInput(
+                    sample_id=sid,
+                    platform=platform,
+                    group=raw.get("group"),
+                    read1=raw.get("read1"),
+                    read2=raw.get("read2"),
+                    long_reads=raw.get("long_reads"),
+                    pod5=raw.get("pod5"),
+                    bam=raw.get("bam"),
+                    assembly=raw.get("assembly"),
+                    technology=raw.get("technology"),
+                    host_reference=raw.get("host_reference"),
+                )
+            )
+
+    for s in samples:
+        _validate_sample_requirements(s)
+    if check_files:
+        _validate_sample_files(samples)
+    return _summarize_samples(samples)
+
+
+def _validate_sample_requirements(sample: SampleInput, row_number: int | None = None) -> None:
+    """Validate a single sample's requirements."""
+    loc = f" (row {row_number})" if row_number else ""
+    if sample.platform not in VALID_PLATFORMS:
+        raise ValueError(
+            f"Invalid platform {sample.platform!r}{loc}: must be one of {sorted(VALID_PLATFORMS)}"
+        )
+
+
+def _validate_sample_files(samples: Iterable[SampleInput]) -> None:
+    """Validate that all referenced input files exist."""
+    for sample in samples:
+        for attr in ("read1", "read2", "long_reads", "pod5", "bam", "assembly"):
+            path_str: str | None = getattr(sample, attr, None)
+            if path_str:
+                p = Path(path_str)
+                if not p.exists():
+                    raise FileNotFoundError(f"Sample {sample.sample_id} {attr} not found: {p}")
+
+
+def _summarize_samples(samples: list[SampleInput]) -> SampleContext:
+    """Build a ``SampleContext`` from a list of samples."""
+    multi_sample = len(samples) > 1
+    has_groups = len({s.group for s in samples if s.group}) > 1
+    return SampleContext(
+        samples=samples,
+        multi_sample=multi_sample,
+        has_groups=has_groups,
+    )
