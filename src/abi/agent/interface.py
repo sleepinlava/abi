@@ -904,6 +904,7 @@ class ABIAgentInterface:
         )
         if resource_overrides_list:
             from abi.resources import apply_resource_overrides
+
             apply_resource_overrides(cfg, resource_overrides_list)
         report = dict(
             run_plugin_preflight(
@@ -977,6 +978,7 @@ class ABIAgentInterface:
         )
         if resource_overrides_list:
             from abi.resources import apply_resource_overrides
+
             apply_resource_overrides(cfg, resource_overrides_list)
         plan = plugin.build_plan(cfg, check_files=check_files)
         if hasattr(plugin, "execute_dry_run"):
@@ -1156,6 +1158,7 @@ class ABIAgentInterface:
         )
         if resource_overrides_list:
             from abi.resources import apply_resource_overrides
+
             apply_resource_overrides(cfg, resource_overrides_list)
         plan = plugin.build_plan(cfg, check_files=check_files)
         options = RuntimeOptions(
@@ -1300,6 +1303,7 @@ class ABIAgentInterface:
         )
         if resource_overrides_list:
             from abi.resources import apply_resource_overrides
+
             apply_resource_overrides(config, resource_overrides_list)
         rows = check_resources(
             analysis_type=analysis_type,
@@ -1421,6 +1425,7 @@ class ABIAgentInterface:
         )
         if resource_overrides_list:
             from abi.resources import apply_resource_overrides
+
             apply_resource_overrides(cfg, resource_overrides_list)
         plan = plugin.build_plan(cfg, check_files=check_files)
         return plugin, cfg, plan

@@ -189,9 +189,7 @@ def test_amplicon_real_execution(tmp_path: Path) -> None:
 
     plugin = Amplicon16SPlugin()
     results_dir = tmp_path / "results"
-    diversity_script = str(
-        PROJECT_ROOT / "scripts" / "amplicon_diversity.py"
-    )
+    diversity_script = str(PROJECT_ROOT / "scripts" / "amplicon_diversity.py")
     config = plugin.load_config(
         overrides={
             "project_name": "smoke-amplicon",

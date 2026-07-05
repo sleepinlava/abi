@@ -4,6 +4,7 @@ import csv
 import gzip
 import json
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -311,7 +312,10 @@ elif name == 'bracken':
     for name in ("seqkit", "fastp", "kneaddata", "kraken2", "bracken"):
         link = bin_dir / name
         link.symlink_to(tool_script)
-    monkeypatch.setenv("PATH", str(bin_dir) + os.pathsep + os.environ["PATH"])
+    monkeypatch.setenv(
+        "PATH",
+        os.pathsep.join((str(bin_dir), str(Path(sys.executable).parent), os.environ["PATH"])),
+    )
 
     workflow = get_plugin("easymetagenome").documented_workflow()
     result = workflow.run(manifest, tmp_path, db_registry=registry)
@@ -398,7 +402,10 @@ elif name == 'humann_split_stratified_table':
         "humann_split_stratified_table",
     ):
         (bin_dir / name).symlink_to(fixture_tool)
-    monkeypatch.setenv("PATH", str(bin_dir) + os.pathsep + os.environ["PATH"])
+    monkeypatch.setenv(
+        "PATH",
+        os.pathsep.join((str(bin_dir), str(Path(sys.executable).parent), os.environ["PATH"])),
+    )
 
     plugin = get_plugin("easymetagenome")
     config = plugin.load_config(
