@@ -59,7 +59,7 @@ def test_wgs_mock_resource_uses_safe_outdir_for_placeholder_path(tmp_path):
 
     target = tmp_path / "results" / "resources" / "amrfinder_db"
     assert rows[0]["path"] == str(target)
-    assert (target / ".abi_mock_resource").is_file()
+    assert (target / ".abi_resource.json").is_file()
 
 
 def test_rnaseq_resource_filter_is_exact():

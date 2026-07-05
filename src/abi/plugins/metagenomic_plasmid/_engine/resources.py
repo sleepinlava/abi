@@ -996,16 +996,14 @@ def apply_resource_overrides(
             field = field.strip()
             if resource_id not in specs:
                 raise ResourceError(
-                    f"Unknown resource id '{resource_id}'; available: "
-                    + ", ".join(sorted(specs))
+                    f"Unknown resource id '{resource_id}'; available: " + ", ".join(sorted(specs))
                 )
         else:
             resource_id = key
             spec = specs.get(resource_id)
             if spec is None:
                 raise ResourceError(
-                    f"Unknown resource id '{resource_id}'; available: "
-                    + ", ".join(sorted(specs))
+                    f"Unknown resource id '{resource_id}'; available: " + ", ".join(sorted(specs))
                 )
             field = spec.field
         block = resources.setdefault(resource_id, {})

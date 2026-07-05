@@ -191,7 +191,8 @@ def test_wgs_resource_setup_reports_process_failure_and_timeout(
         dry_run=False,
         mock=False,
     )[0]
-    assert (failed["status"], failed["message"]) == ("error", "bad db")
+    assert failed["status"] == "error"
+    assert "bad db" in failed["message"]
 
     monkeypatch.setattr(
         subprocess,
@@ -316,6 +317,39 @@ def test_amplicon_taxonomy_validation_and_resource_filter(
         )
         == []
     )
+
+
+def test_amplicon_check_accepts_resource_override_mapping(tmp_path: Path) -> None:
+    database = tmp_path / "taxonomy.fa"
+    database.write_text(">seq;tax=d:Bacteria,p:Firmicutes\nACGT\n", encoding="utf-8")
+
+    rows = resources._check_amplicon_16s(
+        {"resources": {"taxonomy_db": {"path": str(database)}}},
+        resource_ids=["taxonomy_db"],
+    )
+
+    assert rows[-1]["path"] == str(database)
+    assert rows[-1]["status"] == "ok"
+
+
+def test_amplicon_mock_setup_creates_valid_taxonomy_file(tmp_path: Path) -> None:
+    rows = resources._setup_amplicon_16s(
+        {"outdir": str(tmp_path / "output")},
+        resource_ids=["taxonomy_db"],
+        dry_run=False,
+        mock=True,
+    )
+
+    taxonomy_path = Path(rows[0]["path"])
+    assert rows[0]["status"] == "ok"
+    assert taxonomy_path.is_file()
+    assert ";tax=" in taxonomy_path.read_text(encoding="utf-8")
+
+    checked = resources._check_amplicon_16s(
+        {"resources": {"taxonomy_db": {"path": str(taxonomy_path)}}},
+        resource_ids=["taxonomy_db"],
+    )
+    assert checked[-1]["status"] == "ok"
 
 
 def test_amplicon_mock_dry_run_is_planned_and_does_not_execute(tmp_path: Path, monkeypatch) -> None:

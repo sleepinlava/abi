@@ -77,7 +77,11 @@ def _isolate_mamba_root_env(monkeypatch):
     root deterministically.  Also isolate ``ABI_RESOURCE_ROOT`` so resource
     path resolution tests are not perturbed by the host environment.
     """
-    for var in ("ABI_MAMBA_ROOT", "AUTOPLASM_MAMBA_ROOT",
-                "ABI_RESOURCE_ROOT", "AUTOPLASM_RESOURCE_ROOT"):
+    for var in (
+        "ABI_MAMBA_ROOT",
+        "AUTOPLASM_MAMBA_ROOT",
+        "ABI_RESOURCE_ROOT",
+        "AUTOPLASM_RESOURCE_ROOT",
+    ):
         monkeypatch.delenv(var, raising=False)
     yield
