@@ -14,7 +14,14 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
-__all__ = ["ABIConfig", "ExecutionConfig"]
+__all__ = [
+    "ABIConfig",
+    "AlignmentConfig",
+    "DifferentialExpressionConfig",
+    "ExecutionConfig",
+    "InputConfig",
+    "RNASeqConfig",
+]
 
 
 class ExecutionConfig(BaseModel):
@@ -56,3 +63,39 @@ class ABIConfig(BaseModel):
     def to_dict(self) -> dict[str, Any]:
         """Return a plain dict for backward-compatible code paths."""
         return self.model_dump()
+
+
+class InputConfig(BaseModel):
+    """Sample sheet input configuration."""
+
+    sample_sheet: str = "sample_sheet.tsv"
+
+
+class AlignmentConfig(BaseModel):
+    """Alignment tool configuration."""
+
+    tool: str = "star"
+
+
+class DifferentialExpressionConfig(BaseModel):
+    """Differential expression analysis configuration."""
+
+    comparison: str = "treatment_vs_control"
+    alpha: float = Field(default=0.05, ge=0.0, le=1.0)
+
+
+class RNASeqConfig(ABIConfig):
+    """RNA-seq expression analysis configuration.
+
+    Extends :class:`ABIConfig` with RNA-seq-specific fields:
+    ``log_dir``, ``input.sample_sheet``, ``alignment``,
+    and ``differential_expression``.
+    """
+
+    log_dir: str = "logs/rnaseq_expression"
+
+    input: InputConfig = Field(default_factory=lambda: InputConfig())
+    alignment: AlignmentConfig = Field(default_factory=lambda: AlignmentConfig())
+    differential_expression: DifferentialExpressionConfig = Field(
+        default_factory=lambda: DifferentialExpressionConfig()
+    )
