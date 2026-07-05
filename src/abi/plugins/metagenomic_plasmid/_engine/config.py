@@ -293,14 +293,13 @@ def resolved_mamba_root() -> Path:
     Resolution order:
     1. ``ABI_MAMBA_ROOT`` env var (explicit override)
     2. ``AUTOPLASM_MAMBA_ROOT`` env var (legacy compat)
-    3. ``PROJECT_ROOT / ".mamba"`` (default local install)
-    4. ``PROJECT_ROOT.parent / "abi-envs"`` (sibling dir, common in dev/deploy)
+    3. Best populated local candidate among project-local, parent, and sibling
+       mamba roots.
 
     Env overrides that point at non-existent or empty directories fall through
-    to default/sibling so one misconfigured export cannot silently break tool
+    to local candidates so one misconfigured export cannot silently break tool
     discovery.
     """
-    # Env var overrides come FIRST
     for var in ("ABI_MAMBA_ROOT", "AUTOPLASM_MAMBA_ROOT"):
         env_override = os.environ.get(var)
         if env_override:
@@ -310,9 +309,23 @@ def resolved_mamba_root() -> Path:
                 return candidate
             # Fall through on empty/missing override.
     default = PROJECT_ROOT / ".mamba"
-    if default.exists():
-        return default
+    parent_default = PROJECT_ROOT.parent / ".mamba"
     sibling = PROJECT_ROOT.parent / "abi-envs"
-    if sibling.exists():
-        return sibling
-    return default
+    return _best_mamba_root_candidate([default, parent_default, sibling], fallback=default)
+
+
+def _best_mamba_root_candidate(candidates: list[Path], *, fallback: Path) -> Path:
+    """Return the candidate with the most managed env prefixes."""
+    scored: list[tuple[int, int, Path]] = []
+    for index, candidate in enumerate(candidates):
+        envs_dir = candidate / "envs"
+        if envs_dir.is_dir():
+            env_count = sum(1 for child in envs_dir.iterdir() if child.is_dir())
+            if env_count:
+                scored.append((env_count, -index, candidate))
+    if scored:
+        return max(scored)[2]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return fallback
