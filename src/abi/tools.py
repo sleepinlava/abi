@@ -54,7 +54,7 @@ import subprocess
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, ClassVar, Dict, Iterable, List, Mapping, Optional
 
 import yaml
 
@@ -696,6 +696,13 @@ class ToolSkill:
 # command_template 字符串，由 GenericCommandSkill 渲染模板、解析 conda 环境并调用命令。
 
 
+class _PathHintFormat(dict[str, str]):
+    """Keep unknown path-template fields unchanged instead of raising KeyError."""
+
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
 class SafeFormatDict(dict):
     """A dict subclass that handles missing keys during str.format_map().
 
@@ -720,6 +727,25 @@ class SafeFormatDict(dict):
     string.  Callers can inspect this after ``format_map()`` to detect
     parameter gaps without aborting.
     """
+
+    # Class-level missing keys tracking — accumulates across all instances
+    # so callers can inspect total missing-key surface after batch rendering.
+    # 类级别缺失键追踪 — 跨所有实例累计，调用者可在批量渲染后检查总缺失键面积。
+    _all_missing_keys: ClassVar[set[str]] = set()
+
+    @classmethod
+    def clear_all_missing_keys(cls) -> None:
+        """Reset the class-level missing key tracker.
+
+        Useful between independent rendering passes (e.g. between tool
+        command templates and DAG path templates).
+        """
+        cls._all_missing_keys.clear()
+
+    @classmethod
+    def get_all_missing_keys(cls) -> set[str]:
+        """Return a copy of all missing keys tracked across instances."""
+        return cls._all_missing_keys.copy()
 
     def __init__(
         self,
@@ -759,6 +785,7 @@ class SafeFormatDict(dict):
         Keys registered in OPTIONAL_TEMPLATE_FIELDS are silently defaulted to ``""``.
         """
         self.missing_keys.append(key)
+        SafeFormatDict._all_missing_keys.add(key)
         # Fields registered as optional are legitimately absent — no warning needed.
         if key in OPTIONAL_TEMPLATE_FIELDS:
             return ""
@@ -899,6 +926,8 @@ class GenericCommandSkill(ToolSkill):
           / 复制当前进程环境
         - Prepend {env_bin} to PATH so the conda env's binaries are found first.
           / 前置 conda env 的 bin 目录
+        - Prepend registry-declared ``extra_path_dirs`` for tools installed as
+          ABI resources (for example PLASMe or Platon source checkouts).
         - Set CONDA_PREFIX and MAMBA_ROOT_PREFIX so tools that introspect their
           conda environment (e.g. Python scripts that check sys.prefix) work correctly.
           / 设置 CONDA_PREFIX 等供工具内省
@@ -911,12 +940,48 @@ class GenericCommandSkill(ToolSkill):
         omp_threads = env.get("OMP_NUM_THREADS", "")
         if omp_threads == "0" or omp_threads == 0:
             env.pop("OMP_NUM_THREADS", None)
+        path_parts: list[str] = []
         if self.env_bin.exists():
-            env["PATH"] = f"{self.env_bin}{os.pathsep}{env.get('PATH', '')}"
+            path_parts.append(str(self.env_bin))
             env["CONDA_PREFIX"] = str(self.env_prefix)
             env["MAMBA_ROOT_PREFIX"] = str(self.mamba_root)
             env.pop("PYTHONPATH", None)
+        path_parts.extend(str(path) for path in self.extra_path_dirs())
+        if path_parts:
+            path_parts.append(env.get("PATH", ""))
+            env["PATH"] = os.pathsep.join(part for part in path_parts if part)
         return env
+
+    def extra_path_dirs(self) -> list[Path]:
+        """Return existing registry-declared PATH additions for resource-installed tools."""
+        raw_dirs = self.metadata.get("extra_path_dirs", [])
+        if not isinstance(raw_dirs, list):
+            return []
+        resource_root = (
+            os.environ.get("ABI_RESOURCE_ROOT")
+            or os.environ.get("AUTOPLASM_RESOURCE_ROOT")
+            or str(PROJECT_ROOT / "resources" / "autoplasm")
+        )
+        values = {
+            "project_root": str(PROJECT_ROOT),
+            "resource_root": resource_root,
+            "env_prefix": str(self.env_prefix),
+        }
+        paths: list[Path] = []
+        seen: set[str] = set()
+        for raw in raw_dirs:
+            try:
+                candidate = Path(str(raw).format_map(_PathHintFormat(values)))
+            except Exception:
+                continue
+            if not candidate.is_dir():
+                continue
+            resolved = str(candidate.resolve())
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            paths.append(candidate.resolve())
+        return paths
 
     def check_installation(self) -> bool:
         """Return True if the tool executable can be found.
@@ -938,6 +1003,9 @@ class GenericCommandSkill(ToolSkill):
         # / 简单名称：先在 conda env 中搜索，然后搜索系统 PATH。
         if self.env_bin.exists() and shutil.which(self.executable, path=str(self.env_bin)):
             return True
+        for directory in self.extra_path_dirs():
+            if shutil.which(self.executable, path=str(directory)):
+                return True
         # Fall back to full system PATH (some tools like Rscript may only
         # exist outside the conda env). / 回退到完整系统 PATH。
         return shutil.which(self.executable) is not None
@@ -1462,7 +1530,7 @@ class ToolRegistry:
             tool_dict = dict(tool)
             # Auto-fill env_name from environments.yaml if missing
             if not tool_dict.get("env_name") and ToolRegistry._env_assignments:
-                resolved = ToolRegistry.env_for(tool_id, plugin=plugin_name)
+                resolved = ToolRegistry.env_for(tool_id, plugin_name=plugin_name)
                 if resolved and resolved != "abi-base":
                     tool_dict["env_name"] = resolved
             self._tools[tool_id] = tool_dict
@@ -1531,25 +1599,19 @@ class ToolRegistry:
             cls._env_assignments = {"_default": {str(k): str(v) for k, v in raw.items()}}
 
     @classmethod
-    def env_for(cls, tool_id: str, plugin: str = "_default") -> str:
+    def env_for(cls, tool_id: str, *, plugin_name: str) -> str:
         """Resolve the conda environment name for *tool_id*.
 
-        Returns the env_name from environments.yaml's ``tool_assignments``,
-        or ``"abi-base"`` as a safe default. / 从 environments.yaml 解析环境名称。
+        Requires an explicit ``plugin_name`` to prevent implicit cross-plugin
+        fallback. Returns the env_name from environments.yaml's
+        ``tool_assignments`` or ``"abi-base"`` as a safe default.
+        / 要求显式 plugin_name 防止隐式跨插件回退。
         """
         if cls._env_assignments is None:
             return "abi-base"
-        # Direct lookup in the specified plugin
-        plugin_map = cls._env_assignments.get(plugin, {})
+        plugin_map = cls._env_assignments.get(plugin_name, {})
         if plugin_map and tool_id in plugin_map:
             return plugin_map[tool_id]
-        # Fallback: search all plugins
-        for pn, pmap in cls._env_assignments.items():
-            if pn == plugin:
-                continue
-            if tool_id in pmap:
-                return pmap[tool_id]
-        # Last resort
         return cls._env_assignments.get("_default", {}).get(tool_id, "abi-base")
 
     def ids(self) -> List[str]:
