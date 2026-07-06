@@ -8,7 +8,9 @@ from pathlib import Path
 from abi.provenance import (
     PipelineProgressRecorder,
     RunLogger,
+    _minimal_sample_status,
     _tsv_value,
+    capture_tool_version,
     reset_run_provenance,
     write_commands_tsv,
     write_methods_md,
@@ -554,3 +556,123 @@ def test_write_minimal_progress_artifacts_empty_steps(tmp_path: Path) -> None:
     snapshot = json.loads(result["snapshot"].read_text())
     assert snapshot["total_step_count"] == 0
     assert snapshot["completed_step_count"] == 0
+
+
+# ── capture_tool_version ──────────────────────────────────────────────────
+
+
+def test_capture_tool_version_check_installation_raises() -> None:
+    """L71-72: skill.check_installation() raises → ('', 'not_captured')."""
+    class BadSkill:
+        def check_installation(self):
+            raise RuntimeError("boom")
+
+    version, status = capture_tool_version(BadSkill())
+    assert version == ""
+    assert status == "not_captured"
+
+
+def test_capture_tool_version_not_installed() -> None:
+    """L76: check_installation() returns False → ('', 'not_found')."""
+    class MissingSkill:
+        def check_installation(self):
+            return False
+
+    version, status = capture_tool_version(MissingSkill())
+    assert version == ""
+    assert status == "not_found"
+
+
+def test_capture_tool_version_mock_tools() -> None:
+    """When mock_tools=True, returns ('', 'not_captured') even if installed."""
+    class InstalledSkill:
+        def check_installation(self):
+            return True
+
+    version, status = capture_tool_version(InstalledSkill(), mock_tools=True)
+    assert version == ""
+    assert status == "not_captured"
+
+
+# ── _apply_event / _step_state edge cases ─────────────────────────────────
+
+
+def test_apply_event_step_state_returns_none(tmp_path: Path) -> None:
+    """L596: _apply_event when _step_state returns None → return early."""
+    prov = tmp_path / "provenance"
+    prov.mkdir()
+    step = _FakeStep("S1_qc")
+    plan = _FakePlan([step], [_FakeSample("S1")])
+    recorder = PipelineProgressRecorder(prov)
+    recorder.start_run(plan, dry_run=False, parallel=False, workers=1)
+
+    # Manually invoke _apply_event with a step_id that doesn't exist
+    recorder._apply_event("step_started", {"step_id": "nonexistent"}, "2024-01-01T00:00:00")
+    # Should not raise, and no step state changed
+    snapshot = json.loads(recorder.snapshot_path.read_text())
+    # The existing step should still be "pending"
+    assert snapshot["steps"][0]["status"] == "pending"
+
+
+def test_step_state_not_found(tmp_path: Path) -> None:
+    """L661: _step_state step_id not found → None."""
+    prov = tmp_path / "provenance"
+    prov.mkdir()
+    step = _FakeStep("S1_qc")
+    plan = _FakePlan([step], [_FakeSample("S1")])
+    recorder = PipelineProgressRecorder(prov)
+    recorder.start_run(plan, dry_run=False, parallel=False, workers=1)
+
+    result = recorder._step_state("nonexistent")
+    assert result is None
+
+
+def test_step_state_found(tmp_path: Path) -> None:
+    """_step_state returns the step dict when found."""
+    prov = tmp_path / "provenance"
+    prov.mkdir()
+    step = _FakeStep("S1_qc")
+    plan = _FakePlan([step], [_FakeSample("S1")])
+    recorder = PipelineProgressRecorder(prov)
+    recorder.start_run(plan, dry_run=False, parallel=False, workers=1)
+
+    result = recorder._step_state("S1_qc")
+    assert result is not None
+    assert result["step_id"] == "S1_qc"
+
+
+# ── _minimal_sample_status edge case ──────────────────────────────────────
+
+
+def test_minimal_sample_status_empty_sample_id() -> None:
+    """L819: _minimal_sample_status with empty sample_id → continue (skip)."""
+    class EmptySample:
+        sample_id = ""
+        platform = "illumina"
+
+    class FakePlan:
+        samples = [EmptySample()]
+        steps = []
+
+    rows_by_step = {}
+    result = _minimal_sample_status(FakePlan(), rows_by_step)
+    # Sample with empty sample_id should be skipped
+    assert result == {}
+
+
+# ── PipelineProgressRecorder: non-step events ─────────────────────────────
+
+
+def test_recorder_record_unknown_event_noop(tmp_path: Path) -> None:
+    """Unknown events (not step_started/step_completed/step_failed) are no-ops
+    for _apply_event (though they still get written to JSONL)."""
+    prov = tmp_path / "provenance"
+    prov.mkdir()
+    step = _FakeStep("S1_qc")
+    plan = _FakePlan([step], [_FakeSample("S1")])
+    recorder = PipelineProgressRecorder(prov)
+    recorder.start_run(plan, dry_run=False, parallel=False, workers=1)
+    # Record an unknown event — should not crash
+    recorder.record("custom_event", {"key": "value"})
+    snapshot = json.loads(recorder.snapshot_path.read_text())
+    assert snapshot["last_event"]["event"] == "custom_event"

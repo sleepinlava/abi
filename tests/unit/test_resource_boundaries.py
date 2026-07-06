@@ -160,8 +160,11 @@ def test_wgs_resource_setup_safe_non_network_paths(
 ) -> None:
     target = tmp_path / "amrfinder"
     if mode == "existing":
-        target.mkdir()
-        (target / "database_format_version.txt").write_text("1", encoding="utf-8")
+        latest = target / "latest"
+        latest.mkdir(parents=True)
+        (latest / "AMRProt.fa.phr").write_text("phr", encoding="utf-8")
+        (latest / "AMRProt.fa.pin").write_text("pin", encoding="utf-8")
+        (latest / "AMRProt.fa.psq").write_text("psq", encoding="utf-8")
         # A prior successful install writes the ready sentinel; without it a
         # non-empty dir is now correctly reported as "incomplete" (M6 fix).
         (target / ".abi_ready").write_text("amrfinderplus\n", encoding="utf-8")
@@ -174,6 +177,47 @@ def test_wgs_resource_setup_safe_non_network_paths(
 
     assert row["status"] == expected
     assert resources._setup_wgs_bacteria({}, resource_ids=["other"], dry_run=True, mock=False) == []
+
+
+def test_wgs_amrfinder_setup_uses_latest_database_dir_when_parent_is_configured(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "amrfinder"
+    latest = target / "latest"
+    latest.mkdir(parents=True)
+    (target / ".abi_ready").write_text("amrfinderplus\n", encoding="utf-8")
+    (latest / "AMRProt.fa.phr").write_text("phr", encoding="utf-8")
+    (latest / "AMRProt.fa.pin").write_text("pin", encoding="utf-8")
+    (latest / "AMRProt.fa.psq").write_text("psq", encoding="utf-8")
+
+    row = resources._setup_wgs_bacteria(
+        {"resources": {"amrfinder_db": str(target)}},
+        resource_ids=["amrfinder_db"],
+        dry_run=False,
+        mock=False,
+    )[0]
+
+    assert row["status"] == "ok"
+    assert row["path"] == str(latest)
+    assert row["ready_check"] == "amrfinderplus_blast_index"
+
+
+def test_wgs_amrfinder_setup_reports_incomplete_when_ready_sentinel_lacks_index(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "amrfinder"
+    target.mkdir()
+    (target / ".abi_ready").write_text("amrfinderplus\n", encoding="utf-8")
+
+    row = resources._setup_wgs_bacteria(
+        {"resources": {"amrfinder_db": str(target)}},
+        resource_ids=["amrfinder_db"],
+        dry_run=False,
+        mock=False,
+    )[0]
+
+    assert row["status"] == "incomplete"
+    assert "AMRProt.fa" in row["message"]
 
 
 def test_wgs_resource_setup_reports_process_failure_and_timeout(

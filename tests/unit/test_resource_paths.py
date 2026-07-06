@@ -10,20 +10,16 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
-import pytest
-
-from abi.resource_downloader import DownloadResult, DownloadSpec, ResourceDownloader
+from abi.resource_downloader import DownloadResult, ResourceDownloader
 from abi.resources import (
     _check_rnaseq_expression,
     _configured_or_default_resource_path,
     _download_result_to_row,
-    _is_placeholder_resource_value,
     _setup_reference_resources,
     _setup_wgs_bacteria,
 )
-
 
 # --------------------------------------------------------------------------- #
 #  _configured_or_default_resource_path
@@ -201,8 +197,10 @@ class TestSetupWGSBacteria:
         )
         assert rows[0]["status"] == "ok"
 
-    def test_existing_sentinel_skips_incomplete_check(self, tmp_path: Path) -> None:
-        """When .abi_resource.json sentinel exists, incomplete check is skipped."""
+    def test_existing_sentinel_without_index_reports_incomplete(
+        self, tmp_path: Path
+    ) -> None:
+        """A unified sentinel alone is not a usable AMRFinderPlus database."""
         target = tmp_path / "results" / "resources" / "amrfinder_db"
         target.mkdir(parents=True)
         (target / "some_file.txt").write_text("data", encoding="utf-8")
@@ -211,24 +209,13 @@ class TestSetupWGSBacteria:
             "outdir": str(tmp_path / "results"),
             "resources": {"amrfinder_db": str(target)},
         }
-        # With sentinel present and ResourceDownloader detecting "ok", we mock it
-        with patch.object(ResourceDownloader, "ensure") as mock_ensure:
-            mock_ensure.return_value = DownloadResult(
-                resource_id="amrfinder_db",
-                path=target,
-                status="ok",
-                message="Already ready.",
-                file_count=5,
-                size_bytes=1024,
-            )
-            rows = _setup_wgs_bacteria(
-                config, resource_ids=None, dry_run=False, mock=False
-            )
-            assert rows[0]["status"] == "ok"
-            assert rows[0]["directory_file_count"] == 5
+        rows = _setup_wgs_bacteria(config, resource_ids=None, dry_run=False, mock=False)
 
-    def test_legacy_sentinel_skips_incomplete_check(self, tmp_path: Path) -> None:
-        """When legacy .abi_ready sentinel exists, incomplete check is skipped."""
+        assert rows[0]["status"] == "incomplete"
+        assert "AMRProt.fa" in rows[0]["message"]
+
+    def test_legacy_sentinel_without_index_reports_incomplete(self, tmp_path: Path) -> None:
+        """A legacy .abi_ready sentinel alone is not a usable AMRFinderPlus database."""
         target = tmp_path / "results" / "resources" / "amrfinder_db"
         target.mkdir(parents=True)
         (target / "some_file.txt").write_text("data", encoding="utf-8")
@@ -237,17 +224,10 @@ class TestSetupWGSBacteria:
             "outdir": str(tmp_path / "results"),
             "resources": {"amrfinder_db": str(target)},
         }
-        with patch.object(ResourceDownloader, "ensure") as mock_ensure:
-            mock_ensure.return_value = DownloadResult(
-                resource_id="amrfinder_db",
-                path=target,
-                status="ok",
-                message="Already ready.",
-            )
-            rows = _setup_wgs_bacteria(
-                config, resource_ids=None, dry_run=False, mock=False
-            )
-            assert rows[0]["status"] == "ok"
+        rows = _setup_wgs_bacteria(config, resource_ids=None, dry_run=False, mock=False)
+
+        assert rows[0]["status"] == "incomplete"
+        assert "AMRProt.fa" in rows[0]["message"]
 
     def test_download_error_propagates(self, tmp_path: Path) -> None:
         """When downloader.ensure returns error status, it is propagated."""
@@ -288,11 +268,12 @@ class TestSetupWGSBacteria:
             )
             assert rows[0]["path"] == str(target)
 
-    def test_empty_directory_not_incomplete(self, tmp_path: Path) -> None:
-        """Empty directory does not trigger incomplete check (any(iterdir) is False)."""
+    def test_successful_downloader_without_index_reports_incomplete(
+        self, tmp_path: Path
+    ) -> None:
+        """Downloader success is not enough unless AMRFinderPlus index files exist."""
         target = tmp_path / "results" / "resources" / "amrfinder_db"
         target.mkdir(parents=True)
-        # Empty directory - any(target.iterdir()) is False, so no incomplete check
         config = {
             "outdir": str(tmp_path / "results"),
             "resources": {"amrfinder_db": str(target)},
@@ -307,8 +288,8 @@ class TestSetupWGSBacteria:
             rows = _setup_wgs_bacteria(
                 config, resource_ids=None, dry_run=False, mock=False
             )
-            # Should not be "incomplete" because the dir is empty
-            assert rows[0]["status"] == "ok"
+            assert rows[0]["status"] == "incomplete"
+            assert "AMRProt.fa" in rows[0]["message"]
 
 
 # --------------------------------------------------------------------------- #

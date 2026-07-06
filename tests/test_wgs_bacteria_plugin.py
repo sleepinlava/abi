@@ -48,6 +48,20 @@ def test_load_config():
     assert cfg["annotation"]["genus"] == "Escherichia"
 
 
+def test_load_config_normalizes_amrfinder_parent_database_to_latest(tmp_path):
+    db_parent = tmp_path / "amrfinderplus"
+    latest = db_parent / "latest"
+    latest.mkdir(parents=True)
+    (latest / "AMRProt.fa.phr").write_text("phr", encoding="utf-8")
+    (latest / "AMRProt.fa.pin").write_text("pin", encoding="utf-8")
+    (latest / "AMRProt.fa.psq").write_text("psq", encoding="utf-8")
+
+    plugin = get_plugin("wgs_bacteria")
+    cfg = plugin.load_config(overrides={"resources": {"amrfinder_db": str(db_parent)}})
+
+    assert cfg["resources"]["amrfinder_db"] == str(latest)
+
+
 def test_plugin_contract():
     plugin = get_plugin("wgs_bacteria")
     assert_plugin_contract(plugin)

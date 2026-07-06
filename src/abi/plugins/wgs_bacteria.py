@@ -196,6 +196,18 @@ def _resolve_config_paths(config: Dict[str, Any]) -> None:
     ic = config.get("input", {})
     if isinstance(ic, dict) and ic.get("sample_sheet"):
         ic["sample_sheet"] = str(_resolve_path(ic["sample_sheet"], base_dirs=[PROJECT_ROOT]))
+    resources = config.get("resources")
+    if isinstance(resources, dict) and resources.get("amrfinder_db"):
+        amrfinder_db = str(resources["amrfinder_db"])
+        if "NOT_CONFIGURED" not in amrfinder_db.upper():
+            candidate = Path(amrfinder_db)
+            latest = candidate / "latest"
+            latest_check = latest if latest.is_absolute() else PROJECT_ROOT / latest
+            if all(
+                (latest_check / f"AMRProt.fa{suffix}").exists()
+                for suffix in (".phr", ".pin", ".psq")
+            ):
+                resources["amrfinder_db"] = str(latest)
 
 
 # (``_clean``, ``_resolve_path`` are imported from abi._shared)
