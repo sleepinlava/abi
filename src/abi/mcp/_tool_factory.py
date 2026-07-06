@@ -21,7 +21,7 @@ from __future__ import annotations
 import inspect
 import re
 from functools import wraps
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Mapping, Optional, cast
 
 # Safe name patterns — reject anything that could be an injection vector.
 # Only allow valid Python identifiers for both tool names and parameter names.
@@ -84,21 +84,21 @@ class ToolDescriptor:
         required: Set of required parameter names.
     """
 
-    def __init__(self, raw_name: str, metadata: dict) -> None:
+    def __init__(self, raw_name: str, metadata: Mapping[str, Any]) -> None:
         validate_tool_name(raw_name)
         self.name = raw_name
         self.description = str(metadata.get("description", ""))
         self.properties = self._validate_properties(metadata)
         self.required = set(metadata.get("required", []))
 
-    def _validate_properties(self, metadata: dict) -> dict[str, dict]:
+    def _validate_properties(self, metadata: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
         """Validate all parameter names in the properties block."""
         props = metadata.get("properties", {})
         if not isinstance(props, dict):
             return {}
         for pname in props:
             validate_param_name(str(pname))
-        result: dict[str, dict] = {}
+        result: dict[str, dict[str, Any]] = {}
         for k, v in props.items():
             result[str(k)] = dict(v) if isinstance(v, dict) else {"type": "string"}
         return result
@@ -180,5 +180,5 @@ def make_tool_func(
 
     tool_func.__name__ = tool_func.__qualname__ = descriptor.name
     tool_func.__doc__ = descriptor.description
-    tool_func.__signature__ = descriptor.make_function_signature()
+    cast(Any, tool_func).__signature__ = descriptor.make_function_signature()
     return tool_func

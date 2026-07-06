@@ -49,7 +49,7 @@ def _builtin_plugins() -> Dict[str, ABIPlugin]:
     from abi.plugins.viral_viwrap import ViralViWrapPlugin
     from abi.plugins.wgs_bacteria import WGSBacteriaPlugin
 
-    plugin_classes = [
+    plugin_classes: List[type[Any]] = [
         Amplicon16SPlugin,
         EasyMetagenomePlugin,
         MetagenomicPlasmidPlugin,
@@ -61,7 +61,7 @@ def _builtin_plugins() -> Dict[str, ABIPlugin]:
     for cls in plugin_classes:
         validate_plugin_class(cls)
 
-    plugins: List[ABIPlugin] = [cls() for cls in plugin_classes]
+    plugins: List[ABIPlugin] = [cast(ABIPlugin, cls()) for cls in plugin_classes]
     return {str(plugin.plugin_id): plugin for plugin in plugins}
 
 

@@ -23,8 +23,7 @@ __all__ = ["check_resources", "setup_resources", "apply_resource_overrides"]
 _PLACEHOLDER_MARKERS = ("NOT_CONFIGURED", "TODO", "PLACEHOLDER")
 _AMRFINDERPLUS_PROTEIN_INDEX_SUFFIXES = (".phr", ".pin", ".psq")
 _AMRFINDERPLUS_SOURCE_URL = (
-    "https://ftp.ncbi.nlm.nih.gov/pathogen/Antimicrobial_resistance/"
-    "AMRFinderPlus/database/"
+    "https://ftp.ncbi.nlm.nih.gov/pathogen/Antimicrobial_resistance/AMRFinderPlus/database/"
 )
 
 
@@ -135,9 +134,7 @@ def _setup_manual_resource_bundle(
         elif current["status"] == "ok":
             current["message"] = "Configured resource exists."
         elif mock:
-            downloader._mock_resource(
-                DownloadSpec(resource_id=str(current["resource_id"])), target
-            )
+            downloader._mock_resource(DownloadSpec(resource_id=str(current["resource_id"])), target)
             current["status"] = "ok"
             current["message"] = "Mock resource directory prepared."
         else:
@@ -176,8 +173,7 @@ def _is_placeholder_resource_value(value: Any) -> bool:
 
 def _amrfinderplus_has_protein_index(path: Path) -> bool:
     return all(
-        (path / f"AMRProt.fa{suffix}").exists()
-        for suffix in _AMRFINDERPLUS_PROTEIN_INDEX_SUFFIXES
+        (path / f"AMRProt.fa{suffix}").exists() for suffix in _AMRFINDERPLUS_PROTEIN_INDEX_SUFFIXES
     )
 
 
@@ -359,22 +355,24 @@ def _setup_reference_resources(
                 "Automatic download requires an organism/genome build choice; "
                 "configure the reference path explicitly."
             )
-        rows.append({
-            "resource_id": resource_id,
-            "tool_id": "star" if resource_id == "genome_index" else "featurecounts",
-            "field": resource_id,
-            "path": str(target),
-            "status": status,
-            "version": "",
-            "source_url": "",
-            "checksum": "",
-            "command": [],
-            "ready_check": "path_exists",
-            "directory_file_count": _directory_file_count(target),
-            "directory_size_bytes": 0,
-            "message": message,
-            "mock": mock,
-        })
+        rows.append(
+            {
+                "resource_id": resource_id,
+                "tool_id": "star" if resource_id == "genome_index" else "featurecounts",
+                "field": resource_id,
+                "path": str(target),
+                "status": status,
+                "version": "",
+                "source_url": "",
+                "checksum": "",
+                "command": [],
+                "ready_check": "path_exists",
+                "directory_file_count": _directory_file_count(target),
+                "directory_size_bytes": 0,
+                "message": message,
+                "mock": mock,
+            }
+        )
     return rows
 
 
@@ -748,7 +746,7 @@ def _setup_amplicon_16s(
 
     # Mock mode creates a tiny valid SINTAX FASTA and a unified resource sentinel.
     if mock:
-        command = [
+        mock_command = [
             "python",
             str(PROJECT_ROOT / "scripts" / "generate_synthetic_taxonomy.py"),
             "--output",
@@ -762,7 +760,7 @@ def _setup_amplicon_16s(
                 path=tax_fasta,
                 status="planned",
                 version="synthetic_test_only",
-                command=command,
+                command=mock_command,
                 message="Would generate a synthetic taxonomy DB for testing.",
             )
         else:
@@ -791,7 +789,7 @@ def _setup_amplicon_16s(
                 version="synthetic_test_only",
                 file_count=1,
                 size_bytes=tax_fasta.stat().st_size,
-                command=command,
+                command=mock_command,
                 message=(
                     "Synthetic taxonomy DB generated for TESTING only. "
                     "For real analysis, run without --mock to download the RDP training set."
@@ -828,7 +826,7 @@ def _setup_amplicon_16s(
             atomic=False,
             destination=outdir,
             ready_check="non_empty_dir",
-            timeout_seconds=timeout,
+            timeout_seconds=timeout or DEFAULT_RESOURCE_TIMEOUT_SECONDS,
             version="rdp_16s_v16",
         )
         result_dl = downloader.ensure(spec)
