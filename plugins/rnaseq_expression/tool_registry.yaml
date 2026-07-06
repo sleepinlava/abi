@@ -30,8 +30,8 @@ tools:
   executable: featureCounts
   default_enabled: true
   required: true
-  command_template: featureCounts -T {threads} -p -a {annotation_gtf} -o {counts}
-    {bam}
+  command_template: >-
+    sh -c 'tmp="$3.stderr.tmp"; if featureCounts -T "$1" -p -a "$2" -o "$3" "$4" 2>"$tmp"; then cat "$tmp" >&2; rm -f "$tmp"; exit 0; fi; rc=$?; if grep -q "No paired-end reads were detected" "$tmp"; then cat "$tmp" >&2; echo "ABI: retrying featureCounts without -p because BAM has no paired-end flags" >&2; rm -f "$tmp"; featureCounts -T "$1" -a "$2" -o "$3" "$4"; else cat "$tmp" >&2; rm -f "$tmp"; exit "$rc"; fi' featurecounts {threads} {annotation_gtf} {counts} {bam}
   inputs:
   - bam
   - annotation_gtf

@@ -21,7 +21,8 @@ def test_nextflow_exporter_renders_processes_from_abi_plan(tmp_path):
     assert "fastp -i" in script
     assert "/examples/fixtures/tiny_R1.fastq" in script
     assert "STAR --runThreadN 4" in script
-    assert "featureCounts -T 4" in script
+    assert 'featureCounts -T "$1" -p' in script
+    assert "retrying featureCounts without -p" in script
     assert "workflow {" in script
     assert "abi_root = Channel.value('abi_nextflow_start')" in script
     assert "ch_RNA1_QC_FASTP = RNA1_QC_FASTP(abi_root)" in script
