@@ -36,9 +36,9 @@ envs_ok=0; envs_missing=0
 missing_envs=()
 for env_name in "${ABI_ENV_NAMES[@]}"; do
   if [[ -d "${ABI_MAMBA_ROOT}/envs/${env_name}" ]]; then
-    ((envs_ok++))
+    ((++envs_ok))
   else
-    ((envs_missing++))
+    ((++envs_missing))
     missing_envs+=("${env_name}")
   fi
 done

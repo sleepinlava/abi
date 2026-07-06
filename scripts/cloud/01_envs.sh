@@ -87,22 +87,22 @@ for env_name in "${ENVS_TO_INSTALL[@]}"; do
   env_prefix="${ABI_MAMBA_ROOT}/envs/${env_name}"
   if [[ ! -f "${env_yaml}" ]]; then
     log_warn "  ${env_name}: env file not found (${env_yaml}); skipping."
-    ((failed++)); continue
+    ((++failed)); continue
   fi
   if [[ -d "${env_prefix}" ]]; then
     log_info "  ${env_name}: already exists, updating..."
     if [[ "${DRY_RUN}" != "true" ]]; then
       "${MAMBA_BIN}" env update -p "${env_prefix}" -f "${env_yaml}" -y \
-        || { log_error "  ${env_name}: update failed."; ((failed++)); continue; }
+        || { log_error "  ${env_name}: update failed."; ((++failed)); continue; }
     fi
-    ((skipped++))
+    ((++skipped))
   else
     log_info "  ${env_name}: creating..."
     if [[ "${DRY_RUN}" != "true" ]]; then
       "${MAMBA_BIN}" env create -p "${env_prefix}" -f "${env_yaml}" -y \
-        || { log_error "  ${env_name}: create failed."; ((failed++)); continue; }
+        || { log_error "  ${env_name}: create failed."; ((++failed)); continue; }
     fi
-    ((created++))
+    ((++created))
   fi
 done
 
