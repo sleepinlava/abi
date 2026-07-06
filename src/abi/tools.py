@@ -1149,9 +1149,10 @@ class GenericCommandSkill(ToolSkill):
         # tool binary to prevent user-supplied values from being interpreted
         # as CLI flags by the tool.
         values = _template_values(selected)
-        if any(isinstance(v, str) and str(v).startswith("-") for v in values.values()):
-            if len(tokens) > 1:
-                tokens.insert(1, "--")
+        if any(
+            isinstance(v, str) and str(v).startswith("-") for v in values.values()
+        ) and _supports_option_stop(tokens):
+            tokens.insert(1, "--")
         return tokens
 
     def _required_template_fields(self) -> List[str]:
@@ -1599,20 +1600,32 @@ class ToolRegistry:
             cls._env_assignments = {"_default": {str(k): str(v) for k, v in raw.items()}}
 
     @classmethod
-    def env_for(cls, tool_id: str, *, plugin_name: str) -> str:
+    def env_for(
+        cls,
+        tool_id: str,
+        *,
+        plugin_name: str | None = None,
+        plugin: str | None = None,
+    ) -> str:
         """Resolve the conda environment name for *tool_id*.
 
-        Requires an explicit ``plugin_name`` to prevent implicit cross-plugin
-        fallback. Returns the env_name from environments.yaml's
-        ``tool_assignments`` or ``"abi-base"`` as a safe default.
-        / 要求显式 plugin_name 防止隐式跨插件回退。
+        Prefer an explicit ``plugin_name`` (``plugin`` is kept as a legacy
+        alias), then fall back to ``_default``. Returns ``"abi-base"`` when no
+        assignment is known; plugin-qualified lookups never search other
+        plugin maps implicitly.
         """
         if cls._env_assignments is None:
             return "abi-base"
-        plugin_map = cls._env_assignments.get(plugin_name, {})
+
+        selected_plugin = plugin_name if plugin_name is not None else plugin
+        plugin_map = cls._env_assignments.get(selected_plugin, {}) if selected_plugin else {}
         if plugin_map and tool_id in plugin_map:
             return plugin_map[tool_id]
-        return cls._env_assignments.get("_default", {}).get(tool_id, "abi-base")
+
+        default_map = cls._env_assignments.get("_default", {})
+        if tool_id in default_map:
+            return default_map[tool_id]
+        return "abi-base"
 
     def ids(self) -> List[str]:
         """Return sorted tool IDs for stable iteration order.
@@ -1754,6 +1767,16 @@ def _looks_like_path(value: str) -> bool:
     return False
 
 
+def _supports_option_stop(tokens: list[str]) -> bool:
+    """Return True when ``--`` can be inserted after the executable token."""
+    if len(tokens) <= 1:
+        return False
+    executable = Path(tokens[0]).name
+    if executable in {"sh", "bash"} and tokens[1] == "-c":
+        return False
+    return True
+
+
 def _safe_output_path(path: Path | None, output_dir: Path) -> Path | None:
     """Validate that *path* resolves inside *output_dir* (S4 fix).
 
@@ -1762,8 +1785,18 @@ def _safe_output_path(path: Path | None, output_dir: Path) -> Path | None:
     """
     if path is None:
         return None
-    resolved = (output_dir / path).resolve()
     output_resolved = output_dir.resolve()
+    if path.is_absolute():
+        resolved = path.resolve()
+    else:
+        cwd_resolved = path.resolve()
+        if (
+            str(cwd_resolved).startswith(str(output_resolved) + os.sep)
+            or cwd_resolved == output_resolved
+        ):
+            resolved = cwd_resolved
+        else:
+            resolved = (output_dir / path).resolve()
     if not (str(resolved).startswith(str(output_resolved) + os.sep) or resolved == output_resolved):
         raise ToolError(
             f"Output path {path!s} escapes output directory {output_dir}. Resolved to: {resolved}"

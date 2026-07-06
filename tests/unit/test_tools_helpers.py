@@ -21,7 +21,6 @@ from abi.tools import (
     _resource_fields,
 )
 
-
 # ── _looks_like_path ──────────────────────────────────────────────────────────
 
 
@@ -137,7 +136,9 @@ def _make_skill(metadata_override: dict | None = None) -> GenericCommandSkill:
 
 def test_check_dotted_fields_valid_template():
     """Template with only simple {field} references passes without error."""
-    skill = _make_skill({"command_template": "tool --input {input} --output {output} --threads {threads}"})
+    skill = _make_skill(
+        {"command_template": "tool --input {input} --output {output} --threads {threads}"}
+    )
     # Should not raise
     skill._check_dotted_fields()
 
@@ -199,9 +200,21 @@ def test_command_without_stdout_multiple_redirects():
     """Command with two '>' tokens raises ToolError."""
     skill = _make_skill()
     with pytest.raises(ToolError, match="multiple"):
-        skill._command_without_stdout_redirect(
-            ["tool", ">", "out1.txt", ">", "out2.txt"]
-        )
+        skill._command_without_stdout_redirect(["tool", ">", "out1.txt", ">", "out2.txt"])
+
+
+# ── GenericCommandSkill.build_command ─────────────────────────────────────────
+
+
+def test_build_command_does_not_insert_stop_marker_into_shell_wrapper():
+    """Dash-prefixed shell-wrapper arguments must not rewrite ``sh -c`` itself."""
+    template = 'sh -c \'printf "%s\\n" "$1" > "$2"\' wrapper {value} {output}'
+    skill = _make_skill({"command_template": template})
+
+    command = skill.build_command({"value": "-dash-prefixed", "output": "out.txt"})
+
+    assert command[:3] == ["sh", "-c", 'printf "%s\\n" "$1" > "$2"']
+    assert command[3:] == ["wrapper", "-dash-prefixed", "out.txt"]
 
 
 # ── ToolRegistry.env_for ─────────────────────────────────────────────────────
@@ -210,34 +223,34 @@ def test_command_without_stdout_multiple_redirects():
 def test_env_for_direct_hit():
     """Direct tool ID lookup in the target plugin map."""
     ToolRegistry._env_assignments = {"my_plugin": {"tool_a": "env_a"}}
-    assert ToolRegistry.env_for("tool_a", plugin="my_plugin") == "env_a"
+    assert ToolRegistry.env_for("tool_a", plugin_name="my_plugin") == "env_a"
 
 
-def test_env_for_fallback_search_across_plugins():
-    """When not found in target plugin, falls back to searching other plugins."""
+def test_env_for_does_not_search_across_plugins():
+    """When not found in target plugin, other plugin maps are ignored."""
     ToolRegistry._env_assignments = {
         "my_plugin": {},
         "other_plugin": {"tool_b": "env_b"},
     }
-    assert ToolRegistry.env_for("tool_b", plugin="my_plugin") == "env_b"
+    assert ToolRegistry.env_for("tool_b", plugin_name="my_plugin") == "abi-base"
 
 
 def test_env_for_default_key():
     """When no direct lookup works, checks _default plugin."""
     ToolRegistry._env_assignments = {"_default": {"tool_c": "env_c"}}
-    assert ToolRegistry.env_for("tool_c") == "env_c"
+    assert ToolRegistry.env_for("tool_c", plugin_name="my_plugin") == "env_c"
 
 
 def test_env_for_abi_base_when_none_assigned():
     """Returns 'abi-base' when _env_assignments is None."""
     ToolRegistry._env_assignments = None
-    assert ToolRegistry.env_for("any_tool") == "abi-base"
+    assert ToolRegistry.env_for("any_tool", plugin_name="my_plugin") == "abi-base"
 
 
 def test_env_for_abi_base_when_empty():
     """Returns 'abi-base' when _env_assignments is an empty dict."""
     ToolRegistry._env_assignments = {}
-    assert ToolRegistry.env_for("any_tool") == "abi-base"
+    assert ToolRegistry.env_for("any_tool", plugin_name="my_plugin") == "abi-base"
 
 
 # ── _resource_fields ─────────────────────────────────────────────────────────

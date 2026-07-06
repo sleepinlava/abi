@@ -64,6 +64,11 @@ class ABIError(RuntimeError):
     也不需要立即终止进程。这使其成为面向用户的流水线故障的合适基类。
     """
 
+    def __str__(self) -> str:
+        if len(self.args) <= 1:
+            return super().__str__()
+        return f"({', '.join(str(arg) for arg in self.args)})"
+
 
 class ConfigError(ABIError):
     """Raised when ABI configuration or registry metadata is invalid.

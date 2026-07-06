@@ -29,6 +29,18 @@ def test_safe_output_path_rejects_traversal_absolute_and_symlink_escapes(tmp_pat
         _safe_output_path(Path("link/result.tsv"), output_dir)
 
 
+def test_safe_output_path_does_not_duplicate_output_dir_prefix(tmp_path, monkeypatch):
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    monkeypatch.chdir(tmp_path)
+
+    assert _safe_output_path(Path("result.tsv"), output_dir) == output_dir / "result.tsv"
+    assert (
+        _safe_output_path(Path(output_dir.name) / "result.tsv", output_dir)
+        == output_dir / "result.tsv"
+    )
+
+
 class TestSafeFormatDictLenient:
     """Lenient mode (default): missing keys → "" + WARNING."""
 
