@@ -1,4 +1,4 @@
-"""Unit tests for abi.report.generic_report — render_figures_via_sciplot and _render_figures_via_legacy."""
+"""Unit tests for generic report figure rendering helpers."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from abi.report.generic_report import (
 
 class _FakePlugin:
     """Minimal plugin-like object."""
+
     report_title = "Test Plugin"
     abi_version = "1.0.0"
 
@@ -33,7 +34,10 @@ def test_sciplot_import_error(tmp_path: Path) -> None:
     # Write a valid specs file just to get past load_yaml
     specs.write_text("figures:\n  - id: fig1\n", encoding="utf-8")
 
-    with mock.patch("abi.report.generic_report.render_figures_via_sciplot", side_effect=ImportError("no sciplot")):
+    with mock.patch(
+        "abi.report.generic_report.render_figures_via_sciplot",
+        side_effect=ImportError("no sciplot"),
+    ):
         # We can't easily trigger the inner ImportError from here since
         # we need to import the function. Let's use a different approach:
         # mock the entire import chain.
@@ -45,7 +49,9 @@ def test_sciplot_import_error(tmp_path: Path) -> None:
         pass
 
     # Simpler: directly test the try/except by mocking the specific imports
-    with mock.patch("abi.sciplot.adapters", create=True, new_callable=mock.PropertyMock) as mock_adapters:
+    with mock.patch(
+        "abi.sciplot.adapters", create=True, new_callable=mock.PropertyMock
+    ) as mock_adapters:
         mock_adapters.side_effect = ImportError("No module named 'matplotlib'")
         result = render_figures_via_sciplot(plugin, specs, tables, figures)
         assert result == {}
@@ -77,8 +83,10 @@ def test_sciplot_missing_id_key(tmp_path: Path) -> None:
     # The spec with id='fig2' has no source_table → it'll try to render
     # But the one without id should be skipped
     # Mock both adapt_spec and render_figure to avoid heavy rendering
-    with mock.patch("abi.sciplot.adapters.adapt_spec") as mock_adapt, \
-         mock.patch("abi.sciplot.api.render_figure") as mock_render:
+    with (
+        mock.patch("abi.sciplot.adapters.adapt_spec") as mock_adapt,
+        mock.patch("abi.sciplot.api.render_figure") as mock_render,
+    ):
         mock_result = mock.Mock()
         mock_result.errors = []
         mock_result.warnings = []
@@ -219,10 +227,12 @@ def test_write_full_report_basic(tmp_path: Path) -> None:
     (result_dir / "tables").mkdir()
     (result_dir / "provenance").mkdir()
     (result_dir / "provenance" / "tool_versions.tsv").write_text(
-        "tool_id\tversion\n", encoding="utf-8",
+        "tool_id\tversion\n",
+        encoding="utf-8",
     )
     (result_dir / "provenance" / "commands.tsv").write_text(
-        "step_id\tcommand\n", encoding="utf-8",
+        "step_id\tcommand\n",
+        encoding="utf-8",
     )
 
     class FakePlan:
@@ -283,10 +293,12 @@ def test_write_full_report_with_all_options(tmp_path: Path) -> None:
     (result_dir / "tables").mkdir()
     (result_dir / "provenance").mkdir()
     (result_dir / "provenance" / "tool_versions.tsv").write_text(
-        "tool_id\tversion\n", encoding="utf-8",
+        "tool_id\tversion\n",
+        encoding="utf-8",
     )
     (result_dir / "provenance" / "commands.tsv").write_text(
-        "step_id\tcommand\n", encoding="utf-8",
+        "step_id\tcommand\n",
+        encoding="utf-8",
     )
     figs_dir = result_dir / "figures"
     figs_dir.mkdir()
@@ -336,8 +348,10 @@ def test_sciplot_render_exception(tmp_path: Path, caplog) -> None:
     figures = tmp_path / "figures"
     figures.mkdir()
 
-    with mock.patch("abi.sciplot.adapters.adapt_spec") as mock_adapt, \
-         mock.patch("abi.sciplot.api.render_figure") as mock_render:
+    with (
+        mock.patch("abi.sciplot.adapters.adapt_spec"),
+        mock.patch("abi.sciplot.api.render_figure") as mock_render,
+    ):
         mock_render.side_effect = RuntimeError("render explosion")
         with caplog.at_level(logging.WARNING):
             result = render_figures_via_sciplot(plugin, specs, tables, figures)

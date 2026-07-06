@@ -46,7 +46,7 @@ class TestEnsureDirectory:
 
 class TestEnsureParent:
     def test_creates_parent_directory(self, tmp_path):
-        result = ensure_parent(tmp_path / "subdir" / "file.txt")
+        ensure_parent(tmp_path / "subdir" / "file.txt")
         assert (tmp_path / "subdir").exists()
         assert (tmp_path / "subdir").is_dir()
 

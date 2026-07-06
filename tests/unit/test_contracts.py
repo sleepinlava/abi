@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from abi.contracts import (
     ContractValidationError,
-    WorkflowStepSpec,
     WorkflowSpec,
     _normalize_template,
     _require_mapping,
@@ -86,6 +85,7 @@ TOOL_REGISTRY_YAML = """tools:
 
 # ====== Helpers ======
 
+
 def _make_plugin_dir(
     tmp_path,
     manifest_content=None,
@@ -158,7 +158,10 @@ class _FakeRegistry:
 
     def list_tools(self):
         return self._tools
+
+
 # ====== Tests: _require_mapping ======
+
 
 class TestRequireMapping:
     def test_valid_mapping_returns_value(self):
@@ -187,6 +190,7 @@ class TestRequireMapping:
 
 
 # ====== Tests: _require_non_empty_string ======
+
 
 class TestRequireNonEmptyString:
     def test_valid_string_passes(self):
@@ -219,6 +223,7 @@ class TestRequireNonEmptyString:
 
 # ====== Tests: _require_string_list ======
 
+
 class TestRequireStringList:
     def test_valid_list_passes(self):
         _require_string_list(["a", "b"], "test")
@@ -250,7 +255,10 @@ class TestRequireStringList:
     def test_label_in_error_message(self):
         with pytest.raises(ContractValidationError, match="when_to_use entries"):
             _require_string_list(["a", ""], "when_to_use")
+
+
 # ====== Tests: _template_fields ======
+
 
 class TestTemplateFields:
     def test_simple_braces_field(self):
@@ -285,6 +293,7 @@ class TestTemplateFields:
 
 # ====== Tests: _normalize_template ======
 
+
 class TestNormalizeTemplate:
     def test_collapses_extra_spaces(self):
         assert _normalize_template("a   b   c") == "a b c"
@@ -303,7 +312,10 @@ class TestNormalizeTemplate:
 
     def test_whitespace_only(self):
         assert _normalize_template("   ") == ""
+
+
 # ====== Tests: validate_tool_contract ======
+
 
 class TestValidateToolContract:
     # -- happy path --
@@ -319,11 +331,11 @@ class TestValidateToolContract:
         assert "network" not in c["execution"]
         validate_tool_contract(c)
 
-
     def test_optional_writes_output_missing_is_ok(self):
         c = _make_contract()
         assert "writes_output" not in c["execution"]
         validate_tool_contract(c)
+
     def test_optional_env_name_missing_is_ok(self):
         c = _make_contract()
         validate_tool_contract(c)
@@ -350,10 +362,20 @@ class TestValidateToolContract:
 
     # -- missing required fields --
 
-    @pytest.mark.parametrize("field", [
-        "abi_version", "tool_id", "name", "category", "purpose",
-        "inputs", "outputs", "execution", "failure_handling",
-    ])
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "abi_version",
+            "tool_id",
+            "name",
+            "category",
+            "purpose",
+            "inputs",
+            "outputs",
+            "execution",
+            "failure_handling",
+        ],
+    )
     def test_missing_required_field_raises(self, field):
         c = _make_contract()
         del c[field]
@@ -429,7 +451,9 @@ class TestValidateToolContract:
     def test_execution_writes_output_not_boolean_raises(self):
         c = _make_contract()
         c["execution"]["writes_output"] = "yes"
-        with pytest.raises(ContractValidationError, match="execution.writes_output must be boolean"):
+        with pytest.raises(
+            ContractValidationError, match="execution.writes_output must be boolean"
+        ):
             validate_tool_contract(c)
 
     def test_execution_env_name_not_string_raises(self):
@@ -437,6 +461,7 @@ class TestValidateToolContract:
         c["execution"]["env_name"] = 42
         with pytest.raises(ContractValidationError, match="execution.env_name must be string"):
             validate_tool_contract(c)
+
     # -- when_to_use --
 
     def test_when_to_use_not_list_raises(self):
@@ -528,7 +553,10 @@ class TestValidateToolContract:
         c["resources"] = "not mapping"
         with pytest.raises(ContractValidationError, match="resources must be"):
             validate_tool_contract(c)
+
+
 # ====== Tests: _validate_resources_block ======
+
 
 class TestValidateResourcesBlock:
     def test_valid_resources_passes(self):
@@ -537,8 +565,11 @@ class TestValidateResourcesBlock:
     def test_valid_with_accelerator_and_disk(self):
         _validate_resources_block(
             {
-                "cpu": 1, "memory": "4G", "walltime": "01:00:00",
-                "accelerator": "gpu", "disk": "50G",
+                "cpu": 1,
+                "memory": "4G",
+                "walltime": "01:00:00",
+                "accelerator": "gpu",
+                "disk": "50G",
             },
             "tool",
         )
@@ -546,19 +577,22 @@ class TestValidateResourcesBlock:
     def test_cpu_must_be_positive_int(self):
         with pytest.raises(ContractValidationError, match="positive integer"):
             _validate_resources_block(
-                {"cpu": 0, "memory": "4G", "walltime": "01:00"}, "tool",
+                {"cpu": 0, "memory": "4G", "walltime": "01:00"},
+                "tool",
             )
 
     def test_memory_must_be_non_empty_string(self):
         with pytest.raises(ContractValidationError, match="memory must be a non-empty"):
             _validate_resources_block(
-                {"cpu": 1, "memory": "", "walltime": "01:00"}, "tool",
+                {"cpu": 1, "memory": "", "walltime": "01:00"},
+                "tool",
             )
 
     def test_walltime_must_be_non_empty_string(self):
         with pytest.raises(ContractValidationError, match="walltime must be a non-empty"):
             _validate_resources_block(
-                {"cpu": 1, "memory": "4G", "walltime": ""}, "tool",
+                {"cpu": 1, "memory": "4G", "walltime": ""},
+                "tool",
             )
 
     def test_accelerator_must_be_string(self):
@@ -587,13 +621,17 @@ class TestValidateResourcesBlock:
 
 # ====== Tests: _validate_manifest ======
 
+
 class TestValidateManifest:
     @staticmethod
     def _base_manifest():
         return {
-            "abi_version": "0.1", "plugin_id": "test_plugin",
-            "display_name": "TP", "description": "d",
-            "plugin_type": "standalone", "entry_point": "mod:class",
+            "abi_version": "0.1",
+            "plugin_id": "test_plugin",
+            "display_name": "TP",
+            "description": "d",
+            "plugin_type": "standalone",
+            "entry_point": "mod:class",
             "tool_registry": "tool_registry.yaml",
             "standard_tables": "standard_tables.yaml",
             "tool_contracts": "tool_contracts",
@@ -606,11 +644,20 @@ class TestValidateManifest:
         plugin = _FakePlugin(root=str(root))
         _validate_manifest(plugin, root, manifest)
 
-    @pytest.mark.parametrize("field", [
-        "abi_version", "plugin_id", "display_name", "description",
-        "plugin_type", "entry_point", "tool_registry", "standard_tables",
-        "tool_contracts",
-    ])
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "abi_version",
+            "plugin_id",
+            "display_name",
+            "description",
+            "plugin_type",
+            "entry_point",
+            "tool_registry",
+            "standard_tables",
+            "tool_contracts",
+        ],
+    )
     def test_missing_required_field_raises(self, tmp_path, field):
         root = _make_plugin_dir(tmp_path)
         manifest = self._base_manifest()
@@ -661,7 +708,10 @@ class TestValidateManifest:
         }
         plugin = _FakePlugin(root=str(root))
         _validate_manifest(plugin, root, manifest)
+
+
 # ====== Tests: _validate_workflow_section ======
+
 
 class TestValidateWorkflowSection:
     @staticmethod
@@ -760,7 +810,10 @@ class TestValidateWorkflowSection:
         wf = self._valid()
         wf["steps"] = [{"id": "qc", "tool": "fastqc", "citation": "doi:10.xxx"}]
         _validate_workflow_section(wf, "p", "/root")
+
+
 # ====== Tests: load_workflow_spec ======
+
 
 class TestLoadWorkflowSpec:
     def test_returns_none_when_no_workflow_section(self, tmp_path):
@@ -812,6 +865,7 @@ workflow:
 
 # ====== Tests: load_plugin_manifest ======
 
+
 class TestLoadPluginManifest:
     def test_missing_manifest_file_raises(self, tmp_path):
         root = tmp_path / "empty_plugin"
@@ -827,6 +881,7 @@ class TestLoadPluginManifest:
 
 
 # ====== Tests: load_tool_contracts ======
+
 
 class TestLoadToolContracts:
     def test_missing_tool_contracts_dir_raises(self, tmp_path):
@@ -891,6 +946,8 @@ failure_handling:
                 "test_tool_alt": TOOL_CONTRACT_YAML,
             },
         )
+        with pytest.raises(ContractValidationError, match="Duplicate tool contract"):
+            load_tool_contracts(root)
 
     def test_filename_mismatch_tool_id_raises(self, tmp_path):
         root = _make_plugin_dir(
@@ -899,7 +956,10 @@ failure_handling:
         )
         with pytest.raises(ContractValidationError, match="must match tool_id"):
             load_tool_contracts(root)
+
+
 # ====== Tests: _validate_contract_matches_registry ======
+
 
 class TestValidateContractMatchesRegistry:
     def _base_contract(self):
@@ -970,6 +1030,7 @@ class TestValidateContractMatchesRegistry:
 
 # ====== Tests: _validate_declared_tables ======
 
+
 class TestValidateDeclaredTables:
     def test_matching_tables_passes(self, tmp_path):
         root = _make_plugin_dir(tmp_path)
@@ -1000,23 +1061,29 @@ class TestValidateDeclaredTables:
 
 # ====== Tests: validate_plugin_contract_files ======
 
+
 class TestValidatePluginContractFiles:
     def test_no_root_attribute_returns_early(self):
         class NoRootPlugin:
             pass
+
         plugin = NoRootPlugin()
+        validate_plugin_contract_files(plugin)
+
     def test_full_validation_passes(self, tmp_path):
         root = _make_plugin_dir(tmp_path)
-        registry = _FakeRegistry([
-            {
-                "id": "test_tool",
-                "executable": "test_tool",
-                "command_template": "test_tool -i {input_file} -o {output_file}",
-                "category": "qc",
-                "inputs": ["input_file"],
-                "outputs": ["output_file"],
-            }
-        ])
+        registry = _FakeRegistry(
+            [
+                {
+                    "id": "test_tool",
+                    "executable": "test_tool",
+                    "command_template": "test_tool -i {input_file} -o {output_file}",
+                    "category": "qc",
+                    "inputs": ["input_file"],
+                    "outputs": ["output_file"],
+                }
+            ]
+        )
         tables = {"test_table": ["col_a", "col_b"]}
         plugin = _FakePlugin(root=str(root), registry=registry, tables=tables)
         validate_plugin_contract_files(plugin)
@@ -1044,16 +1111,18 @@ failure_handling:
             tmp_path,
             contracts_content={"tool_b": contract2},
         )
-        registry = _FakeRegistry([
-            {
-                "id": "test_tool",
-                "executable": "test_tool",
-                "command_template": "test_tool -i {input_file} -o {output_file}",
-                "category": "qc",
-                "inputs": ["input_file"],
-                "outputs": ["output_file"],
-            }
-        ])
+        registry = _FakeRegistry(
+            [
+                {
+                    "id": "test_tool",
+                    "executable": "test_tool",
+                    "command_template": "test_tool -i {input_file} -o {output_file}",
+                    "category": "qc",
+                    "inputs": ["input_file"],
+                    "outputs": ["output_file"],
+                }
+            ]
+        )
         tables = {"test_table": ["col_a", "col_b"]}
         plugin = _FakePlugin(root=str(root), registry=registry, tables=tables)
         with pytest.raises(ContractValidationError, match="missing required tool contracts"):

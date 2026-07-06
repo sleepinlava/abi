@@ -95,7 +95,6 @@ smoke_test/
 # Benchmark results (generated)
 bench/results/
 bench/Bench_1/bench/results/
-metrics.tsv
 
 # Historical planning docs (auto-generated, not for repo)
 Rebuild.md
@@ -171,6 +170,7 @@ conda.lock
 .codex/
 docs/_build/
 .readthedocs-cache/
+.opencode/
 
 # Superpowers auto-generated plans
 docs/superpowers/

@@ -6,7 +6,6 @@ from pathlib import Path
 
 from abi.report.methods import write_methods
 
-
 # ── write_methods: Resources & Databases ──────────────────────────────────
 
 
@@ -37,7 +36,9 @@ def test_write_methods_with_resource_manifest(tmp_path: Path) -> None:
                 "id": "SILVA_138",
                 "version": "138.1",
                 "path": "/db/silva_138",
-                "checksum_sha256": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+                "checksum_sha256": (
+                    "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+                ),
             },
             {
                 "id": "uniprot",
@@ -145,10 +146,12 @@ def test_write_methods_with_citations(tmp_path: Path) -> None:
     (result_dir / "provenance").mkdir(parents=True)
     (result_dir / "tables").mkdir(parents=True)
     (result_dir / "provenance" / "tool_versions.tsv").write_text(
-        "tool_id\tversion\n", encoding="utf-8",
+        "tool_id\tversion\n",
+        encoding="utf-8",
     )
     (result_dir / "provenance" / "commands.tsv").write_text(
-        "step_id\tcommand\n", encoding="utf-8",
+        "step_id\tcommand\n",
+        encoding="utf-8",
     )
 
     class FakePlan:
@@ -178,10 +181,12 @@ def test_write_methods_with_limitations(tmp_path: Path) -> None:
     (result_dir / "provenance").mkdir(parents=True)
     (result_dir / "tables").mkdir(parents=True)
     (result_dir / "provenance" / "tool_versions.tsv").write_text(
-        "tool_id\tversion\n", encoding="utf-8",
+        "tool_id\tversion\n",
+        encoding="utf-8",
     )
     (result_dir / "provenance" / "commands.tsv").write_text(
-        "step_id\tcommand\n", encoding="utf-8",
+        "step_id\tcommand\n",
+        encoding="utf-8",
     )
 
     class FakePlan:
@@ -209,10 +214,12 @@ def test_write_methods_no_steps(tmp_path: Path) -> None:
     (result_dir / "provenance").mkdir(parents=True)
     (result_dir / "tables").mkdir(parents=True)
     (result_dir / "provenance" / "tool_versions.tsv").write_text(
-        "tool_id\tversion\n", encoding="utf-8",
+        "tool_id\tversion\n",
+        encoding="utf-8",
     )
     (result_dir / "provenance" / "commands.tsv").write_text(
-        "step_id\tcommand\n", encoding="utf-8",
+        "step_id\tcommand\n",
+        encoding="utf-8",
     )
 
     class FakePlan:

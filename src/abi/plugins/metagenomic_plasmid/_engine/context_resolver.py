@@ -32,7 +32,6 @@ class PlasmidContextResolver(PluginContextResolver):
         """
         config = dict(self._config)
         context = self._context
-        sample_count = len(context.samples)
         abundance_samples = [s for s in context.samples if s.platform != "assembly"]
         abundance_sample_count = len(abundance_samples)
         group_counts = Counter(s.group for s in abundance_samples if s.group)
@@ -115,7 +114,6 @@ class PlasmidContextResolver(PluginContextResolver):
         sample_count = len(context.samples)
         abundance_samples = [s for s in context.samples if s.platform != "assembly"]
         abundance_sample_count = len(abundance_samples)
-        group_counts = Counter(s.group for s in abundance_samples if s.group)
 
         sample_analysis = config.get("sample_analysis", {})
         if not isinstance(sample_analysis, dict):
@@ -145,10 +143,7 @@ class PlasmidContextResolver(PluginContextResolver):
                 reason=(
                     "eligible"
                     if run_diversity
-                    else (
-                        f"requires at least {min_diversity} samples with "
-                        "read-based abundance"
-                    )
+                    else (f"requires at least {min_diversity} samples with read-based abundance")
                 ),
             ),
             "differential_abundance": EligibilityResult(
@@ -173,10 +168,7 @@ class PlasmidContextResolver(PluginContextResolver):
                 reason=(
                     "eligible"
                     if run_network
-                    else (
-                        f"requires at least {min_network} samples with "
-                        "read-based abundance"
-                    )
+                    else (f"requires at least {min_network} samples with read-based abundance")
                 ),
             ),
             "host_plasmid_coabundance": EligibilityResult(
@@ -201,6 +193,7 @@ def _requested(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() not in {"false", "no", "0", "off", "disabled"}
     return value is not False
+
 
 # ── Per-sample config helpers (Stage 5) ────────────────────────────────
 # Ported from planner.py.  These are used by config_for_sample() which
@@ -321,9 +314,7 @@ def config_for_sample(config: Mapping[str, Any], sample: Any) -> dict[str, Any]:
     if not isinstance(host_removal, dict):
         host_removal = {}
         resolved["host_removal"] = host_removal
-    host_removal["host_reference"] = (
-        sample.host_reference or host_removal.get("host_reference")
-    )
+    host_removal["host_reference"] = sample.host_reference or host_removal.get("host_reference")
 
     data_profile = _data_profile_dag(sample, resolved)
     assembly = resolved.get("assembly")
@@ -354,9 +345,7 @@ def config_for_sample(config: Mapping[str, Any], sample: Any) -> dict[str, Any]:
         _is_isolate_profile(data_profile)
         or any(
             key in annotation
-            for key in (
-                "general_annotator", "arg_tools", "vf_tools", "mobile_element_tools"
-            )
+            for key in ("general_annotator", "arg_tools", "vf_tools", "mobile_element_tools")
         )
     ):
         annotation["tools"] = _annotation_tools(resolved, data_profile)

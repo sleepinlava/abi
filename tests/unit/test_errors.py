@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Tests for ABI error hierarchy (abi.errors).
 
 Covers:
@@ -8,6 +6,8 @@ Covers:
 - Agent-interpretability (semantic meaning of exception types)
 - MissingTemplateParamError specifics
 """
+
+from __future__ import annotations
 
 import pytest
 
@@ -18,7 +18,6 @@ from abi.errors import (
     SampleSheetError,
     ToolError,
 )
-
 
 # ── Hierarchy Tests ────────────────────────────────────────────────────
 

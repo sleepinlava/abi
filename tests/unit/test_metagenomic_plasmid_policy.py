@@ -9,9 +9,9 @@ import pytest
 import yaml
 
 from abi.plugins import get_plugin
+from abi.plugins.metagenomic_plasmid import build_plan_from_dag
 from abi.plugins.metagenomic_plasmid._engine.config import load_config
 from abi.plugins.metagenomic_plasmid._engine.pipeline import _terminal_overlap_length
-from abi.plugins.metagenomic_plasmid import build_plan_from_dag
 from abi.plugins.metagenomic_plasmid._engine.resources import (
     check_resources,
     default_resource_specs,
@@ -94,6 +94,20 @@ def test_default_illumina_route_matches_optimized_main_path(tmp_path):
     assembly = next(step for step in plan.steps if step.tool_id == "megahit")
     assert assembly.inputs["read1"] == fastp.outputs["clean_read1"]
     assert assembly.inputs["read2"] == fastp.outputs["clean_read2"]
+
+
+def test_multiqc_steps_include_project_outdir_template_param(tmp_path):
+    sample = SampleInput(
+        sample_id="S1", platform="illumina", read1="R1.fastq.gz", read2="R2.fastq.gz"
+    )
+
+    config = _config(tmp_path)
+    plan = build_plan_from_dag(config, _context([sample]), check_files=False)
+    multiqc_steps = [step for step in plan.steps if step.tool_id == "multiqc"]
+
+    assert multiqc_steps
+    for step in multiqc_steps:
+        assert step.params["project_outdir"] == config["outdir"]
 
 
 def test_modern_annotation_fields_override_legacy_default_tool_list(tmp_path):
@@ -346,9 +360,18 @@ def test_ineligible_downstream_modules_record_reasons(tmp_path):
     plan = build_plan_from_dag(_config(tmp_path), _context([sample]), check_files=False)
     reasons = {step.step_name: step.reason for step in plan.skipped_steps}
 
-    assert "no project platform or resolved configuration satisfied its activation conditions" in reasons["diversity"]
-    assert "no project platform or resolved configuration satisfied its activation conditions" in reasons["statistics"]
-    assert "no project platform or resolved configuration satisfied its activation conditions" in reasons["network"]
+    assert (
+        "no project platform or resolved configuration satisfied its activation conditions"
+        in reasons["diversity"]
+    )
+    assert (
+        "no project platform or resolved configuration satisfied its activation conditions"
+        in reasons["statistics"]
+    )
+    assert (
+        "no project platform or resolved configuration satisfied its activation conditions"
+        in reasons["network"]
+    )
 
 
 def test_all_canonical_tables_are_created_with_headers(tmp_path):

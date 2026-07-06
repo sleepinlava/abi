@@ -137,6 +137,11 @@ markers = [
     "performance: deterministic core performance and memory regression baselines",
 ]
 
+[tool.coverage.run]
+omit = [
+    "src/abi/sciplot/tests/*",
+]
+
 [tool.ruff]
 target-version = "py310"
 line-length = 100

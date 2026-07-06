@@ -403,6 +403,8 @@ nodes:
     category: qc
     scope: cross_sample
     name: MultiQC aggregation (Illumina)
+    params:
+      project_outdir: '{outdir}'
     platforms:
     - illumina
     - hybrid
@@ -490,6 +492,8 @@ nodes:
     category: qc
     scope: cross_sample
     name: MultiQC aggregation (ONT)
+    params:
+      project_outdir: '{outdir}'
     platforms:
     - ont
     optional: true
@@ -554,6 +558,8 @@ nodes:
     category: qc
     scope: cross_sample
     name: MultiQC aggregation (HiFi)
+    params:
+      project_outdir: '{outdir}'
     platforms:
     - pacbio_hifi
     optional: true
