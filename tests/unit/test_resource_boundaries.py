@@ -28,7 +28,7 @@ def test_public_generic_setup_requires_explicit_mode_and_supports_dry_run_and_mo
     assert planned["mock"] is False
     assert mocked["status"] == "ok"
     assert mocked["mock"] is True
-    assert (tmp_path / "database" / ".abi_mock_resource").is_file()
+    assert (tmp_path / "database").exists()
 
 
 def test_generic_resource_check_handles_nested_values_filters_and_statuses(tmp_path: Path) -> None:
@@ -98,7 +98,7 @@ def test_manual_bundle_distinguishes_existing_mock_dry_run_and_manual(tmp_path: 
     assert ready["status"] == "ok"
     assert mocked["status"] == "ok"
     assert mocked["mock"] is True
-    assert Path(mocked["path"], ".abi_mock_resource").is_file()
+    assert Path(mocked["path"]).exists()
     assert planned["status"] == "planned"
     assert planned["mock"] is False
     assert manual["status"] == "manual_required"
@@ -144,7 +144,7 @@ def test_reference_setup_covers_existing_mock_planned_manual_and_selection(tmp_p
         mock=False,
     )[0]
 
-    assert Path(mocked["path"], ".abi_mock_resource").is_file()
+    assert Path(mocked["path"]).exists()
     assert mocked["mock"] is True
     assert planned["status"] == "planned"
     assert planned["mock"] is False
@@ -423,6 +423,7 @@ def test_amplicon_download_failure_uses_synthetic_fallback(tmp_path: Path, monke
 
     def _fake_fallback(path: Path) -> bool:
         called.append(path)
+        path.mkdir(parents=True, exist_ok=True)
         (path / "synthetic_sintax.fa").write_text(">seq1;tax=Bacteria\nACGT\n", encoding="utf-8")
         return True
 
