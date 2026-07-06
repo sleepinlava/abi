@@ -98,7 +98,7 @@ def test_register_mcp_tools_skips_tool_without_alias(monkeypatch) -> None:
 # ── _register_mcp_tools(): tool registration error → warning logged ────
 
 
-def test_register_mcp_tools_error_logs_warning(caplog) -> None:
+def test_register_mcp_tools_error_logs_warning(caplog, monkeypatch) -> None:
     """_register_mcp_tools() logs a warning when a tool's registration fails."""
     from abi import tool_descriptors
 
@@ -118,9 +118,8 @@ def test_register_mcp_tools_error_logs_warning(caplog) -> None:
     class FakeAgentBroken:
         pass  # no broken_tool_xyz method — would cause an error
 
-    monkeypatch_mod = pytest.MonkeyPatch()
-    monkeypatch_mod.setattr(tool_descriptors, "ABI_AGENT_TOOLS", fake_tools)
-    monkeypatch_mod.setattr(tool_descriptors, "TOOL_ALIASES", fake_aliases)
+    monkeypatch.setattr(tool_descriptors, "ABI_AGENT_TOOLS", fake_tools)
+    monkeypatch.setattr(tool_descriptors, "TOOL_ALIASES", fake_aliases)
 
     # The tool generates a function that calls agent.broken_tool_xyz,
     # which does not exist on FakeAgentBroken. When mcp.tool() wraps it

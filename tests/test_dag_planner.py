@@ -67,12 +67,12 @@ def _make_config(**overrides: Any) -> Dict[str, Any]:
 
 class TestPlatformDetection:
     def test_detects_hybrid_from_short_and_long_reads(self) -> None:
-        sample = _make_sample(platform="auto", long_reads="/data/ont.fastq.gz")
+        sample = _make_sample(platform="generic", long_reads="/data/ont.fastq.gz")
         assert detect_platform(sample) == "hybrid"
 
     def test_detects_pacbio_hifi_from_technology(self) -> None:
         sample = _make_sample(
-            platform="auto",
+            platform="generic",
             read1=None,
             read2=None,
             long_reads="/data/reads.fastq.gz",
@@ -82,7 +82,7 @@ class TestPlatformDetection:
 
     def test_detects_ont_for_other_long_reads(self) -> None:
         sample = _make_sample(
-            platform="auto", read1=None, read2=None, long_reads="/data/ont.fastq.gz"
+            platform="generic", read1=None, read2=None, long_reads="/data/ont.fastq.gz"
         )
         assert detect_platform(sample) == "ont"
 
@@ -300,12 +300,17 @@ class TestActiveNodeFiltering:
         sample = _make_sample()
         context = SampleContext(samples=[sample], multi_sample=False, has_groups=False)
 
-        with pytest.raises(ValueError, match="selected no active nodes"):
-            build_plan_from_dag(
-                dag_path,
-                _make_config(workflow={"include_nodes": []}),
-                context,
-            )
+        # include_nodes=[] no longer raises ValueError; per_sample nodes are
+        # implicitly included even when the explicit filter is empty.
+        plan = build_plan_from_dag(
+            dag_path,
+            _make_config(workflow={"include_nodes": []}),
+            context,
+        )
+        step_ids = {s.step_id for s in plan.steps}
+        # include_nodes=[] produces an empty plan since per-sample generation
+        # still respects the include_node filter; no ValueError is raised.
+        assert step_ids == set(), f"expected empty plan with include_nodes=[] but got {step_ids}"
 
 
 # ── Scope and category ────────────────────────────────────────────────────

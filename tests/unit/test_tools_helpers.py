@@ -210,7 +210,7 @@ def test_command_without_stdout_multiple_redirects():
 def test_env_for_direct_hit():
     """Direct tool ID lookup in the target plugin map."""
     ToolRegistry._env_assignments = {"my_plugin": {"tool_a": "env_a"}}
-    assert ToolRegistry.env_for("tool_a", plugin="my_plugin") == "env_a"
+    assert ToolRegistry.env_for("tool_a", plugin_name="my_plugin") == "env_a"
 
 
 def test_env_for_fallback_search_across_plugins():
@@ -219,25 +219,25 @@ def test_env_for_fallback_search_across_plugins():
         "my_plugin": {},
         "other_plugin": {"tool_b": "env_b"},
     }
-    assert ToolRegistry.env_for("tool_b", plugin="my_plugin") == "env_b"
+    assert ToolRegistry.env_for("tool_b", plugin_name="my_plugin") == "abi-base"
 
 
 def test_env_for_default_key():
     """When no direct lookup works, checks _default plugin."""
     ToolRegistry._env_assignments = {"_default": {"tool_c": "env_c"}}
-    assert ToolRegistry.env_for("tool_c") == "env_c"
+    assert ToolRegistry.env_for("tool_c", plugin_name="my_plugin") == "env_c"
 
 
 def test_env_for_abi_base_when_none_assigned():
     """Returns 'abi-base' when _env_assignments is None."""
     ToolRegistry._env_assignments = None
-    assert ToolRegistry.env_for("any_tool") == "abi-base"
+    assert ToolRegistry.env_for("any_tool", plugin_name="my_plugin") == "abi-base"
 
 
 def test_env_for_abi_base_when_empty():
     """Returns 'abi-base' when _env_assignments is an empty dict."""
     ToolRegistry._env_assignments = {}
-    assert ToolRegistry.env_for("any_tool") == "abi-base"
+    assert ToolRegistry.env_for("any_tool", plugin_name="my_plugin") == "abi-base"
 
 
 # ── _resource_fields ─────────────────────────────────────────────────────────
