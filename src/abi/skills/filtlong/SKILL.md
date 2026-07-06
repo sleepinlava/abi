@@ -26,7 +26,7 @@ Filtered FASTQ.
 - The CLI resolves the executable from `.mamba/envs/{env_name}/bin`; do not depend on a global conda/mamba environment.
 
 ## Command Template
-`filtlong {long_reads} > {output_dir}/{sample_id}.filtlong.fastq`
+`filtlong --min_length 1000 --keep_percent 90 {long_reads} > {output_dir}/{sample_id}.filtlong.fastq`
 
 ## Auto-selection Rules
 - Registry state: `default-enabled`, `recommended`.

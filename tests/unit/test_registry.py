@@ -83,6 +83,23 @@ def test_registry_builds_minimap2_command_with_long_read_inputs():
     assert "results/ONT1/abundance/ONT1.sam" in command
 
 
+def test_registry_builds_filtlong_command_with_default_thresholds():
+    registry = ToolRegistry.from_path()
+    skill = registry.create("filtlong", mock_tools=True)
+    command = skill.build_command(
+        {
+            "sample_id": "ONT1",
+            "long_reads": "reads.fastq.gz",
+            "output_dir": "results/ont/01_qc/ONT1",
+        }
+    )
+
+    assert "--min_length" in command
+    assert "1000" in command
+    assert "--keep_percent" in command
+    assert "90" in command
+
+
 def test_registry_builds_minimap2_command_with_hifi_preset():
     registry = ToolRegistry.from_path()
     skill = registry.create("minimap2", mock_tools=True)

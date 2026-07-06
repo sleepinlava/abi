@@ -1,6 +1,7 @@
+import pytest
+
 from abi.autoplasm.config import load_config
 from abi.autoplasm.planner import build_plan
-import pytest
 
 
 @pytest.mark.xfail(reason="planner rewritten to use DAG-driven output; params migrated to inputs")
@@ -99,6 +100,7 @@ def test_ont_route_uses_filtered_long_reads_and_metaflye_contigs(tmp_path):
 
     metaflye = steps["ONT1_assembly_metaflye"]
     assert metaflye.params["long_reads"].endswith("01_qc/ONT1/ONT1.filtlong.fastq")
+    assert metaflye.params["threads"] == 2
 
     quast = steps["ONT1_assembly_qc_quast"]
     assert quast.params["assembly"].endswith("02_assembly/ONT1/assembly.fasta")

@@ -240,7 +240,6 @@ nodes:
         source: sample_sheet
       threads:
         type: integer
-        default: 1
     outputs:
       long_reads:
         type: file
