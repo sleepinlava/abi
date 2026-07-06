@@ -35,7 +35,8 @@ def test_resolve_nextflow_bin_from_env_var(tmp_path: Path, monkeypatch) -> None:
 
 def test_resolve_nextflow_bin_shutil_which_fallback(monkeypatch) -> None:
     monkeypatch.setattr(
-        shutil, "which",
+        shutil,
+        "which",
         lambda name: "/usr/local/bin/nextflow" if name == "nextflow" else None,
     )
     with (
@@ -101,13 +102,17 @@ def test_resource_directive_lines_non_default_values() -> None:
     )
 
     with (
-        patch.object(registry, "get", return_value={
-            "resources": {
-                "memory": "16GB",
-                "walltime": "04:00:00",
-                "disk": "100GB",
+        patch.object(
+            registry,
+            "get",
+            return_value={
+                "resources": {
+                    "memory": "16GB",
+                    "walltime": "04:00:00",
+                    "disk": "100GB",
+                },
             },
-        }),
+        ),
         patch.object(registry, "has", return_value=True),
     ):
         lines = exporter._resource_directive_lines(binding, registry)
@@ -133,12 +138,17 @@ def test_container_directive_line_with_image() -> None:
     )
 
     with (
-        patch.object(registry, "get", return_value={
-            "container_image": "docker://biocontainers/fastp:0.23.2",
-        }),
+        patch.object(
+            registry,
+            "get",
+            return_value={
+                "container_image": "docker://biocontainers/fastp:0.23.2",
+            },
+        ),
         patch.object(registry, "has", return_value=True),
-        patch("abi.tools.resolve_container_image",
-              return_value="docker://biocontainers/fastp:0.23.2"),
+        patch(
+            "abi.tools.resolve_container_image", return_value="docker://biocontainers/fastp:0.23.2"
+        ),
     ):
         result = exporter._container_directive_line(binding, registry)
 
@@ -177,7 +187,10 @@ def test_workflow_block_empty_dag_returns_placeholder_message() -> None:
     dag = ABIDAG(bindings=[], edges={}, roots=[], topological_order=[])
     exporter = NextflowExporter()
     result = exporter._workflow_block(dag)
-    assert "No exportable external steps" in result or "ABI plan has no exportable external steps" in result
+    assert (
+        "No exportable external steps" in result
+        or "ABI plan has no exportable external steps" in result
+    )
 
 
 def test_command_text_unknown_tool_id_raises_tool_error() -> None:

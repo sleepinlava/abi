@@ -40,7 +40,7 @@ def test_write_html_report_with_rendered_figures(tmp_path: Path) -> None:
         rendered_figures=rendered_figures,
     )
     content = path.read_text(encoding="utf-8")
-    assert '<section>\n<h2>Figures</h2>' in content
+    assert "<section>\n<h2>Figures</h2>" in content
     assert 'id="fig-qc_read_counts"' in content
     assert 'src="../figures/qc_read_counts.png"' in content
 
@@ -73,6 +73,7 @@ def test_write_html_report_figure_outside_result_dir(tmp_path: Path) -> None:
 def test_write_html_report_citation_no_tool_stage() -> None:
     """L203: citation with no tool and no stage → bare <li>citation</li>."""
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmp:
         result_dir = Path(tmp)
         citations = [
@@ -92,6 +93,7 @@ def test_write_html_report_citation_no_tool_stage() -> None:
 def test_write_html_report_citation_tool_only() -> None:
     """Citation with tool but no stage."""
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmp:
         result_dir = Path(tmp)
         citations = [
@@ -177,6 +179,7 @@ def test_write_html_report_table_summary_rows(tmp_path: Path) -> None:
 
 def test_write_html_report_empty_steps(tmp_path: Path) -> None:
     """Plan with no steps → 'none' for tools used."""
+
     class EmptyPlan:
         def to_dict(self):
             return {

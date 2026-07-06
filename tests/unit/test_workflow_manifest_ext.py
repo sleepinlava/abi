@@ -5,14 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
-import pytest
-
 from abi.workflow.manifest import (
     ResourceManifest,
     _checksum_path,
     checksum_file,
 )
-
 
 # ── ResourceManifest.__init__ with resources list ───────────────────────
 
@@ -106,7 +103,9 @@ def test_add_resources_from_config_with_plain_path_value(tmp_path: Path) -> None
 
 def test_validate_missing_resource_path_returns_error() -> None:
     """ResourceManifest.validate() reports error for non-existent resource path."""
-    manifest = ResourceManifest("test", resources=[{"id": "missing_db", "path": "/nonexistent/path"}])
+    manifest = ResourceManifest(
+        "test", resources=[{"id": "missing_db", "path": "/nonexistent/path"}]
+    )
     errors = manifest.validate()
     assert len(errors) == 1
     assert "missing_db" in errors[0]

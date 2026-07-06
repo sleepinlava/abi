@@ -312,9 +312,7 @@ class ResourceDownloader:
                         for src in spec.source_files:
                             src_path = Path(src)
                             if not src_path.exists():
-                                raise FileNotFoundError(
-                                    f"Source file not found: {src_path}"
-                                )
+                                raise FileNotFoundError(f"Source file not found: {src_path}")
                             dest_file = work_dir / src_path.name
                             shutil.copy2(src_path, dest_file)
                     else:

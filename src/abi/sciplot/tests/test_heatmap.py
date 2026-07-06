@@ -134,8 +134,7 @@ class TestHeatmap:
         from abi.sciplot.renderers.plots.heatmap import plot_heatmap
 
         rows = [
-            {"gene": f"Gene{i}", "Sample1": float(i), "Sample2": float(100 - i)}
-            for i in range(60)
+            {"gene": f"Gene{i}", "Sample1": float(i), "Sample2": float(100 - i)} for i in range(60)
         ]
         tsv = _make_synthetic_tsv(rows)
         try:

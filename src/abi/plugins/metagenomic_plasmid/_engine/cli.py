@@ -17,11 +17,11 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
+from abi.plugins.metagenomic_plasmid import build_plan_from_dag as build_plan
 from abi.plugins.metagenomic_plasmid._engine.config import load_config
 from abi.plugins.metagenomic_plasmid._engine.dashboard import DashboardServer
 from abi.plugins.metagenomic_plasmid._engine.json_utils import load_json_object
 from abi.plugins.metagenomic_plasmid._engine.pipeline import PipelineExecutor
-from abi.plugins.metagenomic_plasmid import build_plan_from_dag as build_plan
 from abi.plugins.metagenomic_plasmid._engine.resources import (
     check_resources as check_resource_status,
 )

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from abi.provenance import (
@@ -11,12 +10,12 @@ from abi.provenance import (
     capture_tool_version,
 )
 
-
 # ── capture_tool_version edge cases ────────────────────────────────────────
 
 
 def test_capture_version_check_installation_raises_ext() -> None:
     """L71-72: skill.check_installation() raises → ('', 'not_captured')."""
+
     class BadSkill:
         def check_installation(self):
             raise RuntimeError("boom")
@@ -28,6 +27,7 @@ def test_capture_version_check_installation_raises_ext() -> None:
 
 def test_capture_version_check_installation_returns_false_ext() -> None:
     """L75-76: check_installation() returns False → ('', 'not_found')."""
+
     class MissingSkill:
         def check_installation(self):
             return False
@@ -39,6 +39,7 @@ def test_capture_version_check_installation_returns_false_ext() -> None:
 
 def test_capture_version_timeout_ext() -> None:
     """L83-84: version == 'version_command_timeout' → ('version_command_timeout', 'timeout')."""
+
     class TimeoutSkill:
         def check_installation(self):
             return True
@@ -53,6 +54,7 @@ def test_capture_version_timeout_ext() -> None:
 
 def test_capture_version_failed_prefix_ext() -> None:
     """L85-86: version starts with 'version_command_' → ('version_command_X', 'failed')."""
+
     class FailedSkill:
         def check_installation(self):
             return True
@@ -66,6 +68,7 @@ def test_capture_version_failed_prefix_ext() -> None:
 
 def test_capture_version_regex_unmatched_ext() -> None:
     """L85: version starts with 'regex_unmatched:' → ('regex_unmatched:X', 'failed')."""
+
     class RegexSkill:
         def check_installation(self):
             return True
@@ -79,6 +82,7 @@ def test_capture_version_regex_unmatched_ext() -> None:
 
 def test_capture_version_capture_failed_prefix_ext() -> None:
     """L85: version starts with 'capture_failed' → ('capture_failedX', 'failed')."""
+
     class CaptureFailSkill:
         def check_installation(self):
             return True
@@ -92,6 +96,7 @@ def test_capture_version_capture_failed_prefix_ext() -> None:
 
 def test_capture_version_empty_version_ext() -> None:
     """L81-82: capture_version() returns empty string → ('', 'not_configured')."""
+
     class EmptyVersionSkill:
         def check_installation(self):
             return True
@@ -106,6 +111,7 @@ def test_capture_version_empty_version_ext() -> None:
 
 def test_capture_version_capture_raises_ext() -> None:
     """L79-80: capture_version() raises → ('', 'failed')."""
+
     class CrashSkill:
         def check_installation(self):
             return True
@@ -120,6 +126,7 @@ def test_capture_version_capture_raises_ext() -> None:
 
 def test_capture_version_success_ext() -> None:
     """L87: success path → (version, 'captured')."""
+
     class GoodSkill:
         def check_installation(self):
             return True
@@ -141,9 +148,7 @@ def test_apply_event_unknown_step_id_ext(tmp_path: Path) -> None:
     prov.mkdir()
     recorder = PipelineProgressRecorder(prov)
     recorder._snapshot = {
-        "steps": [
-            {"step_id": "real_step", "status": "pending"}
-        ],
+        "steps": [{"step_id": "real_step", "status": "pending"}],
         "samples": {},
         "current_steps": [],
     }
@@ -159,9 +164,7 @@ def test_apply_event_unknown_event_type_ext(tmp_path: Path) -> None:
     prov.mkdir()
     recorder = PipelineProgressRecorder(prov)
     recorder._snapshot = {
-        "steps": [
-            {"step_id": "step1", "status": "pending"}
-        ],
+        "steps": [{"step_id": "step1", "status": "pending"}],
         "samples": {},
         "current_steps": [],
     }
@@ -175,6 +178,7 @@ def test_apply_event_unknown_event_type_ext(tmp_path: Path) -> None:
 
 def test_minimal_sample_status_empty_sample_id_ext() -> None:
     """L818: empty sample_id → continue (not added to status dict)."""
+
     class EmptySample:
         sample_id = ""
         platform = "illumina"
@@ -191,6 +195,7 @@ def test_minimal_sample_status_empty_sample_id_ext() -> None:
 
 def test_minimal_sample_status_no_samples_ext() -> None:
     """Empty samples list → empty result."""
+
     class FakePlan:
         samples = []
         steps = []
@@ -202,6 +207,7 @@ def test_minimal_sample_status_no_samples_ext() -> None:
 
 def test_minimal_sample_status_failed_sample_ext() -> None:
     """Sample with failed step → status 'failed'."""
+
     class Sample:
         def __init__(self, sid, plat="illumina"):
             self.sample_id = sid
@@ -225,6 +231,7 @@ def test_minimal_sample_status_failed_sample_ext() -> None:
 
 def test_minimal_sample_status_pending_ext() -> None:
     """Sample with no command rows → status 'pending'."""
+
     class Sample:
         def __init__(self, sid, plat="illumina"):
             self.sample_id = sid

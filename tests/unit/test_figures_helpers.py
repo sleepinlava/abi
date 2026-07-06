@@ -69,9 +69,7 @@ def test_from_dict_figsize_list_to_tuple():
 
 
 def test_from_dict_figsize_already_tuple():
-    spec = FigureSpec.from_dict(
-        {"id": "f1", "type": "bar", "source_table": "t", "figsize": (8, 4)}
-    )
+    spec = FigureSpec.from_dict({"id": "f1", "type": "bar", "source_table": "t", "figsize": (8, 4)})
     assert spec.figsize == (8, 4)
 
 

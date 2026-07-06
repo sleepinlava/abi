@@ -15,7 +15,6 @@ import typer
 from abi.cli import _agent_result, _build_job_payload, _fail, _path_string, _set_if_not_none
 from abi.errors import ABIError
 
-
 # ---------------------------------------------------------------------------
 # _agent_result  (cli.py lines 168-182)
 # ---------------------------------------------------------------------------

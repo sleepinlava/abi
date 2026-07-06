@@ -6,16 +6,16 @@ import pytest
 import yaml
 
 from abi.sciplot.schema.palette_spec import (
+    FORBIDDEN_PALETTES,
+    FORBIDDEN_SUBSTRINGS,
     CategoricalPalette,
     ContinuousPalette,
     DivergingPalette,
-    FORBIDDEN_PALETTES,
-    FORBIDDEN_SUBSTRINGS,
     PaletteRegistry,
 )
 
-
 # ── CategoricalPalette model ─────────────────────────────────────────────
+
 
 def test_categorical_palette_construction():
     p = CategoricalPalette(
@@ -44,14 +44,13 @@ def test_diverging_palette_construction():
 
 # ── Registration — forbidden names ──────────────────────────────────────
 
+
 def test_register_rejects_exact_forbidden_name():
     """register raises ValueError when palette name is in FORBIDDEN_PALETTES."""
     registry = PaletteRegistry()
     for name in sorted(FORBIDDEN_PALETTES)[:2]:  # Test a couple to be safe
         with pytest.raises(ValueError, match="forbidden"):
-            registry.register(
-                ContinuousPalette(name=name, type="continuous", source="test")
-            )
+            registry.register(ContinuousPalette(name=name, type="continuous", source="test"))
 
 
 def test_register_rejects_forbidden_substring():
@@ -63,9 +62,7 @@ def test_register_rejects_forbidden_substring():
             match=r"matches forbidden pattern|forbidden",
         ):
             registry.register(
-                ContinuousPalette(
-                    name=f"my_{substr}_pal", type="continuous", source="test"
-                )
+                ContinuousPalette(name=f"my_{substr}_pal", type="continuous", source="test")
             )
 
 
@@ -89,6 +86,7 @@ def test_register_accepts_valid_palettes():
 
 
 # ── from_yaml ────────────────────────────────────────────────────────────
+
 
 def test_from_yaml_reads_qualitative_sequential_diverging(tmp_path):
     yaml_content = {
@@ -133,6 +131,7 @@ def test_from_yaml_handles_non_dict_sections(tmp_path):
 
 # ── get_categorical ─────────────────────────────────────────────────────
 
+
 def test_get_categorical_fallback_to_colorblind_safe_8():
     """Unknown name → fallback to colorblind_safe_8 (when registered)."""
     registry = PaletteRegistry()
@@ -167,6 +166,7 @@ def test_get_categorical_n_exceeds_max_raises():
 
 # ── get_continuous ──────────────────────────────────────────────────────
 
+
 def test_get_continuous_found():
     registry = PaletteRegistry()
     registry.register(ContinuousPalette(name="magma", type="continuous", source="test"))
@@ -181,6 +181,7 @@ def test_get_continuous_fallback_to_viridis():
 
 # ── get_diverging ───────────────────────────────────────────────────────
 
+
 def test_get_diverging_found():
     registry = PaletteRegistry()
     registry.register(DivergingPalette(name="coolwarm", type="diverging", source="test"))
@@ -194,6 +195,7 @@ def test_get_diverging_fallback_to_coolwarm():
 
 
 # ── get_matplotlib_colormap ─────────────────────────────────────────────
+
 
 def test_get_matplotlib_colormap_found():
     registry = PaletteRegistry()
@@ -217,6 +219,7 @@ def test_get_matplotlib_colormap_not_found_diverging_default():
 
 
 # ── Properties ──────────────────────────────────────────────────────────
+
 
 def test_categorical_names_property():
     registry = PaletteRegistry()
@@ -248,6 +251,7 @@ def test_load_builtins_populates_all_lists():
 
 
 # ── is_allowed ──────────────────────────────────────────────────────────
+
 
 def test_is_allowed_forbidden_exact_name():
     """is_allowed returns False for exact forbidden names."""

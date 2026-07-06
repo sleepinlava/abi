@@ -9,10 +9,10 @@ from abi.resources import (
     _is_placeholder_resource_value,
 )
 
-
 # --------------------------------------------------------------------------- #
 #  _is_placeholder_resource_value
 # --------------------------------------------------------------------------- #
+
 
 class TestIsPlaceholderResourceValue:
     """Tests for _is_placeholder_resource_value."""
@@ -67,6 +67,7 @@ class TestIsPlaceholderResourceValue:
 #  _generic_resource_status
 # --------------------------------------------------------------------------- #
 
+
 class TestGenericResourceStatus:
     """Tests for _generic_resource_status."""
 
@@ -107,6 +108,7 @@ class TestGenericResourceStatus:
 #  _generic_resource_message
 # --------------------------------------------------------------------------- #
 
+
 class TestGenericResourceMessage:
     """Tests for _generic_resource_message."""
 
@@ -114,9 +116,7 @@ class TestGenericResourceMessage:
         assert _generic_resource_message("ok") == "Configured resource path exists."
 
     def test_missing_message(self) -> None:
-        assert _generic_resource_message("missing") == (
-            "Configured resource path does not exist."
-        )
+        assert _generic_resource_message("missing") == ("Configured resource path does not exist.")
 
     def test_incomplete_message(self) -> None:
         assert _generic_resource_message("incomplete") == (
@@ -124,9 +124,7 @@ class TestGenericResourceMessage:
         )
 
     def test_not_configured_message(self) -> None:
-        assert _generic_resource_message("not_configured") == (
-            "Resource path is not configured."
-        )
+        assert _generic_resource_message("not_configured") == ("Resource path is not configured.")
 
     def test_unknown_status_falls_back_to_not_configured(self) -> None:
         assert _generic_resource_message("unknown") == "Resource path is not configured."
@@ -136,6 +134,7 @@ class TestGenericResourceMessage:
 # --------------------------------------------------------------------------- #
 #  _directory_file_count
 # --------------------------------------------------------------------------- #
+
 
 class TestDirectoryFileCount:
     """Tests for _directory_file_count."""

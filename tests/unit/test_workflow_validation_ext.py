@@ -6,7 +6,6 @@ from pathlib import Path
 
 from abi.workflow.validation import WorkflowValidator
 
-
 # ── check_tables(): Exception catch when file read fails ────────────────
 
 

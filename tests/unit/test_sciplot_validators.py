@@ -4,19 +4,18 @@ load_data_table, and validate_data.
 
 from __future__ import annotations
 
-import pandas as pd
 import pytest
 
+from abi.sciplot.schema.figure_spec import FigureSpec
 from abi.sciplot.validators import (
     DataValidationError,
     DataValidationReport,
     load_data_table,
     validate_data,
 )
-from abi.sciplot.schema.figure_spec import FigureSpec
-
 
 # ── FigureSpec factory helpers ──────────────────────────────────────────
+
 
 def _make_spec(
     tmp_path,
@@ -51,6 +50,7 @@ def _make_spec(
 
 # ── DataValidationError ─────────────────────────────────────────────────
 
+
 def test_data_validation_error_construction():
     """DataValidationError stores rule, message, and details."""
     err = DataValidationError("DATA001", "file not found", {"table": "/tmp/x.tsv"})
@@ -65,6 +65,7 @@ def test_data_validation_error_construction():
 
 # ── DataValidationReport ────────────────────────────────────────────────
 
+
 def test_report_empty_state():
     """Fresh report has no errors/warnings and is valid."""
     report = DataValidationReport()
@@ -77,12 +78,8 @@ def test_report_empty_state():
 def test_report_to_dict_with_errors():
     """to_dict includes errors and status=error when errors exist."""
     report = DataValidationReport()
-    report.errors.append(
-        DataValidationError("DATA001", "missing file", {"table": "t.tsv"})
-    )
-    report.warnings.append(
-        DataValidationError("DATA004", "some NaN", {"col": "y"})
-    )
+    report.errors.append(DataValidationError("DATA001", "missing file", {"table": "t.tsv"}))
+    report.warnings.append(DataValidationError("DATA004", "some NaN", {"col": "y"}))
 
     assert report.is_valid is False
     d = report.to_dict()
@@ -98,9 +95,7 @@ def test_report_to_dict_with_errors():
 def test_report_to_dict_with_warnings_only():
     """Warnings only → status=ok."""
     report = DataValidationReport()
-    report.warnings.append(
-        DataValidationError("DATA004", "warning", {"col": "x"})
-    )
+    report.warnings.append(DataValidationError("DATA004", "warning", {"col": "x"}))
     assert report.is_valid is True
     d = report.to_dict()
     assert d["status"] == "ok"
@@ -109,6 +104,7 @@ def test_report_to_dict_with_warnings_only():
 
 
 # ── load_data_table ─────────────────────────────────────────────────────
+
 
 def test_load_data_table_missing_file_raises_data001(tmp_path):
     spec = _make_spec(tmp_path, table_filename="nonexistent.tsv")
@@ -145,6 +141,7 @@ def test_load_data_table_csv(tmp_path):
 
 # ── validate_data ───────────────────────────────────────────────────────
 
+
 def test_validate_data_data001_missing_table(tmp_path):
     """Missing file → DATA001 error with early return."""
     spec = _make_spec(tmp_path, table_filename="nope.tsv")
@@ -170,6 +167,7 @@ def test_validate_data_data002_missing_column(tmp_path):
 def test_validate_data_data003_no_axis_mapping_non_heatmap(tmp_path):
     """Non-heatmap type with no x and no y → ValidationError at spec creation."""
     from pydantic import ValidationError
+
     content = "col_a\tcol_b\n1\t2\n"
     table_path = tmp_path / "data.tsv"
     table_path.write_text(content)
@@ -194,8 +192,11 @@ def test_validate_data_data003_skipped_for_heatmap(tmp_path):
     """Heatmap type skips DATA003 even if x and y are empty."""
     content = "gene_id\tsample1\tsample2\ng1\t1\t2\n"
     spec = _make_spec(
-        tmp_path, table_content=content,
-        figure_type="heatmap", x="", y="",
+        tmp_path,
+        table_content=content,
+        figure_type="heatmap",
+        x="",
+        y="",
     )
     report = validate_data(spec)
     rules = {e.rule for e in report.errors}
@@ -230,8 +231,11 @@ def test_validate_data_happy_path(tmp_path):
     """All checks pass for a well-formed dataset."""
     content = "group\tvalue\nA\t10\nB\t20\nC\t15\n"
     spec = _make_spec(
-        tmp_path, table_content=content,
-        figure_type="barplot", x="group", y="value",
+        tmp_path,
+        table_content=content,
+        figure_type="barplot",
+        x="group",
+        y="value",
         required_columns=["group"],
     )
     report = validate_data(spec)

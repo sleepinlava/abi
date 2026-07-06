@@ -1,9 +1,10 @@
 """Tests for the rnaseq_expression plugin."""
 
 from __future__ import annotations
-import pytest
 
 from pathlib import Path
+
+import pytest
 
 from abi.plugins import get_plugin, list_plugins
 from abi.testing import assert_plugin_contract

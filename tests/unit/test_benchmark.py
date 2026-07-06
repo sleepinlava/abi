@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -18,7 +18,6 @@ from abi.testing.benchmark import (
     run_benchmark,
     validate_against_expected,
 )
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -212,21 +211,15 @@ class TestBenchmarkResult:
     """Tests for BenchmarkResult.pass_rate and .summary()."""
 
     def test_pass_rate_normal(self) -> None:
-        result = BenchmarkResult(
-            plugin_id="p", dataset_path=Path("/tmp"), total=10, passed=8
-        )
+        result = BenchmarkResult(plugin_id="p", dataset_path=Path("/tmp"), total=10, passed=8)
         assert result.pass_rate == 0.8
 
     def test_pass_rate_zero_total(self) -> None:
-        result = BenchmarkResult(
-            plugin_id="p", dataset_path=Path("/tmp"), total=0, passed=0
-        )
+        result = BenchmarkResult(plugin_id="p", dataset_path=Path("/tmp"), total=0, passed=0)
         assert result.pass_rate == 0.0
 
     def test_pass_rate_all_pass(self) -> None:
-        result = BenchmarkResult(
-            plugin_id="p", dataset_path=Path("/tmp"), total=5, passed=5
-        )
+        result = BenchmarkResult(plugin_id="p", dataset_path=Path("/tmp"), total=5, passed=5)
         assert result.pass_rate == 1.0
 
     def test_summary_format(self) -> None:
@@ -286,9 +279,7 @@ class TestRunBenchmark:
             "p:\n  step1:\n    output.tsv: true\n", encoding="utf-8"
         )
 
-        completed = subprocess.CompletedProcess(
-            args=[], returncode=2, stdout="", stderr="KILLED"
-        )
+        completed = subprocess.CompletedProcess(args=[], returncode=2, stdout="", stderr="KILLED")
 
         with patch("abi.testing.benchmark.subprocess.run", return_value=completed):
             result = run_benchmark("p", tmp_path, outdir)
@@ -307,15 +298,14 @@ class TestRunBenchmark:
             "p:\n  step1:\n    output.tsv: true\n", encoding="utf-8"
         )
 
-        completed = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="", stderr=""
-        )
+        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
 
-        with patch(
-            "abi.testing.benchmark.subprocess.run", return_value=completed
-        ), patch(
-            "abi.testing.benchmark.BenchmarkAssertion.evaluate",
-            return_value=True,
+        with (
+            patch("abi.testing.benchmark.subprocess.run", return_value=completed),
+            patch(
+                "abi.testing.benchmark.BenchmarkAssertion.evaluate",
+                return_value=True,
+            ),
         ):
             result = run_benchmark("p", tmp_path, outdir)
 

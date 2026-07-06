@@ -1117,9 +1117,7 @@ def _resolve_inputs(
                 value = sample_dict.get(source_str, "")
         else:
             # No explicit source — try config resources, then config, then empty.
-            value = _resolve_script_path(
-                key, _resolve_config_value(config, key), plugin_root
-            )
+            value = _resolve_script_path(key, _resolve_config_value(config, key), plugin_root)
 
         # Try fallback when primary source yields nothing / 主源为空时尝试备用源
         if not value:

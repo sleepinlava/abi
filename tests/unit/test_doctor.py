@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from abi.doctor import Doctor, HealthCheck, HealthReport
 
-
 # ── HealthCheck ──────────────────────────────────────────────────────────────
+
 
 class TestHealthCheck:
     """Construction and field access for the HealthCheck dataclass."""
@@ -44,35 +42,44 @@ class TestHealthCheck:
 
 # ── HealthReport ─────────────────────────────────────────────────────────────
 
+
 class TestHealthReportPassed:
     """The ``passed`` property."""
 
     def test_all_passed_returns_true(self) -> None:
-        r = HealthReport(checks=[
-            HealthCheck(name="a", status="passed", message="ok"),
-            HealthCheck(name="b", status="passed", message="ok"),
-        ])
+        r = HealthReport(
+            checks=[
+                HealthCheck(name="a", status="passed", message="ok"),
+                HealthCheck(name="b", status="passed", message="ok"),
+            ]
+        )
         assert r.passed is True
 
     def test_warning_does_not_cause_failure(self) -> None:
-        r = HealthReport(checks=[
-            HealthCheck(name="a", status="passed", message="ok"),
-            HealthCheck(name="b", status="warning", message="watch out"),
-        ])
+        r = HealthReport(
+            checks=[
+                HealthCheck(name="a", status="passed", message="ok"),
+                HealthCheck(name="b", status="warning", message="watch out"),
+            ]
+        )
         assert r.passed is True
 
     def test_single_failed_returns_false(self) -> None:
-        r = HealthReport(checks=[
-            HealthCheck(name="a", status="passed", message="ok"),
-            HealthCheck(name="b", status="failed", message="boom"),
-        ])
+        r = HealthReport(
+            checks=[
+                HealthCheck(name="a", status="passed", message="ok"),
+                HealthCheck(name="b", status="failed", message="boom"),
+            ]
+        )
         assert r.passed is False
 
     def test_all_failed_returns_false(self) -> None:
-        r = HealthReport(checks=[
-            HealthCheck(name="a", status="failed", message="boom 1"),
-            HealthCheck(name="b", status="failed", message="boom 2"),
-        ])
+        r = HealthReport(
+            checks=[
+                HealthCheck(name="a", status="failed", message="boom 1"),
+                HealthCheck(name="b", status="failed", message="boom 2"),
+            ]
+        )
         assert r.passed is False
 
     def test_empty_checks_returns_true(self) -> None:
@@ -95,9 +102,11 @@ class TestHealthReportSummary:
         }
 
     def test_all_passed(self) -> None:
-        r = HealthReport(checks=[
-            HealthCheck(name="a", status="passed", message="ok"),
-        ])
+        r = HealthReport(
+            checks=[
+                HealthCheck(name="a", status="passed", message="ok"),
+            ]
+        )
         assert r.summary == {
             "total": 1,
             "passed": 1,
@@ -107,12 +116,14 @@ class TestHealthReportSummary:
         }
 
     def test_mixed_statuses(self) -> None:
-        r = HealthReport(checks=[
-            HealthCheck(name="a", status="passed", message="ok"),
-            HealthCheck(name="b", status="passed", message="ok too"),
-            HealthCheck(name="c", status="warning", message="hmm"),
-            HealthCheck(name="d", status="failed", message="boom"),
-        ])
+        r = HealthReport(
+            checks=[
+                HealthCheck(name="a", status="passed", message="ok"),
+                HealthCheck(name="b", status="passed", message="ok too"),
+                HealthCheck(name="c", status="warning", message="hmm"),
+                HealthCheck(name="d", status="failed", message="boom"),
+            ]
+        )
         assert r.summary == {
             "total": 4,
             "passed": 2,
@@ -122,10 +133,12 @@ class TestHealthReportSummary:
         }
 
     def test_all_warning(self) -> None:
-        r = HealthReport(checks=[
-            HealthCheck(name="a", status="warning", message="a"),
-            HealthCheck(name="b", status="warning", message="b"),
-        ])
+        r = HealthReport(
+            checks=[
+                HealthCheck(name="a", status="warning", message="a"),
+                HealthCheck(name="b", status="warning", message="b"),
+            ]
+        )
         assert r.summary == {
             "total": 2,
             "passed": 0,
@@ -135,11 +148,13 @@ class TestHealthReportSummary:
         }
 
     def test_all_failed(self) -> None:
-        r = HealthReport(checks=[
-            HealthCheck(name="a", status="failed", message="a"),
-            HealthCheck(name="b", status="failed", message="b"),
-            HealthCheck(name="c", status="failed", message="c"),
-        ])
+        r = HealthReport(
+            checks=[
+                HealthCheck(name="a", status="failed", message="a"),
+                HealthCheck(name="b", status="failed", message="b"),
+                HealthCheck(name="c", status="failed", message="c"),
+            ]
+        )
         assert r.summary == {
             "total": 3,
             "passed": 0,
@@ -153,10 +168,12 @@ class TestHealthReportToDict:
     """The ``to_dict()`` method."""
 
     def test_structure(self) -> None:
-        r = HealthReport(checks=[
-            HealthCheck(name="alpha", status="passed", message="great", details={"v": 1}),
-            HealthCheck(name="beta", status="warning", message="meh"),
-        ])
+        r = HealthReport(
+            checks=[
+                HealthCheck(name="alpha", status="passed", message="great", details={"v": 1}),
+                HealthCheck(name="beta", status="warning", message="meh"),
+            ]
+        )
         d = r.to_dict()
         assert "summary" in d
         assert "checks" in d
@@ -164,9 +181,11 @@ class TestHealthReportToDict:
         assert len(d["checks"]) == 2
 
     def test_check_entry_structure(self) -> None:
-        r = HealthReport(checks=[
-            HealthCheck(name="chk", status="passed", message="msg", details={"k": "v"}),
-        ])
+        r = HealthReport(
+            checks=[
+                HealthCheck(name="chk", status="passed", message="msg", details={"k": "v"}),
+            ]
+        )
         entry = r.to_dict()["checks"][0]
         assert entry == {
             "name": "chk",
@@ -183,6 +202,7 @@ class TestHealthReportToDict:
 
 
 # ── Doctor._check_python ─────────────────────────────────────────────────────
+
 
 class TestDoctorCheckPython:
     """``Doctor._check_python()`` returns a correct HealthCheck."""
@@ -219,6 +239,7 @@ class TestDoctorCheckPython:
 
 
 # ── Doctor.run_all ───────────────────────────────────────────────────────────
+
 
 class TestDoctorRunAllWithoutAnalysisType:
     """``Doctor.run_all()`` with no analysis_type."""
@@ -278,6 +299,7 @@ class TestDoctorRunAllWithAnalysisType:
 
 
 # ── Integration / edge cases ─────────────────────────────────────────────────
+
 
 class TestDoctorIntegration:
     """End-to-end sanity checks."""

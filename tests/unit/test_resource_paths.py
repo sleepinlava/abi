@@ -25,6 +25,7 @@ from abi.resources import (
 #  _configured_or_default_resource_path
 # --------------------------------------------------------------------------- #
 
+
 class TestConfiguredOrDefaultResourcePath:
     """Tests for _configured_or_default_resource_path."""
 
@@ -118,23 +119,20 @@ class TestConfiguredOrDefaultResourcePath:
 #  _setup_wgs_bacteria
 # --------------------------------------------------------------------------- #
 
+
 class TestSetupWGSBacteria:
     """Tests for _setup_wgs_bacteria covering mock/downloader/incomplete paths."""
 
     def test_resource_filter_returns_empty(self) -> None:
         """When resource_ids does not include amrfinder_db, return empty list."""
-        result = _setup_wgs_bacteria(
-            {}, resource_ids=["other"], dry_run=False, mock=False
-        )
+        result = _setup_wgs_bacteria({}, resource_ids=["other"], dry_run=False, mock=False)
         assert result == []
 
     def test_dry_run_returns_planned(self, tmp_path: Path) -> None:
         """Dry run returns planned status via ResourceDownloader."""
         target = tmp_path / "results" / "resources" / "amrfinder_db"
         config = {"outdir": str(tmp_path / "results"), "resources": {}}
-        rows = _setup_wgs_bacteria(
-            config, resource_ids=None, dry_run=True, mock=False
-        )
+        rows = _setup_wgs_bacteria(config, resource_ids=None, dry_run=True, mock=False)
         assert len(rows) == 1
         assert rows[0]["status"] == "planned"
         assert rows[0]["mock"] is False
@@ -145,9 +143,7 @@ class TestSetupWGSBacteria:
         """Mock mode uses ResourceDownloader mock path to create resource."""
         target = tmp_path / "results" / "resources" / "amrfinder_db"
         config = {"outdir": str(tmp_path / "results"), "resources": {}}
-        rows = _setup_wgs_bacteria(
-            config, resource_ids=None, dry_run=False, mock=True
-        )
+        rows = _setup_wgs_bacteria(config, resource_ids=None, dry_run=False, mock=True)
         assert len(rows) == 1
         assert rows[0]["status"] == "ok"
         assert rows[0]["mock"] is True
@@ -162,9 +158,7 @@ class TestSetupWGSBacteria:
             "outdir": str(tmp_path / "results"),
             "resources": {"amrfinder_db": str(target)},
         }
-        rows = _setup_wgs_bacteria(
-            config, resource_ids=None, dry_run=False, mock=False
-        )
+        rows = _setup_wgs_bacteria(config, resource_ids=None, dry_run=False, mock=False)
         assert len(rows) == 1
         assert rows[0]["status"] == "incomplete"
         assert "lacks the ready sentinel" in rows[0]["message"]
@@ -178,9 +172,7 @@ class TestSetupWGSBacteria:
             "outdir": str(tmp_path / "results"),
             "resources": {"amrfinder_db": str(target)},
         }
-        rows = _setup_wgs_bacteria(
-            config, resource_ids=None, dry_run=True, mock=False
-        )
+        rows = _setup_wgs_bacteria(config, resource_ids=None, dry_run=True, mock=False)
         assert rows[0]["status"] == "planned"
 
     def test_incomplete_skipped_when_mock(self, tmp_path: Path) -> None:
@@ -192,14 +184,10 @@ class TestSetupWGSBacteria:
             "outdir": str(tmp_path / "results"),
             "resources": {"amrfinder_db": str(target)},
         }
-        rows = _setup_wgs_bacteria(
-            config, resource_ids=None, dry_run=False, mock=True
-        )
+        rows = _setup_wgs_bacteria(config, resource_ids=None, dry_run=False, mock=True)
         assert rows[0]["status"] == "ok"
 
-    def test_existing_sentinel_without_index_reports_incomplete(
-        self, tmp_path: Path
-    ) -> None:
+    def test_existing_sentinel_without_index_reports_incomplete(self, tmp_path: Path) -> None:
         """A unified sentinel alone is not a usable AMRFinderPlus database."""
         target = tmp_path / "results" / "resources" / "amrfinder_db"
         target.mkdir(parents=True)
@@ -243,9 +231,7 @@ class TestSetupWGSBacteria:
                 status="error",
                 message="Download failed: network unreachable",
             )
-            rows = _setup_wgs_bacteria(
-                config, resource_ids=None, dry_run=False, mock=False
-            )
+            rows = _setup_wgs_bacteria(config, resource_ids=None, dry_run=False, mock=False)
             assert rows[0]["status"] == "error"
             assert "network unreachable" in rows[0]["message"]
 
@@ -263,14 +249,10 @@ class TestSetupWGSBacteria:
                 status="ok",
                 message="Already ready.",
             )
-            rows = _setup_wgs_bacteria(
-                config, resource_ids=None, dry_run=False, mock=False
-            )
+            rows = _setup_wgs_bacteria(config, resource_ids=None, dry_run=False, mock=False)
             assert rows[0]["path"] == str(target)
 
-    def test_successful_downloader_without_index_reports_incomplete(
-        self, tmp_path: Path
-    ) -> None:
+    def test_successful_downloader_without_index_reports_incomplete(self, tmp_path: Path) -> None:
         """Downloader success is not enough unless AMRFinderPlus index files exist."""
         target = tmp_path / "results" / "resources" / "amrfinder_db"
         target.mkdir(parents=True)
@@ -285,9 +267,7 @@ class TestSetupWGSBacteria:
                 status="ok",
                 message="Ready.",
             )
-            rows = _setup_wgs_bacteria(
-                config, resource_ids=None, dry_run=False, mock=False
-            )
+            rows = _setup_wgs_bacteria(config, resource_ids=None, dry_run=False, mock=False)
             assert rows[0]["status"] == "incomplete"
             assert "AMRProt.fa" in rows[0]["message"]
 
@@ -295,6 +275,7 @@ class TestSetupWGSBacteria:
 # --------------------------------------------------------------------------- #
 #  _setup_reference_resources
 # --------------------------------------------------------------------------- #
+
 
 class TestSetupReferenceResources:
     """Tests for _setup_reference_resources covering mock/dry_run/existing paths."""
@@ -315,8 +296,11 @@ class TestSetupReferenceResources:
         """Dry run with mock=True includes mock-specific message."""
         config = {"outdir": str(tmp_path / "results"), "resources": {}}
         rows = _setup_reference_resources(
-            "rnaseq_expression", config, resource_ids=["genome_index"],
-            dry_run=True, mock=True,
+            "rnaseq_expression",
+            config,
+            resource_ids=["genome_index"],
+            dry_run=True,
+            mock=True,
         )
         assert len(rows) == 1
         assert rows[0]["status"] == "planned"
@@ -327,8 +311,11 @@ class TestSetupReferenceResources:
         """Mock mode for genome_index creates ResourceDownloader mock."""
         config = {"outdir": str(tmp_path / "results"), "resources": {}}
         rows = _setup_reference_resources(
-            "rnaseq_expression", config, resource_ids=["genome_index"],
-            dry_run=False, mock=True,
+            "rnaseq_expression",
+            config,
+            resource_ids=["genome_index"],
+            dry_run=False,
+            mock=True,
         )
         assert len(rows) == 1
         assert rows[0]["status"] == "ok"
@@ -340,15 +327,18 @@ class TestSetupReferenceResources:
         """Mock mode for annotation_gtf writes a GTF snippet."""
         config = {"outdir": str(tmp_path / "results"), "resources": {}}
         rows = _setup_reference_resources(
-            "rnaseq_expression", config, resource_ids=["annotation_gtf"],
-            dry_run=False, mock=True,
+            "rnaseq_expression",
+            config,
+            resource_ids=["annotation_gtf"],
+            dry_run=False,
+            mock=True,
         )
         assert len(rows) == 1
         assert rows[0]["status"] == "ok"
         assert rows[0]["mock"] is True
         assert Path(rows[0]["path"]).is_file()
         content = Path(rows[0]["path"]).read_text()
-        assert "gene_id \"MOCK1\"" in content
+        assert 'gene_id "MOCK1"' in content
         assert rows[0]["tool_id"] == "featurecounts"
 
     def test_existing_target_is_ok(self, tmp_path: Path) -> None:
@@ -361,8 +351,11 @@ class TestSetupReferenceResources:
             "resources": {"genome_index": str(target)},
         }
         rows = _setup_reference_resources(
-            "rnaseq_expression", config, resource_ids=["genome_index"],
-            dry_run=False, mock=False,
+            "rnaseq_expression",
+            config,
+            resource_ids=["genome_index"],
+            dry_run=False,
+            mock=False,
         )
         assert rows[0]["status"] == "ok"
         assert "exists" in rows[0]["message"].lower()
@@ -371,8 +364,11 @@ class TestSetupReferenceResources:
         """When target does not exist, status is manual_required."""
         config = {"outdir": str(tmp_path / "results"), "resources": {}}
         rows = _setup_reference_resources(
-            "rnaseq_expression", config, resource_ids=["genome_index"],
-            dry_run=False, mock=False,
+            "rnaseq_expression",
+            config,
+            resource_ids=["genome_index"],
+            dry_run=False,
+            mock=False,
         )
         assert rows[0]["status"] == "manual_required"
 
@@ -380,8 +376,11 @@ class TestSetupReferenceResources:
         """When resource_ids is specified, only include those resources."""
         config = {"outdir": str(tmp_path / "results"), "resources": {}}
         rows = _setup_reference_resources(
-            "rnaseq_expression", config, resource_ids=["genome_index"],
-            dry_run=True, mock=False,
+            "rnaseq_expression",
+            config,
+            resource_ids=["genome_index"],
+            dry_run=True,
+            mock=False,
         )
         assert len(rows) == 1
         assert rows[0]["resource_id"] == "genome_index"
@@ -390,8 +389,11 @@ class TestSetupReferenceResources:
         """Both genome_index and annotation_gtf are created in mock mode."""
         config = {"outdir": str(tmp_path / "results"), "resources": {}}
         rows = _setup_reference_resources(
-            "rnaseq_expression", config, resource_ids=None,
-            dry_run=False, mock=True,
+            "rnaseq_expression",
+            config,
+            resource_ids=None,
+            dry_run=False,
+            mock=True,
         )
         assert len(rows) == 2
         assert all(r["status"] == "ok" for r in rows)
@@ -404,6 +406,7 @@ class TestSetupReferenceResources:
 # --------------------------------------------------------------------------- #
 #  _download_result_to_row
 # --------------------------------------------------------------------------- #
+
 
 class TestDownloadResultToRow:
     """Tests for _download_result_to_row."""
@@ -542,15 +545,14 @@ class TestDownloadResultToRow:
 #  _check_rnaseq_expression
 # --------------------------------------------------------------------------- #
 
+
 class TestCheckRNASeqExpression:
     """Tests for _check_rnaseq_expression subprocess paths."""
 
     def test_filter_skips_when_deseq2_not_selected(self, tmp_path: Path) -> None:
         """When resource_ids specified but does not include deseq2_package, skip."""
         config = {"resources": {"genome_index": str(tmp_path)}}
-        rows = _check_rnaseq_expression(
-            config, resource_ids=["genome_index"]
-        )
+        rows = _check_rnaseq_expression(config, resource_ids=["genome_index"])
         assert len(rows) == 1
         assert rows[0]["resource_id"] == "genome_index"
 
@@ -558,12 +560,8 @@ class TestCheckRNASeqExpression:
         """When subprocess returns OK with version, status is ok."""
         config = {"resources": {}}
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = SimpleNamespace(
-                returncode=0, stdout="OK: 1.42.0\n", stderr=""
-            )
-            rows = _check_rnaseq_expression(
-                config, resource_ids=["deseq2_package"]
-            )
+            mock_run.return_value = SimpleNamespace(returncode=0, stdout="OK: 1.42.0\n", stderr="")
+            rows = _check_rnaseq_expression(config, resource_ids=["deseq2_package"])
             assert rows[-1]["status"] == "ok"
             assert rows[-1]["version"] == "1.42.0"
             assert rows[-1]["resource_id"] == "deseq2_package"
@@ -573,9 +571,7 @@ class TestCheckRNASeqExpression:
         config = {"resources": {}}
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = subprocess.TimeoutExpired("Rscript", 30)
-            rows = _check_rnaseq_expression(
-                config, resource_ids=["deseq2_package"]
-            )
+            rows = _check_rnaseq_expression(config, resource_ids=["deseq2_package"])
             assert rows[-1]["status"] == "not_installed"
             assert "not installed" in rows[-1]["message"].lower()
 
@@ -584,9 +580,7 @@ class TestCheckRNASeqExpression:
         config = {"resources": {}}
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = FileNotFoundError("Rscript not found")
-            rows = _check_rnaseq_expression(
-                config, resource_ids=["deseq2_package"]
-            )
+            rows = _check_rnaseq_expression(config, resource_ids=["deseq2_package"])
             assert rows[-1]["status"] == "not_installed"
 
     def test_deseq2_not_installed_oserror(self, tmp_path: Path) -> None:
@@ -594,9 +588,7 @@ class TestCheckRNASeqExpression:
         config = {"resources": {}}
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = OSError("Permission denied")
-            rows = _check_rnaseq_expression(
-                config, resource_ids=["deseq2_package"]
-            )
+            rows = _check_rnaseq_expression(config, resource_ids=["deseq2_package"])
             assert rows[-1]["status"] == "not_installed"
 
     def test_deseq2_without_ok_in_output(self, tmp_path: Path) -> None:
@@ -606,9 +598,7 @@ class TestCheckRNASeqExpression:
             mock_run.return_value = SimpleNamespace(
                 returncode=1, stdout="Error: package not found\n", stderr=""
             )
-            rows = _check_rnaseq_expression(
-                config, resource_ids=["deseq2_package"]
-            )
+            rows = _check_rnaseq_expression(config, resource_ids=["deseq2_package"])
             assert rows[-1]["status"] == "not_installed"
             assert rows[-1]["version"] == ""
 
@@ -616,9 +606,7 @@ class TestCheckRNASeqExpression:
         """When resource_ids is None, deseq2_package is included."""
         config = {"resources": {}}
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = SimpleNamespace(
-                returncode=0, stdout="OK: 1.42.0\n", stderr=""
-            )
+            mock_run.return_value = SimpleNamespace(returncode=0, stdout="OK: 1.42.0\n", stderr="")
             rows = _check_rnaseq_expression(config, resource_ids=None)
             # Should have at least the deseq2_package row
             deseq2_rows = [r for r in rows if r["resource_id"] == "deseq2_package"]
@@ -629,11 +617,7 @@ class TestCheckRNASeqExpression:
         """When DESeq2 is found, message includes the version string."""
         config = {"resources": {}}
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = SimpleNamespace(
-                returncode=0, stdout="OK: 1.42.0\n", stderr=""
-            )
-            rows = _check_rnaseq_expression(
-                config, resource_ids=["deseq2_package"]
-            )
+            mock_run.return_value = SimpleNamespace(returncode=0, stdout="OK: 1.42.0\n", stderr="")
+            rows = _check_rnaseq_expression(config, resource_ids=["deseq2_package"])
             assert "1.42.0" in rows[-1]["message"]
             assert "DESeq2 1.42.0 found" in rows[-1]["message"]

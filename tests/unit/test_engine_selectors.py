@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from abi.plugins.metagenomic_plasmid._engine.schemas import ConfigError
-from abi.plugins.metagenomic_plasmid._engine.selectors import select_value, record_auto_selection
+from abi.plugins.metagenomic_plasmid._engine.selectors import record_auto_selection, select_value
 
 
 # ---------------------------------------------------------------------------
@@ -13,21 +13,15 @@ from abi.plugins.metagenomic_plasmid._engine.selectors import select_value, reco
 # ---------------------------------------------------------------------------
 class TestSelectValue:
     def test_auto_mode_returns_configured(self):
-        result = select_value(
-            name="threads", configured=8, default=4, mode="auto"
-        )
+        result = select_value(name="threads", configured=8, default=4, mode="auto")
         assert result == 8
 
     def test_interactive_mode_returns_configured(self):
-        result = select_value(
-            name="threads", configured=8, default=4, mode="interactive"
-        )
+        result = select_value(name="threads", configured=8, default=4, mode="interactive")
         assert result == 8
 
     def test_none_configured_returns_default(self):
-        result = select_value(
-            name="mode", configured=None, default="auto", mode="auto"
-        )
+        result = select_value(name="mode", configured=None, default="auto", mode="auto")
         assert result == "auto"
 
         result = select_value(
@@ -37,9 +31,7 @@ class TestSelectValue:
 
     def test_invalid_mode_raises_config_error(self):
         with pytest.raises(ConfigError, match="Invalid mode"):
-            select_value(
-                name="x", configured=1, default=2, mode="batch"
-            )
+            select_value(name="x", configured=1, default=2, mode="batch")
 
     def test_value_not_in_choices_raises(self):
         with pytest.raises(ConfigError, match="must be one of"):
@@ -97,9 +89,7 @@ class TestRecordAutoSelection:
         assert result == {"auto_selection_reason": "default value"}
 
     def test_preserves_existing_keys(self):
-        result = record_auto_selection(
-            {"threads": 8, "mode": "auto"}, "chosen by system"
-        )
+        result = record_auto_selection({"threads": 8, "mode": "auto"}, "chosen by system")
         assert result["threads"] == 8
         assert result["mode"] == "auto"
         assert result["auto_selection_reason"] == "chosen by system"

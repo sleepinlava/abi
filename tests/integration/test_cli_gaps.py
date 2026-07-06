@@ -28,11 +28,15 @@ def test_check_no_check_runtime(runner: CliRunner) -> None:
     Exit code 1 is expected because sample sheet / resources are not
     configured in the test environment.
     """
-    result = runner.invoke(app, [
-        "check",
-        "--type", "rnaseq_expression",
-        "--no-check-runtime",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "check",
+            "--type",
+            "rnaseq_expression",
+            "--no-check-runtime",
+        ],
+    )
     # Exit 0 or 1 — assertion is on the shape of the output.
     assert result.exit_code in (0, 1), result.output
     # Non-JSON path: raw payload is a JSON object with plugin/status/checks.
@@ -50,12 +54,16 @@ def test_check_output_json(runner: CliRunner) -> None:
     the embedded check result has status "fail" because resources are
     not configured.  When the result fails the CLI exits with code 1.
     """
-    result = runner.invoke(app, [
-        "check",
-        "--type", "rnaseq_expression",
-        "--no-check-runtime",
-        "--output-json",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "check",
+            "--type",
+            "rnaseq_expression",
+            "--no-check-runtime",
+            "--output-json",
+        ],
+    )
     # Exit 0 or 1 — envelope always present.
     assert result.exit_code in (0, 1), result.output
     data = json.loads(result.output.strip())
@@ -68,10 +76,14 @@ def test_check_output_json(runner: CliRunner) -> None:
 
 def test_contract_lint(runner: CliRunner) -> None:
     """contract-lint validates DAG and tool contracts."""
-    result = runner.invoke(app, [
-        "contract-lint",
-        "--type", "rnaseq_expression",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "contract-lint",
+            "--type",
+            "rnaseq_expression",
+        ],
+    )
     assert result.exit_code == 0, result.output
     data = json.loads(result.output.strip())
     assert data["passed"] is True
@@ -84,11 +96,16 @@ def test_contract_lint(runner: CliRunner) -> None:
 
 def test_export_tools_anthropic(runner: CliRunner) -> None:
     """export-tools --format anthropic returns a list of tool descriptors."""
-    result = runner.invoke(app, [
-        "export-tools",
-        "--type", "rnaseq_expression",
-        "--format", "anthropic",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "export-tools",
+            "--type",
+            "rnaseq_expression",
+            "--format",
+            "anthropic",
+        ],
+    )
     assert result.exit_code == 0, result.output
     data = json.loads(result.output.strip())
     assert isinstance(data, list)
@@ -97,11 +114,16 @@ def test_export_tools_anthropic(runner: CliRunner) -> None:
 
 def test_export_tools_gemini(runner: CliRunner) -> None:
     """export-tools --format gemini returns function_declarations dict."""
-    result = runner.invoke(app, [
-        "export-tools",
-        "--type", "rnaseq_expression",
-        "--format", "gemini",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "export-tools",
+            "--type",
+            "rnaseq_expression",
+            "--format",
+            "gemini",
+        ],
+    )
     assert result.exit_code == 0, result.output
     data = json.loads(result.output.strip())
     assert isinstance(data, dict)
@@ -116,12 +138,16 @@ def test_export_tools_gemini(runner: CliRunner) -> None:
 @pytest.mark.xfail(reason="missing setup_rnaseq_env.sh on test environment")
 def test_setup_resources_mock(runner: CliRunner) -> None:
     """setup-resources --mock creates placeholder resource entries."""
-    result = runner.invoke(app, [
-        "setup-resources",
-        "--type", "rnaseq_expression",
-        "--mock",
-        "--confirm",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "setup-resources",
+            "--type",
+            "rnaseq_expression",
+            "--mock",
+            "--confirm",
+        ],
+    )
     assert result.exit_code == 0, result.output
     data = json.loads(result.output.strip())
     assert isinstance(data, list)
@@ -137,22 +163,32 @@ def test_init_force(runner: CliRunner, tmp_path: Path) -> None:
     outdir = tmp_path / "proj"
 
     # First init
-    result1 = runner.invoke(app, [
-        "init",
-        "--type", "rnaseq_expression",
-        "--outdir", str(outdir),
-    ])
+    result1 = runner.invoke(
+        app,
+        [
+            "init",
+            "--type",
+            "rnaseq_expression",
+            "--outdir",
+            str(outdir),
+        ],
+    )
     assert result1.exit_code == 0, result1.output
     assert (outdir / "config" / "rnaseq_expression.yaml").is_file()
     assert (outdir / "samples.tsv").is_file()
 
     # Second init with --force
-    result2 = runner.invoke(app, [
-        "init",
-        "--type", "rnaseq_expression",
-        "--outdir", str(outdir),
-        "--force",
-    ])
+    result2 = runner.invoke(
+        app,
+        [
+            "init",
+            "--type",
+            "rnaseq_expression",
+            "--outdir",
+            str(outdir),
+            "--force",
+        ],
+    )
     assert result2.exit_code == 0, result2.output
 
 
@@ -161,11 +197,16 @@ def test_init_force(runner: CliRunner, tmp_path: Path) -> None:
 
 def test_invalid_type_exit_code(runner: CliRunner) -> None:
     """Nonexistent analysis type -> exit code 1."""
-    result = runner.invoke(app, [
-        "query",
-        "--type", "nonexistent_type_xyz",
-        "--what", "stages",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "query",
+            "--type",
+            "nonexistent_type_xyz",
+            "--what",
+            "stages",
+        ],
+    )
     assert result.exit_code == 1, result.output
 
 
@@ -183,11 +224,16 @@ def test_missing_required_arg(runner: CliRunner) -> None:
 
 def test_export_openai_tools_apps_sdk(runner: CliRunner) -> None:
     """export-openai-tools --format apps-sdk returns valid JSON tool list."""
-    result = runner.invoke(app, [
-        "export-openai-tools",
-        "--type", "rnaseq_expression",
-        "--format", "apps-sdk",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "export-openai-tools",
+            "--type",
+            "rnaseq_expression",
+            "--format",
+            "apps-sdk",
+        ],
+    )
     assert result.exit_code == 0, result.output
     data = json.loads(result.output.strip())
     assert isinstance(data, list)

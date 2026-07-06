@@ -2,13 +2,8 @@
 
 from __future__ import annotations
 
-import csv
 import json
-from pathlib import Path
 
-import pytest
-
-from abi.plugins.metagenomic_plasmid._engine import logger as logger_mod
 from abi.plugins.metagenomic_plasmid._engine.logger import (
     RunLogger,
     write_commands_tsv,
@@ -229,7 +224,9 @@ class TestWriteToolVersions:
 
     def test_none_values_become_empty(self, tmp_path):
         path = tmp_path / "versions.tsv"
-        rows = [{"tool_id": "t", "executable": None, "env_name": None, "version": None, "status": None}]
+        rows = [
+            {"tool_id": "t", "executable": None, "env_name": None, "version": None, "status": None}
+        ]
         write_tool_versions(rows, path)
         content = path.read_text()
         # None values should become empty strings, never appear as "None"

@@ -1,4 +1,3 @@
-
 """Generate lock files for ABI runtime tools, Conda envs, and resources."""
 
 from __future__ import annotations
@@ -140,7 +139,9 @@ def build_conda_lock(
     declared = environment_spec.get("environments", {})
     declared_envs = set(declared) if isinstance(declared, Mapping) else set()
     env_root = mamba_root / "envs"
-    present_envs = {p.name for p in env_root.iterdir() if p.is_dir()} if env_root.is_dir() else set()
+    present_envs = (
+        {p.name for p in env_root.iterdir() if p.is_dir()} if env_root.is_dir() else set()
+    )
     env_names = sorted(declared_envs | present_envs)
     conda = _resolve_conda_executable(conda_executable)
 
@@ -398,7 +399,9 @@ def _cloud_resource_config(
             }
         )
     if analysis_type == "wgs_bacteria":
-        amr_db = _first_existing_dir(resource_root / "amrfinder_db", resource_root / "amrfinderplus")
+        amr_db = _first_existing_dir(
+            resource_root / "amrfinder_db", resource_root / "amrfinderplus"
+        )
         return plugin.load_config(overrides={"resources": {"amrfinder_db": str(amr_db)}})
     return plugin.load_config()
 
@@ -508,7 +511,9 @@ def _resource_executable_dirs(install_path: Path, executable: str) -> list[Path]
     return candidates
 
 
-def _resolve_executable(executable: str, *, env_prefix: Path, extra_dirs: Sequence[Path]) -> Path | None:
+def _resolve_executable(
+    executable: str, *, env_prefix: Path, extra_dirs: Sequence[Path]
+) -> Path | None:
     path = Path(executable)
     if path.is_absolute() or path.parent != Path("."):
         return path if path.exists() else None

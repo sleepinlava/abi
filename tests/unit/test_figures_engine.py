@@ -30,7 +30,8 @@ class TestFigureEngineIntegration:
         tables_dir.mkdir()
 
         (tables_dir / "metrics.tsv").write_text(
-            "sample_id\tvalue\nS1\t1.0\nS2\t2.5\n", encoding="utf-8",
+            "sample_id\tvalue\nS1\t1.0\nS2\t2.5\n",
+            encoding="utf-8",
         )
 
         engine = FigureEngine(
@@ -38,10 +39,17 @@ class TestFigureEngineIntegration:
             tables_dir=tables_dir,
             figures_dir=figures_dir,
         )
-        engine.load_specs([
-            {"id": "test_bar", "type": "bar", "source_table": "metrics",
-             "x": "sample_id", "y": "value"},
-        ])
+        engine.load_specs(
+            [
+                {
+                    "id": "test_bar",
+                    "type": "bar",
+                    "source_table": "metrics",
+                    "x": "sample_id",
+                    "y": "value",
+                },
+            ]
+        )
 
         results = engine.render_all()
 
@@ -62,10 +70,12 @@ class TestFigureEngineIntegration:
         tables_dir.mkdir()
 
         (tables_dir / "metrics.tsv").write_text(
-            "sample_id\tvalue\nS1\t1.0\nS2\t2.5\n", encoding="utf-8",
+            "sample_id\tvalue\nS1\t1.0\nS2\t2.5\n",
+            encoding="utf-8",
         )
         (tables_dir / "scatter_data.tsv").write_text(
-            "x_val\ty_val\n1.0\t2.0\n3.0\t4.0\n", encoding="utf-8",
+            "x_val\ty_val\n1.0\t2.0\n3.0\t4.0\n",
+            encoding="utf-8",
         )
 
         engine = FigureEngine(
@@ -76,12 +86,24 @@ class TestFigureEngineIntegration:
             tables_dir=tables_dir,
             figures_dir=figures_dir,
         )
-        engine.load_specs([
-            {"id": "bar_chart", "type": "bar", "source_table": "metrics",
-             "x": "sample_id", "y": "value"},
-            {"id": "scatter_plot", "type": "scatter", "source_table": "scatter_data",
-             "x": "x_val", "y": "y_val"},
-        ])
+        engine.load_specs(
+            [
+                {
+                    "id": "bar_chart",
+                    "type": "bar",
+                    "source_table": "metrics",
+                    "x": "sample_id",
+                    "y": "value",
+                },
+                {
+                    "id": "scatter_plot",
+                    "type": "scatter",
+                    "source_table": "scatter_data",
+                    "x": "x_val",
+                    "y": "y_val",
+                },
+            ]
+        )
 
         results = engine.render_all()
 
@@ -106,10 +128,18 @@ class TestFigureEngineIntegration:
             tables_dir=tables_dir,
             figures_dir=figures_dir,
         )
-        engine.load_specs([
-            {"id": "skip_me", "type": "bar", "source_table": "metrics",
-             "x": "sample_id", "y": "value", "required": False},
-        ])
+        engine.load_specs(
+            [
+                {
+                    "id": "skip_me",
+                    "type": "bar",
+                    "source_table": "metrics",
+                    "x": "sample_id",
+                    "y": "value",
+                    "required": False,
+                },
+            ]
+        )
 
         results = engine.render_all()
 
@@ -132,10 +162,18 @@ class TestFigureEngineIntegration:
             tables_dir=tables_dir,
             figures_dir=figures_dir,
         )
-        engine.load_specs([
-            {"id": "must_render", "type": "bar", "source_table": "metrics",
-             "x": "sample_id", "y": "value", "required": True},
-        ])
+        engine.load_specs(
+            [
+                {
+                    "id": "must_render",
+                    "type": "bar",
+                    "source_table": "metrics",
+                    "x": "sample_id",
+                    "y": "value",
+                    "required": True,
+                },
+            ]
+        )
 
         with pytest.raises(FigureError, match="empty or missing"):
             engine.render_all()
@@ -143,7 +181,8 @@ class TestFigureEngineIntegration:
     # ── test 5: mixed valid + optional missing → renders valid, skips rest ─
 
     def test_render_all_mixed_valid_and_optional_missing(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """1 valid spec + 1 optional spec with missing data → valid renders, optional skipped."""
         tables_dir = tmp_path / "tables"
@@ -151,7 +190,8 @@ class TestFigureEngineIntegration:
         tables_dir.mkdir()
 
         (tables_dir / "metrics.tsv").write_text(
-            "sample_id\tvalue\nS1\t1.0\nS2\t2.5\n", encoding="utf-8",
+            "sample_id\tvalue\nS1\t1.0\nS2\t2.5\n",
+            encoding="utf-8",
         )
         # Do NOT write missing_table.tsv
 
@@ -163,13 +203,25 @@ class TestFigureEngineIntegration:
             tables_dir=tables_dir,
             figures_dir=figures_dir,
         )
-        engine.load_specs([
-            {"id": "valid_bar", "type": "bar", "source_table": "metrics",
-             "x": "sample_id", "y": "value"},
-            {"id": "optional_missing", "type": "bar",
-             "source_table": "missing_table",
-             "x": "col_a", "y": "col_b", "required": False},
-        ])
+        engine.load_specs(
+            [
+                {
+                    "id": "valid_bar",
+                    "type": "bar",
+                    "source_table": "metrics",
+                    "x": "sample_id",
+                    "y": "value",
+                },
+                {
+                    "id": "optional_missing",
+                    "type": "bar",
+                    "source_table": "missing_table",
+                    "x": "col_a",
+                    "y": "col_b",
+                    "required": False,
+                },
+            ]
+        )
 
         results = engine.render_all()
 
@@ -185,7 +237,8 @@ class TestFigureEngineIntegration:
     # ── test 6: validation error from unknown source_table → tracked ───────
 
     def test_render_all_spec_validation_error_tracked(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """Spec with unknown source_table → error tracked in engine.errors, no render."""
         tables_dir = tmp_path / "tables"
@@ -197,10 +250,17 @@ class TestFigureEngineIntegration:
             tables_dir=tables_dir,
             figures_dir=figures_dir,
         )
-        engine.load_specs([
-            {"id": "bad_spec", "type": "bar", "source_table": "nonexistent",
-             "x": "sample_id", "y": "value"},
-        ])
+        engine.load_specs(
+            [
+                {
+                    "id": "bad_spec",
+                    "type": "bar",
+                    "source_table": "nonexistent",
+                    "x": "sample_id",
+                    "y": "value",
+                },
+            ]
+        )
 
         results = engine.render_all()
 
@@ -220,7 +280,8 @@ class TestFigureEngineIntegration:
         tables_dir.mkdir()
 
         (tables_dir / "metrics.tsv").write_text(
-            "sample_id\tvalue\n", encoding="utf-8",
+            "sample_id\tvalue\n",
+            encoding="utf-8",
         )
 
         # Case A: optional spec → skipped, no PNG
@@ -229,10 +290,18 @@ class TestFigureEngineIntegration:
             tables_dir=tables_dir,
             figures_dir=figures_dir,
         )
-        engine.load_specs([
-            {"id": "opt_empty", "type": "bar", "source_table": "metrics",
-             "x": "sample_id", "y": "value", "required": False},
-        ])
+        engine.load_specs(
+            [
+                {
+                    "id": "opt_empty",
+                    "type": "bar",
+                    "source_table": "metrics",
+                    "x": "sample_id",
+                    "y": "value",
+                    "required": False,
+                },
+            ]
+        )
         results = engine.render_all()
         assert results == {}
         assert engine.skipped_count == 1
@@ -245,10 +314,18 @@ class TestFigureEngineIntegration:
             tables_dir=tables_dir,
             figures_dir=figures_dir,
         )
-        engine2.load_specs([
-            {"id": "req_empty", "type": "bar", "source_table": "metrics",
-             "x": "sample_id", "y": "value", "required": True},
-        ])
+        engine2.load_specs(
+            [
+                {
+                    "id": "req_empty",
+                    "type": "bar",
+                    "source_table": "metrics",
+                    "x": "sample_id",
+                    "y": "value",
+                    "required": True,
+                },
+            ]
+        )
         with pytest.raises(FigureError, match="empty or missing"):
             engine2.render_all()
 
@@ -270,19 +347,21 @@ class TestFigureEngineIntegration:
             tables_dir=tables_dir,
             figures_dir=figures_dir,
         )
-        engine.load_specs([
-            {
-                "id": "fancy_scatter",
-                "type": "scatter",
-                "source_table": "data",
-                "x": "x",
-                "y": "y",
-                "title": "My Scatter Plot",
-                "xlabel": "X Axis",
-                "ylabel": "Y Axis",
-                "figsize": [12, 8],
-            },
-        ])
+        engine.load_specs(
+            [
+                {
+                    "id": "fancy_scatter",
+                    "type": "scatter",
+                    "source_table": "data",
+                    "x": "x",
+                    "y": "y",
+                    "title": "My Scatter Plot",
+                    "xlabel": "X Axis",
+                    "ylabel": "Y Axis",
+                    "figsize": [12, 8],
+                },
+            ]
+        )
 
         results = engine.render_all()
 

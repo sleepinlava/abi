@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
-from abi.json_utils import ABIJSONError, load_json_file, load_json_object, loads_json
-from abi.json_utils import _json_decode_message
+from abi.json_utils import (
+    ABIJSONError,
+    _json_decode_message,
+    load_json_file,
+    load_json_object,
+    loads_json,
+)
 
 
 # ---------------------------------------------------------------------------

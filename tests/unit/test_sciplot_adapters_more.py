@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import io
 import sys
-from pathlib import Path
 
 import pytest
 
@@ -19,8 +18,8 @@ from abi.sciplot.adapters import (
 )
 from abi.sciplot.schema.figure_spec import SUPPORTED_FIGURE_TYPES
 
-
 # -- _map_type -------------------------------------------------------------
+
 
 def test_map_type_maps_legacy_types():
     assert _map_type("bar") == "barplot"
@@ -44,6 +43,7 @@ def test_map_type_unknown_raises_valueerror():
 
 
 # -- adapt_spec: figsize fallback -----------------------------------------
+
 
 def test_adapt_spec_figsize_not_2_element_fallback(tmp_path):
     """Non-2-element figsize leads to fallback 90x70 mm."""
@@ -101,6 +101,7 @@ def test_adapt_spec_figsize_3_element_fallback(tmp_path):
 
 # -- adapt_spec: continuous palette fallback ------------------------------
 
+
 def test_adapt_spec_continuous_palette_fallback(tmp_path):
     """Non-categorical, non-diverging colormap - continuous palette path."""
     spec = adapt_spec(
@@ -151,6 +152,7 @@ def test_adapt_spec_continuous_reds_aliased_to_magma(tmp_path):
 
 # -- adapt_spec: volcano_plot stat spec -----------------------------------
 
+
 def test_adapt_spec_volcano_plot_stat_spec(tmp_path):
     """Volcano plot creates a StatSpec from old_spec fields."""
     spec = adapt_spec(
@@ -188,6 +190,7 @@ def test_adapt_spec_non_volcano_no_stat_spec(tmp_path):
 
 
 # -- adapt_all_specs ------------------------------------------------------
+
 
 def test_adapt_all_specs_happy_path(tmp_path):
     """adapt_all_specs converts a list of valid specs."""

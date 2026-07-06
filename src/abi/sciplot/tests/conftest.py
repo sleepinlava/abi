@@ -3,6 +3,7 @@
 Extracted from test_render.py and test_biological_renderers.py to avoid
 duplication across test files.
 """
+
 from __future__ import annotations
 
 import tempfile

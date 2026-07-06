@@ -91,8 +91,8 @@ from abi.json_utils import load_json_object, loads_json
 from abi.openai_contracts import export_openai_tools  # backward compat
 from abi.plugins import get_plugin, list_plugins
 from abi.resources import setup_resources
-from abi.runtime_lock import DEFAULT_ANALYSIS_TYPES, generate_runtime_locks
 from abi.results import validate_abi_result_dir
+from abi.runtime_lock import DEFAULT_ANALYSIS_TYPES, generate_runtime_locks
 from abi.schemas import ABIError
 from abi.skill_installer import install_bundled_skills
 from abi.tool_descriptors import (
@@ -2309,10 +2309,11 @@ def contract_lint_command(
         _fail(exc)
 
 
-
 @app.command("doctor")
 def doctor_command(
-    analysis_type: str | None = typer.Option(None, "--type", "-t", help="ABI analysis type to check."),
+    analysis_type: str | None = typer.Option(
+        None, "--type", "-t", help="ABI analysis type to check."
+    ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON."),
 ) -> None:
     """Run health diagnostics on the ABI installation.
@@ -2322,23 +2323,29 @@ def doctor_command(
     """
     try:
         from abi.doctor import Doctor
+
         doctor = Doctor()
         report = doctor.run_all(analysis_type=analysis_type)
         if json_output:
             typer.echo(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
         else:
             for check in report.checks:
-                sym = {"passed":"OK","warning":"WARN","failed":"FAIL","skipped":"SKIP"}[check.status]
+                sym = {"passed": "OK", "warning": "WARN", "failed": "FAIL", "skipped": "SKIP"}[
+                    check.status
+                ]
                 typer.echo(f"  [{sym}] {check.name}: {check.message}")
             s = report.summary
-            typer.echo(f"\n  {s['passed']} passed, {s['warning']} warnings, {s['failed']} failed"
-                       f" -- {'HEALTHY' if report.passed else 'UNHEALTHY'}")
+            typer.echo(
+                f"\n  {s['passed']} passed, {s['warning']} warnings, {s['failed']} failed"
+                f" -- {'HEALTHY' if report.passed else 'UNHEALTHY'}"
+            )
         if not report.passed:
             raise typer.Exit(code=1)
     except typer.Exit:
         raise
     except Exception as exc:
         _fail(exc)
+
 
 def main() -> None:
     """Entry point for the ``abi`` console script.

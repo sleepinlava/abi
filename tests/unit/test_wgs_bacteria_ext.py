@@ -11,10 +11,9 @@ from abi.plugins.wgs_bacteria import (
     _compute_gc_content,
     _compute_n50,
     _parse_prokka,
-    _parse_spades,
     _parse_sample_sheet,
+    _parse_spades,
 )
-
 
 # ── build_sample_context(): missing sample_sheet → ValueError ─────────
 

@@ -139,7 +139,6 @@ class TestVolcano:
     def test_render_missing_x_column_raises(self) -> None:
         """Missing log2FoldChange column raises ValueError."""
         from abi.sciplot.renderers.plots.volcano_plot import plot_volcano
-
         from abi.sciplot.schema.palette_spec import PaletteRegistry
         from abi.sciplot.schema.theme_spec import ThemeSpec
 
@@ -167,7 +166,6 @@ class TestVolcano:
     def test_render_missing_y_column_raises(self) -> None:
         """Missing padj column raises ValueError."""
         from abi.sciplot.renderers.plots.volcano_plot import plot_volcano
-
         from abi.sciplot.schema.palette_spec import PaletteRegistry
         from abi.sciplot.schema.theme_spec import ThemeSpec
 
@@ -202,8 +200,8 @@ class TestVolcano:
         tsv = _make_synthetic_tsv(
             [
                 {"log2FoldChange": -3.0, "padj": 0.001},  # Down (both)
-                {"log2FoldChange": -0.5, "padj": 0.5},   # NS (both)
-                {"log2FoldChange": 1.5, "padj": 0.03},   # Up (default), NS (custom)
+                {"log2FoldChange": -0.5, "padj": 0.5},  # NS (both)
+                {"log2FoldChange": 1.5, "padj": 0.03},  # Up (default), NS (custom)
                 {"log2FoldChange": 2.5, "padj": 0.001},  # Up (both)
             ]
         )

@@ -210,9 +210,7 @@ class SampleInput:
         encounter an unrecognized platform string.
         """
         if v not in VALID_PLATFORMS:
-            raise ValueError(
-                f"Invalid platform {v!r}. Must be one of {sorted(VALID_PLATFORMS)}"
-            )
+            raise ValueError(f"Invalid platform {v!r}. Must be one of {sorted(VALID_PLATFORMS)}")
         return v
 
     def to_dict(self) -> Dict[str, Any]:

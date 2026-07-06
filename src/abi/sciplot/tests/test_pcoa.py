@@ -104,7 +104,6 @@ class TestPcoa:
     def test_render_less_than_two_samples_raises(self) -> None:
         """<2 unique samples → ValueError."""
         from abi.sciplot.renderers.plots.pcoa_plot import plot_pcoa_plot
-
         from abi.sciplot.schema.palette_spec import PaletteRegistry
         from abi.sciplot.schema.theme_spec import ThemeSpec
 
@@ -136,7 +135,6 @@ class TestPcoa:
     def test_render_missing_columns_raises(self) -> None:
         """Missing required columns → ValueError."""
         from abi.sciplot.renderers.plots.pcoa_plot import plot_pcoa_plot
-
         from abi.sciplot.schema.palette_spec import PaletteRegistry
         from abi.sciplot.schema.theme_spec import ThemeSpec
 

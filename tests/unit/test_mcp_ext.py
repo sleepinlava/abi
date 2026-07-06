@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import logging
-from unittest.mock import patch
 
 import pytest
 
 from abi.mcp.server import _register_mcp_tools
-
 
 # ── _validate_properties() non-dict metadata → return {} ───────────────
 
@@ -81,6 +79,7 @@ def test_register_mcp_tools_skips_tool_without_alias(monkeypatch) -> None:
             # Return a stub callable so getattr() never raises for aliased tools
             def _stub(**kwargs):
                 return str(kwargs)
+
             return _stub
 
     monkeypatch.setattr(tool_descriptors, "ABI_AGENT_TOOLS", fake_tools)

@@ -14,7 +14,6 @@ from abi.config_models import (
     RNASeqConfig,
 )
 
-
 # ── ExecutionConfig ──────────────────────────────────────────────────────────
 
 
@@ -72,14 +71,18 @@ class TestExecutionConfigCustom:
     """Custom values via constructor and model_validate."""
 
     def test_custom_via_constructor(self) -> None:
-        cfg = ExecutionConfig(parallel=True, workers=8, error_policy="continue", tool_timeout_seconds=30.0)
+        cfg = ExecutionConfig(
+            parallel=True, workers=8, error_policy="continue", tool_timeout_seconds=30.0
+        )
         assert cfg.parallel is True
         assert cfg.workers == 8
         assert cfg.error_policy == "continue"
         assert cfg.tool_timeout_seconds == 30.0
 
     def test_custom_via_model_validate(self) -> None:
-        cfg = ExecutionConfig.model_validate({"parallel": True, "workers": 16, "error_policy": "continue"})
+        cfg = ExecutionConfig.model_validate(
+            {"parallel": True, "workers": 16, "error_policy": "continue"}
+        )
         assert cfg.parallel is True
         assert cfg.workers == 16
 
@@ -184,19 +187,23 @@ class TestABIConfigFromDict:
         assert cfg.project_name == "ABI Analysis"
 
     def test_from_dict_with_fields(self) -> None:
-        cfg = ABIConfig.from_dict({
-            "project_name": "My Project",
-            "threads": 8,
-            "mode": "interactive",
-        })
+        cfg = ABIConfig.from_dict(
+            {
+                "project_name": "My Project",
+                "threads": 8,
+                "mode": "interactive",
+            }
+        )
         assert cfg.project_name == "My Project"
         assert cfg.threads == 8
         assert cfg.mode == "interactive"
 
     def test_from_dict_with_nested_execution(self) -> None:
-        cfg = ABIConfig.from_dict({
-            "execution": {"workers": 16, "error_policy": "continue"},
-        })
+        cfg = ABIConfig.from_dict(
+            {
+                "execution": {"workers": 16, "error_policy": "continue"},
+            }
+        )
         assert cfg.execution.workers == 16
         assert cfg.execution.error_policy == "continue"
 
@@ -234,10 +241,12 @@ class TestABIConfigToDictRoundTrip:
         assert rt.execution.error_policy == "continue"
 
     def test_round_trip_with_extra_fields(self) -> None:
-        original = ABIConfig.model_validate({
-            "project_name": "Test",
-            "custom_extra": "preserved",
-        })
+        original = ABIConfig.model_validate(
+            {
+                "project_name": "Test",
+                "custom_extra": "preserved",
+            }
+        )
         rt = ABIConfig.from_dict(original.to_dict())
         assert rt.model_extra == {"custom_extra": "preserved"}
 
@@ -251,9 +260,11 @@ class TestABIConfigModelValidate:
         assert cfg.threads == 12
 
     def test_model_validate_nested_dict(self) -> None:
-        cfg = ABIConfig.model_validate({
-            "execution": {"parallel": True, "workers": 8},
-        })
+        cfg = ABIConfig.model_validate(
+            {
+                "execution": {"parallel": True, "workers": 8},
+            }
+        )
         assert cfg.execution.parallel is True
         assert cfg.execution.workers == 8
 
@@ -393,11 +404,13 @@ class TestRNASeqConfigInheritance:
             RNASeqConfig(threads=0)
 
     def test_from_dict_works(self) -> None:
-        cfg = RNASeqConfig.from_dict({
-            "project_name": "RNA Study",
-            "threads": 16,
-            "log_dir": "custom_logs",
-        })
+        cfg = RNASeqConfig.from_dict(
+            {
+                "project_name": "RNA Study",
+                "threads": 16,
+                "log_dir": "custom_logs",
+            }
+        )
         assert cfg.project_name == "RNA Study"
         assert cfg.threads == 16
         assert cfg.log_dir == "custom_logs"
@@ -434,15 +447,19 @@ class TestRNASeqConfigModelValidate:
     """``model_validate()`` with plain dicts."""
 
     def test_model_validate_plain_dict(self) -> None:
-        cfg = RNASeqConfig.model_validate({
-            "project_name": "Via Dict",
-            "input": {"sample_sheet": "dict_samples.tsv"},
-        })
+        cfg = RNASeqConfig.model_validate(
+            {
+                "project_name": "Via Dict",
+                "input": {"sample_sheet": "dict_samples.tsv"},
+            }
+        )
         assert cfg.project_name == "Via Dict"
         assert cfg.input.sample_sheet == "dict_samples.tsv"
 
     def test_model_validate_nested_alignment(self) -> None:
-        cfg = RNASeqConfig.model_validate({
-            "alignment": {"tool": "bowtie2"},
-        })
+        cfg = RNASeqConfig.model_validate(
+            {
+                "alignment": {"tool": "bowtie2"},
+            }
+        )
         assert cfg.alignment.tool == "bowtie2"

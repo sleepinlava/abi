@@ -12,33 +12,33 @@ Covers:
 
 from __future__ import annotations
 
-import yaml
-import pytest
 from pathlib import Path
+
+import pytest
+import yaml
 
 from abi.dag_planner import (
     PathTemplateContext,
     UniversalDAG,
-    build_plan_from_dag,
     _resolve_input_path,
     _resolve_outputs,
     _resolve_script_path,
+    build_plan_from_dag,
 )
 from abi.schemas import ExecutionPlan, SampleContext, SampleInput
 
-
 # -- helpers --
 
-def _make_sample_context(sample_id="S1", platform="illumina",
-                         read1="S1_R1.fq", read2="S1_R2.fq"):
-    sample = SampleInput(sample_id=sample_id, platform=platform,
-                         read1=read1, read2=read2)
+
+def _make_sample_context(sample_id="S1", platform="illumina", read1="S1_R1.fq", read2="S1_R2.fq"):
+    sample = SampleInput(sample_id=sample_id, platform=platform, read1=read1, read2=read2)
     return SampleContext(samples=[sample], multi_sample=False, has_groups=False)
 
 
 # ====================================================================
 # 1. active_node_ids — unknown nodes in include_nodes
 # ====================================================================
+
 
 class TestActiveNodeIdsUnknownInclude:
     def test_raises_valueerror_on_unknown_include_nodes(self):
@@ -63,21 +63,25 @@ class TestActiveNodeIdsUnknownInclude:
             dag.active_node_ids("illumina", config)
 
     def test_valid_include_nodes_whitelist(self):
-        spec = {"nodes": {
-            "A": {"platforms": ["illumina"], "category": "qc"},
-            "B": {"platforms": ["illumina"], "category": "assembly"},
-            "C": {"platforms": ["illumina"], "category": "report"},
-        }}
+        spec = {
+            "nodes": {
+                "A": {"platforms": ["illumina"], "category": "qc"},
+                "B": {"platforms": ["illumina"], "category": "assembly"},
+                "C": {"platforms": ["illumina"], "category": "report"},
+            }
+        }
         dag = UniversalDAG(spec)
         config = {"workflow": {"include_nodes": ["A", "C"]}}
         result = dag.active_node_ids("illumina", config)
         assert result == ["A", "C"]
 
     def test_workflow_not_a_mapping_ignores_include(self):
-        spec = {"nodes": {
-            "A": {"platforms": ["illumina"], "category": "qc"},
-            "B": {"platforms": ["illumina"], "category": "assembly"},
-        }}
+        spec = {
+            "nodes": {
+                "A": {"platforms": ["illumina"], "category": "qc"},
+                "B": {"platforms": ["illumina"], "category": "assembly"},
+            }
+        }
         dag = UniversalDAG(spec)
         config = {"workflow": "not-a-dict"}
         result = dag.active_node_ids("illumina", config)
@@ -88,27 +92,44 @@ class TestActiveNodeIdsUnknownInclude:
 # 2. _category_enabled — optional node, no config block
 # ====================================================================
 
+
 class TestCategoryEnabledOptionalNoConfig:
     def test_optional_node_no_config_block_returns_false(self):
-        spec = {"nodes": {"opt": {
-            "platforms": ["illumina"], "category": "nonexistent", "optional": True,
-        }}}
+        spec = {
+            "nodes": {
+                "opt": {
+                    "platforms": ["illumina"],
+                    "category": "nonexistent",
+                    "optional": True,
+                }
+            }
+        }
         dag = UniversalDAG(spec)
         result = dag._category_enabled({}, "nonexistent", "opt")
         assert result is False
 
     def test_empty_node_id_no_config_block_returns_true(self):
-        spec = {"nodes": {"req": {
-            "platforms": ["illumina"], "category": "nonexistent",
-        }}}
+        spec = {
+            "nodes": {
+                "req": {
+                    "platforms": ["illumina"],
+                    "category": "nonexistent",
+                }
+            }
+        }
         dag = UniversalDAG(spec)
         result = dag._category_enabled({}, "nonexistent", "")
         assert result is True
 
     def test_required_node_no_config_block_returns_true(self):
-        spec = {"nodes": {"req": {
-            "platforms": ["illumina"], "category": "nonexistent",
-        }}}
+        spec = {
+            "nodes": {
+                "req": {
+                    "platforms": ["illumina"],
+                    "category": "nonexistent",
+                }
+            }
+        }
         dag = UniversalDAG(spec)
         result = dag._category_enabled({}, "nonexistent", "req")
         assert result is True
@@ -118,33 +139,48 @@ class TestCategoryEnabledOptionalNoConfig:
 # 3. resolve_dependencies — unresolvable deps error
 # ====================================================================
 
+
 class TestResolveDependenciesUnresolvable:
     def test_required_node_inactive_dep_no_fallback_raises(self):
-        spec = {"nodes": {
-            "A": {"platforms": ["illumina"], "category": "qc"},
-            "B": {"platforms": ["illumina"], "category": "assembly", "depends_on": ["A"]},
-        }}
+        spec = {
+            "nodes": {
+                "A": {"platforms": ["illumina"], "category": "qc"},
+                "B": {"platforms": ["illumina"], "category": "assembly", "depends_on": ["A"]},
+            }
+        }
         dag = UniversalDAG(spec)
         with pytest.raises(ValueError, match="none are active and no fallbacks are available"):
             dag.resolve_dependencies(["B"], platform="illumina")
 
     def test_optional_node_inactive_dep_succeeds(self):
-        spec = {"nodes": {
-            "A": {"platforms": ["illumina"], "category": "qc"},
-            "B": {"platforms": ["illumina"], "category": "assembly",
-                  "depends_on": ["A"], "optional": True},
-        }}
+        spec = {
+            "nodes": {
+                "A": {"platforms": ["illumina"], "category": "qc"},
+                "B": {
+                    "platforms": ["illumina"],
+                    "category": "assembly",
+                    "depends_on": ["A"],
+                    "optional": True,
+                },
+            }
+        }
         dag = UniversalDAG(spec)
         result = dag.resolve_dependencies(["B"], platform="illumina")
         assert result == {"B": []}
 
     def test_active_fallback_resolves(self):
-        spec = {"nodes": {
-            "A": {"platforms": ["illumina"], "category": "qc"},
-            "B": {"platforms": ["illumina"], "category": "assembly"},
-            "C": {"platforms": ["illumina"], "category": "reporting",
-                  "depends_on": ["A"], "fallback_depends": ["B"]},
-        }}
+        spec = {
+            "nodes": {
+                "A": {"platforms": ["illumina"], "category": "qc"},
+                "B": {"platforms": ["illumina"], "category": "assembly"},
+                "C": {
+                    "platforms": ["illumina"],
+                    "category": "reporting",
+                    "depends_on": ["A"],
+                    "fallback_depends": ["B"],
+                },
+            }
+        }
         dag = UniversalDAG(spec)
         result = dag.resolve_dependencies(["B", "C"], platform="illumina")
         assert result["C"] == ["B"]
@@ -154,6 +190,7 @@ class TestResolveDependenciesUnresolvable:
 # 4. _resolve_script_path — plugin_root with scripts/
 # ====================================================================
 
+
 class TestResolveScriptPathPluginRoot:
     def test_plugin_root_scripts_dir_resolves_script(self, tmp_path):
         scripts_dir = tmp_path / "scripts"
@@ -161,10 +198,7 @@ class TestResolveScriptPathPluginRoot:
         script_file = scripts_dir / "my_unique_test_script.py"
         script_file.write_text("# test script")
 
-        result = _resolve_script_path(
-            "my_unique_test_script_script", "",
-            plugin_root=str(tmp_path)
-        )
+        result = _resolve_script_path("my_unique_test_script_script", "", plugin_root=str(tmp_path))
         assert "my_unique_test_script.py" in result
         assert str(script_file.resolve()) in result or Path(result).is_file()
 
@@ -174,8 +208,7 @@ class TestResolveScriptPathPluginRoot:
         (scripts_dir / "my_unique_r_test_script.R").write_text("# R script")
 
         result = _resolve_script_path(
-            "my_unique_r_test_script_script", "",
-            plugin_root=str(tmp_path)
+            "my_unique_r_test_script_script", "", plugin_root=str(tmp_path)
         )
         assert "my_unique_r_test_script.R" in result
         assert Path(result).is_file()
@@ -185,9 +218,7 @@ class TestResolveScriptPathPluginRoot:
         scripts_dir.mkdir()
         (scripts_dir / "unrelated.py").write_text("# unrelated")
 
-        result = _resolve_script_path(
-            "diversity_script", "", plugin_root=str(tmp_path)
-        )
+        result = _resolve_script_path("diversity_script", "", plugin_root=str(tmp_path))
         assert "amplicon_diversity.py" in result
         assert Path(result).is_file()
 
@@ -198,8 +229,7 @@ class TestResolveScriptPathPluginRoot:
         plugin_script.write_text("# plugin script")
 
         result = _resolve_script_path(
-            "zmqf_unique_name_script_script", "",
-            plugin_root=str(tmp_path)
+            "zmqf_unique_name_script_script", "", plugin_root=str(tmp_path)
         )
         assert str(plugin_script.resolve()) in result or Path(result).is_file()
         assert "zmqf_unique_name_script.py" in result
@@ -209,32 +239,38 @@ class TestResolveScriptPathPluginRoot:
 # 5. _resolve_input_path — template resolution (extended)
 # ====================================================================
 
+
 class TestResolveInputPathExtended:
     def test_template_with_outdir(self):
         result = _resolve_input_path(
             "{outdir}/results/file.txt",
-            {"outdir": "/output"}, None,
+            {"outdir": "/output"},
+            None,
         )
         assert result == "/output/results/file.txt"
 
     def test_template_with_sample_id(self):
         sample = SampleInput(sample_id="S1", platform="illumina")
         result = _resolve_input_path(
-            "{sample_id}_report.html", {"outdir": "/tmp"}, sample,
+            "{sample_id}_report.html",
+            {"outdir": "/tmp"},
+            sample,
         )
         assert result == "S1_report.html"
 
     def test_template_with_category_dir(self):
         result = _resolve_input_path(
             "{outdir}/{category_dir}/file.txt",
-            {"outdir": "/out"}, None,
+            {"outdir": "/out"},
+            None,
         )
         assert result == "/out//file.txt"
 
     def test_template_with_config_level_vars(self):
         result = _resolve_input_path(
             "{threads}_{mode}/input.fq",
-            {"outdir": "/out", "threads": 8, "mode": "auto"}, None,
+            {"outdir": "/out", "threads": 8, "mode": "auto"},
+            None,
         )
         assert result == "8_auto/input.fq"
 
@@ -255,53 +291,81 @@ class TestResolveInputPathExtended:
 # 6. _resolve_outputs — non-Mapping spec skip
 # ====================================================================
 
+
 class TestResolveOutputs:
     def test_non_mapping_output_skipped_with_string(self):
-        spec = {"nodes": {"qc": {
-            "platforms": ["illumina"], "category": "qc",
-            "outputs": {"clean": "raw_string", "output_dir": {"path": "{outdir}/qc"}},
-        }}}
+        spec = {
+            "nodes": {
+                "qc": {
+                    "platforms": ["illumina"],
+                    "category": "qc",
+                    "outputs": {"clean": "raw_string", "output_dir": {"path": "{outdir}/qc"}},
+                }
+            }
+        }
         dag = UniversalDAG(spec)
         ctx = PathTemplateContext(config={"outdir": "/out"})
         resolved = _resolve_outputs(dag, "qc", ctx)
         assert resolved["clean"] == "raw_string"
 
     def test_non_mapping_output_with_int(self):
-        spec = {"nodes": {"qc": {
-            "platforms": ["illumina"], "category": "qc",
-            "outputs": {"threads": 4, "output_dir": {"path": "{outdir}/qc"}},
-        }}}
+        spec = {
+            "nodes": {
+                "qc": {
+                    "platforms": ["illumina"],
+                    "category": "qc",
+                    "outputs": {"threads": 4, "output_dir": {"path": "{outdir}/qc"}},
+                }
+            }
+        }
         dag = UniversalDAG(spec)
         ctx = PathTemplateContext(config={"outdir": "/out"})
         resolved = _resolve_outputs(dag, "qc", ctx)
         assert resolved["threads"] == 4
 
     def test_path_template_resolved(self):
-        spec = {"nodes": {"assembly": {
-            "platforms": ["illumina"], "category": "assembly",
-            "outputs": {"contigs": {"path": "{outdir}/{category_dir}/contigs.fa"}},
-        }}}
+        spec = {
+            "nodes": {
+                "assembly": {
+                    "platforms": ["illumina"],
+                    "category": "assembly",
+                    "outputs": {"contigs": {"path": "{outdir}/{category_dir}/contigs.fa"}},
+                }
+            }
+        }
         dag = UniversalDAG(spec)
-        ctx = PathTemplateContext(config={"outdir": "/out"}, sample=None, category_dir="02_assembly")
+        ctx = PathTemplateContext(
+            config={"outdir": "/out"}, sample=None, category_dir="02_assembly"
+        )
         resolved = _resolve_outputs(dag, "assembly", ctx)
         assert resolved["contigs"] == "/out/02_assembly/contigs.fa"
         assert resolved["output_dir"] == "/out/02_assembly"
 
     def test_output_without_path_defaults_empty(self):
-        spec = {"nodes": {"qc": {
-            "platforms": ["illumina"], "category": "qc",
-            "outputs": {"clean": {}, "output_dir": {"path": "{outdir}/qc"}},
-        }}}
+        spec = {
+            "nodes": {
+                "qc": {
+                    "platforms": ["illumina"],
+                    "category": "qc",
+                    "outputs": {"clean": {}, "output_dir": {"path": "{outdir}/qc"}},
+                }
+            }
+        }
         dag = UniversalDAG(spec)
         ctx = PathTemplateContext(config={"outdir": "/out"})
         resolved = _resolve_outputs(dag, "qc", ctx)
         assert resolved["clean"] == ""
 
     def test_output_dir_default_with_sample_id(self):
-        spec = {"nodes": {"qc": {
-            "platforms": ["illumina"], "category": "qc",
-            "outputs": {"clean": {"path": "{outdir}/qc/clean.fq"}},
-        }}}
+        spec = {
+            "nodes": {
+                "qc": {
+                    "platforms": ["illumina"],
+                    "category": "qc",
+                    "outputs": {"clean": {"path": "{outdir}/qc/clean.fq"}},
+                }
+            }
+        }
         dag = UniversalDAG(spec)
         sample = SampleInput(sample_id="S1", platform="illumina")
         ctx = PathTemplateContext(config={"outdir": "/out"}, sample=sample, category_dir="01_qc")
@@ -320,16 +384,21 @@ class TestResolveOutputs:
 # 7. build_plan_from_dag — integration
 # ====================================================================
 
+
 class TestBuildPlanFromDag:
     def test_per_sample_node_generates_steps(self, tmp_path):
         dag_yaml = {
-            "pipeline_id": "test", "platforms": ["illumina"],
+            "pipeline_id": "test",
+            "platforms": ["illumina"],
             "category_dirs": {"qc": "01_qc"},
-            "nodes": {"qc": {
-                "scope": "per_sample", "category": "qc",
-                "platforms": ["illumina"],
-                "outputs": {"clean": {"path": "{outdir}/{category_dir}/clean.fq"}},
-            }},
+            "nodes": {
+                "qc": {
+                    "scope": "per_sample",
+                    "category": "qc",
+                    "platforms": ["illumina"],
+                    "outputs": {"clean": {"path": "{outdir}/{category_dir}/clean.fq"}},
+                }
+            },
         }
         dag_path = tmp_path / "pipeline_dag.yaml"
         dag_path.write_text(yaml.dump(dag_yaml))
@@ -341,18 +410,24 @@ class TestBuildPlanFromDag:
 
     def test_multiple_per_sample_nodes_in_order(self, tmp_path):
         dag_yaml = {
-            "pipeline_id": "test_chain", "platforms": ["illumina"],
+            "pipeline_id": "test_chain",
+            "platforms": ["illumina"],
             "category_dirs": {"qc": "01_qc", "assembly": "02_assembly"},
             "nodes": {
                 "qc": {
-                    "scope": "per_sample", "category": "qc",
+                    "scope": "per_sample",
+                    "category": "qc",
                     "platforms": ["illumina"],
                     "outputs": {"clean": {"path": "{outdir}/{category_dir}/{sample_id}/clean.fq"}},
                 },
                 "assembly": {
-                    "scope": "per_sample", "category": "assembly",
-                    "platforms": ["illumina"], "depends_on": ["qc"],
-                    "outputs": {"contigs": {"path": "{outdir}/{category_dir}/{sample_id}/contigs.fa"}},
+                    "scope": "per_sample",
+                    "category": "assembly",
+                    "platforms": ["illumina"],
+                    "depends_on": ["qc"],
+                    "outputs": {
+                        "contigs": {"path": "{outdir}/{category_dir}/{sample_id}/contigs.fa"}
+                    },
                 },
             },
         }
@@ -369,12 +444,16 @@ class TestBuildPlanFromDag:
 
     def test_no_nodes_match_platform_returns_plan(self, tmp_path):
         dag_yaml = {
-            "pipeline_id": "test_ont", "platforms": ["ont"],
-            "nodes": {"qc": {
-                "scope": "per_sample", "category": "qc",
-                "platforms": ["ont"],
-                "outputs": {"clean": {"path": "{outdir}/qc/clean.fq"}},
-            }},
+            "pipeline_id": "test_ont",
+            "platforms": ["ont"],
+            "nodes": {
+                "qc": {
+                    "scope": "per_sample",
+                    "category": "qc",
+                    "platforms": ["ont"],
+                    "outputs": {"clean": {"path": "{outdir}/qc/clean.fq"}},
+                }
+            },
         }
         dag_path = tmp_path / "pipeline_dag.yaml"
         dag_path.write_text(yaml.dump(dag_yaml))
@@ -384,18 +463,23 @@ class TestBuildPlanFromDag:
 
     def test_cross_sample_node_generates_step(self, tmp_path):
         dag_yaml = {
-            "pipeline_id": "test_cross", "platforms": ["illumina"],
+            "pipeline_id": "test_cross",
+            "platforms": ["illumina"],
             "category_dirs": {"qc": "01_qc", "report": "05_report"},
             "nodes": {
                 "qc": {
-                    "scope": "per_sample", "category": "qc",
+                    "scope": "per_sample",
+                    "category": "qc",
                     "platforms": ["illumina"],
                     "outputs": {"clean": {"path": "{outdir}/{category_dir}/{sample_id}/clean.fq"}},
                 },
                 "summary": {
-                    "scope": "cross_sample", "category": "report",
+                    "scope": "cross_sample",
+                    "category": "report",
                     "platforms": ["illumina"],
-                    "inputs": {"qc_outs": {"aggregate": "per_sample_outputs", "source": "qc.clean"}},
+                    "inputs": {
+                        "qc_outs": {"aggregate": "per_sample_outputs", "source": "qc.clean"}
+                    },
                     "outputs": {"report": {"path": "{outdir}/{category_dir}/summary.html"}},
                 },
             },
@@ -410,12 +494,16 @@ class TestBuildPlanFromDag:
 
     def test_execution_plan_metadata(self, tmp_path):
         dag_yaml = {
-            "pipeline_id": "test_meta", "platforms": ["illumina"],
-            "nodes": {"qc": {
-                "scope": "per_sample", "category": "qc",
-                "platforms": ["illumina"],
-                "outputs": {"clean": {"path": "{outdir}/qc/clean.fq"}},
-            }},
+            "pipeline_id": "test_meta",
+            "platforms": ["illumina"],
+            "nodes": {
+                "qc": {
+                    "scope": "per_sample",
+                    "category": "qc",
+                    "platforms": ["illumina"],
+                    "outputs": {"clean": {"path": "{outdir}/qc/clean.fq"}},
+                }
+            },
         }
         dag_path = tmp_path / "pipeline_dag.yaml"
         dag_path.write_text(yaml.dump(dag_yaml))
@@ -428,17 +516,21 @@ class TestBuildPlanFromDag:
 
     def test_include_nodes_filters_steps(self, tmp_path):
         dag_yaml = {
-            "pipeline_id": "test_filter", "platforms": ["illumina"],
+            "pipeline_id": "test_filter",
+            "platforms": ["illumina"],
             "category_dirs": {"qc": "01_qc", "assembly": "02_assembly"},
             "nodes": {
                 "qc": {
-                    "scope": "per_sample", "category": "qc",
+                    "scope": "per_sample",
+                    "category": "qc",
                     "platforms": ["illumina"],
                     "outputs": {"clean": {"path": "{outdir}/qc/clean.fq"}},
                 },
                 "assembly": {
-                    "scope": "per_sample", "category": "assembly",
-                    "platforms": ["illumina"], "depends_on": ["qc"],
+                    "scope": "per_sample",
+                    "category": "assembly",
+                    "platforms": ["illumina"],
+                    "depends_on": ["qc"],
                     "outputs": {"contigs": {"path": "{outdir}/assembly/conts.fa"}},
                 },
             },
@@ -455,6 +547,7 @@ class TestBuildPlanFromDag:
 # ====================================================================
 # 8. PathTemplateContext with upstream_outputs
 # ====================================================================
+
 
 class TestPathTemplateContextUpstream:
     def test_upstream_outputs_context_keys(self):
@@ -492,6 +585,7 @@ class TestPathTemplateContextUpstream:
 # 9. Edge cases
 # ====================================================================
 
+
 class TestEdgeCases:
     def test_from_yaml_file_not_found(self, tmp_path):
         with pytest.raises(FileNotFoundError, match="not found"):
@@ -508,20 +602,24 @@ class TestEdgeCases:
             UniversalDAG({})
 
     def test_topological_order_preserves_level_order(self):
-        spec = {"nodes": {
-            "Z": {"platforms": ["illumina"], "category": "z"},
-            "A": {"platforms": ["illumina"], "category": "a"},
-            "B": {"platforms": ["illumina"], "category": "b"},
-        }}
+        spec = {
+            "nodes": {
+                "Z": {"platforms": ["illumina"], "category": "z"},
+                "A": {"platforms": ["illumina"], "category": "a"},
+                "B": {"platforms": ["illumina"], "category": "b"},
+            }
+        }
         dag = UniversalDAG(spec)
         order = dag.topological_order(["Z", "A", "B"])
         assert order == ["Z", "A", "B"]
 
     def test_topological_order_with_resolved_edges(self):
-        spec = {"nodes": {
-            "A": {"platforms": ["illumina"], "category": "a"},
-            "B": {"platforms": ["illumina"], "category": "b", "depends_on": ["A"]},
-        }}
+        spec = {
+            "nodes": {
+                "A": {"platforms": ["illumina"], "category": "a"},
+                "B": {"platforms": ["illumina"], "category": "b", "depends_on": ["A"]},
+            }
+        }
         dag = UniversalDAG(spec)
         order = dag.topological_order({"B": ["A"], "A": []})
         assert order == ["A", "B"]

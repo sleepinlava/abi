@@ -65,6 +65,7 @@ for _k in _EXPECTED_PLOT_KEYS:
 
 # ── Helper: build a minimal FigureSpec for a given type / 最简 FigureSpec ─────
 
+
 def _make_minimal_fig_spec(
     tmp_path: Path,
     figure_type: str,
@@ -135,15 +136,19 @@ def test_all_plot_functions_accept_correct_signature() -> None:
         params = list(sig.parameters.values())
 
         # Count parameters excluding positional-only separator and *args/**kwargs
-        named = [p for p in params if p.kind in (
-            inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            inspect.Parameter.KEYWORD_ONLY,
-        )]
+        named = [
+            p
+            for p in params
+            if p.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            )
+        ]
 
         assert len(named) == 5, (
-            f"'{key}' has {len(named)} named parameters, expected 5. "
-            f"Signature: {sig}"
+            f"'{key}' has {len(named)} named parameters, expected 5. Signature: {sig}"
         )
 
         expected_names = ["spec", "data", "ax", "palette", "theme"]
@@ -196,59 +201,89 @@ def _register(
 _register(
     "barplot", ["label", "value"], [["A", 1], ["B", 2], ["C", 3]], {"x": "label", "y": "value"}
 )
-_register("boxplot_with_points", ["group", "value"],
-          [["A", 1.0], ["A", 2.0], ["B", 3.0], ["B", 4.0], ["C", 5.0]],
-          {"x": "group", "y": "value"})
-_register("violin_with_box", ["group", "value"],
-          [["A", 1.0], ["A", 2.0], ["B", 3.0], ["B", 4.0], ["C", 5.0]],
-          {"x": "group", "y": "value"})
-_register("scatterplot", ["x", "y"],
-          [[1, 2], [2, 4], [3, 6], [4, 8], [5, 10]],
-          {"x": "x", "y": "y"})
-_register("ordination_plot", ["sample", "PC1", "PC2", "group"],
-          [["S1", 1.0, 2.0, "A"], ["S2", 2.0, 4.0, "B"], ["S3", 3.0, 6.0, "A"]],
-          {"x": "sample", "hue": "group"})
-_register("stacked_barplot", ["sample", "value1", "value2"],
-          [["S1", 10, 20], ["S2", 15, 25]],
-          {"x": "sample"})
-_register("heatmap", ["sample", "col1", "col2"],
-          [["S1", 1.0, 2.0], ["S2", 3.0, 4.0]],
-          {"x": "sample"})
-_register("lineplot", ["x", "y"],
-          [[1, 2], [2, 4], [3, 6], [4, 8], [5, 10]],
-          {"x": "x", "y": "y"})
+_register(
+    "boxplot_with_points",
+    ["group", "value"],
+    [["A", 1.0], ["A", 2.0], ["B", 3.0], ["B", 4.0], ["C", 5.0]],
+    {"x": "group", "y": "value"},
+)
+_register(
+    "violin_with_box",
+    ["group", "value"],
+    [["A", 1.0], ["A", 2.0], ["B", 3.0], ["B", 4.0], ["C", 5.0]],
+    {"x": "group", "y": "value"},
+)
+_register(
+    "scatterplot", ["x", "y"], [[1, 2], [2, 4], [3, 6], [4, 8], [5, 10]], {"x": "x", "y": "y"}
+)
+_register(
+    "ordination_plot",
+    ["sample", "PC1", "PC2", "group"],
+    [["S1", 1.0, 2.0, "A"], ["S2", 2.0, 4.0, "B"], ["S3", 3.0, 6.0, "A"]],
+    {"x": "sample", "hue": "group"},
+)
+_register(
+    "stacked_barplot",
+    ["sample", "value1", "value2"],
+    [["S1", 10, 20], ["S2", 15, 25]],
+    {"x": "sample"},
+)
+_register(
+    "heatmap", ["sample", "col1", "col2"], [["S1", 1.0, 2.0], ["S2", 3.0, 4.0]], {"x": "sample"}
+)
+_register("lineplot", ["x", "y"], [[1, 2], [2, 4], [3, 6], [4, 8], [5, 10]], {"x": "x", "y": "y"})
 
 # -- Volcano plot: 100 rows of random differential expression --
 _volc_rng = np.random.default_rng(99)
-_volc_data = pd.DataFrame({
-    "gene_id": [f"GENE_{i:04d}" for i in range(100)],
-    "log2FoldChange": _volc_rng.normal(0, 1.5, size=100),
-    "padj": 10 ** _volc_rng.uniform(-3, 0, size=100),
-})
+_volc_data = pd.DataFrame(
+    {
+        "gene_id": [f"GENE_{i:04d}" for i in range(100)],
+        "log2FoldChange": _volc_rng.normal(0, 1.5, size=100),
+        "padj": 10 ** _volc_rng.uniform(-3, 0, size=100),
+    }
+)
 _SPEC_DATA_DISPATCH["volcano_plot"] = (
     _volc_data,
     {"x": "log2FoldChange", "y": "padj", "label": "gene_id"},
 )
 
 # -- Biological-grade plot types --
-_register("phylum_stacked_bar", ["sample_id", "phylum", "abundance"],
-          [["S1", "P1", 8], ["S1", "P2", 2], ["S2", "P1", 3], ["S2", "P2", 7]],
-          {"x": "sample_id", "y": "abundance", "hue": "phylum"})
-_register("genus_heatmap", ["sample_id", "genus", "abundance"],
-          [["S1", "G1", 8], ["S2", "G1", 2], ["S1", "G2", 3], ["S2", "G2", 7]],
-          {"x": "sample_id", "y": "abundance"})
-_register("pcoa_plot", ["sample_a", "sample_b", "distance"],
-          [["a", "b", 0.5], ["a", "c", 0.3], ["b", "c", 0.4]],
-          {})
-_register("differential_volcano", ["feature", "log2fc", "padj"],
-          [["A", 2.0, 0.01], ["B", -2.0, 0.02], ["C", 0.0, 0.8]],
-          {"x": "log2fc", "y": "padj", "label": "feature"})
-_register("alpha_stats_boxplot", ["sample_id", "shannon", "group"],
-          [["S1", 1.0, "A"], ["S2", 1.2, "A"], ["S3", 2.0, "B"], ["S4", 2.2, "B"]],
-          {"x": "sample_id", "y": "shannon", "hue": "group"})
-_register("phylogenetic_heatmap", ["sample_id", "asv_id", "abundance"],
-          [["S1", "A", 3], ["S2", "A", 4], ["S1", "B", 8], ["S2", "B", 2]],
-          {"x": "sample_id", "y": "abundance", "label": "asv_id"})
+_register(
+    "phylum_stacked_bar",
+    ["sample_id", "phylum", "abundance"],
+    [["S1", "P1", 8], ["S1", "P2", 2], ["S2", "P1", 3], ["S2", "P2", 7]],
+    {"x": "sample_id", "y": "abundance", "hue": "phylum"},
+)
+_register(
+    "genus_heatmap",
+    ["sample_id", "genus", "abundance"],
+    [["S1", "G1", 8], ["S2", "G1", 2], ["S1", "G2", 3], ["S2", "G2", 7]],
+    {"x": "sample_id", "y": "abundance"},
+)
+_register(
+    "pcoa_plot",
+    ["sample_a", "sample_b", "distance"],
+    [["a", "b", 0.5], ["a", "c", 0.3], ["b", "c", 0.4]],
+    {},
+)
+_register(
+    "differential_volcano",
+    ["feature", "log2fc", "padj"],
+    [["A", 2.0, 0.01], ["B", -2.0, 0.02], ["C", 0.0, 0.8]],
+    {"x": "log2fc", "y": "padj", "label": "feature"},
+)
+_register(
+    "alpha_stats_boxplot",
+    ["sample_id", "shannon", "group"],
+    [["S1", 1.0, "A"], ["S2", 1.2, "A"], ["S3", 2.0, "B"], ["S4", 2.2, "B"]],
+    {"x": "sample_id", "y": "shannon", "hue": "group"},
+)
+_register(
+    "phylogenetic_heatmap",
+    ["sample_id", "asv_id", "abundance"],
+    [["S1", "A", 3], ["S2", "A", 4], ["S1", "B", 8], ["S2", "B", 2]],
+    {"x": "sample_id", "y": "abundance", "label": "asv_id"},
+)
 
 
 @pytest.mark.skipif(not HAS_MPL, reason="matplotlib is not installed")

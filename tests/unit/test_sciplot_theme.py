@@ -7,8 +7,8 @@ import yaml
 
 from abi.sciplot.schema.theme_spec import ThemeSpec
 
-
 # ── from_yaml ────────────────────────────────────────────────────────────
+
 
 def test_from_yaml_happy_path(tmp_path):
     """Load a ThemeSpec from a valid YAML file with all sections."""
@@ -88,6 +88,7 @@ def test_from_yaml_minimal_valid(tmp_path):
 
 
 # ── to_matplotlib_rcparams ──────────────────────────────────────────────
+
 
 def test_to_matplotlib_rcparams_full_dict():
     """Verify all expected rcParams keys and their values from a ThemeSpec."""

@@ -14,10 +14,8 @@ from unittest.mock import patch
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 import pandas as pd
-import pytest
 
 from abi.sciplot.renderers import RenderResult
 from abi.sciplot.renderers.matplotlib_renderer import MatplotlibRenderer
@@ -34,7 +32,6 @@ from abi.sciplot.schema.palette_spec import PaletteRegistry
 from abi.sciplot.schema.theme_spec import ThemeSpec
 
 from .conftest import make_minimal_fig_spec
-
 
 # ── Thread-local storage for capturing axes during render() ──────────────
 
@@ -237,9 +234,7 @@ class TestRenderWithLabels:
         assert ax.get_xlabel() == "Category Axis", (
             f"Expected 'Category Axis', got '{ax.get_xlabel()}'"
         )
-        assert ax.get_ylabel() == "Value Axis", (
-            f"Expected 'Value Axis', got '{ax.get_ylabel()}'"
-        )
+        assert ax.get_ylabel() == "Value Axis", f"Expected 'Value Axis', got '{ax.get_ylabel()}'"
 
 
 class TestRenderWithHue:

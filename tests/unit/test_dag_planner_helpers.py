@@ -14,8 +14,8 @@ from abi.dag_planner import (
 )
 from abi.schemas import SampleInput
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────
+
 
 def _make_minimal_dag() -> UniversalDAG:
     """Build a minimal UniversalDAG with 3 nodes across two platforms."""
@@ -65,33 +65,23 @@ class TestDetectPlatform:
         assert detect_platform(sample) == "pacbio_hifi"
 
     def test_pacbio_by_long_reads_filename(self):
-        sample = SampleInput(
-            sample_id="S1", platform="generic", long_reads="pacbio.fastq"
-        )
+        sample = SampleInput(sample_id="S1", platform="generic", long_reads="pacbio.fastq")
         assert detect_platform(sample) == "pacbio_hifi"
 
     def test_ont_by_long_reads(self):
-        sample = SampleInput(
-            sample_id="S1", platform="generic", long_reads="ont_reads.fastq"
-        )
+        sample = SampleInput(sample_id="S1", platform="generic", long_reads="ont_reads.fastq")
         assert detect_platform(sample) == "ont"
 
     def test_illumina_paired_end(self):
-        sample = SampleInput(
-            sample_id="S1", platform="generic", read1="R1.fq", read2="R2.fq"
-        )
+        sample = SampleInput(sample_id="S1", platform="generic", read1="R1.fq", read2="R2.fq")
         assert detect_platform(sample) == "illumina"
 
     def test_illumina_single_end(self):
-        sample = SampleInput(
-            sample_id="S1", platform="generic", read1="R1.fq"
-        )
+        sample = SampleInput(sample_id="S1", platform="generic", read1="R1.fq")
         assert detect_platform(sample) == "illumina"
 
     def test_assembly_only(self):
-        sample = SampleInput(
-            sample_id="S1", platform="generic", assembly="contigs.fasta"
-        )
+        sample = SampleInput(sample_id="S1", platform="generic", assembly="contigs.fasta")
         assert detect_platform(sample) == "assembly"
 
     def test_default_illumina_no_inputs(self):
@@ -147,118 +137,175 @@ class TestUniversalDAGProperties:
 
 class TestEvaluateCondition:
     def test_value_equals_match(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "mode", "operator": "value", "value": "auto"},
-            {"mode": "auto"},
-        ) is True
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "mode", "operator": "value", "value": "auto"},
+                {"mode": "auto"},
+            )
+            is True
+        )
 
     def test_value_equals_no_match(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "mode", "operator": "value", "value": "interactive"},
-            {"mode": "auto"},
-        ) is False
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "mode", "operator": "value", "value": "interactive"},
+                {"mode": "auto"},
+            )
+            is False
+        )
 
     def test_not_empty_with_non_empty_string(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "name", "operator": "not_empty"},
-            {"name": "hello"},
-        ) is True
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "name", "operator": "not_empty"},
+                {"name": "hello"},
+            )
+            is True
+        )
 
     def test_not_empty_with_whitespace_string(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "name", "operator": "not_empty"},
-            {"name": "   "},
-        ) is False
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "name", "operator": "not_empty"},
+                {"name": "   "},
+            )
+            is False
+        )
 
     def test_not_empty_with_non_empty_list(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "items", "operator": "not_empty"},
-            {"items": [1, 2, 3]},
-        ) is True
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "items", "operator": "not_empty"},
+                {"items": [1, 2, 3]},
+            )
+            is True
+        )
 
     def test_not_empty_with_empty_list(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "items", "operator": "not_empty"},
-            {"items": []},
-        ) is False
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "items", "operator": "not_empty"},
+                {"items": []},
+            )
+            is False
+        )
 
     def test_not_empty_with_non_empty_dict(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "cfg", "operator": "not_empty"},
-            {"cfg": {"a": 1}},
-        ) is True
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "cfg", "operator": "not_empty"},
+                {"cfg": {"a": 1}},
+            )
+            is True
+        )
 
     def test_not_empty_with_empty_dict(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "cfg", "operator": "not_empty"},
-            {"cfg": {}},
-        ) is False
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "cfg", "operator": "not_empty"},
+                {"cfg": {}},
+            )
+            is False
+        )
 
     def test_not_empty_with_none_value(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "name", "operator": "not_empty"},
-            {"name": None},
-        ) is False
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "name", "operator": "not_empty"},
+                {"name": None},
+            )
+            is False
+        )
 
     def test_not_empty_with_missing_field(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "missing", "operator": "not_empty"},
-            {},
-        ) is False
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "missing", "operator": "not_empty"},
+                {},
+            )
+            is False
+        )
 
     def test_list_contains_match(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "platforms", "operator": "list_contains", "value": "illumina"},
-            {"platforms": ["illumina", "ont"]},
-        ) is True
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "platforms", "operator": "list_contains", "value": "illumina"},
+                {"platforms": ["illumina", "ont"]},
+            )
+            is True
+        )
 
     def test_list_contains_no_match(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "platforms", "operator": "list_contains", "value": "pacbio"},
-            {"platforms": ["illumina", "ont"]},
-        ) is False
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "platforms", "operator": "list_contains", "value": "pacbio"},
+                {"platforms": ["illumina", "ont"]},
+            )
+            is False
+        )
 
     def test_list_contains_with_string_value(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "mode", "operator": "list_contains", "value": "auto"},
-            {"mode": "auto"},
-        ) is True
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "mode", "operator": "list_contains", "value": "auto"},
+                {"mode": "auto"},
+            )
+            is True
+        )
 
     def test_list_contains_with_string_value_no_match(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "mode", "operator": "list_contains", "value": "interactive"},
-            {"mode": "auto"},
-        ) is False
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "mode", "operator": "list_contains", "value": "interactive"},
+                {"mode": "auto"},
+            )
+            is False
+        )
 
     def test_list_contains_non_list_non_string(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "num", "operator": "list_contains", "value": 5},
-            {"num": 5},
-        ) is False
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "num", "operator": "list_contains", "value": 5},
+                {"num": 5},
+            )
+            is False
+        )
 
     def test_unknown_operator_returns_false(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "mode", "operator": "bogus_operator", "value": "auto"},
-            {"mode": "auto"},
-        ) is False
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "mode", "operator": "bogus_operator", "value": "auto"},
+                {"mode": "auto"},
+            )
+            is False
+        )
 
     def test_default_operator_is_value(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "mode", "value": "auto"},
-            {"mode": "auto"},
-        ) is True
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "mode", "value": "auto"},
+                {"mode": "auto"},
+            )
+            is True
+        )
 
     def test_dotted_field_path_navigation(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "host_removal.host_reference", "operator": "not_empty"},
-            {"host_removal": {"host_reference": "/path/to/host.fa"}},
-        ) is True
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "host_removal.host_reference", "operator": "not_empty"},
+                {"host_removal": {"host_reference": "/path/to/host.fa"}},
+            )
+            is True
+        )
 
     def test_dotted_field_path_missing(self):
-        assert UniversalDAG._evaluate_condition(
-            {"field": "host_removal.host_reference", "operator": "not_empty"},
-            {"host_removal": {}},
-        ) is False
+        assert (
+            UniversalDAG._evaluate_condition(
+                {"field": "host_removal.host_reference", "operator": "not_empty"},
+                {"host_removal": {}},
+            )
+            is False
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -268,57 +315,37 @@ class TestEvaluateCondition:
 
 class TestCategoryExplicitlyEnabled:
     def test_string_true(self):
-        assert UniversalDAG._category_explicitly_enabled(
-            {"qc": {"enable": "true"}}, "qc"
-        ) is True
+        assert UniversalDAG._category_explicitly_enabled({"qc": {"enable": "true"}}, "qc") is True
 
     def test_string_yes(self):
-        assert UniversalDAG._category_explicitly_enabled(
-            {"qc": {"enable": "yes"}}, "qc"
-        ) is True
+        assert UniversalDAG._category_explicitly_enabled({"qc": {"enable": "yes"}}, "qc") is True
 
     def test_string_one(self):
-        assert UniversalDAG._category_explicitly_enabled(
-            {"qc": {"enable": "1"}}, "qc"
-        ) is True
+        assert UniversalDAG._category_explicitly_enabled({"qc": {"enable": "1"}}, "qc") is True
 
     def test_string_false(self):
-        assert UniversalDAG._category_explicitly_enabled(
-            {"qc": {"enable": "false"}}, "qc"
-        ) is False
+        assert UniversalDAG._category_explicitly_enabled({"qc": {"enable": "false"}}, "qc") is False
 
     def test_string_no(self):
-        assert UniversalDAG._category_explicitly_enabled(
-            {"qc": {"enable": "no"}}, "qc"
-        ) is False
+        assert UniversalDAG._category_explicitly_enabled({"qc": {"enable": "no"}}, "qc") is False
 
     def test_string_zero(self):
-        assert UniversalDAG._category_explicitly_enabled(
-            {"qc": {"enable": "0"}}, "qc"
-        ) is False
+        assert UniversalDAG._category_explicitly_enabled({"qc": {"enable": "0"}}, "qc") is False
 
     def test_bool_true(self):
-        assert UniversalDAG._category_explicitly_enabled(
-            {"qc": {"enable": True}}, "qc"
-        ) is True
+        assert UniversalDAG._category_explicitly_enabled({"qc": {"enable": True}}, "qc") is True
 
     def test_bool_false(self):
-        assert UniversalDAG._category_explicitly_enabled(
-            {"qc": {"enable": False}}, "qc"
-        ) is False
+        assert UniversalDAG._category_explicitly_enabled({"qc": {"enable": False}}, "qc") is False
 
     def test_missing_category(self):
         assert UniversalDAG._category_explicitly_enabled({}, "qc") is False
 
     def test_non_mapping_block(self):
-        assert UniversalDAG._category_explicitly_enabled(
-            {"qc": "just_a_string"}, "qc"
-        ) is False
+        assert UniversalDAG._category_explicitly_enabled({"qc": "just_a_string"}, "qc") is False
 
     def test_missing_enable_key(self):
-        assert UniversalDAG._category_explicitly_enabled(
-            {"qc": {"threads": 4}}, "qc"
-        ) is False
+        assert UniversalDAG._category_explicitly_enabled({"qc": {"threads": 4}}, "qc") is False
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -337,16 +364,12 @@ class TestResolveScriptPath:
         assert result == "NOT_CONFIGURED"
 
     def test_non_empty_script_value_returned_as_is(self):
-        result = _resolve_script_path(
-            "diversity_script", "/custom/path/diversity.py"
-        )
+        result = _resolve_script_path("diversity_script", "/custom/path/diversity.py")
         assert result == "/custom/path/diversity.py"
 
     def test_not_configured_sentinel_for_script_key(self):
         """When a _script key has NOT_CONFIGURED and no bundled script, returns empty."""
-        result = _resolve_script_path(
-            "nonexistent_script", "DIVERSITY_SCRIPT_NOT_CONFIGURED"
-        )
+        result = _resolve_script_path("nonexistent_script", "DIVERSITY_SCRIPT_NOT_CONFIGURED")
         assert result == "DIVERSITY_SCRIPT_NOT_CONFIGURED"
 
     def test_empty_value_for_non_script_key(self):
@@ -386,9 +409,7 @@ class TestResolveInputPath:
         assert result == "42"
 
     def test_template_with_broken_key_returns_raw(self):
-        result = _resolve_input_path(
-            "{nonexistent_key}", {"outdir": "/tmp"}, None
-        )
+        result = _resolve_input_path("{nonexistent_key}", {"outdir": "/tmp"}, None)
         assert result == "{nonexistent_key}"
 
 

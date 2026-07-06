@@ -14,10 +14,10 @@ from abi.contracts import (
     _validate_resources_block,
 )
 
-
 # ---------------------------------------------------------------------------
 # _require_non_empty_string
 # ---------------------------------------------------------------------------
+
 
 def test_require_non_empty_string_valid():
     """Should not raise for a non-empty string."""
@@ -45,6 +45,7 @@ def test_require_non_empty_string_whitespace():
 # ---------------------------------------------------------------------------
 # _require_mapping
 # ---------------------------------------------------------------------------
+
 
 def test_require_mapping_valid_dict():
     """Non-empty dict should pass."""
@@ -79,6 +80,7 @@ def test_require_mapping_string():
 # _require_string_list
 # ---------------------------------------------------------------------------
 
+
 def test_require_string_list_valid():
     """Non-empty list of non-empty strings should pass."""
     _require_string_list(["a", "b"], "test_label")
@@ -112,6 +114,7 @@ def test_require_string_list_contains_whitespace_only():
 # _template_fields
 # ---------------------------------------------------------------------------
 
+
 def test_template_fields_simple():
     """Plain {name} placeholders are extracted."""
     fields = _template_fields("hello {name}, welcome to {place}")
@@ -139,6 +142,7 @@ def test_template_fields_ignores_bracketed_as_literal():
 # _normalize_template
 # ---------------------------------------------------------------------------
 
+
 def test_normalize_template_multi_whitespace():
     """Multiple spaces are collapsed."""
     result = _normalize_template("cmd    --flag  --other")
@@ -162,6 +166,7 @@ def test_normalize_template_no_change():
 # ---------------------------------------------------------------------------
 # _validate_resources_block
 # ---------------------------------------------------------------------------
+
 
 def test_validate_resources_block_valid():
     """Valid resource block should not raise."""

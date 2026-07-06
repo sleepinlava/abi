@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from abi.sciplot.lint import (
     ALL_RULES,
     LintFinding,
@@ -20,6 +18,7 @@ from abi.sciplot.lint import (
     lint_figure,
 )
 from abi.sciplot.schema.figure_spec import (
+    SUPPORTED_FIGURE_TYPES,
     DataSpec,
     ExportSpec,
     FigureSpec,
@@ -27,9 +26,7 @@ from abi.sciplot.schema.figure_spec import (
     MappingSpec,
     StatSpec,
     StyleSpec,
-    SUPPORTED_FIGURE_TYPES,
 )
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -311,9 +308,7 @@ class TestCheckLabels:
             export=ExportSpec(output_dir=Path("/tmp"), basename="test"),
         )
         findings = _check_labels(spec, [], None)
-        x_warnings = [
-            f for f in findings if f.rule == "LABEL001" and "x-axis" in f.message.lower()
-        ]
+        x_warnings = [f for f in findings if f.rule == "LABEL001" and "x-axis" in f.message.lower()]
         assert len(x_warnings) == 1
 
     def test_label001_empty_y_label(self) -> None:
@@ -328,9 +323,7 @@ class TestCheckLabels:
             export=ExportSpec(output_dir=Path("/tmp"), basename="test"),
         )
         findings = _check_labels(spec, [], None)
-        y_warnings = [
-            f for f in findings if f.rule == "LABEL001" and "y-axis" in f.message.lower()
-        ]
+        y_warnings = [f for f in findings if f.rule == "LABEL001" and "y-axis" in f.message.lower()]
         assert len(y_warnings) == 1
 
     def test_label001_heatmap_skipped(self) -> None:
@@ -360,9 +353,7 @@ class TestCheckLabels:
             labels=LabelSpec(x_label="Samples"),
         )
         findings = _check_labels(spec, [], None)
-        x_warnings = [
-            f for f in findings if f.rule == "LABEL001" and "x-axis" in f.message.lower()
-        ]
+        x_warnings = [f for f in findings if f.rule == "LABEL001" and "x-axis" in f.message.lower()]
         assert x_warnings == []
 
     def test_labels_with_mapping_x_no_warning(self) -> None:
@@ -373,9 +364,7 @@ class TestCheckLabels:
             mapping=MappingSpec(x="group"),
         )
         findings = _check_labels(spec, [], None)
-        x_warnings = [
-            f for f in findings if f.rule == "LABEL001" and "x-axis" in f.message.lower()
-        ]
+        x_warnings = [f for f in findings if f.rule == "LABEL001" and "x-axis" in f.message.lower()]
         assert x_warnings == []
 
 

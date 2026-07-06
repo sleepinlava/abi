@@ -563,6 +563,7 @@ def test_write_minimal_progress_artifacts_empty_steps(tmp_path: Path) -> None:
 
 def test_capture_tool_version_check_installation_raises() -> None:
     """L71-72: skill.check_installation() raises → ('', 'not_captured')."""
+
     class BadSkill:
         def check_installation(self):
             raise RuntimeError("boom")
@@ -574,6 +575,7 @@ def test_capture_tool_version_check_installation_raises() -> None:
 
 def test_capture_tool_version_not_installed() -> None:
     """L76: check_installation() returns False → ('', 'not_found')."""
+
     class MissingSkill:
         def check_installation(self):
             return False
@@ -585,6 +587,7 @@ def test_capture_tool_version_not_installed() -> None:
 
 def test_capture_tool_version_mock_tools() -> None:
     """When mock_tools=True, returns ('', 'not_captured') even if installed."""
+
     class InstalledSkill:
         def check_installation(self):
             return True
@@ -646,6 +649,7 @@ def test_step_state_found(tmp_path: Path) -> None:
 
 def test_minimal_sample_status_empty_sample_id() -> None:
     """L819: _minimal_sample_status with empty sample_id → continue (skip)."""
+
     class EmptySample:
         sample_id = ""
         platform = "illumina"
