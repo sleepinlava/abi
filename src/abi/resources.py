@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from abi import resource_downloader as _resource_downloader
 from abi.errors import ABIError
 from abi.interfaces import ABIResourcePlugin
 from abi.plugins import get_plugin
+from abi.resource_downloader import DownloadResult, DownloadSpec, ResourceDownloader
 from abi.timeouts import DEFAULT_RESOURCE_TIMEOUT_SECONDS, timeout_from_env_or_value
 
-__all__ = ["check_resources", "setup_resources"]
+# Compatibility for the Phase 1 plan's public import path while this module
+# remains a single file instead of a package.
+__path__ = []  # type: ignore[var-annotated]
+sys.modules.setdefault(__name__ + ".downloader", _resource_downloader)
+
+__all__ = ["check_resources", "setup_resources", "apply_resource_overrides"]
 
 _PLACEHOLDER_MARKERS = ("NOT_CONFIGURED", "TODO", "PLACEHOLDER")
 
@@ -100,10 +108,11 @@ def _setup_manual_resource_bundle(
     """Prepare mock bundles or report explicit manual setup requirements.
 
     These plugins depend on organism/site-specific databases or an upstream
-    multi-environment installation.  Automatically choosing or partially
+    multi-environment installation. Automatically choosing or partially
     downloading such resources would create a misleading runnable state.
     """
     rows = _check_generic_resources(analysis_type, config, resource_ids=resource_ids)
+    downloader = ResourceDownloader(Path(), dry_run=dry_run, mock=mock)
     planned: List[Dict[str, Any]] = []
     for row in rows:
         current = dict(row)
@@ -121,10 +130,8 @@ def _setup_manual_resource_bundle(
         elif current["status"] == "ok":
             current["message"] = "Configured resource exists."
         elif mock:
-            target.mkdir(parents=True, exist_ok=True)
-            (target / ".abi_mock_resource").write_text(
-                f"{analysis_type}:{current['resource_id']}\n",
-                encoding="utf-8",
+            downloader._mock_resource(
+                DownloadSpec(resource_id=str(current["resource_id"])), target
             )
             current["status"] = "ok"
             current["message"] = "Mock resource directory prepared."
@@ -146,6 +153,8 @@ def _setup_manual_resource_bundle(
 def _configured_or_default_resource_path(config: Mapping[str, Any], resource_id: str) -> Path:
     resources = config.get("resources", {})
     value = resources.get(resource_id) if isinstance(resources, Mapping) else None
+    if isinstance(value, Mapping):
+        value = value.get("path")
     if value and not _is_placeholder_resource_value(value):
         return Path(str(value))
     return Path(str(config.get("outdir", "results"))) / "resources" / resource_id
@@ -167,74 +176,64 @@ def _setup_wgs_bacteria(
     dry_run: bool,
     mock: bool,
 ) -> List[Dict[str, Any]]:
-    """Prepare the AMRFinderPlus database used by the WGS DAG."""
-    import shutil
-    import subprocess
+    """Prepare the AMRFinderPlus database used by the WGS DAG.
 
+    Uses ResourceDownloader for atomic, idempotent resource management.
+    """
     if resource_ids and "amrfinder_db" not in resource_ids:
         return []
     target = _configured_or_default_resource_path(config, "amrfinder_db")
     command = ["amrfinder_update", "--database", str(target)]
-    ready_sentinel = target / ".abi_ready"
-    if dry_run:
-        status = "planned"
-        message = "Would download/update the AMRFinderPlus database."
-    elif mock:
-        target.mkdir(parents=True, exist_ok=True)
-        (target / ".abi_mock_resource").write_text("wgs_bacteria:amrfinder_db\n", encoding="utf-8")
-        ready_sentinel.write_text("mock\n", encoding="utf-8")
-        status = "ok"
-        message = "Mock AMRFinderPlus database prepared."
-    elif ready_sentinel.exists():
-        status = "ok"
-        message = "Existing AMRFinderPlus database found (ready sentinel); update skipped."
-    elif target.exists() and any(target.iterdir()):
-        status = "incomplete"
-        message = (
-            "Existing AMRFinderPlus directory is non-empty but lacks the ready "
-            "sentinel; a prior update may have failed. Remove it or rerun setup."
-        )
-    else:
-        target.mkdir(parents=True, exist_ok=True)
-        try:
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=_resource_timeout(config),
-            )
-            if result.returncode == 0:
-                ready_sentinel.write_text("amrfinderplus\n", encoding="utf-8")
-                status = "ok"
-                message = "AMRFinderPlus database downloaded successfully."
-            else:
-                status = "error"
-                message = (result.stdout or result.stderr or "").strip()[-500:]
-                # Clean up partial files so a retry isn't blocked by a
-                # non-empty-but-incomplete directory (false-positive "ok").
-                shutil.rmtree(target, ignore_errors=True)
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            status = "error"
-            message = str(exc)
-            shutil.rmtree(target, ignore_errors=True)
+    timeout = _resource_timeout(config)
+
+    # Check for incomplete directory (non-empty but no sentinel)
+    legacy_sentinel = target / ".abi_ready"
+    if not dry_run and not mock and target.exists() and any(target.iterdir()):
+        sentinel = target / ResourceDownloader.SENTINEL
+        if not sentinel.exists() and not legacy_sentinel.exists():
+            return [
+                {
+                    "resource_id": "amrfinder_db",
+                    "tool_id": "amrfinderplus",
+                    "field": "amrfinder_db",
+                    "path": str(target),
+                    "status": "incomplete",
+                    "version": "",
+                    "source_url": "https://ftp.ncbi.nlm.nih.gov/pathogen/Antimicrobial_resistance/AMRFinderPlus/database/",
+                    "checksum": "",
+                    "command": command,
+                    "ready_check": "non_empty_directory",
+                    "directory_file_count": _directory_file_count(target),
+                    "directory_size_bytes": 0,
+                    "message": (
+                        "Existing AMRFinderPlus directory is non-empty but lacks the ready "
+                        "sentinel; a prior update may have failed. Remove it or rerun setup."
+                    ),
+                    "mock": mock,
+                }
+            ]
+
+    spec = DownloadSpec(
+        resource_id="amrfinder_db",
+        tool_id="amrfinderplus",
+        command=command,
+        atomic=False,
+        destination=target,
+        display_name="AMRFinderPlus database",
+        timeout_seconds=timeout or 3600.0,
+    )
+    downloader = ResourceDownloader(Path(), dry_run=dry_run, mock=mock)
+    result = downloader.ensure(spec)
+
     return [
-        {
-            "resource_id": "amrfinder_db",
-            "tool_id": "amrfinderplus",
-            "field": "amrfinder_db",
-            "path": str(target),
-            "status": status,
-            "version": "",
-            "source_url": "https://ftp.ncbi.nlm.nih.gov/pathogen/Antimicrobial_resistance/AMRFinderPlus/database/",
-            "checksum": "",
-            "command": command,
-            "ready_check": "non_empty_directory",
-            "directory_file_count": _directory_file_count(target),
-            "directory_size_bytes": 0,
-            "message": message,
-            "mock": mock,
-        }
+        _download_result_to_row(
+            result,
+            tool_id="amrfinderplus",
+            field="amrfinder_db",
+            source_url="https://ftp.ncbi.nlm.nih.gov/pathogen/Antimicrobial_resistance/AMRFinderPlus/database/",
+            ready_check="non_empty_directory",
+            mock=mock,
+        )
     ]
 
 
@@ -248,12 +247,12 @@ def _setup_reference_resources(
 ) -> List[Dict[str, Any]]:
     """Plan or mock organism-specific reference resources.
 
-    Genome indices and annotations cannot be downloaded correctly without an
-    organism/build choice. Real setup therefore reports an actionable
-    ``manual_required`` status rather than raising a generic not-implemented
-    error or silently choosing the wrong reference.
+    Genome indices and annotations cannot be downloaded automatically ---
+    the user must pick an organism/genome build. Mock mode uses
+    ResourceDownloader for consistent mock resource creation.
     """
     selected = set(resource_ids or [])
+    downloader = ResourceDownloader(Path(), dry_run=dry_run, mock=mock)
     rows: List[Dict[str, Any]] = []
     for resource_id in ("genome_index", "annotation_gtf"):
         if selected and resource_id not in selected:
@@ -266,15 +265,9 @@ def _setup_reference_resources(
                 if mock
                 else "Select an organism/genome build and configure this reference path."
             )
-        elif target.exists():
-            status = "ok"
-            message = "Configured reference resource exists."
         elif mock:
             if resource_id == "genome_index":
-                target.mkdir(parents=True, exist_ok=True)
-                (target / ".abi_mock_resource").write_text(
-                    f"{analysis_type}:{resource_id}\n", encoding="utf-8"
-                )
+                downloader._mock_resource(DownloadSpec(resource_id=resource_id), target)
             else:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(
@@ -283,30 +276,31 @@ def _setup_reference_resources(
                 )
             status = "ok"
             message = "Mock reference resource prepared."
+        elif target.exists():
+            status = "ok"
+            message = "Configured reference resource exists."
         else:
             status = "manual_required"
             message = (
                 "Automatic download requires an organism/genome build choice; "
                 "configure the reference path explicitly."
             )
-        rows.append(
-            {
-                "resource_id": resource_id,
-                "tool_id": "star" if resource_id == "genome_index" else "featurecounts",
-                "field": resource_id,
-                "path": str(target),
-                "status": status,
-                "version": "",
-                "source_url": "",
-                "checksum": "",
-                "command": [],
-                "ready_check": "path_exists",
-                "directory_file_count": _directory_file_count(target),
-                "directory_size_bytes": 0,
-                "message": message,
-                "mock": mock,
-            }
-        )
+        rows.append({
+            "resource_id": resource_id,
+            "tool_id": "star" if resource_id == "genome_index" else "featurecounts",
+            "field": resource_id,
+            "path": str(target),
+            "status": status,
+            "version": "",
+            "source_url": "",
+            "checksum": "",
+            "command": [],
+            "ready_check": "path_exists",
+            "directory_file_count": _directory_file_count(target),
+            "directory_size_bytes": 0,
+            "message": message,
+            "mock": mock,
+        })
     return rows
 
 
@@ -360,7 +354,11 @@ def _generic_resource_status(value: Any) -> str:
     if any(marker in text for marker in _PLACEHOLDER_MARKERS):
         return "not_configured"
     path = Path(text)
-    return "ok" if path.exists() else "missing"
+    if not path.exists():
+        return "missing"
+    if path.is_dir() and not any(path.iterdir()):
+        return "incomplete"
+    return "ok"
 
 
 def _generic_resource_message(status: str) -> str:
@@ -368,6 +366,8 @@ def _generic_resource_message(status: str) -> str:
         return "Configured resource path exists."
     if status == "missing":
         return "Configured resource path does not exist."
+    if status == "incomplete":
+        return "Configured resource directory is empty; database setup may be incomplete."
     return "Resource path is not configured."
 
 
@@ -377,6 +377,42 @@ def _directory_file_count(path: Path) -> int:
     if not path.is_dir():
         return 0
     return sum(1 for child in path.rglob("*") if child.is_file())
+
+
+def _download_result_to_row(
+    result: DownloadResult,
+    *,
+    tool_id: str = "",
+    field: str = "",
+    source_url: str = "",
+    ready_check: str = "sentinel",
+    mock: bool = False,
+) -> dict[str, Any]:
+    """Convert a DownloadResult to the resource row dict format."""
+    file_count = result.file_count or (
+        sum(1 for _ in result.path.rglob("*") if _.is_file()) if result.path.is_dir() else 0
+    )
+    size_bytes = result.size_bytes or (
+        sum(f.stat().st_size for f in result.path.rglob("*") if f.is_file())
+        if result.path.is_dir()
+        else 0
+    )
+    return {
+        "resource_id": result.resource_id,
+        "tool_id": tool_id,
+        "field": field or result.resource_id,
+        "path": str(result.path),
+        "status": result.status,
+        "version": result.version,
+        "source_url": source_url,
+        "checksum": result.checksum,
+        "command": list(result.command),
+        "ready_check": ready_check,
+        "directory_file_count": file_count,
+        "directory_size_bytes": size_bytes,
+        "message": result.message,
+        "mock": mock,
+    }
 
 
 def _check_rnaseq_expression(
@@ -393,10 +429,15 @@ def _check_rnaseq_expression(
     if selected and "deseq2_package" not in selected:
         return rows
 
-    # Check DESeq2 availability via Rscript
+    # Check DESeq2 availability via Rscript. Prefer ABI's rnaseq env so checks
+    # match the environment used by the registered rnaseq_expression tools.
+    from abi.config import resolved_mamba_root
+
     deseq2_status = "not_installed"
     deseq2_version = ""
-    rscript = os.environ.get("ABI_RSCRIPT_PATH", "Rscript")
+    configured_rscript = os.environ.get("ABI_RSCRIPT_PATH")
+    env_rscript = resolved_mamba_root() / "envs" / "rnaseq" / "bin" / "Rscript"
+    rscript = configured_rscript or (str(env_rscript) if env_rscript.exists() else "Rscript")
 
     try:
         result = subprocess.run(
@@ -458,7 +499,7 @@ def _setup_rnaseq_expression(
     import os
     import subprocess
 
-    from abi.config import PROJECT_ROOT
+    from abi.config import PROJECT_ROOT, resolved_mamba_root
 
     selected = set(resource_ids or [])
     if selected and "rnaseq_environment" not in selected:
@@ -475,7 +516,11 @@ def _setup_rnaseq_expression(
         )
 
     mamba_root = str(
-        config.get("mamba_root") or os.environ.get("MAMBA_ROOT") or str(PROJECT_ROOT / ".mamba")
+        config.get("mamba_root")
+        or os.environ.get("ABI_MAMBA_ROOT")
+        or os.environ.get("AUTOPLASM_MAMBA_ROOT")
+        or os.environ.get("MAMBA_ROOT")
+        or resolved_mamba_root()
     )
 
     cmd = ["bash", str(setup_script), "--mamba-root", mamba_root]
@@ -548,7 +593,14 @@ def _check_amplicon_16s(
         return rows
 
     # Check taxonomy DB
-    taxonomy_db = config.get("resources", {}).get("taxonomy_db", "TAXONOMY_DB_NOT_CONFIGURED")
+    resources = config.get("resources", {})
+    taxonomy_db = (
+        resources.get("taxonomy_db", "TAXONOMY_DB_NOT_CONFIGURED")
+        if isinstance(resources, Mapping)
+        else "TAXONOMY_DB_NOT_CONFIGURED"
+    )
+    if isinstance(taxonomy_db, Mapping):
+        taxonomy_db = taxonomy_db.get("path", "TAXONOMY_DB_NOT_CONFIGURED")
     tax_path = Path(str(taxonomy_db))
     tax_status = "missing"
     tax_entries = 0
@@ -600,10 +652,9 @@ def _setup_amplicon_16s(
 ) -> List[Dict[str, Any]]:
     """Set up amplicon_16s resources: taxonomy database for SINTAX classification.
 
-    Strategy:
-    1. --mock: generate a tiny synthetic DB instantly (for testing)
-    2. Default: download RDP 16S training set (~50 MB) from drive5.com
-    3. Fallback: if download fails, generate synthetic DB
+    Uses ResourceDownloader for mock mode; subprocess for real download
+    (the RDP download script writes to a specific output path).
+    Falls back to synthetic taxonomy if RDP download fails.
     """
     import subprocess
 
@@ -612,113 +663,143 @@ def _setup_amplicon_16s(
     if resource_ids and "taxonomy_db" not in resource_ids:
         return []
 
-    resources = config.get("resources", {})
-    if not isinstance(resources, Mapping):
-        resources = {}
-
     outdir = Path(str(config.get("outdir", str(PROJECT_ROOT / "data" / "taxonomy"))))
     if "taxonomy" not in outdir.parts:
         outdir = outdir / "taxonomy"
     if not dry_run:
         outdir.mkdir(parents=True, exist_ok=True)
 
-    if mock:
-        generate_script = PROJECT_ROOT / "scripts" / "generate_synthetic_taxonomy.py"
-        tax_fasta = outdir / "synthetic_sintax.fa"
-        if not dry_run:
-            subprocess.run(
-                ["python", str(generate_script), "--output", str(tax_fasta), "--entries", "50"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-        return [
-            {
-                "resource_id": "taxonomy_db",
-                "tool_id": "vsearch_taxonomy",
-                "field": "taxonomy_db",
-                "path": str(tax_fasta),
-                "status": "planned" if dry_run else ("ok" if tax_fasta.exists() else "error"),
-                "version": "synthetic_test_only",
-                "source_url": "generated by scripts/generate_synthetic_taxonomy.py",
-                "checksum": "",
-                "command": ["python", str(generate_script)],
-                "ready_check": "sintax_fasta_valid",
-                "directory_file_count": 0,
-                "directory_size_bytes": 0,
-                "message": (
-                    "Would generate a synthetic taxonomy DB for testing."
-                    if dry_run
-                    else "Synthetic taxonomy DB generated for TESTING only. "
-                    "For real analysis, run without --mock to download the RDP training set."
-                ),
-                "mock": mock,
-            }
-        ]
-
-    # Primary: download RDP training set
     download_script = PROJECT_ROOT / "scripts" / "download_rdp_sintax.sh"
     tax_fasta = outdir / "rdp_16s_v16.fa"
     synthetic_fasta = outdir / "synthetic_sintax.fa"
-    effective_path = tax_fasta
+    timeout = _resource_timeout(config)
 
-    if tax_fasta.exists():
-        status = "ok"
-        message = f"RDP taxonomy DB already exists: {tax_fasta}"
-    elif dry_run:
-        status = "planned"
-        message = "Would download RDP 16S training set from drive5.com (~50 MB)"
-    elif download_script.exists():
-        cmd = ["bash", str(download_script), "--output", str(outdir)]
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=_resource_timeout(config),
+    # Mock mode creates a tiny valid SINTAX FASTA and a unified resource sentinel.
+    if mock:
+        command = [
+            "python",
+            str(PROJECT_ROOT / "scripts" / "generate_synthetic_taxonomy.py"),
+            "--output",
+            str(tax_fasta),
+            "--entries",
+            "1",
+        ]
+        if dry_run:
+            result = DownloadResult(
+                resource_id="taxonomy_db",
+                path=tax_fasta,
+                status="planned",
+                version="synthetic_test_only",
+                command=command,
+                message="Would generate a synthetic taxonomy DB for testing.",
             )
-            if result.returncode == 0 and tax_fasta.exists():
-                status = "ok"
-                message = "RDP 16S training set downloaded successfully."
-            else:
-                status = "fallback"
-                message = "RDP download failed; generating synthetic fallback."
-                _generate_synthetic_fallback(outdir)
-                effective_path = synthetic_fasta
-        except (subprocess.TimeoutExpired, OSError):
-            status = "fallback"
-            message = "RDP download timed out; generated synthetic fallback."
-            _generate_synthetic_fallback(outdir)
-            effective_path = synthetic_fasta
-    else:
-        status = "error"
-        message = f"Download script not found: {download_script}"
+        else:
+            import shutil
 
-    if status == "fallback" and not synthetic_fasta.exists():
-        status = "error"
+            if tax_fasta.exists() and tax_fasta.is_dir():
+                shutil.rmtree(tax_fasta)
+            tax_fasta.parent.mkdir(parents=True, exist_ok=True)
+            tax_fasta.write_text(
+                ">mock_taxon_1;tax=d:Bacteria,p:Firmicutes,c:Bacilli\n"
+                "ACGTACGTACGTACGTACGTACGTACGTACGT\n",
+                encoding="utf-8",
+            )
+            ResourceDownloader(Path(), mock=True).ensure(
+                DownloadSpec(
+                    resource_id="taxonomy_db",
+                    tool_id="vsearch_taxonomy",
+                    destination=outdir,
+                    version="synthetic_test_only",
+                )
+            )
+            result = DownloadResult(
+                resource_id="taxonomy_db",
+                path=tax_fasta,
+                status="ok",
+                version="synthetic_test_only",
+                file_count=1,
+                size_bytes=tax_fasta.stat().st_size,
+                command=command,
+                message=(
+                    "Synthetic taxonomy DB generated for TESTING only. "
+                    "For real analysis, run without --mock to download the RDP training set."
+                ),
+            )
+        return [
+            _download_result_to_row(
+                result,
+                tool_id="vsearch_taxonomy",
+                field="taxonomy_db",
+                source_url="generated by scripts/generate_synthetic_taxonomy.py",
+                ready_check="sintax_fasta_valid",
+                mock=True,
+            )
+        ]
+
+    # Primary: download RDP training set via ResourceDownloader (non-atomic)
+    if tax_fasta.exists():
+        effective_path = tax_fasta
+        status_msg = "ok"
+        message = f"RDP taxonomy DB already exists: {tax_fasta}"
+        command: list[str] = []
+    elif dry_run:
+        effective_path = tax_fasta
+        status_msg = "planned"
+        message = "Would download RDP 16S training set from drive5.com (~50 MB)"
+        command = []
+    elif download_script.exists():
+        downloader = ResourceDownloader(Path(), dry_run=dry_run, mock=False)
+        spec = DownloadSpec(
+            resource_id="taxonomy_db",
+            tool_id="vsearch_taxonomy",
+            command=["bash", str(download_script), "--output", str(outdir)],
+            atomic=False,
+            destination=outdir,
+            ready_check="non_empty_dir",
+            timeout_seconds=timeout,
+            version="rdp_16s_v16",
+        )
+        result_dl = downloader.ensure(spec)
+        if result_dl.status == "ok":
+            effective_path = tax_fasta
+            status_msg = "ok"
+            message = "RDP 16S training set downloaded successfully."
+            command = result_dl.command
+        else:
+            effective_path = synthetic_fasta
+            status_msg = "fallback"
+            message = f"RDP download failed: {result_dl.message}. Generating synthetic fallback."
+            command = result_dl.command
+            _generate_synthetic_fallback(outdir)
+    else:
+        effective_path = tax_fasta
+        status_msg = "error"
+        message = f"Download script not found: {download_script}"
+        command = []
+
+    if status_msg == "fallback" and not synthetic_fasta.exists():
+        status_msg = "error"
         message = (
             "RDP download failed and synthetic fallback generation did not "
             f"produce {synthetic_fasta}."
         )
 
+    result = DownloadResult(
+        resource_id="taxonomy_db",
+        path=effective_path,
+        status=status_msg,
+        message=message,
+        command=command,
+    )
     return [
-        {
-            "resource_id": "taxonomy_db",
-            "tool_id": "vsearch_taxonomy",
-            "field": "taxonomy_db",
-            "path": str(effective_path),
-            "status": status,
-            "version": "",
-            "source_url": "https://www.drive5.com/sintax/rdp_16s_v16_sp.fa.gz",
-            "checksum": "",
-            "command": ["bash", str(download_script)] if download_script.exists() else [],
-            "ready_check": "sintax_fasta_valid",
-            "directory_file_count": 0,
-            "directory_size_bytes": 0,
-            "message": message,
-            "mock": mock,
-        }
+        _download_result_to_row(
+            result,
+            tool_id="vsearch_taxonomy",
+            field="taxonomy_db",
+            source_url="https://www.drive5.com/sintax/rdp_16s_v16_sp.fa.gz",
+            ready_check="sintax_fasta_valid",
+            mock=mock,
+        )
     ]
 
 
@@ -750,3 +831,27 @@ def _generate_synthetic_fallback(outdir: Path) -> bool:
         check=False,
     )
     return result.returncode == 0 and synthetic_path.exists()
+
+
+def apply_resource_overrides(config: Dict[str, Any], overrides: Sequence[str]) -> None:
+    """Apply ``--resource id=path`` overrides to a config dict in-place.
+
+    Handles ``id=path`` syntax: sets ``config.resources.<id>`` to ``<path>``.
+    For the full ``id:field=path`` syntax, use the plugin's version directly.
+    """
+    resources = config.setdefault("resources", {})
+    if not isinstance(resources, Mapping):
+        resources = {}
+        config["resources"] = resources
+    for item in overrides:
+        key, _, path = item.partition("=")
+        key = key.strip()
+        path = path.strip()
+        if not key or not path:
+            raise ABIError(f"Invalid --resource override (expected id=path): {item!r}")
+        resource_id = key
+        block = resources.setdefault(resource_id, {})
+        if not isinstance(block, dict):
+            block = {}
+            resources[resource_id] = block
+        block["path"] = path

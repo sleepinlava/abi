@@ -86,9 +86,11 @@ class RNASeqExpressionPlugin:
         config_path: str | Path | None = None,
         *,
         profile: str | None = None,
+        db_profile: str | None = None,
         overrides: Optional[Mapping[str, Any]] = None,
     ) -> Dict[str, Any]:
         del profile
+        del db_profile
         config = load_yaml(self.root / "config_default.yaml")
         if config_path:
             config = deep_merge(config, load_yaml(config_path))

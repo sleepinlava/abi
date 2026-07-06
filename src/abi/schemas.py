@@ -33,8 +33,11 @@ Design principles / 设计原则
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, field
 from typing import Any, Dict, List, Optional
+
+from pydantic import Field, field_validator, model_validator
+from pydantic.dataclasses import dataclass
 
 from abi.errors import ABIError, ConfigError, SampleSheetError, ToolError
 from abi.filesystem import ensure_parent
@@ -133,14 +136,16 @@ class SampleInput:
     慎用；当某个属性被广泛使用时，应优先提升为类型化字段。
     """
 
+    model_config = {"extra": "allow"}
+
     # ── Identity / 标识 ──
-    sample_id: str
+    sample_id: str = Field(..., min_length=1)
     # Unique sample identifier. Maps to the ``sample_id`` column in the
     # SampleSheet and is the primary key throughout the pipeline.
     # 样品唯一标识符。对应 SampleSheet 中的 sample_id 列，是流水线中的主键。
 
     # ── Sequencing / 测序信息 ──
-    platform: str = "generic"
+    platform: str = Field(default="generic")
     # Sequencing platform. Must be one of ``VALID_PLATFORMS``.
     # Determines which tools are eligible and how reads are paired.
     # 测序平台。必须是 VALID_PLATFORMS 之一。决定哪些工具有效以及 reads 如何配对。
@@ -196,6 +201,20 @@ class SampleInput:
     # 扩展字典，用于尚未提升为类型化字段的插件特定元数据。
     # 不要将影响流水线执行决策的数据放在这里 -- 应提升为一级字段。
 
+    @field_validator("platform")
+    @classmethod
+    def validate_platform(cls, v: str) -> str:
+        """Reject unknown platform values at construction time.
+
+        Validated against ``VALID_PLATFORMS`` so that downstream tools never
+        encounter an unrecognized platform string.
+        """
+        if v not in VALID_PLATFORMS:
+            raise ValueError(
+                f"Invalid platform {v!r}. Must be one of {sorted(VALID_PLATFORMS)}"
+            )
+        return v
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to a JSON-round-trip-safe dictionary.
 
@@ -249,6 +268,8 @@ class SampleContext:
     使其可以独立测试。
     """
 
+    model_config = {"extra": "allow"}
+
     # ── Collection / 样本集合 ──
     samples: List[SampleInput]
     # The full list of samples in this run. Must be non-empty.
@@ -277,6 +298,36 @@ class SampleContext:
     # is False.
     # 若为 True（需要 has_groups），运行跨组质粒丰度统计检验。
     # 当 has_groups 为 False 时强制为 False。
+
+    @model_validator(mode="after")
+    def validate_consistency(self) -> SampleContext:
+        """Ensure sample collection invariants hold.
+
+        - ``samples`` must be non-empty.
+        - ``multi_sample`` must be consistent with ``len(samples)``.
+        - ``has_groups`` must be consistent with distinct sample group values.
+        - ``enable_differential_abundance`` is forced to False when groups
+          are absent.
+        """
+        if not self.samples:
+            raise ValueError("SampleContext.samples must be non-empty")
+
+        # Auto-correct multi_sample to match reality.
+        expected_multi = len(self.samples) > 1
+        if self.multi_sample != expected_multi:
+            object.__setattr__(self, "multi_sample", expected_multi)
+
+        # Auto-correct has_groups to match reality.
+        distinct_groups = {s.group for s in self.samples if s.group is not None}
+        expected_has_groups = len(distinct_groups) >= 2
+        if self.has_groups != expected_has_groups:
+            object.__setattr__(self, "has_groups", expected_has_groups)
+
+        # Force enable_differential_abundance to False when no groups exist.
+        if not self.has_groups and self.enable_differential_abundance:
+            object.__setattr__(self, "enable_differential_abundance", False)
+
+        return self
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize sample context for JSON round-tripping."""
@@ -310,29 +361,31 @@ class PlanStep:
     差异很大且独立演化。校验在工具边界进行，而非在计划模型中。
     """
 
+    model_config = {"extra": "allow"}
+
     # ── Identity / 标识 ──
-    step_id: str
+    step_id: str = Field(..., min_length=1)
     # Unique step identifier within the plan (e.g. "step_001").
     # 计划内唯一的步骤标识符（如 "step_001"）。
 
-    step_name: str
+    step_name: str = Field(..., min_length=1)
     # Human-readable step name for logs and reports (e.g. "Quality Control").
     # 人类可读的步骤名称，用于日志和报告（如 "Quality Control"）。
 
     # ── Tool binding / 工具绑定 ──
-    tool_id: str
+    tool_id: str = Field(..., min_length=1)
     # ID of the registered tool that will execute this step.
     # Must exist in ``ToolRegistry`` at execution time.
     # 注册工具的 ID，将执行此步骤。执行时必须在 ToolRegistry 中存在。
 
-    category: str
+    category: str = Field(..., min_length=1)
     # Logical category for grouping steps in the plan (e.g. "qc", "assembly",
     # "plasmid_calling", "reporting"). Used by the dashboard and reports.
     # 步骤分组的逻辑类别（如 "qc"、"assembly"、"plasmid_calling"、"reporting"）。
     # 用于仪表盘和报告。
 
     # ── Scope / 作用域 ──
-    sample_id: Optional[str]
+    sample_id: Optional[str] = None
     # Sample this step operates on. ``None`` means "project-level" (e.g.
     # a combined report or aggregation step).
     # 此步骤操作的样本。None 表示"项目级"（如合并报告或聚合步骤）。
@@ -394,6 +447,8 @@ class ExecutionPlan:
     4. 执行后，计划 + 输出构成溯源包。
     """
 
+    model_config = {"extra": "allow"}
+
     # ── Project identity / 项目标识 ──
     project_name: str
     # Human-readable project name. Used in report titles and log prefixes.
@@ -444,7 +499,7 @@ class ExecutionPlan:
     # These must be declared AFTER all required fields (dataclass rule).
     # 这些字段必须在所有必填字段之后声明（数据类规则）。
 
-    analysis_type: str = "metagenomic_plasmid"
+    analysis_type: str = Field(default="metagenomic_plasmid", min_length=1)
     # Analysis workflow type. Future extension point for non-plasmid workflows
     # (e.g. "amr", "viral"). Currently always "metagenomic_plasmid".
     # 分析工作流类型。为非质粒工作流（如 "amr"、"viral"）预留的扩展点。

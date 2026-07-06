@@ -121,6 +121,7 @@ class MetatranscriptomicsPlugin:
         config_path: str | Path | None = None,
         *,
         profile: str | None = None,
+        db_profile: str | None = None,
         overrides: Optional[Mapping[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Load, merge, and validate the metatranscriptomics configuration.
@@ -136,6 +137,7 @@ class MetatranscriptomicsPlugin:
         合并后，将相对路径（如样本表位置）解析到 ``PROJECT_ROOT``，
         并验证必需的键。
         """
+        del db_profile
         del profile  # Not used by this plugin / 此插件不使用
         config = load_yaml(self.root / "config_default.yaml")
         if config_path:

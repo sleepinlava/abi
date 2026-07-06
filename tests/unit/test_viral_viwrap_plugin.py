@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -185,7 +186,10 @@ out.mkdir(parents=True, exist_ok=True)
     shared_bin.mkdir(parents=True, exist_ok=True)
     (shared_bin / "ViWrap").symlink_to(executable)
     (bin_dir / "conda").symlink_to(executable)
-    monkeypatch.setenv("PATH", str(bin_dir) + os.pathsep + os.environ["PATH"])
+    monkeypatch.setenv(
+        "PATH",
+        os.pathsep.join((str(bin_dir), str(Path(sys.executable).parent), os.environ["PATH"])),
+    )
 
     plugin = get_plugin("viral_viwrap")
     loaded = plugin.load_config(overrides=config)

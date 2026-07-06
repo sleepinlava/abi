@@ -11,6 +11,19 @@ import yaml
 
 from abi.filesystem import ensure_parent
 
+__all__ = [
+    "ABIConfigError",
+    "load_yaml",
+    "write_yaml",
+    "resolved_mamba_root",
+    "deep_merge",
+    "compact_overrides",
+    "mapping_block",
+    "load_resource_profile",
+    "env_resource_overrides",
+    "wrap_config",
+]
+
 
 def _resolve_project_root() -> Path:
     current = Path(__file__).resolve()
@@ -52,19 +65,48 @@ def resolved_mamba_root() -> Path:
     Resolution order:
     1. ``ABI_MAMBA_ROOT`` env var (explicit override)
     2. ``AUTOPLASM_MAMBA_ROOT`` env var (legacy compat)
-    3. ``PROJECT_ROOT / ".mamba"`` (default local install)
-    4. ``PROJECT_ROOT.parent / "abi-envs"`` (sibling dir, common in dev/deploy)
+    3. Best populated local candidate among ``PROJECT_ROOT / ".mamba"``,
+       ``PROJECT_ROOT.parent / ".mamba"``, and ``PROJECT_ROOT.parent / "abi-envs"``.
+
+    Env overrides that point at non-existent or empty directories fall through
+    to local candidates so one misconfigured export cannot silently break tool
+    discovery.
     """
-    env_override = os.environ.get("ABI_MAMBA_ROOT") or os.environ.get("AUTOPLASM_MAMBA_ROOT")
-    if env_override:
-        return Path(env_override)
+    for var in ("ABI_MAMBA_ROOT", "AUTOPLASM_MAMBA_ROOT"):
+        env_override = os.environ.get(var)
+        if env_override:
+            candidate = Path(env_override)
+            envs_dir = candidate / "envs"
+            if envs_dir.is_dir() and any(envs_dir.iterdir()):
+                return candidate
+            # Fall through to local candidates on empty/missing override.
     default = PROJECT_ROOT / ".mamba"
-    if default.exists():
-        return default
+    parent_default = PROJECT_ROOT.parent / ".mamba"
     sibling = PROJECT_ROOT.parent / "abi-envs"
-    if sibling.exists():
-        return sibling
-    return default
+    return _best_mamba_root_candidate([default, parent_default, sibling], fallback=default)
+
+
+def _best_mamba_root_candidate(candidates: list[Path], *, fallback: Path) -> Path:
+    """Return the candidate with the most managed env prefixes.
+
+    Cloud rebuild scripts commonly place all envs in ``PROJECT_ROOT.parent / ".mamba"``
+    while an older project-local ``.mamba`` may still contain a single stale env.
+    Picking the most populated candidate keeps local installs working but avoids
+    silently resolving to an incomplete root on shared disks.
+    """
+    scored: list[tuple[int, int, Path]] = []
+    for index, candidate in enumerate(candidates):
+        envs_dir = candidate / "envs"
+        if envs_dir.is_dir():
+            env_count = sum(1 for child in envs_dir.iterdir() if child.is_dir())
+            if env_count:
+                scored.append((env_count, -index, candidate))
+    if scored:
+        return max(scored)[2]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return fallback
 
 
 def deep_merge(base: Dict[str, Any], override: Mapping[str, Any]) -> Dict[str, Any]:
@@ -150,3 +192,18 @@ def env_resource_overrides() -> Dict[str, Any]:
     if container_runtime:
         overrides["container_runtime"] = container_runtime
     return overrides
+
+
+def wrap_config(data: dict[str, Any]) -> dict[str, Any]:
+    """Wrap a raw config dict through ``ABIConfig`` validation.
+
+    This is the migration bridge for Phase 2→3: existing code that expects
+    ``Dict[str, Any]`` continues to work, while callers that opt in can use
+    ``ABIConfig(**data)`` directly for type-safe attribute access.
+
+    Returns the validated dict (via ``ABIConfig.to_dict()``) so downstream
+    consumers receive cleaned/normalized values.
+    """
+    from abi.config_models import ABIConfig
+
+    return ABIConfig.model_validate(data).model_dump()

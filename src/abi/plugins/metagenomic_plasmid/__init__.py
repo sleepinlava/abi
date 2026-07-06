@@ -46,6 +46,12 @@ from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
 from abi.config import PLUGIN_ROOT, load_yaml
+from abi.dag_planner import (
+    build_plan_from_dag as _core_build_plan,
+)
+from abi.dag_planner import (
+    build_sample_context as _core_build_sample_context,
+)
 from abi.provenance import RunLogger
 from abi.schemas import ExecutionPlan, PlanStep, SampleContext, SampleInput
 from abi.tools import ToolRegistry
@@ -53,13 +59,405 @@ from abi.tools import ToolRegistry
 from ._engine.config import load_config as load_autoplasm_config
 from ._engine.parsers import parse_standard_outputs
 from ._engine.pipeline import PipelineExecutor
-from ._engine.planner import build_plan_from_dag
 from ._engine.report.html import write_html_report
 from ._engine.report.markdown import write_markdown_report
 from ._engine.resources import check_resources as check_plugin_resources
 from ._engine.resources import setup_resources as setup_plugin_resources
 from ._engine.result_validation import validate_result_dir as validate_plugin_result_dir
 from ._engine.standard_tables import summarize_standard_tables
+
+# ── Context resolver & hooks (migrated from _engine/planner.py) ──────────
+
+
+def _plugin_context_resolver(
+    config: Mapping[str, Any], context: SampleContext
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """Resolve auto/conditional sample-analysis settings from sample metadata.
+
+    Replaces ``_engine/planner.py:_resolve_context_conditions()``.
+    """
+    from collections import Counter
+    from copy import deepcopy
+
+    resolved = deepcopy(dict(config))
+    sample_count = len(context.samples)
+    abundance_samples = [s for s in context.samples if s.platform != "assembly"]
+    abundance_sample_count = len(abundance_samples)
+    group_counts = Counter(s.group for s in abundance_samples if s.group)
+    has_read_inputs = abundance_sample_count > 0
+
+    # ── sample_analysis section ──────────────────────────────────────────
+    sample_analysis = resolved.setdefault("sample_analysis", {})
+    if not isinstance(sample_analysis, dict):
+        sample_analysis = {}
+        resolved["sample_analysis"] = sample_analysis
+
+    def _requested(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() in {"true", "yes", "1", "auto"}
+        return bool(value)
+
+    analysis_requested = _requested(sample_analysis.get("enable", "auto"))
+    min_diversity = int(sample_analysis.get("min_diversity_samples", 3))
+    min_replicates = int(sample_analysis.get("min_group_replicates", 3))
+    run_diversity = (
+        analysis_requested and has_read_inputs and abundance_sample_count >= min_diversity
+    )
+    differential_requested = analysis_requested and _requested(
+        sample_analysis.get("differential_abundance", "auto")
+    )
+    run_differential = (
+        differential_requested
+        and has_read_inputs
+        and len(group_counts) >= 2
+        and all(count >= min_replicates for count in group_counts.values())
+    )
+
+    sample_analysis["enable"] = run_diversity
+    sample_analysis["run_diversity"] = run_diversity
+    sample_analysis["differential_abundance"] = run_differential
+    sample_analysis["run_differential"] = run_differential
+    differential_method = str(sample_analysis.get("differential_method", "deseq2"))
+    sample_analysis["run_differential_deseq2"] = (
+        run_differential and differential_method == "deseq2"
+    )
+    sample_analysis["run_differential_internal"] = (
+        run_differential and differential_method == "internal_effect_size"
+    )
+
+    # ── network section ──────────────────────────────────────────────────
+    network = resolved.setdefault("network", {})
+    if not isinstance(network, dict):
+        network = {}
+        resolved["network"] = network
+    network_requested = _requested(network.get("enable", "auto"))
+    min_network = int(network.get("min_samples", 20))
+    run_network = network_requested and has_read_inputs and abundance_sample_count >= min_network
+    network["enable"] = run_network
+    network["run_network"] = run_network
+
+    # ── host_plasmid_linking section ──────────────────────────────────────
+    host_linking = resolved.setdefault("host_plasmid_linking", {})
+    if not isinstance(host_linking, dict):
+        host_linking = {}
+        resolved["host_plasmid_linking"] = host_linking
+    methods = host_linking.get("methods", [])
+    host_linking_enabled = _requested(host_linking.get("enable", False))
+    coabundance_requested = (
+        host_linking_enabled and isinstance(methods, list) and "co_abundance" in methods
+    )
+    host_prediction = resolved.get("host_prediction", {})
+    host_profile_enabled = isinstance(host_prediction, Mapping) and _requested(
+        host_prediction.get("enable", False)
+    )
+    run_coabundance = (
+        coabundance_requested and host_profile_enabled and abundance_sample_count >= min_diversity
+    )
+    host_linking["enable"] = host_linking_enabled
+    host_linking["run_coabundance"] = run_coabundance
+
+    # ── Eligibility ──────────────────────────────────────────────────────
+    eligibility: Dict[str, Dict[str, Any]] = {}
+    if not run_diversity:
+        eligibility["diversity"] = {
+            "run": run_diversity,
+            "sample_count": sample_count,
+            "eligible_sample_count": abundance_sample_count,
+            "threshold": min_diversity,
+            "reason": (
+                f"requires at least {min_diversity} samples with read-based abundance"
+                if has_read_inputs
+                else "no samples with read-based abundance"
+            ),
+        }
+    if not run_differential:
+        eligibility["differential_abundance"] = {
+            "run": run_differential,
+            "sample_count": sample_count,
+            "eligible_sample_count": abundance_sample_count,
+            "group_counts": dict(sorted(group_counts.items())),
+            "threshold": min_replicates,
+            "reason": (
+                f"requires at least two groups and {min_replicates} biological replicates per group"
+                if has_read_inputs
+                else "no samples with read-based abundance"
+            ),
+        }
+    if not run_network:
+        eligibility["network"] = {
+            "run": run_network,
+            "sample_count": sample_count,
+            "eligible_sample_count": abundance_sample_count,
+            "threshold": min_network,
+            "reason": (
+                f"requires at least {min_network} samples with read-based abundance"
+                if has_read_inputs
+                else "no samples with read-based abundance"
+            ),
+        }
+    if not run_coabundance:
+        eligibility["host_plasmid_coabundance"] = {
+            "run": run_coabundance,
+            "report_skip": coabundance_requested,
+            "sample_count": sample_count,
+            "eligible_sample_count": abundance_sample_count,
+            "threshold": min_diversity,
+            "reason": (
+                "requires co_abundance method, host profile enabled, and "
+                f"at least {min_diversity} samples with abundance data"
+                if coabundance_requested
+                else "co_abundance not requested"
+            ),
+        }
+
+    # ── Resolve tool lists from config (needed before active_node_ids) ──
+    # ``annotation.tools`` resolution from ``general_annotator`` / ``arg_tools`` etc.
+    annotation = resolved.get("annotation")
+    if isinstance(annotation, dict):
+        if any(
+            k in annotation
+            for k in ("general_annotator", "arg_tools", "vf_tools", "mobile_element_tools")
+        ):
+            general = annotation.get("general_annotator", "bakta")
+            tools = [] if general in {None, "", "none"} else [str(general)]
+            tools.extend(str(t) for t in annotation.get("arg_tools", []) if t)
+            tools.extend(str(t) for t in annotation.get("vf_tools", []) if t)
+            tools.extend(str(t) for t in annotation.get("mobile_element_tools", []) if t)
+            annotation["tools"] = tools
+
+    # Resolve ``auto`` tool lists for typed categories.
+    # Use the first available sample's platform for data_profile fallback.
+    data_profile = None
+    workflow = resolved.get("workflow", {})
+    if isinstance(workflow, Mapping) and workflow.get("data_profile"):
+        data_profile = str(workflow["data_profile"])
+    if data_profile is None:
+        input_cfg = resolved.get("input", {})
+        if isinstance(input_cfg, Mapping) and input_cfg.get("data_profile"):
+            data_profile = str(input_cfg["data_profile"])
+    if data_profile is None and context.samples:
+        first_plat = _detect_platform(context.samples[0])
+        data_profile = DATA_PROFILE_BY_PLATFORM.get(first_plat, first_plat)
+
+    for category in ("plasmid_binning", "typing", "host_prediction"):
+        block = resolved.get(category)
+        if not isinstance(block, dict):
+            block = {}
+            resolved[category] = block
+        configured_tools = block.get("tools", "auto")
+        if block.get("enable") and (configured_tools == "auto" or configured_tools is None):
+            block["tools"] = _default_tools_for_category(category, data_profile or "")
+
+    # If annotation is already set (from defaults), add mob_suite for isolate
+    # profiles even when no arg_tools/vf_tools are present.
+    if data_profile and _is_isolate_profile(data_profile):
+        annotation_block = resolved.get("annotation")
+        if isinstance(annotation_block, dict) and "mob_suite" not in annotation_block.get(
+            "tools", []
+        ):
+            existing = list(annotation_block.get("tools", []))
+            existing.append("mob_suite")
+            annotation_block["tools"] = existing
+
+    # Enable assembly for assembly-platform samples (so active_node_ids
+    # includes assembly_provided and downstream nodes).
+    if any(s.platform == "assembly" for s in context.samples):
+        assembly_block = resolved.setdefault("assembly", {})
+        if isinstance(assembly_block, dict):
+            assembly_block["enable"] = True
+
+    return resolved, eligibility
+
+
+def _detect_platform(sample: SampleInput) -> str:
+    """Simple platform detection for data_profile resolution in context_resolver."""
+    if sample.platform and sample.platform not in {"auto", "", "generic"}:
+        return sample.platform
+    if sample.read1 and sample.long_reads:
+        return "hybrid"
+    if sample.long_reads or sample.pod5 or sample.bam:
+        return "ont"
+    if sample.read1:
+        return "illumina"
+    if sample.assembly:
+        return "assembly"
+    return "illumina"
+
+
+def _plugin_skip_step_hook(
+    node_id: str,
+    tool_id: str,
+    sample_config: Mapping[str, Any],
+    sample: SampleInput,
+) -> str | None:
+    """Skip assembly-only sample read-QC steps.
+
+    Replaces ``_engine/planner.py:_analysis_skip_steps()`` and the per-sample
+    skip logic from ``_dag_step_for_node()``.
+    """
+    if tool_id == "internal":
+        return None
+    # Assembly-only input skips read QC
+    if (
+        sample.platform == "assembly"
+        and "qc" in (node_id or "").lower()
+        and tool_id not in {"quast", "assembly_qc"}
+    ):
+        return "Assembly-only input skips read QC"
+    return None
+
+
+# ── Per-sample config hook (replaces _engine/planner.py:_config_for_sample) ──
+
+
+ISOLATE_PROFILES: set = {"isolate_plasmid", "isolate"}
+
+DATA_PROFILE_BY_PLATFORM: dict[str, str] = {
+    "illumina": "illumina_short",
+    "ont": "ont_long",
+    "pacbio_hifi": "pacbio_hifi",
+    "hybrid": "hybrid_short_long",
+    "assembly": "assembly_only",
+}
+
+
+def _is_isolate_profile(data_profile: str) -> bool:
+    return data_profile in ISOLATE_PROFILES or data_profile.endswith("_isolate")
+
+
+def _data_profile_dag(sample: SampleInput, config: Mapping[str, Any]) -> str:
+    workflow = config.get("workflow", {})
+    if isinstance(workflow, Mapping) and workflow.get("data_profile"):
+        return str(workflow["data_profile"])
+    input_config = config.get("input", {})
+    if isinstance(input_config, Mapping) and input_config.get("data_profile"):
+        return str(input_config["data_profile"])
+    return DATA_PROFILE_BY_PLATFORM.get(sample.platform, sample.platform)
+
+
+def _annotation_tools(config: Mapping[str, Any], data_profile: str) -> list[str]:
+    annotation = config.get("annotation", {})
+    if not isinstance(annotation, Mapping):
+        return []
+    general = annotation.get("general_annotator", "bakta")
+    tools = [] if general in {None, "", "none"} else [str(general)]
+    tools.extend(str(t) for t in annotation.get("arg_tools", []) if t)
+    tools.extend(str(t) for t in annotation.get("vf_tools", []) if t)
+    tools.extend(str(t) for t in annotation.get("mobile_element_tools", []) if t)
+    if _is_isolate_profile(data_profile):
+        tools.append("mob_suite")
+    return tools
+
+
+def _default_tools_for_category(category: str, data_profile: str) -> list[str]:
+    if category == "plasmid_detection":
+        return ["genomad"]
+    if category == "plasmid_binning":
+        return ["gplas2"]
+    if category == "typing" and _is_isolate_profile(data_profile):
+        return ["mob_typer", "plasmidfinder"]
+    if category == "host_prediction":
+        if data_profile in {"illumina_short", "ont_long", "pacbio_hifi", "hybrid_short_long"}:
+            return ["metaphlan"]
+        return ["plasmidhostfinder"]
+    return []
+
+
+def _plugin_sample_config_hook(config: Mapping[str, Any], sample: SampleInput) -> dict[str, Any]:
+    """Customize config per sample — replaces ``_config_for_sample()``.
+
+    Merges sample-level input fields into ``config.input``, resolves
+    ``auto`` tool lists, and sets ``host_removal.host_reference`` from
+    the sample's own field.
+    """
+    from copy import deepcopy
+
+    resolved = deepcopy(dict(config))
+
+    # Merge sample input fields into config for enable_condition resolution
+    input_block = resolved.setdefault("input", {})
+    if not isinstance(input_block, dict):
+        input_block = {}
+        resolved["input"] = input_block
+    for field in ("long_reads", "pod5", "bam"):
+        val = getattr(sample, field, None)
+        if val is not None:
+            input_block[field] = val
+
+    # host_removal.host_reference from sample
+    host_removal = resolved.setdefault("host_removal", {})
+    if not isinstance(host_removal, dict):
+        host_removal = {}
+        resolved["host_removal"] = host_removal
+    if sample.host_reference:
+        host_removal["host_reference"] = sample.host_reference
+
+    # Assembly defaults
+    assembly = resolved.setdefault("assembly", {})
+    if not isinstance(assembly, dict):
+        assembly = {}
+        resolved["assembly"] = assembly
+    assembly.setdefault("short_read_assembler", "megahit")
+    assembly.setdefault("long_read_assembler", "metaflye")
+    assembly.setdefault("pacbio_hifi_assembler", "hifiasm_meta")
+    assembly.setdefault("hybrid_assembler", "opera_ms")
+    if sample.platform == "assembly":
+        assembly["enable"] = True
+
+    data_profile = _data_profile_dag(sample, resolved)
+
+    for category in ("plasmid_binning", "typing", "host_prediction"):
+        block = resolved.get(category)
+        if not isinstance(block, dict):
+            block = {}
+            resolved[category] = block
+        configured_tools = block.get("tools", "auto")
+        if block.get("enable") and (configured_tools == "auto" or configured_tools is None):
+            block["tools"] = _default_tools_for_category(category, data_profile)
+
+    annotation = resolved.get("annotation")
+    if isinstance(annotation, dict) and (
+        _is_isolate_profile(data_profile)
+        or any(
+            key in annotation
+            for key in ("general_annotator", "arg_tools", "vf_tools", "mobile_element_tools")
+        )
+    ):
+        annotation["tools"] = _annotation_tools(resolved, data_profile)
+
+    return resolved
+
+
+# ── Backward-compatible entry point ───────────────────────────────────────
+
+
+def build_plan_from_dag(
+    config: Mapping[str, Any],
+    sample_context: SampleContext | None = None,
+    *,
+    check_files: bool = True,
+) -> ExecutionPlan:
+    """Build an execution plan from the canonical declarative DAG spec.
+
+    Uses the core DAG planner with plugin-specific hooks for context
+    resolution, sample config customization, and per-step skip logic.
+    """
+    ctx = sample_context or _core_build_sample_context(config, check_files=check_files)
+    if not sample_context:
+        has_abundance = any(s.platform != "assembly" for s in ctx.samples)
+        ctx.enable_sample_analysis = ctx.multi_sample
+        ctx.enable_differential_abundance = ctx.has_groups and has_abundance
+
+    resolved_config, _ = _plugin_context_resolver(config, ctx)
+    return _core_build_plan(
+        PLUGIN_ROOT / "metagenomic_plasmid" / "pipeline_dag.yaml",
+        resolved_config,
+        ctx,
+        context_resolver=None,
+        skip_step_hook=_plugin_skip_step_hook,
+    )
 
 
 class MetagenomicPlasmidPlugin:
@@ -95,6 +493,7 @@ class MetagenomicPlasmidPlugin:
         config_path: str | Path | None = None,
         *,
         profile: str | None = None,
+        db_profile: str | None = None,
         overrides: Optional[Mapping[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Load and normalize the pipeline configuration.
@@ -108,7 +507,12 @@ class MetagenomicPlasmidPlugin:
         合并默认配置与用户提供的覆盖项。``profile`` 默认为 ``"dry_run"``，
         确保即使没有真实 profile 也能安全加载配置。
         """
-        return load_autoplasm_config(config_path, profile=profile or "dry_run", overrides=overrides)
+        return load_autoplasm_config(
+            config_path,
+            profile=profile or "dry_run",
+            db_profile=db_profile,
+            overrides=overrides,
+        )
 
     def check_resources(
         self,

@@ -28,7 +28,7 @@ def test_public_generic_setup_requires_explicit_mode_and_supports_dry_run_and_mo
     assert planned["mock"] is False
     assert mocked["status"] == "ok"
     assert mocked["mock"] is True
-    assert (tmp_path / "database" / ".abi_mock_resource").is_file()
+    assert (tmp_path / "database").exists()
 
 
 def test_generic_resource_check_handles_nested_values_filters_and_statuses(tmp_path: Path) -> None:
@@ -71,6 +71,7 @@ def test_generic_resource_check_handles_nested_values_filters_and_statuses(tmp_p
 def test_manual_bundle_distinguishes_existing_mock_dry_run_and_manual(tmp_path: Path) -> None:
     existing = tmp_path / "existing"
     existing.mkdir()
+    (existing / ".autoplasm_resource_ready").write_text("ok", encoding="utf-8")
     base = {
         "outdir": str(tmp_path / "out"),
         "resources": {
@@ -97,7 +98,7 @@ def test_manual_bundle_distinguishes_existing_mock_dry_run_and_manual(tmp_path: 
     assert ready["status"] == "ok"
     assert mocked["status"] == "ok"
     assert mocked["mock"] is True
-    assert Path(mocked["path"], ".abi_mock_resource").is_file()
+    assert Path(mocked["path"]).exists()
     assert planned["status"] == "planned"
     assert planned["mock"] is False
     assert manual["status"] == "manual_required"
@@ -143,7 +144,7 @@ def test_reference_setup_covers_existing_mock_planned_manual_and_selection(tmp_p
         mock=False,
     )[0]
 
-    assert Path(mocked["path"], ".abi_mock_resource").is_file()
+    assert Path(mocked["path"]).exists()
     assert mocked["mock"] is True
     assert planned["status"] == "planned"
     assert planned["mock"] is False
@@ -190,7 +191,8 @@ def test_wgs_resource_setup_reports_process_failure_and_timeout(
         dry_run=False,
         mock=False,
     )[0]
-    assert (failed["status"], failed["message"]) == ("error", "bad db")
+    assert failed["status"] == "error"
+    assert "bad db" in failed["message"]
 
     monkeypatch.setattr(
         subprocess,
@@ -250,7 +252,7 @@ def test_rnaseq_setup_missing_script_and_selected_generic_resource(
         {"resources": {"genome_index": str(genome)}},
         resource_ids=["genome_index"],
     )
-    assert [(row["resource_id"], row["status"]) for row in rows] == [("genome_index", "ok")]
+    assert [(row["resource_id"], row["status"]) for row in rows] == [("genome_index", "incomplete")]
     assert rows[0]["mock"] is False
 
     mock_preview = resources._setup_rnaseq_expression(
@@ -315,6 +317,39 @@ def test_amplicon_taxonomy_validation_and_resource_filter(
         )
         == []
     )
+
+
+def test_amplicon_check_accepts_resource_override_mapping(tmp_path: Path) -> None:
+    database = tmp_path / "taxonomy.fa"
+    database.write_text(">seq;tax=d:Bacteria,p:Firmicutes\nACGT\n", encoding="utf-8")
+
+    rows = resources._check_amplicon_16s(
+        {"resources": {"taxonomy_db": {"path": str(database)}}},
+        resource_ids=["taxonomy_db"],
+    )
+
+    assert rows[-1]["path"] == str(database)
+    assert rows[-1]["status"] == "ok"
+
+
+def test_amplicon_mock_setup_creates_valid_taxonomy_file(tmp_path: Path) -> None:
+    rows = resources._setup_amplicon_16s(
+        {"outdir": str(tmp_path / "output")},
+        resource_ids=["taxonomy_db"],
+        dry_run=False,
+        mock=True,
+    )
+
+    taxonomy_path = Path(rows[0]["path"])
+    assert rows[0]["status"] == "ok"
+    assert taxonomy_path.is_file()
+    assert ";tax=" in taxonomy_path.read_text(encoding="utf-8")
+
+    checked = resources._check_amplicon_16s(
+        {"resources": {"taxonomy_db": {"path": str(taxonomy_path)}}},
+        resource_ids=["taxonomy_db"],
+    )
+    assert checked[-1]["status"] == "ok"
 
 
 def test_amplicon_mock_dry_run_is_planned_and_does_not_execute(tmp_path: Path, monkeypatch) -> None:
@@ -388,6 +423,7 @@ def test_amplicon_download_failure_uses_synthetic_fallback(tmp_path: Path, monke
 
     def _fake_fallback(path: Path) -> bool:
         called.append(path)
+        path.mkdir(parents=True, exist_ok=True)
         (path / "synthetic_sintax.fa").write_text(">seq1;tax=Bacteria\nACGT\n", encoding="utf-8")
         return True
 

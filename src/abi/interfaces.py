@@ -155,6 +155,7 @@ class ABIPlugin(Protocol):
         config_path: str | Path | None = None,
         *,
         profile: str | None = None,
+        db_profile: str | None = None,
         overrides: Optional[Mapping[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Load and validate the plugin's configuration.
@@ -164,6 +165,7 @@ class ABIPlugin(Protocol):
           the plugin loads its built-in defaults.
         * ``profile`` -- optional config profile name (for plugins that
           support multiple named profiles within one file).
+        * ``db_profile`` -- optional database profile name (e.g. light, full, shared).
         * ``overrides`` -- key-value pairs that override config file values.
           Applied last, after defaults and file loading.
 

@@ -33,41 +33,47 @@ resources:
   root: resources/autoplasm
   auto_download: false
   genomad:
-    database: GENOMAD_DB_NOT_CONFIGURED
+    database: genomad/genomad_db
     version: ""
   bakta:
-    database: BAKTA_DB_NOT_CONFIGURED
+    database: bakta/db
     version: ""
   mob_suite:
-    database: MOB_SUITE_DB_NOT_CONFIGURED
+    database: mob_suite/data
     version: ""
   plasmidfinder:
-    database: PLASMIDFINDER_DB_NOT_CONFIGURED
+    database: plasmidfinder_db
     version: ""
   metaphlan:
-    database: METAPHLAN_DB_NOT_CONFIGURED
+    database: metaphlan
     version: ""
   amrfinderplus:
-    database: AMRFINDERPLUS_DB_NOT_CONFIGURED/latest
+    database: amrfinderplus/latest
     version: ""
   card:
-    database: CARD_DB_NOT_CONFIGURED
+    database: card
     version: ""
   kraken2:
-    database: KRAKEN2_DB_NOT_CONFIGURED
+    database: kraken2
     version: ""
   gtdbtk:
-    database: GTDBTK_DB_NOT_CONFIGURED
+    database: gtdbtk/release232
     version: ""
   checkm2:
-    database: CHECKM2_DB_NOT_CONFIGURED
+    database: checkm2
+    version: ""
+  eggnog_mapper:
+    database: eggnog_mapper
+    version: ""
+  abricate:
+    database: abricate
     version: ""
   plasme:
-    database: PLASME_DB_NOT_CONFIGURED
+    database: PLASMe/DB
     version: ""
   plasx:
-    annotations: PLASX_DATA_NOT_CONFIGURED
-    model: PLASX_MODEL_NOT_CONFIGURED
+    annotations: PlasX
+    model: PlasX
     version: ""
   copla:
     refgraph: COPLA_REFGRAPH_NOT_CONFIGURED

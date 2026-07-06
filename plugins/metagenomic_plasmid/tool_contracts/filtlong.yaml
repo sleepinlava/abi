@@ -17,7 +17,7 @@ outputs:
     type: path
 execution:
   executable: filtlong
-  command_template: filtlong {long_reads} > {output_dir}/{sample_id}.filtlong.fastq
+  command_template: filtlong --min_length 1000 --keep_percent 90 {long_reads} > {output_dir}/{sample_id}.filtlong.fastq
   network: false
   writes_output: true
 normalization:

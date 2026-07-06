@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any, Mapping
 
 from abi.executor import GenericABIExecutor
@@ -10,6 +11,18 @@ from abi.provenance import RunLogger
 from abi.runtimes.base import RuntimeOptions, RuntimeResult
 from abi.schemas import ABIError
 from abi.tables import StandardTableManager
+
+
+def _skip_preflight_requested() -> bool:
+    """Honor an explicit opt-in bypass of the resource/runtime preflight.
+
+    Some plugins (e.g. autoplasm) register resources for every supported tool
+    regardless of which stages are enabled in the user config, which makes the
+    default preflight over-report.  Setting ``ABI_SKIP_PREFLIGHT=1`` lets an
+    operator who has manually verified the enabled tools bypass the gate while
+    still running real tools.  Default behavior is unchanged.
+    """
+    return os.environ.get("ABI_SKIP_PREFLIGHT", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _coerce_bool(value: Any) -> bool:
@@ -49,7 +62,7 @@ class LocalRuntime:
         dry_run: bool,
     ) -> RuntimeResult:
         mock_tools = dry_run or _coerce_bool(config.get("mock_tools"))
-        if not mock_tools:
+        if not mock_tools and not _skip_preflight_requested():
             report = run_plugin_preflight(self.plugin, config, engine="local")
             if str(report.get("status", "pass")) == "fail":
                 raise ABIError(

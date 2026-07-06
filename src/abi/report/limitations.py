@@ -50,9 +50,12 @@ def load_limitations(
         path = Path(str(source))
     if not path.exists():
         return []
-    from abi.config import load_yaml
+    from abi.config import ABIConfigError, load_yaml
 
-    data = load_yaml(path)
+    try:
+        data = load_yaml(path)
+    except ABIConfigError:
+        return []
     if not isinstance(data, Mapping):
         return []
     items = data.get("limitations", [])

@@ -1,0 +1,41 @@
+# ABI Database Profile: light
+# 最小数据库集合 — 本地开发、CI、smoke 测试使用
+# Minimal databases for local development, CI, and smoke testing.
+#
+# 用法 / Usage:
+#   abi check-resources --type metagenomic_plasmid --db-profile light
+#   abi run --type metagenomic_plasmid --db-profile light --smoke --confirm-execution
+#
+# 与 --profile (执行类) 正交；可同时使用。
+# Orthogonal to --profile (execution profile); may be combined.
+
+resources:
+  root: /root/autodl-tmp/resources/autoplasm
+
+  genomad:
+    database: genomad
+  bakta:
+    # Bakta light database (~2GB) — sufficient for synthetic/smoke contigs.
+    # For production genome annotation, switch to `full` profile.
+    database: bakta/db
+  mob_suite:
+    database: mob_suite
+  plasmidfinder:
+    database: plasmidfinder_db
+  metaphlan:
+    database: metaphlan
+  amrfinderplus:
+    database: amrfinderplus
+  card:
+    database: card
+  kraken2:
+    database: kraken2
+    version: standard_20260226
+  gtdbtk:
+    database: gtdbtk
+  checkm2:
+    database: checkm2
+  eggnog_mapper:
+    database: eggnog_mapper
+  abricate:
+    database: abricate

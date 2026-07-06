@@ -34,6 +34,7 @@ resources/*
 !resources/.gitkeep
 results/*
 !results/.gitkeep
+logs/
 log/*
 !log/.gitkeep
 *.log
@@ -141,6 +142,9 @@ plugins/*/report/*
 # Jupyter notebook checkpoints
 .ipynb_checkpoints/
 
+# Cloud/download scratch outputs
+/merged.tab
+
 # Temporary analysis outputs
 tmp/
 temp/
@@ -184,3 +188,7 @@ bench/results/
 sample_sheet_illumina_test.tsv
 config_illumina_full.yaml
 docs/en/abi_hpc_validation_guide.md
+
+locks/
+
+locks/

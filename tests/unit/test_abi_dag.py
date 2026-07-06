@@ -154,11 +154,11 @@ def test_infer_dag_accepts_metagenomic_plasmid_shared_output_dirs(tmp_path):
     # S2 is assembly-only in examples/sample_sheet.tsv, so the planner must
     # preserve its own platform route instead of forcing the first sample's
     # Illumina route onto the whole project.
-    assert "S2_assembly_provided" in dag.topological_order
+    assert "S2_assembly_internal" in dag.topological_order
     assert "S2_qc_fastp" not in dag.topological_order
     # Verify the plasmid detection chain is intact
-    assert "S1_plasmid_detect_genomad" in dag.topological_order
-    assert "S1_plasmid_consensus" in dag.topological_order
+    assert "S1_plasmid_detection_genomad" in dag.topological_order
+    assert "S1_plasmid_consensus_internal" in dag.topological_order
 
 
 def test_infer_dag_ignores_structured_non_path_values():
@@ -281,10 +281,10 @@ def test_metagenomic_plasmid_core_declared_workflow_is_golden_dag():
     positions = {step_id: index for index, step_id in enumerate(dag.topological_order)}
 
     assert positions["S1_qc_fastp"] < positions["S1_assembly_megahit"]
-    assert positions["S1_assembly_megahit"] < positions["S1_plasmid_detect_genomad"]
-    assert positions["S1_plasmid_detect_genomad"] < positions["S1_annotation_bakta"]
-    assert positions["S1_plasmid_detect_genomad"] < positions["S1_typing_plasmidfinder"]
-    assert positions["S1_plasmid_detect_genomad"] < positions["S1_abundance_coverm"]
+    assert positions["S1_assembly_megahit"] < positions["S1_plasmid_detection_genomad"]
+    assert positions["S1_plasmid_detection_genomad"] < positions["S1_annotation_bakta"]
+    assert positions["S1_plasmid_detection_genomad"] < positions["S1_typing_plasmidfinder"]
+    assert positions["S1_plasmid_detection_genomad"] < positions["S1_abundance_coverm"]
     assert positions["S1_abundance_coverm"] < positions["report_markdown"]
 
 

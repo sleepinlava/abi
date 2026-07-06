@@ -3,7 +3,7 @@ tools:
     name: ViWrap
     category: viral_analysis
     executable: ViWrap
-    env_name: abi-base
+    env_name: autoplasm-base
     required: true
     output_dir_policy: must_not_exist
     version_command: ViWrap -h

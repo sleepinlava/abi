@@ -81,7 +81,8 @@ nodes:
         path: "{outdir}/{category_dir}/{sample_id}"
     assertions:
       - "output_files.output_dir exists"
-      - "output_files.contigs_fasta.min_size >= 1000"
+      # min_size is enforced via the ``contract: {min_size: "1KB"}`` declaration
+      # above on ``contigs_fasta``; do not duplicate here.
 
   # ── Annotation ──────────────────────────────────────────────────────
   annotation_prokka:

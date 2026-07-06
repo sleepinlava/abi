@@ -26,6 +26,7 @@ updated, keeping consumers stable. / 只写入模式中声明的列，防止模�
 from __future__ import annotations
 
 import csv
+import threading
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping
 
@@ -44,6 +45,8 @@ class StandardTableManager:
     - **Append-friendly**: write_table() with append=True adds rows without
       re-reading the file; headers are never duplicated. / 追加友好
     - **Summary**: summarize() returns row counts for dashboards and reports. / 汇总行数
+    - **Thread-safe**: per-table locks prevent race conditions on concurrent
+      writes from parallel pipeline steps. / 每表锁防止多线程竞争写入。
 
     # Usage pattern / 使用模式
         manager = StandardTableManager({"samples": ["sample_id", "platform"]})
@@ -67,6 +70,15 @@ class StandardTableManager:
         }
         if not self.schemas:
             raise ValueError("ABI standard table schemas cannot be empty")
+        self._global_lock = threading.Lock()
+        self._table_locks: dict[str, threading.Lock] = {}
+
+    def _lock_for(self, table_name: str) -> threading.Lock:
+        """Return a per-table lock, creating it on first access."""
+        with self._global_lock:
+            if table_name not in self._table_locks:
+                self._table_locks[table_name] = threading.Lock()
+            return self._table_locks[table_name]
 
     def table_path(self, tables_dir: str | Path, table_name: str) -> Path:
         """Return the filesystem path for a standard table .tsv file.
@@ -86,14 +98,20 @@ class StandardTableManager:
         Existing files are NOT overwritten — only missing files are created.
         This means ensure_tables() is safe to call multiple times during a
         pipeline run (e.g. once per step). / 只创建缺失文件，不覆盖已有文件。
+
+        # Thread-safe / 线程安全
+        Per-table locks prevent duplicate header writes when multiple threads
+        call ensure_tables() concurrently on the same schema. / 每表锁防止
+        多线程同时创建表头时的竞争。
         """
         paths = {}
         for table_name, fields in self.schemas.items():
             path = self.table_path(tables_dir, table_name)
             path.parent.mkdir(parents=True, exist_ok=True)
-            if not path.exists():
-                # Only write header if file doesn't exist yet / 文件不存在时才写表头
-                self._write_header(path, fields)
+            with self._lock_for(table_name):
+                if not path.exists():
+                    # Only write header if file doesn't exist yet / 文件不存在时才写表头
+                    self._write_header(path, fields)
             paths[table_name] = path
         return paths
 
@@ -146,22 +164,22 @@ class StandardTableManager:
         path = self.table_path(tables_dir, table_name)
         path.parent.mkdir(parents=True, exist_ok=True)
         rows = list(rows)
-        # Determine write mode: append to existing file, or create/overwrite / 确定写入模式
-        mode = "a" if append and path.exists() else "w"
-        with path.open(mode, encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(
-                handle,
-                fieldnames=fields,
-                delimiter="\t",
-                extrasaction="ignore",  # Drop extra keys silently / 静默丢弃额外字段
-                lineterminator="\n",
-            )
-            # Write header if starting fresh or file is empty / 新模式或空文件写表头
-            if mode == "w" or path.stat().st_size == 0:
-                writer.writeheader()
-            for row in rows:
-                # Build a row dict with only declared fields, converting None→"" / 仅包含声明字段
-                writer.writerow({field: _tsv_value(row.get(field, "")) for field in fields})
+        with self._lock_for(table_name):
+            # Determine write mode: append to existing file, or create/overwrite / 确定写入模式
+            mode = "a" if append and path.exists() else "w"
+            with path.open(mode, encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=fields,
+                    delimiter="\t",
+                    extrasaction="ignore",  # Drop extra keys silently / 静默丢弃额外字段
+                    lineterminator="\n",
+                )
+                # Write header if starting fresh or file is empty / 新模式或空文件写表头
+                if mode == "w" or path.stat().st_size == 0:
+                    writer.writeheader()
+                for row in rows:
+                    writer.writerow({field: _tsv_value(row.get(field, "")) for field in fields})
         return path
 
     def summarize(self, tables_dir: str | Path) -> Dict[str, Dict[str, Any]]:
@@ -177,9 +195,10 @@ class StandardTableManager:
         summary = {}
         for table_name in self.schemas:
             path = self.table_path(tables_dir, table_name)
-            with path.open("r", encoding="utf-8", newline="") as handle:
-                # csv.DictReader skips the header row automatically / DictReader 自动跳表头
-                row_count = sum(1 for _ in csv.DictReader(handle, delimiter="\t"))
+            with self._lock_for(table_name):
+                with path.open("r", encoding="utf-8", newline="") as handle:
+                    # csv.DictReader skips the header row automatically / DictReader 自动跳表头
+                    row_count = sum(1 for _ in csv.DictReader(handle, delimiter="\t"))
             summary[table_name] = {"rows": row_count, "path": str(path)}
         return summary
 

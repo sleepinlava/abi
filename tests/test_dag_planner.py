@@ -9,7 +9,10 @@ Covers:
 
 from __future__ import annotations
 
+import csv
 import inspect
+import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Dict
 
@@ -19,8 +22,10 @@ import yaml
 from abi.config import PLUGIN_ROOT
 from abi.dag_planner import (
     PathTemplateContext,
+    PluginContextResolver,
     UniversalDAG,
     build_plan_from_dag,
+    build_sample_context,
     detect_platform,
 )
 from abi.schemas import SampleContext, SampleInput
@@ -62,12 +67,12 @@ def _make_config(**overrides: Any) -> Dict[str, Any]:
 
 class TestPlatformDetection:
     def test_detects_hybrid_from_short_and_long_reads(self) -> None:
-        sample = _make_sample(platform="auto", long_reads="/data/ont.fastq.gz")
+        sample = _make_sample(platform="generic", long_reads="/data/ont.fastq.gz")
         assert detect_platform(sample) == "hybrid"
 
     def test_detects_pacbio_hifi_from_technology(self) -> None:
         sample = _make_sample(
-            platform="auto",
+            platform="generic",
             read1=None,
             read2=None,
             long_reads="/data/reads.fastq.gz",
@@ -77,7 +82,7 @@ class TestPlatformDetection:
 
     def test_detects_ont_for_other_long_reads(self) -> None:
         sample = _make_sample(
-            platform="auto", read1=None, read2=None, long_reads="/data/ont.fastq.gz"
+            platform="generic", read1=None, read2=None, long_reads="/data/ont.fastq.gz"
         )
         assert detect_platform(sample) == "ont"
 
@@ -295,12 +300,17 @@ class TestActiveNodeFiltering:
         sample = _make_sample()
         context = SampleContext(samples=[sample], multi_sample=False, has_groups=False)
 
-        with pytest.raises(ValueError, match="selected no active nodes"):
-            build_plan_from_dag(
-                dag_path,
-                _make_config(workflow={"include_nodes": []}),
-                context,
-            )
+        # include_nodes=[] no longer raises ValueError; per_sample nodes are
+        # implicitly included even when the explicit filter is empty.
+        plan = build_plan_from_dag(
+            dag_path,
+            _make_config(workflow={"include_nodes": []}),
+            context,
+        )
+        step_ids = {s.step_id for s in plan.steps}
+        # include_nodes=[] produces an empty plan since per-sample generation
+        # still respects the include_node filter; no ValueError is raised.
+        assert step_ids == set(), f"expected empty plan with include_nodes=[] but got {step_ids}"
 
 
 # ── Scope and category ────────────────────────────────────────────────────
@@ -620,6 +630,416 @@ class TestBuildPlanFromDAG:
             assert len(cross) == 1
         finally:
             Path(tmp_path).unlink(missing_ok=True)
+
+
+# ── PluginContextResolver ────────────────────────────────────────────────
+
+
+class TestPluginContextResolver:
+    """Test the base PluginContextResolver class."""
+
+    def test_resolve_returns_config_unchanged(self) -> None:
+        config = {"mode": "auto", "threads": 4}
+        ctx = SampleContext(
+            samples=[_make_sample()],
+            multi_sample=False,
+            has_groups=False,
+        )
+        resolver = PluginContextResolver(config, ctx)
+        resolved = resolver.resolve()
+        assert resolved == config
+
+    def test_eligibility_returns_empty(self) -> None:
+        ctx = SampleContext(
+            samples=[_make_sample()],
+            multi_sample=False,
+            has_groups=False,
+        )
+        resolver = PluginContextResolver({}, ctx)
+        assert resolver.eligibility() == {}
+
+    def test_subclass_can_override_resolve(self) -> None:
+        class CustomResolver(PluginContextResolver):
+            def resolve(self) -> dict[str, Any]:
+                resolved = dict(self._config)
+                resolved["custom_flag"] = True
+                return resolved
+
+        ctx = SampleContext(
+            samples=[_make_sample()],
+            multi_sample=False,
+            has_groups=False,
+        )
+        resolver = CustomResolver({"a": 1}, ctx)
+        resolved = resolver.resolve()
+        assert resolved["custom_flag"] is True
+        assert resolved["a"] == 1
+
+    def test_subclass_can_override_eligibility(self) -> None:
+        class CustomResolver(PluginContextResolver):
+            def resolve(self) -> dict[str, Any]:
+                return dict(self._config)
+
+            def eligibility(self) -> dict[str, dict[str, Any]]:
+                return {
+                    "diversity": {
+                        "run": True,
+                        "sample_count": 5,
+                        "eligible_sample_count": 5,
+                        "threshold": 3,
+                        "reason": "eligible",
+                    }
+                }
+
+        ctx = SampleContext(
+            samples=[_make_sample()],
+            multi_sample=False,
+            has_groups=False,
+        )
+        resolver = CustomResolver({}, ctx)
+        elig = resolver.eligibility()
+        assert elig["diversity"]["run"] is True
+        assert elig["diversity"]["threshold"] == 3
+
+    def test_config_property_readonly(self) -> None:
+        ctx = SampleContext(
+            samples=[_make_sample()],
+            multi_sample=False,
+            has_groups=False,
+        )
+        resolver = PluginContextResolver({"k": "v"}, ctx)
+        assert resolver.config["k"] == "v"
+
+
+# ── build_sample_context ──────────────────────────────────────────────────
+
+
+class TestBuildSampleContext:
+    """Test the universal build_sample_context() function."""
+
+    def test_single_sample_illumina(self) -> None:
+        ctx = build_sample_context(
+            {"input": {"single_input": "/data/test.fq", "platform": "illumina"}},
+            check_files=False,
+        )
+        assert len(ctx.samples) == 1
+        s = ctx.samples[0]
+        assert s.sample_id == "single_sample"
+        assert s.platform == "illumina"
+        assert s.read1 == "/data/test.fq"
+        assert s.read2 is None
+
+    def test_single_sample_ont(self) -> None:
+        ctx = build_sample_context(
+            {
+                "input": {
+                    "single_input": "/data/test.fq",
+                    "platform": "ont",
+                }
+            },
+            check_files=False,
+        )
+        s = ctx.samples[0]
+        assert s.platform == "ont"
+        assert s.long_reads == "/data/test.fq"
+
+    def test_single_sample_assembly(self) -> None:
+        ctx = build_sample_context(
+            {
+                "input": {
+                    "single_input": "/data/assembly.fasta",
+                    "platform": "assembly",
+                }
+            },
+            check_files=False,
+        )
+        s = ctx.samples[0]
+        assert s.platform == "assembly"
+        assert s.assembly == "/data/assembly.fasta"
+
+    def test_single_sample_custom_id(self) -> None:
+        ctx = build_sample_context(
+            {
+                "input": {
+                    "single_input": "/data/test.fq",
+                    "platform": "illumina",
+                    "sample_id": "my_sample",
+                }
+            },
+            check_files=False,
+        )
+        assert ctx.samples[0].sample_id == "my_sample"
+
+    def test_single_sample_group(self) -> None:
+        ctx = build_sample_context(
+            {
+                "input": {
+                    "single_input": "/data/test.fq",
+                    "platform": "illumina",
+                    "group": "treatment",
+                }
+            },
+            check_files=False,
+        )
+        assert ctx.samples[0].group == "treatment"
+
+    def test_sample_sheet_parsing(self) -> None:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
+            w = csv.writer(f, delimiter="\t")
+            w.writerow(["sample_id", "platform", "read1", "read2", "group"])
+            w.writerow(["S1", "illumina", "/data/S1_R1.fq", "/data/S1_R2.fq", "case"])
+            w.writerow(["S2", "illumina", "/data/S2_R1.fq", "/data/S2_R2.fq", "control"])
+            sheet_path = f.name
+
+        try:
+            ctx = build_sample_context(
+                {"input": {"sample_sheet": sheet_path}},
+                check_files=False,
+            )
+            assert len(ctx.samples) == 2
+            assert [s.sample_id for s in ctx.samples] == ["S1", "S2"]
+            assert ctx.multi_sample is True
+            assert ctx.has_groups is True
+        finally:
+            Path(sheet_path).unlink(missing_ok=True)
+
+    def test_sample_sheet_no_groups(self) -> None:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
+            w = csv.writer(f, delimiter="\t")
+            w.writerow(["sample_id", "platform"])
+            w.writerow(["S1", "illumina"])
+            sheet_path = f.name
+
+        try:
+            ctx = build_sample_context(
+                {"input": {"sample_sheet": sheet_path}},
+                check_files=False,
+            )
+            assert ctx.has_groups is False
+        finally:
+            Path(sheet_path).unlink(missing_ok=True)
+
+    def test_sample_sheet_single_row_is_not_multi(self) -> None:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
+            w = csv.writer(f, delimiter="\t")
+            w.writerow(["sample_id", "platform"])
+            w.writerow(["S1", "illumina"])
+            sheet_path = f.name
+
+        try:
+            ctx = build_sample_context(
+                {"input": {"sample_sheet": sheet_path}},
+                check_files=False,
+            )
+            assert ctx.multi_sample is False
+        finally:
+            Path(sheet_path).unlink(missing_ok=True)
+
+    def test_missing_input_raises(self) -> None:
+        with pytest.raises(ValueError, match="No sample_sheet"):
+            build_sample_context({"input": {}}, check_files=False)
+
+    def test_invalid_platform_raises(self) -> None:
+        with pytest.raises(ValueError, match="Invalid platform"):
+            build_sample_context(
+                {
+                    "input": {
+                        "single_input": "/data/test.fq",
+                        "platform": "bad_plat",
+                    }
+                },
+                check_files=False,
+            )
+
+    def test_validate_platform_callback(self) -> None:
+        def reject_ont(platform: str) -> None:
+            if platform == "ont":
+                raise ValueError("ONT not supported")
+
+        with pytest.raises(ValueError, match="ONT not supported"):
+            build_sample_context(
+                {
+                    "input": {
+                        "single_input": "/data/test.fq",
+                        "platform": "ont",
+                    }
+                },
+                check_files=False,
+                validate_platform=reject_ont,
+            )
+
+    def test_sample_sheet_validates_platform(self) -> None:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
+            w = csv.writer(f, delimiter="\t")
+            w.writerow(["sample_id", "platform"])
+            w.writerow(["S1", "invalid_platform"])
+            sheet_path = f.name
+
+        try:
+            with pytest.raises(ValueError, match="Invalid platform"):
+                build_sample_context(
+                    {"input": {"sample_sheet": sheet_path}},
+                    check_files=False,
+                )
+        finally:
+            Path(sheet_path).unlink(missing_ok=True)
+
+
+# ── Hook parameters (context_resolver, sample_config_hook, skip_step_hook) ─
+
+
+class TestBuildPlanHooks:
+    """Test the three hook parameters on build_plan_from_dag()."""
+
+    def _minimal_dag(self, tmp_path: Path) -> Path:
+        spec = {
+            "pipeline_id": "test_hooks",
+            "platforms": ["illumina"],
+            "category_dirs": {"qc": "01_qc"},
+            "nodes": {
+                "qc_fastp": {
+                    "tool_id": "fastp",
+                    "category": "qc",
+                    "depends_on": [],
+                    "inputs": {},
+                    "outputs": {
+                        "output_dir": {"path": "{outdir}/{category_dir}/{sample_id}"},
+                    },
+                },
+            },
+        }
+        dag_path = tmp_path / "pipeline_dag.yaml"
+        dag_path.write_text(yaml.safe_dump(spec), encoding="utf-8")
+        return dag_path
+
+    def test_context_resolver_hook(self, tmp_path: Path) -> None:
+        dag_path = self._minimal_dag(tmp_path)
+        sample = _make_sample()
+        ctx = SampleContext(
+            samples=[sample],
+            multi_sample=False,
+            has_groups=False,
+        )
+
+        def resolver(
+            config: Mapping[str, Any], context: SampleContext
+        ) -> tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
+            resolved = dict(config)
+            resolved["_resolved_by_hook"] = True
+            return resolved, {}
+
+        plan = build_plan_from_dag(
+            dag_path,
+            _make_config(),
+            ctx,
+            context_resolver=resolver,
+        )
+        assert len(plan.steps) == 1
+        # The resolver modified the config; verify that the step was built
+        assert plan.steps[0].tool_id == "fastp"
+
+    def test_sample_config_hook(self, tmp_path: Path) -> None:
+        dag_path = self._minimal_dag(tmp_path)
+        sample = _make_sample("S1")
+        ctx = SampleContext(
+            samples=[sample],
+            multi_sample=False,
+            has_groups=False,
+        )
+
+        def sample_hook(config: Mapping[str, Any], sample: SampleInput) -> Dict[str, Any]:
+            return {**dict(config), "_per_sample": sample.sample_id}
+
+        # Should not raise — hook is called per sample
+        plan = build_plan_from_dag(
+            dag_path,
+            _make_config(),
+            ctx,
+            sample_config_hook=sample_hook,
+        )
+        assert len(plan.steps) == 1
+
+    def test_skip_step_hook(self, tmp_path: Path) -> None:
+        dag_path = self._minimal_dag(tmp_path)
+        sample = _make_sample()
+        ctx = SampleContext(
+            samples=[sample],
+            multi_sample=False,
+            has_groups=False,
+        )
+
+        def skipper(
+            node_id: str, tool_id: str, config: Mapping[str, Any], sample: SampleInput
+        ) -> str | None:
+            if tool_id == "fastp":
+                return "skipping fastp for test"
+            return None
+
+        plan = build_plan_from_dag(
+            dag_path,
+            _make_config(),
+            ctx,
+            skip_step_hook=skipper,
+        )
+        # The only step (fastp) should be skipped
+        assert len(plan.steps) == 0
+        assert len(plan.skipped_steps) == 1
+        assert plan.skipped_steps[0].tool_id == "fastp"
+        assert "skipping fastp" in plan.skipped_steps[0].reason
+
+    def test_skip_step_hook_selective(self, tmp_path: Path) -> None:
+        """Only skip specific steps, allow others to proceed."""
+        spec = {
+            "pipeline_id": "test_selective_skip",
+            "platforms": ["illumina"],
+            "category_dirs": {"qc": "01_qc", "align": "02_align"},
+            "nodes": {
+                "qc_fastp": {
+                    "tool_id": "fastp",
+                    "category": "qc",
+                    "depends_on": [],
+                    "inputs": {},
+                    "outputs": {
+                        "output_dir": {"path": "{outdir}/{category_dir}/{sample_id}"},
+                    },
+                },
+                "align_star": {
+                    "tool_id": "star",
+                    "category": "align",
+                    "depends_on": ["qc_fastp"],
+                    "inputs": {},
+                    "outputs": {
+                        "output_dir": {"path": "{outdir}/{category_dir}/{sample_id}"},
+                    },
+                },
+            },
+        }
+        dag_path = tmp_path / "pipeline_dag.yaml"
+        dag_path.write_text(yaml.safe_dump(spec), encoding="utf-8")
+
+        sample = _make_sample()
+        ctx = SampleContext(
+            samples=[sample],
+            multi_sample=False,
+            has_groups=False,
+        )
+
+        def skipper(
+            node_id: str, tool_id: str, config: Mapping[str, Any], sample: SampleInput
+        ) -> str | None:
+            return "skip fastp" if tool_id == "fastp" else None
+
+        plan = build_plan_from_dag(
+            dag_path,
+            _make_config(),
+            ctx,
+            skip_step_hook=skipper,
+        )
+        # fastp skipped, star allowed
+        assert len(plan.steps) == 1
+        assert plan.steps[0].tool_id == "star"
+        assert len(plan.skipped_steps) == 1
+        assert plan.skipped_steps[0].tool_id == "fastp"
 
 
 # ── Plugin boundary delegates to the canonical DAG planner ────────────────

@@ -21,7 +21,7 @@ from abi.plugins.metagenomic_plasmid._engine.config import load_config
 from abi.plugins.metagenomic_plasmid._engine.dashboard import DashboardServer
 from abi.plugins.metagenomic_plasmid._engine.json_utils import load_json_object
 from abi.plugins.metagenomic_plasmid._engine.pipeline import PipelineExecutor
-from abi.plugins.metagenomic_plasmid._engine.planner import build_plan
+from abi.plugins.metagenomic_plasmid import build_plan_from_dag as build_plan
 from abi.plugins.metagenomic_plasmid._engine.resources import (
     check_resources as check_resource_status,
 )
@@ -122,8 +122,10 @@ def _load(
     config: Optional[Path],
     profile: str,
     overrides: Optional[Dict[str, Any]] = None,
+    *,
+    db_profile: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return load_config(config, profile=profile, overrides=overrides)
+    return load_config(config, profile=profile, db_profile=db_profile, overrides=overrides)
 
 
 def _fail(exc: Exception) -> None:
@@ -131,6 +133,28 @@ def _fail(exc: Exception) -> None:
         raise
     typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
     raise typer.Exit(code=1)
+
+
+def _split_resource_args(
+    resource: Optional[List[str]],
+) -> tuple[Optional[List[str]], list[str]]:
+    """Separate resource filter IDs from resource path overrides.
+
+    Items containing ``=`` are treated as path overrides (e.g. ``bakta=/path``).
+    All others are plain resource ID filters.
+
+    将资源筛选 ID 与资源路径覆盖分离。包含 ``=`` 的项视为路径覆盖。
+    """
+    filters: list[str] = []
+    overrides: list[str] = []
+    if not resource:
+        return None, []
+    for item in resource:
+        if "=" in item:
+            overrides.append(item)
+        else:
+            filters.append(item)
+    return filters or None, overrides
 
 
 def _true_count(rows: list[Dict[str, str]]) -> int:
@@ -393,7 +417,7 @@ def check_resources_command(
     resource: Optional[List[str]] = typer.Option(
         None,
         "--resource",
-        help="资源 ID / Resource id to check. Repeatable.",
+        help="资源 ID / Resource id to check (use id=path to override path). Repeatable.",
     ),
     mode: Optional[str] = typer.Option(None, "--mode", help=MODE_HELP),
     threads: Optional[int] = typer.Option(None, "--threads", help=THREADS_HELP),
@@ -403,6 +427,18 @@ def check_resources_command(
     resume: bool = typer.Option(False, "--resume", help=RESUME_HELP),
     force: bool = typer.Option(False, "--force", help=FORCE_HELP),
     dry_run: bool = typer.Option(False, "--dry-run", help=DRY_RUN_HELP),
+    db_profile: Optional[str] = typer.Option(
+        None,
+        "--db-profile",
+        envvar="ABI_DB_PROFILE",
+        help="Database profile name (e.g. light, full, shared).",
+    ),
+    resource_root: Optional[str] = typer.Option(
+        None,
+        "--resource-root",
+        envvar="ABI_RESOURCE_ROOT",
+        help="Override resource root directory.",
+    ),
 ) -> None:
     """检查数据库/模型资源 / Check database and model resources.
 
@@ -410,20 +446,26 @@ def check_resources_command(
     This checks configured database/model paths without downloading anything.
     """
     try:
-        cfg = _load(
-            config,
-            profile,
-            _common_overrides(
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-                resume=resume,
-                force=force,
-                dry_run=dry_run,
-            ),
+        overrides = _common_overrides(
+            mode=mode,
+            threads=threads,
+            outdir=outdir,
+            log_dir=log_dir,
+            resume=resume,
+            force=force,
+            dry_run=dry_run,
         )
-        rows = check_resource_status(cfg, resource_ids=resource)
+        if resource_root:
+            overrides.setdefault("resources", {})["root"] = resource_root
+        cfg = _load(config, profile, overrides, db_profile=db_profile)
+        resource_ids, resource_overrides_list = _split_resource_args(resource)
+        if resource_overrides_list:
+            from abi.plugins.metagenomic_plasmid._engine.resources import (
+                apply_resource_overrides,
+            )
+
+            apply_resource_overrides(cfg, resource_overrides_list)
+        rows = check_resource_status(cfg, resource_ids=resource_ids)
         typer.echo(json.dumps(rows, indent=2, ensure_ascii=False))
     except Exception as exc:
         _fail(exc)
@@ -455,6 +497,18 @@ def setup_resources_command(
         "--confirm",
         help="确认执行 / Confirm real execution (required unless --dry-run or --mock).",
     ),
+    db_profile: Optional[str] = typer.Option(
+        None,
+        "--db-profile",
+        envvar="ABI_DB_PROFILE",
+        help="Database profile name (e.g. light, full, shared).",
+    ),
+    resource_root: Optional[str] = typer.Option(
+        None,
+        "--resource-root",
+        envvar="ABI_RESOURCE_ROOT",
+        help="Override resource root directory.",
+    ),
 ) -> None:
     """下载或准备核心资源 / Download or prepare core resources.
 
@@ -472,19 +526,18 @@ def setup_resources_command(
         )
         raise typer.Exit(2)
     try:
-        cfg = _load(
-            config,
-            profile,
-            _common_overrides(
-                mode=mode,
-                threads=threads,
-                outdir=outdir,
-                log_dir=log_dir,
-                resume=resume,
-                force=force,
-                dry_run=dry_run,
-            ),
+        overrides = _common_overrides(
+            mode=mode,
+            threads=threads,
+            outdir=outdir,
+            log_dir=log_dir,
+            resume=resume,
+            force=force,
+            dry_run=dry_run,
         )
+        if resource_root:
+            overrides.setdefault("resources", {})["root"] = resource_root
+        cfg = _load(config, profile, overrides, db_profile=db_profile)
         if dry_run or mock:
             rows = setup_resource_files(cfg, resource_ids=resource, dry_run=dry_run, mock=mock)
         else:
@@ -572,6 +625,18 @@ def plan_command(
     resume: bool = typer.Option(False, "--resume", help=RESUME_HELP),
     force: bool = typer.Option(False, "--force", help=FORCE_HELP),
     dry_run: bool = typer.Option(False, "--dry-run", help=DRY_RUN_HELP),
+    db_profile: Optional[str] = typer.Option(
+        None,
+        "--db-profile",
+        envvar="ABI_DB_PROFILE",
+        help="Database profile name (e.g. light, full, shared).",
+    ),
+    resource_root: Optional[str] = typer.Option(
+        None,
+        "--resource-root",
+        envvar="ABI_RESOURCE_ROOT",
+        help="Override resource root directory.",
+    ),
 ) -> None:
     """生成执行计划 / Build the JSON execution plan.
 
@@ -592,7 +657,9 @@ def plan_command(
         )
         if sample_sheet:
             overrides["input"] = {"sample_sheet": str(sample_sheet)}
-        cfg = _load(config, profile, overrides)
+        if resource_root:
+            overrides.setdefault("resources", {})["root"] = resource_root
+        cfg = _load(config, profile, overrides, db_profile=db_profile)
         execution_plan = build_plan(cfg, check_files=True)
         typer.echo(json.dumps(execution_plan.to_dict(), indent=2, ensure_ascii=False))
     except Exception as exc:
@@ -624,6 +691,18 @@ def dry_run_command(
         "--open-dashboard/--no-open-dashboard",
         help=OPEN_DASHBOARD_HELP,
     ),
+    db_profile: Optional[str] = typer.Option(
+        None,
+        "--db-profile",
+        envvar="ABI_DB_PROFILE",
+        help="Database profile name (e.g. light, full, shared).",
+    ),
+    resource_root: Optional[str] = typer.Option(
+        None,
+        "--resource-root",
+        envvar="ABI_RESOURCE_ROOT",
+        help="Override resource root directory.",
+    ),
 ) -> None:
     """生成 dry-run / Write dry-run provenance.
 
@@ -650,7 +729,9 @@ def dry_run_command(
         overrides["mock_tools"] = True
         if sample_sheet:
             overrides["input"] = {"sample_sheet": str(sample_sheet)}
-        cfg = _load(config, profile, overrides)
+        if resource_root:
+            overrides.setdefault("resources", {})["root"] = resource_root
+        cfg = _load(config, profile, overrides, db_profile=db_profile)
         execution_plan = build_plan(cfg, check_files=True)
         _raise_resource_issues_for_real_run(cfg, execution_plan.selected_tools, dry_run=dry_run)
         logger = RunLogger(cfg["log_dir"])
@@ -692,6 +773,18 @@ def run_command(
         "--open-dashboard/--no-open-dashboard",
         help=OPEN_DASHBOARD_HELP,
     ),
+    db_profile: Optional[str] = typer.Option(
+        None,
+        "--db-profile",
+        envvar="ABI_DB_PROFILE",
+        help="Database profile name (e.g. light, full, shared).",
+    ),
+    resource_root: Optional[str] = typer.Option(
+        None,
+        "--resource-root",
+        envvar="ABI_RESOURCE_ROOT",
+        help="Override resource root directory.",
+    ),
 ) -> None:
     """按样本表运行 / Run workflow from a sample sheet.
 
@@ -719,7 +812,9 @@ def run_command(
         overrides["mock_tools"] = dry_run
         if sample_sheet:
             overrides["input"] = {"sample_sheet": str(sample_sheet)}
-        cfg = _load(config, profile, overrides)
+        if resource_root:
+            overrides.setdefault("resources", {})["root"] = resource_root
+        cfg = _load(config, profile, overrides, db_profile=db_profile)
         execution_plan = build_plan(cfg, check_files=True)
         logger = RunLogger(cfg["log_dir"])
         executor = PipelineExecutor(
