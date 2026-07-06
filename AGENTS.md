@@ -4,7 +4,7 @@
 
 Core Python code lives in `src/abi/`. Keep transport-neutral behavior in the core; CLI, MCP, HTTP, and provider integrations should remain thin adapters. Built-in workflow implementations are split between Python entry points in `src/abi/plugins/` and declarative definitions in `plugins/<analysis_type>/` (`pipeline_dag.yaml`, tool registries, schemas, and report metadata). Tests are organized under `tests/unit/`, `tests/integration/`, and `tests/smoke/`; SciPlot also has focused tests in `src/abi/sciplot/tests/`. Use `examples/` for runnable configuration samples, `docs/en/` and `docs/zh/` for documentation, `envs/` for Conda environments, `environments.yaml` for tool→env assignments (20 envs, 93 tools), and `scripts/` for maintenance utilities.
 
-Current codebase (2026-06-21): 174 Python source files (~39k lines), 40-module plasmid engine (9,859 lines), 32-file sciplot module (4,516 lines), 62 test files (723 passed, 4 skipped).
+Current codebase (2026-07-06): 201 Python source files (~48k lines), plasmid engine (11,586 lines), 29-file sciplot module (7,201 lines), 108 test files (1364 passed, 11 skipped, 3 pre-existing failures), 83% coverage.
 
 ## Build, Test, and Development Commands
 
@@ -30,3 +30,29 @@ Name test files `test_<feature>.py` and test functions `test_<behavior>`. Add fa
 ## Commit & Pull Request Guidelines
 
 History uses concise imperative subjects prefixed by scope, such as `feat:`, `fix:`, and `docs:`. Keep each commit focused. Pull requests should explain the problem and solution, list validation commands, link relevant issues, and note configuration or compatibility effects. Include screenshots or generated artifacts for report, documentation, or figure changes. Ensure lint, formatting, typing, tests, and bilingual documentation updates (when applicable) pass before review.
+
+## Local Codex Cloud Access
+
+This workspace may include a local, git-ignored `.key` file for the cloud
+development machine. Treat it as a secret and never print, paste, commit, or
+summarize its contents. The expected format is:
+
+```text
+ssh -p <port> <user>@<host>
+<password>
+```
+
+Use the local ignored helper `.codex/abi-cloud-ssh` to connect. It reads `.key`
+without exposing the password and supports either an interactive SSH session or
+a remote command:
+
+```bash
+.codex/abi-cloud-ssh
+.codex/abi-cloud-ssh 'hostname && whoami && pwd'
+.codex/abi-cloud-ssh 'cd /root && ls -la'
+```
+
+Network/SSH commands require sandbox escalation. Before running long remote
+jobs, verify the current target with a read-only probe such as `hostname`,
+`whoami`, `pwd`, and optionally `nvidia-smi`. SeetaCloud web port mappings such
+as `6006` or `6008` are service URLs, not the SSH control endpoint.

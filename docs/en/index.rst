@@ -4,7 +4,7 @@ ABI Documentation
 **Agent-Bioinformatics Interface** — a Python control plane between AI agents
 and bioinformatics tools.  Not a workflow engine, but a structured interface
 layer that provides standardized JSON envelopes, provenance tracking, tool
-contracts, and execution gating across seven bioinformatics analysis types. (v1.4.0, 2026-06-23 — 856 tests, 0 ruff/mypy errors, 7/7 plugins verified)
+contracts, and execution gating across seven bioinformatics analysis types. (v1.4.0, 2026-07-06 — 1364 tests, 83% coverage, 0 ruff/mypy errors, 7/7 plugins verified)
 
 .. image:: https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=1e6fba
    :target: https://pypi.org/project/abi-agent/

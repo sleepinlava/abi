@@ -1,7 +1,7 @@
 # ABI Paper — Execution Plan (执行计划书)
 
-> **Date**: 2026-06-21
-> **Status**: Active — 本地验证完成 (723 tests, 0 ruff, 0 mypy)，5/5 插件真实执行已验证，待云/HPC 扩展
+> **Date**: 2026-07-06
+> **Status**: Active — 本地验证完成 (1364 tests, 83% coverage, 0 ruff, 0 mypy)，7/7 插件真实执行已验证，待云/HPC 扩展
 > **Environment**: WSL2 (16-core, 15GB RAM, 1TB disk, Python 3.10)
 
 ## 0. Executive Summary
@@ -37,8 +37,8 @@ execution sequence for cloud/HPC phases.
 |-------|--------|
 | `ruff check src/ tests/` | ✅ All checks passed |
 | `ruff format --check src/ tests/` | ✅ 236 files already formatted |
-| `mypy src/abi/ --ignore-missing-imports` | ✅ 0 errors (173 source files) |
-| `pytest tests/ -v --tb=short` | ✅ 723 passed, 0 failures, 4 skipped |
+| `mypy src/abi/ --ignore-missing-imports` | ✅ 0 errors (201 source files) |
+| `pytest tests/ -v --tb=short` | ✅ 1364 passed, 11 skipped, 3 pre-existing failures |
 | `python -m build` | ✅ binary wheel + source tarball |
 | `python -m twine check dist/*` | ✅ PASSED |
 
@@ -471,10 +471,10 @@ Week 9-12:  Paper writing + figure polishing + submission
 ### Gate 1: Pre-Execution (local — ✅ PASSED 2026-06-21)
 - [x] ruff check: 0 errors (236 files)
 - [x] ruff format --check: all 236 files formatted
-- [x] mypy: 0 errors (173 source files)
-- [x] pytest: 723 passed, 4 skipped
-- [x] All 5 plugins produce valid plan
-- [x] All 5 plugins produce valid dry-run artifacts
+- [x] mypy: 0 errors (201 source files)
+- [x] pytest: 1364 passed, 11 skipped, 3 pre-existing failures
+- [x] All 7 plugins produce valid plan
+- [x] All 7 plugins produce valid dry-run artifacts
 - [x] All 31 figure specs validate (8 sciplot + 23 classic)
 - [x] Report HTML generation works
 

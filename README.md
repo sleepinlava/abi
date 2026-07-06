@@ -13,19 +13,19 @@ HTTP Job Service with force-kill capability.
 [![PyPI](https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=blue)](https://pypi.org/project/abi-agent/)
 [![Python](https://img.shields.io/pypi/pyversions/abi-agent?style=flat-square)](https://pypi.org/project/abi-agent/)
 [![CI](https://img.shields.io/github/actions/workflow/status/sleepinlava/abi/ci.yml?branch=master&style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-75.39%25-brightgreen?style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-83%25-brightgreen?style=flat-square)](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-Sphinx-blue?style=flat-square)](https://sleepinlava.github.io/abi/)
 [![Status](https://img.shields.io/badge/status-alpha-orange?style=flat-square)](https://github.com/sleepinlava/abi)
 [![License](https://img.shields.io/pypi/l/abi-agent?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
 
 > :cn: [中文版](README.zh.md)
 
-> **Engineering status (v1.5.1 source, 2026-06-23): local freeze candidate.**
-> 980 tests pass, branch-aware coverage is 75.39%, risk-based module coverage
-> gates pass, and a clean wheel runs all 7 built-in plugin dry-runs. Hard freeze
-> still requires a green remote Python 3.10-3.13 matrix, fixed real-tool
-> benchmarks with biological acceptance criteria, two defect-only release
-> candidates, and one week without new P0/P1 defects.
+> **Engineering status (v1.5.1 source, 2026-07-06): local freeze candidate.**
+> 1364 tests pass (83% statement coverage), risk-based module coverage gates
+> pass, and a clean wheel runs all 7 built-in plugin dry-runs. Hard freeze still
+> requires a green remote Python 3.10-3.13 matrix, fixed real-tool benchmarks
+> with biological acceptance criteria, two defect-only release candidates, and
+> one week without new P0/P1 defects.
 
 ## Installation
 

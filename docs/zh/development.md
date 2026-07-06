@@ -114,7 +114,7 @@ pytest tests/ -v --tb=short
 
 回归测试覆盖位于 `tests/unit/test_executor.py` 和 `tests/unit/test_step_contract.py` 中。
 
-**当前测试状态 (2026-06-21)**: 723 通过, 4 跳过, 0 ruff 错误, 0 mypy 错误。
+**当前测试状态 (2026-07-06)**: 1364 通过, 11 跳过, 3 预存失败, 83% 覆盖率, 0 ruff 错误, 0 mypy 错误。
 
 ## 运行时资产
 

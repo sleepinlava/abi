@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Tests for ABI error hierarchy (abi.errors).
 
 Covers:
@@ -74,8 +76,7 @@ class TestConstructor:
     )
     def test_multiple_args(self, exc_cls):
         err = exc_cls("one", "two")
-        # Python exceptions stringify multi-arg as "('arg1', 'arg2')"
-        assert str(err) == "('one', 'two')"
+        assert str(err) == "(one, two)"
 
 
 # ── Catch-semantics Tests (agent interpretability) ──────────────────────
@@ -95,7 +96,7 @@ class TestCatchSemantics:
             try:
                 raise err
             except ABIError:
-                pass  # caught as expected
+                pass
             else:
                 pytest.fail(f"ABIError did not catch {type(err).__name__}")
 
@@ -151,7 +152,7 @@ class TestMissingTemplateParamError:
         assert issubclass(MissingTemplateParamError, ABIError)
 
     def test_message_includes_param_name(self):
-        err = MissingTemplateParamError("Template '{reads}' is missing")
+        err = MissingTemplateParamError("Template {reads} is missing")
         assert "reads" in str(err)
         assert "missing" in str(err).lower()
 
@@ -160,6 +161,15 @@ class TestMissingTemplateParamError:
         err = MissingTemplateParamError("missing param")
         assert not isinstance(err, ConfigError)
         assert isinstance(err, MissingTemplateParamError)
+
+    # ── From upstream merge ──
+    def test_missing_template_param_error_chain(self) -> None:
+        err = MissingTemplateParamError("msg")
+        assert isinstance(err, ABIError)
+        assert isinstance(err, RuntimeError)
+
+    def test_missing_template_param_error_message(self) -> None:
+        assert str(MissingTemplateParamError("{foo}")) == "{foo}"
 
 
 # ── isinstance checks ───────────────────────────────────────────────────
@@ -175,3 +185,62 @@ class TestIsInstance:
 
     def test_parent_is_not_instance_of_subclass(self):
         assert not isinstance(ABIError(), MissingTemplateParamError)
+
+
+# ── From upstream merge: per-class behavior tests ───────────────────────
+
+
+class TestABIError:
+    def test_abi_error_is_runtime_error(self) -> None:
+        assert isinstance(ABIError("msg"), RuntimeError)
+
+    def test_abi_error_message(self) -> None:
+        assert str(ABIError("test")) == "test"
+
+    def test_abi_error_caught_by_base(self) -> None:
+        try:
+            raise ConfigError("oops")
+        except ABIError:
+            pass  # expected
+
+
+class TestConfigError:
+    def test_config_error_chain(self) -> None:
+        err = ConfigError("msg")
+        assert isinstance(err, ABIError)
+        assert isinstance(err, ConfigError)
+        assert isinstance(err, RuntimeError)
+
+    def test_config_error_message(self) -> None:
+        assert str(ConfigError("bad config")) == "bad config"
+
+
+class TestSampleSheetError:
+    def test_samplesheet_error_chain(self) -> None:
+        err = SampleSheetError("msg")
+        assert isinstance(err, ABIError)
+        assert isinstance(err, RuntimeError)
+
+    def test_samplesheet_error_message(self) -> None:
+        assert str(SampleSheetError("missing col")) == "missing col"
+
+
+class TestToolError:
+    def test_tool_error_chain(self) -> None:
+        err = ToolError("msg")
+        assert isinstance(err, ABIError)
+        assert isinstance(err, RuntimeError)
+
+    def test_tool_error_message(self) -> None:
+        assert str(ToolError("exec failed")) == "exec failed"
+
+
+class TestExceptionIsolation:
+    def test_abi_error_not_value_error(self) -> None:
+        assert not isinstance(ABIError("msg"), ValueError)
+
+    def test_abi_error_not_type_error(self) -> None:
+        assert not isinstance(ABIError("msg"), TypeError)
+
+    def test_standard_python_exceptions_not_abi(self) -> None:
+        assert not isinstance(ValueError("x"), ABIError)

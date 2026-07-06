@@ -51,7 +51,7 @@ def plot_boxplot_with_points(
     # Boxplot
     bp = ax.boxplot(
         box_data,
-        tick_labels=[str(g) for g in groups],
+        labels=[str(g) for g in groups],
         patch_artist=True,
         widths=0.5,
         flierprops={"marker": "o", "markerfacecolor": "grey", "markersize": 3, "alpha": 0.4},

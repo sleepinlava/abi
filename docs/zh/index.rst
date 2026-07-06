@@ -3,7 +3,7 @@ ABI 文档
 
 **Agent-Bioinformatics Interface** — 一个位于 AI Agent 和生物信息学工具之间的
 Python 控制平面。ABI 不是一个工作流引擎，而是一个提供标准化 JSON 信封、
-溯源跟踪、工具合约和执行门控的结构化接口层，覆盖七种生物信息学分析类型。 (v1.4.0, 2026-06-23 — 856 测试通过, 0 ruff/mypy 错误, 7/7 插件验证通过)
+溯源跟踪、工具合约和执行门控的结构化接口层，覆盖七种生物信息学分析类型。 (v1.4.0, 2026-07-06 — 1364 测试通过, 83% 覆盖率, 0 ruff/mypy 错误, 7/7 插件验证通过)
 
 .. image:: https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=1e6fba
    :target: https://pypi.org/project/abi-agent/
