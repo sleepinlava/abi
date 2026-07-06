@@ -1,9 +1,10 @@
 """ABI Doctor — health check and diagnostic reporting."""
 from __future__ import annotations
+
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+
 
 @dataclass
 class HealthCheck:
@@ -15,9 +16,11 @@ class HealthCheck:
 @dataclass
 class HealthReport:
     checks: list[HealthCheck]
+
     @property
     def passed(self) -> bool:
         return all(c.status != "failed" for c in self.checks)
+
     @property
     def summary(self) -> dict:
         return {
@@ -27,6 +30,7 @@ class HealthReport:
             "warning": sum(1 for c in self.checks if c.status == "warning"),
             "healthy": self.passed,
         }
+
     def to_dict(self) -> dict:
         return {
             "summary": self.summary,
@@ -72,7 +76,7 @@ class Doctor:
             plugins = list_plugins()
             ids = sorted(p.plugin_id for p in plugins)
             return HealthCheck(name="plugins", status="passed" if plugins else "warning",
-                message=f"{len(plugins)} plugins: {", ".join(ids)}",
+                message=f"{len(plugins)} plugins: {'; '.join(ids)}",
                 details={"count": len(plugins), "plugins": ids})
         except Exception as e:
             return HealthCheck(name="plugins", status="failed", message=str(e), details={"error": str(e)})

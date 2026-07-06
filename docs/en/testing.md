@@ -41,7 +41,7 @@ pytest tests/unit/test_dag_planner.py -v
 pytest tests/unit/test_dag_planner.py::test_build_plan_per_sample -v
 
 # With coverage
-pytest tests/ --cov=src/abi --cov-report=term --cov-fail-under=60
+pytest tests/ --cov=src/abi --cov-report=term --cov-fail-under=75
 ```
 
 ## Shared Fixtures
@@ -277,7 +277,7 @@ ABI uses GitHub Actions with two workflows:
 | `ruff format --check` | 3.10, 3.11, 3.12, 3.13 |
 | `mypy src/abi/` | 3.10, 3.11, 3.12, 3.13 |
 | `pytest tests/` | 3.10, 3.11, 3.12, 3.13 |
-| `pytest --cov --cov-fail-under=60` | 3.12 only |
+| `pytest --cov --cov-fail-under=75` | 3.12 only |
 | Sphinx docs build | 3.12 only |
 | Wheel build + smoke test | 3.12 only |
 

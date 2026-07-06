@@ -98,7 +98,7 @@
 ### 3.5 工作项 2e — 双 DAG Phase 2 迁移 ✅ `bb4207a` `5619e9e` `d6dd70c`
 
 完整 6 阶段渐进迁移完成：
-- Stage 0: `ABI_DAG_PLANNER_LEGACY` 安全网
+- Stage 0: `ABI_DAG_PLANNER_LEGACY` 安全网（迁移期间临时措施，Phase 3 完成迁移后按计划删除）
 - Stages 1-4: context / context_resolver / sample_config / skip_step hooks 全部迁移
 - Stages 5-6: 常量迁入 `pipeline_dag.yaml`，legacy `planner.py` 删除
 - 默认 `LEGACY=0`：新 DAG 路径为唯一生产路径

@@ -11,7 +11,7 @@ Current codebase (2026-07-06): 201 Python source files (~48k lines), plasmid eng
 - `pip install -e ".[dev]"` installs ABI and development tools in editable mode.
 - `pytest tests/ -v --tb=short` runs the main test suite.
 - `pytest tests/unit/test_dag.py -q` runs a focused test module.
-- `pytest tests/ --cov=src/abi --cov-fail-under=60` checks the CI coverage floor.
+- `pytest tests/ --cov=src/abi --cov-fail-under=75` checks the CI coverage floor.
 - `ruff check src/ tests/` checks lint and import rules.
 - `ruff format --check src/ tests/` verifies formatting; omit `--check` to format locally.
 - `mypy src/abi/ --ignore-missing-imports` performs static type checking.

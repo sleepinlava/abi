@@ -41,7 +41,7 @@ pytest tests/unit/test_dag_planner.py -v
 pytest tests/unit/test_dag_planner.py::test_build_plan_per_sample -v
 
 # 带覆盖率
-pytest tests/ --cov=src/abi --cov-report=term --cov-fail-under=60
+pytest tests/ --cov=src/abi --cov-report=term --cov-fail-under=75
 ```
 
 ## 共享 Fixtures
@@ -285,7 +285,7 @@ ABI 使用 GitHub Actions 并包含两个工作流：
 | `ruff format --check` | 3.10, 3.11, 3.12, 3.13 |
 | `mypy src/abi/` | 3.10, 3.11, 3.12, 3.13 |
 | `pytest tests/` | 3.10, 3.11, 3.12, 3.13 |
-| `pytest --cov --cov-fail-under=60` | 仅 3.12 |
+| `pytest --cov --cov-fail-under=75` | 仅 3.12 |
 | Sphinx 文档构建 | 仅 3.12 |
 | Wheel 构建 + 冒烟测试 | 仅 3.12 |
 
