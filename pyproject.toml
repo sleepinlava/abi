@@ -8,10 +8,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "abi-agent"
-version = "1.5.2"
+version = "1.5.3"
 description = "Agent-Bioinformatics Interface: plugin-based abstraction for AI-driven bioinformatics analysis"
 readme = "README.md"
-license = "MIT"
+license = { text = "MIT" }
+license-files = []
 requires-python = ">=3.10"
 authors = [{ name = "BingkangGuo", email = "bingkangguo@gmail.com" }]
 keywords = ["bioinformatics", "agent", "ai", "pipeline", "plasmid", "metagenomics"]
