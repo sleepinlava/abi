@@ -938,7 +938,7 @@ def _assembly_paths_by_sample(plan: ExecutionPlan) -> Dict[str, str]:
     paths: Dict[str, str] = {}
     for step in plan.steps:
         sample_id = step.sample_id
-        assembly = step.params.get("assembly")
+        assembly = step.inputs.get("assembly") or step.params.get("assembly")
         if sample_id and assembly and sample_id not in paths:
             paths[sample_id] = str(assembly)
     return paths

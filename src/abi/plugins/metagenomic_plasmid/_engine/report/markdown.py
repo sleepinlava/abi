@@ -289,8 +289,13 @@ def _count_fasta_records(path: Path) -> int:
 def _assembly_paths_by_sample(plan: ExecutionPlan) -> dict[str, str]:
     paths: dict[str, str] = {}
     for step in plan.steps:
-        if step.sample_id and step.params.get("assembly") and step.sample_id not in paths:
-            paths[step.sample_id] = str(step.params["assembly"])
+        assembly = (
+            step.inputs.get("assembly")
+            or step.outputs.get("assembly")
+            or step.params.get("assembly")
+        )
+        if step.sample_id and assembly and step.sample_id not in paths:
+            paths[step.sample_id] = str(assembly)
     return paths
 
 

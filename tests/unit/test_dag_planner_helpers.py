@@ -9,10 +9,11 @@ from abi.dag_planner import (
     UniversalDAG,
     _resolve_input_path,
     _resolve_script_path,
+    build_plan_from_dag,
     detect_platform,
     node_id_to_tool_id,
 )
-from abi.schemas import SampleInput
+from abi.schemas import SampleContext, SampleInput
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -411,6 +412,98 @@ class TestResolveInputPath:
     def test_template_with_broken_key_returns_raw(self):
         result = _resolve_input_path("{nonexistent_key}", {"outdir": "/tmp"}, None)
         assert result == "{nonexistent_key}"
+
+
+def test_build_plan_resolves_config_dotted_source_inputs(tmp_path):
+    dag_path = tmp_path / "pipeline_dag.yaml"
+    dag_path.write_text(
+        "\n".join(
+            [
+                "pipeline_id: test_pipeline",
+                "platforms: [assembly]",
+                "category_dirs:",
+                "  plasmid_detection: 04_plasmid_detection",
+                "nodes:",
+                "  plasmid_detect:",
+                "    tool_id: genomad",
+                "    category: plasmid_detection",
+                "    scope: per_sample",
+                "    platforms: [assembly]",
+                "    inputs:",
+                "      assembly:",
+                "        source: sample_sheet",
+                "      database:",
+                "        source: config.resources.genomad.database",
+                "    outputs:",
+                "      output_dir:",
+                "        type: directory",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    sample = SampleInput(sample_id="S1", platform="assembly", assembly="contigs.fasta")
+    config = {
+        "outdir": str(tmp_path / "results"),
+        "resources": {"genomad": {"database": str(tmp_path / "resources" / "genomad")}},
+    }
+
+    plan = build_plan_from_dag(
+        dag_path,
+        config,
+        SampleContext(samples=[sample], multi_sample=False, has_groups=False),
+    )
+
+    assert plan.steps[0].inputs["database"] == str(tmp_path / "resources" / "genomad")
+
+
+def test_build_plan_resolves_cross_sample_config_dotted_source_inputs(tmp_path):
+    dag_path = tmp_path / "pipeline_dag.yaml"
+    dag_path.write_text(
+        "\n".join(
+            [
+                "pipeline_id: test_pipeline",
+                "platforms: [assembly]",
+                "nodes:",
+                "  assembly_provided:",
+                "    tool_id: internal",
+                "    category: assembly",
+                "    scope: per_sample",
+                "    platforms: [assembly]",
+                "    inputs:",
+                "      assembly:",
+                "        source: sample_sheet",
+                "    outputs:",
+                "      assembly:",
+                "        path: '{sample.assembly}'",
+                "  report:",
+                "    tool_id: report_markdown",
+                "    category: report",
+                "    scope: cross_sample",
+                "    platforms: [assembly]",
+                "    depends_on: [assembly_provided]",
+                "    inputs:",
+                "      project_outdir:",
+                "        source: config.outdir",
+                "    outputs:",
+                "      report_md:",
+                "        type: file",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    sample = SampleInput(sample_id="S1", platform="assembly", assembly="contigs.fasta")
+    config = {"outdir": str(tmp_path / "results")}
+
+    plan = build_plan_from_dag(
+        dag_path,
+        config,
+        SampleContext(samples=[sample], multi_sample=False, has_groups=False),
+    )
+
+    report_step = next(step for step in plan.steps if step.step_id == "report")
+    assert report_step.inputs["project_outdir"] == config["outdir"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════

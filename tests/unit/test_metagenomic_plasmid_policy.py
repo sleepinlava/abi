@@ -12,7 +12,11 @@ from abi.contracts.lint import validate_pipeline_template_params
 from abi.plugins import get_plugin
 from abi.plugins.metagenomic_plasmid import build_plan_from_dag
 from abi.plugins.metagenomic_plasmid._engine.config import load_config
-from abi.plugins.metagenomic_plasmid._engine.pipeline import _terminal_overlap_length
+from abi.plugins.metagenomic_plasmid._engine.pipeline import (
+    _assembly_paths_by_sample,
+    _terminal_overlap_length,
+)
+from abi.plugins.metagenomic_plasmid._engine.report.markdown import write_markdown_report
 from abi.plugins.metagenomic_plasmid._engine.resources import (
     check_resources,
     default_resource_specs,
@@ -21,7 +25,7 @@ from abi.plugins.metagenomic_plasmid._engine.standard_tables import (
     TABLE_SCHEMAS,
     ensure_standard_tables,
 )
-from abi.schemas import SampleContext, SampleInput
+from abi.schemas import ExecutionPlan, PlanStep, SampleContext, SampleInput
 
 
 def _config(tmp_path: Path, overrides=None):
@@ -180,6 +184,66 @@ def test_assembly_input_remains_active_when_assembly_generation_is_disabled(tmp_
     plan = build_plan_from_dag(config, _context([sample]), check_files=False)
 
     assert "ASM1_assembly_internal" in {step.step_id for step in plan.steps}
+
+
+def test_candidate_fasta_export_uses_dag_input_assembly_path(tmp_path):
+    assembly = tmp_path / "assembly.fasta"
+    sample = SampleInput(sample_id="S1", platform="illumina")
+    context = _context([sample])
+    plan = ExecutionPlan(
+        project_name="test",
+        mode="auto",
+        threads=1,
+        outdir=str(tmp_path / "results"),
+        log_dir=str(tmp_path / "logs"),
+        samples=[sample],
+        sample_context=context,
+        selected_tools=["genomad"],
+        steps=[
+            PlanStep(
+                step_id="S1_plasmid_detection_genomad",
+                step_name="plasmid_detection",
+                tool_id="genomad",
+                category="plasmid_detection",
+                sample_id="S1",
+                inputs={"assembly": str(assembly)},
+            )
+        ],
+    )
+
+    assert _assembly_paths_by_sample(plan) == {"S1": str(assembly)}
+
+
+def test_markdown_report_counts_dag_input_assembly_contigs(tmp_path):
+    assembly = tmp_path / "assembly.fasta"
+    assembly.write_text(">contig_1\nATGC\n>contig_2\nATGC\n>contig_3\nATGC\n", encoding="utf-8")
+    tables_dir = tmp_path / "tables"
+    ensure_standard_tables(tables_dir)
+    sample = SampleInput(sample_id="S1", platform="illumina")
+    plan = ExecutionPlan(
+        project_name="test",
+        mode="auto",
+        threads=1,
+        outdir=str(tmp_path / "results"),
+        log_dir=str(tmp_path / "logs"),
+        samples=[sample],
+        sample_context=_context([sample]),
+        selected_tools=["megahit"],
+        steps=[
+            PlanStep(
+                step_id="S1_assembly_megahit",
+                step_name="assembly",
+                tool_id="megahit",
+                category="assembly",
+                sample_id="S1",
+                inputs={"assembly": str(assembly)},
+            )
+        ],
+    )
+
+    report_path = write_markdown_report(plan, tmp_path / "report", tables_dir=tables_dir)
+
+    assert "- Total contigs: 3" in report_path.read_text(encoding="utf-8")
 
 
 @pytest.mark.xfail(reason="host_removal step IDs changed in DAG refactoring")

@@ -5,3 +5,22 @@ def test_release_check_script_is_documented() -> None:
     assert Path("scripts/release_check.sh").is_file()
     assert "scripts/release_check.sh" in Path("docs/en/release.md").read_text()
     assert "scripts/release_check.sh" in Path("docs/zh/release.md").read_text()
+
+
+def test_release_check_uses_stable_coverage_gate() -> None:
+    script = Path("scripts/release_check.sh").read_text()
+
+    assert "python -m pytest tests/ src/abi/sciplot/tests/" in script
+    assert "--strict-markers" in script
+    assert '-m "not requires_tools"' in script
+    assert "--capture=no" in script
+    assert "--cov-fail-under=75" in script
+
+
+def test_release_gate_does_not_execute_known_broken_dry_run_xfails() -> None:
+    dry_run_tests = Path("tests/integration/test_dry_run.py").read_text()
+
+    runnable_known_broken_marker = (
+        '@pytest.mark.xfail(reason="DAG refactoring changed step structure and output file paths")'
+    )
+    assert runnable_known_broken_marker not in dry_run_tests

@@ -1099,6 +1099,8 @@ def _resolve_inputs(
             source_str = str(source)
             if source_str == "sample_sheet":
                 value = sample_dict.get(key, "")
+            elif source_str.startswith("config."):
+                value = _lookup_config_path(config, source_str.removeprefix("config.")) or ""
             elif "." in source_str:
                 # Upstream reference: "NODE_ID.OUTPUT_KEY"
                 parts = source_str.split(".", 1)
@@ -1201,19 +1203,27 @@ def _resolve_cross_sample_inputs(
         else:
             source = spec.get("source")
             if source is not None and "." in str(source):
-                # Upstream reference: "NODE_ID.OUTPUT_KEY"
-                parts = str(source).split(".", 1)
-                upstream_id, upstream_key = parts[0], parts[1]
-                # Check cross-sample outputs first, then per-sample
-                if upstream_id in cross_sample_outputs:
-                    resolved[key] = cross_sample_outputs[upstream_id].get(upstream_key, "")
-                else:
-                    first_sid = (
-                        sample_context.samples[0].sample_id if sample_context.samples else ""
-                    )
+                source_str = str(source)
+                if source_str.startswith("config."):
                     resolved[key] = (
-                        sample_outputs.get(first_sid, {}).get(upstream_id, {}).get(upstream_key, "")
+                        _lookup_config_path(config, source_str.removeprefix("config.")) or ""
                     )
+                else:
+                    # Upstream reference: "NODE_ID.OUTPUT_KEY"
+                    parts = source_str.split(".", 1)
+                    upstream_id, upstream_key = parts[0], parts[1]
+                    # Check cross-sample outputs first, then per-sample
+                    if upstream_id in cross_sample_outputs:
+                        resolved[key] = cross_sample_outputs[upstream_id].get(upstream_key, "")
+                    else:
+                        first_sid = (
+                            sample_context.samples[0].sample_id if sample_context.samples else ""
+                        )
+                        resolved[key] = (
+                            sample_outputs.get(first_sid, {})
+                            .get(upstream_id, {})
+                            .get(upstream_key, "")
+                        )
             else:
                 resolved[key] = _resolve_script_path(
                     key, _resolve_config_value(config, key), plugin_root
