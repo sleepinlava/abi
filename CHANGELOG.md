@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.5.2] - 2026-07-07
+
+### Added
+
+- Added a consolidated `scripts/release_check.sh` entry point for local
+  release verification before tagging or publishing.
+- Added a paper-evaluation task package with benchmark task definitions,
+  metrics schema, bilingual evaluation notes, and manuscript outline drafts.
+- Added contract lint coverage for DAG template parameters so plugin validation
+  catches unresolved command, params, input, and output placeholders.
+
+### Changed
+
+- Aligned the documented release gate with CI by running the full test suite
+  and SciPlot tests under coverage, excluding `requires_tools` tests, and
+  checking module coverage from `coverage.json`.
+- Updated metagenomic plasmid DAG-driven tests to assert the current declarative
+  step and output contracts instead of old handwritten planner paths.
+
+### Fixed
+
+- Fixed declarative DAG input resolution for `source: config.*` references,
+  including tool database resources and cross-sample report inputs.
+- Fixed metagenomic plasmid FASTA export and reports to read assembly paths
+  from DAG-resolved step inputs/outputs after the planner refactor.
+- Fixed GitHub Actions release identity by adding this `1.5.2` changelog
+  section and moved the opencode API key reference to a GitHub Actions secret.
+
 ## [1.5.1] - 2026-06-23
 
 ### Changed

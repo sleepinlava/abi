@@ -10,6 +10,15 @@
 scripts/release_check.sh
 ```
 
+推送发布候选前，确认 `CHANGELOG.md` 中存在与 `pyproject.toml` 的
+`project.version` 完全一致的版本小节；CI 会通过
+`scripts/check_release_identity.py` 强制检查这一点。
+
+脚本默认会在 `/tmp` 下创建 POSIX 临时目录，并在测试前导出
+`TMPDIR`、`TMP` 和 `TEMP`。这样可以避免 WSL/Windows 挂载的临时目录破坏
+权限敏感测试的 `chmod` 语义。可通过 `ABI_RELEASE_TMPDIR` 或
+`ABI_RELEASE_TMP_ROOT` 覆盖位置。
+
 该脚本运行与 CI 一致的质量门：
 
 ```bash
@@ -45,5 +54,7 @@ abi-mcp --help 2>/dev/null || python -m abi.mcp.server --help 2>/dev/null || tru
 - `ci.yml` 运行 lint、格式检查、mypy、测试和构建检查。
 - `release.yml` 构建分发包并为 `v*` 标签创建 GitHub Release。
 - `publish-pypi.yml` 通过 PyPI Trusted Publishing 发布 release 产物。
+- `opencode.yml` 要求在 GitHub Actions Secrets 中配置
+  `DEEPSEEK_API_KEY`；不要把服务商 API key 直接写入 workflow YAML。
 
 发布工作流不应直接上传到 PyPI；发布操作由专用的 PyPI 工作流在 GitHub Release 发布后处理。
