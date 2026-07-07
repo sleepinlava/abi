@@ -1088,6 +1088,39 @@ class TestValidatePluginContractFiles:
         plugin = _FakePlugin(root=str(root), registry=registry, tables=tables)
         validate_plugin_contract_files(plugin)
 
+    def test_pipeline_template_param_violation_raises(self, tmp_path):
+        root = _make_plugin_dir(tmp_path)
+        (root / "config_default.yaml").write_text("outdir: results\n")
+        (root / "pipeline_dag.yaml").write_text(
+            """
+nodes:
+  qc_multiqc:
+    inputs:
+      output_dir:
+        source: "{project_outdir}/01_qc"
+    outputs:
+      report:
+        path: "{outdir}/multiqc.html"
+"""
+        )
+        registry = _FakeRegistry(
+            [
+                {
+                    "id": "test_tool",
+                    "executable": "test_tool",
+                    "command_template": "test_tool -i {input_file} -o {output_file}",
+                    "category": "qc",
+                    "inputs": ["input_file"],
+                    "outputs": ["output_file"],
+                }
+            ]
+        )
+        tables = {"test_table": ["col_a", "col_b"]}
+        plugin = _FakePlugin(root=str(root), registry=registry, tables=tables)
+
+        with pytest.raises(ContractValidationError, match="pipeline template params"):
+            validate_plugin_contract_files(plugin)
+
     def test_missing_required_contract_raises(self, tmp_path):
         contract2 = """abi_version: "0.1"
 tool_id: tool_b

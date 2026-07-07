@@ -13,6 +13,7 @@ from abi.contracts.lint import (
     lint_resource_blocks,
     lint_tool_contracts,
     run_contract_lint,
+    validate_pipeline_template_params,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -426,6 +427,53 @@ class TestRunContractLint:
         }
         result = run_contract_lint(dag)
         assert result["error_count"] >= 1
+
+
+class TestValidatePipelineTemplateParams:
+    def test_reports_source_template_missing_from_node_params(self, tmp_path: Path):
+        plugin_root = tmp_path / "plugin"
+        plugin_root.mkdir()
+        (plugin_root / "config_default.yaml").write_text("outdir: results\n")
+        (plugin_root / "pipeline_dag.yaml").write_text(
+            """
+nodes:
+  qc_multiqc:
+    params: {}
+    inputs:
+      output_dir:
+        source: "{project_outdir}/01_qc"
+    outputs:
+      report:
+        path: "{outdir}/multiqc.html"
+"""
+        )
+
+        violations = validate_pipeline_template_params(plugin_root)
+
+        assert len(violations) == 1
+        assert "qc_multiqc.inputs.output_dir.source" in violations[0]
+        assert "project_outdir" in violations[0]
+
+    def test_accepts_template_fields_from_node_params(self, tmp_path: Path):
+        plugin_root = tmp_path / "plugin"
+        plugin_root.mkdir()
+        (plugin_root / "config_default.yaml").write_text("outdir: results\n")
+        (plugin_root / "pipeline_dag.yaml").write_text(
+            """
+nodes:
+  qc_multiqc:
+    params:
+      project_outdir: "{outdir}"
+    inputs:
+      output_dir:
+        source: "{project_outdir}/01_qc"
+    outputs:
+      report:
+        path: "{outdir}/multiqc.html"
+"""
+        )
+
+        assert validate_pipeline_template_params(plugin_root) == []
 
 
 # ═══════════════════════════════════════════════════════════════════════════

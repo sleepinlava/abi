@@ -1,0 +1,14 @@
+metrics:
+  - id: plan_validity
+    type: boolean
+  - id: command_correctness
+    type: boolean
+  - id: dry_run_success
+    type: boolean
+  - id: provenance_completeness
+    type: number
+    range: [0, 1]
+  - id: intervention_count
+    type: integer
+  - id: time_to_valid_plan_seconds
+    type: number

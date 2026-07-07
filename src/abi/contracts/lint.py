@@ -24,8 +24,12 @@ from __future__ import annotations
 
 import ast
 import re
+import string
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Set
+from pathlib import Path
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Set
+
+import yaml
 
 __all__ = [
     "LintFinding",
@@ -33,6 +37,7 @@ __all__ = [
     "lint_dag",
     "lint_tool_contracts",
     "run_contract_lint",
+    "validate_pipeline_template_params",
 ]
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -324,6 +329,136 @@ def lint_assertion_syntax(
                     )
                 )
     return findings
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Pipeline template parameter checks
+# ═══════════════════════════════════════════════════════════════════════════
+
+_STATIC_TEMPLATE_FIELDS = {
+    "outdir",
+    "category_dir",
+    "threads",
+    "mode",
+    "project_name",
+    "sample",
+    "resources",
+}
+_DYNAMIC_TEMPLATE_PREFIXES = ("active_", "upstream_")
+
+
+def validate_pipeline_template_params(plugin_root: Path) -> list[str]:
+    """Return unresolved template fields in a plugin ``pipeline_dag.yaml``.
+
+    DAG path and param templates are resolved from a small planning context:
+    config defaults, per-node params, standard path fields such as ``outdir``,
+    and dynamic upstream selector names such as ``active_assembly_node``.
+    Missing fields usually mean a runtime command template will receive an
+    unresolved placeholder instead of a concrete parameter.
+    """
+    root = Path(plugin_root)
+    dag_path = root / "pipeline_dag.yaml"
+    if not dag_path.exists():
+        return []
+
+    with dag_path.open("r", encoding="utf-8") as handle:
+        dag_spec = yaml.safe_load(handle) or {}
+    if not isinstance(dag_spec, Mapping):
+        return [f"{dag_path}: pipeline_dag.yaml must contain a mapping"]
+
+    config_fields = _pipeline_config_fields(root)
+    violations: list[str] = []
+    for node in _normalize_dag_nodes(dag_spec):
+        node_id = str(node.get("id", "<unknown>"))
+        node_params = node.get("params")
+        node_param_fields = (
+            set(str(key) for key in node_params) if isinstance(node_params, Mapping) else set()
+        )
+        allowed_fields = set(_STATIC_TEMPLATE_FIELDS) | config_fields | node_param_fields
+        if str(node.get("scope", "per_sample")) != "cross_sample":
+            allowed_fields.add("sample_id")
+
+        for location, template in _iter_pipeline_template_strings(node):
+            for field in _template_field_roots(template):
+                if _is_allowed_template_field(field, allowed_fields):
+                    continue
+                violations.append(
+                    f"{dag_path}: {node_id}.{location} references unresolved "
+                    f"template field {field!r}"
+                )
+    return violations
+
+
+def _pipeline_config_fields(plugin_root: Path) -> set[str]:
+    config_path = plugin_root / "config_default.yaml"
+    if not config_path.exists():
+        return set()
+    with config_path.open("r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle) or {}
+    if not isinstance(config, Mapping):
+        return set()
+    return {str(key) for key in config}
+
+
+def _iter_pipeline_template_strings(node: Mapping[str, Any]) -> Iterator[tuple[str, str]]:
+    for location, value in _iter_template_values(node.get("params"), ("params",)):
+        yield location, value
+
+    for command_key in ("command", "command_template"):
+        command_value = node.get(command_key)
+        if isinstance(command_value, str) and "{" in command_value:
+            yield command_key, command_value
+
+    inputs = node.get("inputs")
+    if isinstance(inputs, Mapping):
+        for input_name, input_spec in inputs.items():
+            if not isinstance(input_spec, Mapping):
+                continue
+            for key in ("path", "source", "fallback", "default"):
+                input_value = input_spec.get(key)
+                if isinstance(input_value, str) and "{" in input_value:
+                    yield f"inputs.{input_name}.{key}", input_value
+
+    outputs = node.get("outputs")
+    if isinstance(outputs, Mapping):
+        for output_name, output_spec in outputs.items():
+            if not isinstance(output_spec, Mapping):
+                continue
+            output_value = output_spec.get("path")
+            if isinstance(output_value, str) and "{" in output_value:
+                yield f"outputs.{output_name}.path", output_value
+
+
+def _iter_template_values(value: Any, path: tuple[str, ...]) -> Iterator[tuple[str, str]]:
+    if isinstance(value, str):
+        if "{" in value:
+            yield ".".join(path), value
+        return
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            yield from _iter_template_values(nested, (*path, str(key)))
+    elif isinstance(value, list):
+        for index, nested in enumerate(value):
+            yield from _iter_template_values(nested, (*path, str(index)))
+
+
+def _template_field_roots(template: str) -> set[str]:
+    fields: set[str] = set()
+    formatter = string.Formatter()
+    try:
+        parsed = list(formatter.parse(template))
+    except ValueError:
+        return fields
+    for _, field_name, format_spec, _ in parsed:
+        if field_name:
+            fields.add(field_name.split(".", 1)[0].split("[", 1)[0])
+        if format_spec and "{" in format_spec:
+            fields.update(_template_field_roots(format_spec))
+    return {field for field in fields if field}
+
+
+def _is_allowed_template_field(field: str, allowed_fields: set[str]) -> bool:
+    return field in allowed_fields or field.startswith(_DYNAMIC_TEMPLATE_PREFIXES)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

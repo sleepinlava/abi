@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping
 
 from abi.config import load_yaml
+from abi.contracts.lint import validate_pipeline_template_params
 
 __all__ = [
     "PLUGIN_MANIFEST_NAME",
@@ -244,6 +245,12 @@ def validate_plugin_contract_files(plugin: Any) -> None:
     root = Path(plugin.root)
     manifest = load_plugin_manifest(root)
     _validate_manifest(plugin, root, manifest)
+    template_param_violations = validate_pipeline_template_params(root)
+    if template_param_violations:
+        raise ContractValidationError(
+            f"{plugin.plugin_id}: pipeline template params invalid: "
+            + "; ".join(template_param_violations)
+        )
     contracts = load_tool_contracts(root)
     registry = plugin.registry()
     registry_by_id = {tool["id"]: tool for tool in registry.list_tools()}

@@ -1,0 +1,10 @@
+tasks:
+  - id: plasmid_minimal_dry_run
+    workflow: metagenomic_plasmid
+    command: abi dry-run --type metagenomic_plasmid --config examples/config_minimal.yaml --outdir /tmp/abi-paper-plasmid --no-check-files --no-progress --output-json
+  - id: metatranscriptomics_demo_dry_run
+    workflow: metatranscriptomics
+    command: abi dry-run --type metatranscriptomics --config examples/metatranscriptomics/config_demo.yaml --outdir /tmp/abi-paper-metatranscriptomics --no-check-files --no-progress --output-json
+  - id: rnaseq_expression_demo_dry_run
+    workflow: rnaseq_expression
+    command: abi dry-run --type rnaseq_expression --sample-sheet examples/sample_sheet_transcriptomics.tsv --outdir /tmp/abi-paper-rnaseq --no-check-files --no-progress --output-json

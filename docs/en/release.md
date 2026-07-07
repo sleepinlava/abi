@@ -4,15 +4,22 @@
 
 ## Pre-Release Checks
 
+Run the consolidated release check before tagging or publishing:
+
+```bash
+scripts/release_check.sh
+```
+
+The script runs the same quality gate expected by CI:
+
 ```bash
 ruff check src/ tests/
 ruff format --check src/ tests/
 mypy src/abi/ --ignore-missing-imports
-pytest tests/ -v --tb=short
+pytest tests/ --cov=src/abi --cov-fail-under=75 --cov-report=term-missing:skip-covered -q --tb=short
 
-rm -rf dist/
 python -m build
-python -m twine check dist/*
+abi query --type metagenomic_plasmid --what stages
 ```
 
 After building a wheel, smoke-test the installed commands in a clean

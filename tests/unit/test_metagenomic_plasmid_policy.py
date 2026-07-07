@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from abi.contracts.lint import validate_pipeline_template_params
 from abi.plugins import get_plugin
 from abi.plugins.metagenomic_plasmid import build_plan_from_dag
 from abi.plugins.metagenomic_plasmid._engine.config import load_config
@@ -94,6 +95,10 @@ def test_default_illumina_route_matches_optimized_main_path(tmp_path):
     assembly = next(step for step in plan.steps if step.tool_id == "megahit")
     assert assembly.inputs["read1"] == fastp.outputs["clean_read1"]
     assert assembly.inputs["read2"] == fastp.outputs["clean_read2"]
+
+
+def test_pipeline_template_params_are_contract_linted() -> None:
+    assert validate_pipeline_template_params(Path("plugins/metagenomic_plasmid")) == []
 
 
 def test_multiqc_steps_include_project_outdir_template_param(tmp_path):

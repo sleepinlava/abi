@@ -4,15 +4,22 @@
 
 ## 发布前检查
 
+打标签或发布前，先运行统一发布检查入口：
+
+```bash
+scripts/release_check.sh
+```
+
+该脚本运行与 CI 一致的质量门：
+
 ```bash
 ruff check src/ tests/
 ruff format --check src/ tests/
 mypy src/abi/ --ignore-missing-imports
-pytest tests/ -v --tb=short
+pytest tests/ --cov=src/abi --cov-fail-under=75 --cov-report=term-missing:skip-covered -q --tb=short
 
-rm -rf dist/
 python -m build
-python -m twine check dist/*
+abi query --type metagenomic_plasmid --what stages
 ```
 
 构建 wheel 后，在可行的情况下于干净环境中对已安装命令进行冒烟测试：
