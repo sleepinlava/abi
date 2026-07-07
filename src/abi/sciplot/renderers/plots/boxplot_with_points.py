@@ -6,6 +6,9 @@ and overlays individual data points with jitter for transparency.
 
 from __future__ import annotations
 
+from inspect import signature
+from typing import Any
+
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
@@ -48,15 +51,21 @@ def plot_boxplot_with_points(
     # Colours
     colors = palette.get_categorical(spec.style.palette, n=max(n_groups, 1))
 
-    # Boxplot
-    bp = ax.boxplot(
-        box_data,
-        labels=[str(g) for g in groups],
-        patch_artist=True,
-        widths=0.5,
-        flierprops={"marker": "o", "markerfacecolor": "grey", "markersize": 3, "alpha": 0.4},
-        medianprops={"color": "black", "linewidth": 1},
-    )
+    boxplot_kwargs: dict[str, Any] = {
+        "patch_artist": True,
+        "widths": 0.5,
+        "flierprops": {
+            "marker": "o",
+            "markerfacecolor": "grey",
+            "markersize": 3,
+            "alpha": 0.4,
+        },
+        "medianprops": {"color": "black", "linewidth": 1},
+    }
+    label_param = "tick_labels" if "tick_labels" in signature(ax.boxplot).parameters else "labels"
+    boxplot_kwargs[label_param] = [str(g) for g in groups]
+
+    bp = ax.boxplot(box_data, **boxplot_kwargs)
     for i, patch in enumerate(bp["boxes"]):
         patch.set_facecolor(colors[i % len(colors)])
         patch.set_alpha(0.6)

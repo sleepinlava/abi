@@ -28,6 +28,7 @@ matplotlib (primary) or plotly (interactive fallback).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from inspect import signature
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -464,7 +465,10 @@ def _render_boxplot(
         groups.setdefault(g, []).append(v)
     group_names = sorted(groups.keys())
     data = [groups[g] for g in group_names]
-    bp = ax.boxplot(data, labels=group_names, patch_artist=True)
+    boxplot_kwargs: Dict[str, Any] = {"patch_artist": True}
+    label_param = "tick_labels" if "tick_labels" in signature(ax.boxplot).parameters else "labels"
+    boxplot_kwargs[label_param] = group_names
+    bp = ax.boxplot(data, **boxplot_kwargs)
     for patch in bp["boxes"]:
         patch.set_facecolor("#4472C4")
         patch.set_alpha(0.6)

@@ -27,6 +27,8 @@
   from DAG-resolved step inputs/outputs after the planner refactor.
 - Fixed GitHub Actions release identity by adding this `1.5.2` changelog
   section and moved the opencode API key reference to a GitHub Actions secret.
+- Fixed Matplotlib boxplot label argument compatibility across older local
+  releases and newer CI type signatures.
 
 ## [1.5.1] - 2026-06-23
 
