@@ -31,15 +31,26 @@ def plot_barplot(
     x_col = spec.mapping.x
     y_col = spec.mapping.y
 
-    if y_col is None:
-        raise ValueError("barplot requires mapping.y to be set (bar heights).")
-
-    if x_col and x_col in data.columns:
-        labels = [str(r) for r in data[x_col].values]
+    # Auto-count mode: when y is not specified, count occurrences of x values
+    if not y_col:
+        if x_col and x_col in data.columns:
+            counts = data[x_col].value_counts().reset_index()
+            counts.columns = ["label", "count"]
+            labels = counts["label"].astype(str).values
+            values = counts["count"].values
+            if spec.labels and not spec.labels.y_label:
+                spec.labels.y_label = "Count"
+        else:
+            raise ValueError(
+                "barplot requires either mapping.y (bar heights) or a valid "
+                "mapping.x column for auto-counting."
+            )
     else:
-        labels = [str(i) for i in range(len(data))]
-
-    values = pd.to_numeric(data[y_col], errors="coerce").fillna(0).values
+        if x_col and x_col in data.columns:
+            labels = [str(r) for r in data[x_col].values]
+        else:
+            labels = [str(i) for i in range(len(data))]
+        values = pd.to_numeric(data[y_col], errors="coerce").fillna(0).values
 
     # Truncate if too many bars
     max_bars = 60
