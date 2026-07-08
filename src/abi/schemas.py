@@ -503,6 +503,13 @@ class ExecutionPlan:
     # 分析工作流类型。为非质粒工作流（如 "amr"、"viral"）预留的扩展点。
     # 目前始终为 "metagenomic_plasmid"。
 
+    plasmid_strategy: str = Field(default="single_tool", min_length=1)
+    # Consensus strategy for plasmid detection: "single_tool", "union",
+    # "intersection", "majority_vote", or "weighted_vote". Used by the report
+    # phase for consensus table generation.
+    # 质粒检测共识策略："single_tool"、"union"、"intersection"、"majority_vote"
+    # 或 "weighted_vote"。由报告阶段用于共识表生成。
+
     skipped_steps: List[PlanStep] = field(default_factory=list)
     # Steps that were planned but marked ``skipped=True``. Stored separately
     # so the executor does not run them, but they remain in the provenance
@@ -532,6 +539,7 @@ class ExecutionPlan:
             "steps": [step.to_dict() for step in self.steps],
             "skipped_steps": [step.to_dict() for step in self.skipped_steps],
             "provenance_dir": self.provenance_dir,
+            "plasmid_strategy": self.plasmid_strategy,
         }
 
 

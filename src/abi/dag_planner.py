@@ -1042,6 +1042,8 @@ def build_plan_from_dag(
 
     # ── Assemble plan ──────────────────────────────────────────────────
     selected_tools = sorted({s.tool_id for s in steps if s.tool_id != "internal"})
+    plasmid_detection = config.get("plasmid_detection", {}) if isinstance(config, dict) else {}
+    plasmid_strategy = plasmid_detection.get("strategy", "single_tool")
     return ExecutionPlan(
         project_name=project_name,
         analysis_type=dag.pipeline_id,
@@ -1055,6 +1057,7 @@ def build_plan_from_dag(
         steps=steps,
         skipped_steps=skipped_steps,
         provenance_dir=str(outdir / "provenance"),
+        plasmid_strategy=str(plasmid_strategy),
     )
 
 
