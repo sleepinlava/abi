@@ -72,9 +72,11 @@ def test_core_parsers_emit_standard_rows(tmp_path):
     assert supports_standard_parsing("genomad")
 
     genomad = parse_standard_outputs("genomad", FIXTURES / "genomad", "S1")
-    assert genomad["plasmid_predictions"][0]["contig_id"] == "contig_1"
-    assert genomad["plasmid_predictions"][0]["confidence"] == "high"
-    assert genomad["plasmid_predictions"][0]["evidence_level"] == "primary"
+    predictions = genomad["plasmid_predictions"]
+    assert len(predictions) == 2  # not 4 — verifies no duplicate from per-contig summaries
+    assert predictions[0]["contig_id"] == "contig_1"
+    assert predictions[0]["confidence"] == "high"
+    assert predictions[0]["evidence_level"] == "primary"
 
     mob = parse_standard_outputs("mob_suite", FIXTURES / "mob_suite", "S1")
     assert mob["plasmid_predictions"][0]["tool"] == "mob_suite"
