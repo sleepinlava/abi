@@ -516,9 +516,10 @@ tools:
   default_enabled: false
   required: false
   command_template: platon --threads {threads} --output {output_dir} --prefix {sample_id}
-    {assembly}
+    --meta --db {database} {assembly}
   inputs:
   - assembly
+  - database
 - id: scapp
   name: SCAPP
   category: plasmid_binning

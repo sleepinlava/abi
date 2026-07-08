@@ -891,6 +891,10 @@ nodes:
     - assembly
     optional: false
     depends_on: []
+    params:
+      _internal_handler:
+        handler_id: "metagenomic_plasmid.passthrough_assembly"
+        execution_scope: "worker"
     inputs:
       assembly:
         type: file
@@ -1247,6 +1251,9 @@ nodes:
         type: file
         format: fasta
         source: '{active_assembly_node}.assembly'
+      database:
+        type: directory
+        source: config.resources.platon.database
       threads:
         type: integer
         default: 1
@@ -1269,6 +1276,10 @@ nodes:
     - hybrid
     - assembly
     optional: false
+    params:
+      _internal_handler:
+        handler_id: "metagenomic_plasmid.plasmid_consensus"
+        execution_scope: "worker"
     depends_on:
     - plasmid_detect_genomad
     - plasmid_detect_plasme
@@ -1334,6 +1345,10 @@ nodes:
     - hybrid
     - assembly
     optional: false
+    params:
+      _internal_handler:
+        handler_id: "metagenomic_plasmid.plasmid_structure"
+        execution_scope: "worker"
     depends_on:
     - plasmid_consensus
     inputs:
@@ -2503,6 +2518,10 @@ nodes:
     - hybrid
     - assembly
     optional: false
+    params:
+      _internal_handler:
+        handler_id: "metagenomic_plasmid.plasmid_catalog_prepare"
+        execution_scope: "worker"
     depends_on:
     - plasmid_consensus
     outputs:
