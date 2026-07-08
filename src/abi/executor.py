@@ -1606,32 +1606,63 @@ def _propagate_resolved_paths(completed_step: Any, downstream_steps: List[Any]) 
     if not replacements:
         return
 
+    # Only propagate resolved paths to downstream steps owned by the same
+    # sample (or cross-sample steps with sample_id=None).  Without this
+    # guard, per-sample assembly passthrough results from sample 1 leak
+    # into sample 2's downstream steps, and the correct overwrite from
+    # sample 2 is then skipped because the (wrong) path already exists.
+    completed_sample_id = getattr(completed_step, "sample_id", None)
+
     for ds in downstream_steps:
+        ds_sample_id = getattr(ds, "sample_id", None)
+        if completed_sample_id is not None and ds_sample_id is not None:
+            if ds_sample_id != completed_sample_id:
+                continue
         # Update inputs
         for key, value in list(getattr(ds, "inputs", {}).items()):
             if isinstance(value, str):
                 old = Path(value)
-                if not old.exists():
+                # Skip values that already exist on disk OR are empty strings
+                # (Path("") resolves to "." which spuriously exists).
+                # 跳过已存在于磁盘上的值或空字符串
+                # （Path("") 会被解析为 "." 虚假地存在）。
+                if not value or not old.exists():
+                    # For empty values, match by key name directly.
+                    # 对于空值，直接按键名匹配。
+                    if not value and key in replacements:
+                        ds.inputs[key] = replacements[key]
+                        continue
                     # Try matching by checking if any resolved output
                     # lives in the same output directory and has a
                     # compatible file extension.
                     for repl_key, repl_val in replacements.items():
                         repl_path = Path(repl_val)
-                        if old.suffix and repl_path.suffix == old.suffix:
-                            if repl_path.parent.parent == old.parent.parent:
-                                ds.inputs[key] = repl_val
-                                break
+                        if (
+                            # Match empty or compatible suffix
+                            # 匹配空后缀或兼容后缀
+                            (not old.suffix or repl_path.suffix == old.suffix)
+                            and repl_path.parent.parent == old.parent.parent
+                        ):
+                            ds.inputs[key] = repl_val
+                            break
         # Update params
         for key, value in list(getattr(ds, "params", {}).items()):
             if isinstance(value, str) and key != "output_dir":
                 old = Path(value)
-                if not old.exists():
+                if not value or not old.exists():
+                    # For empty param values, match by key name.
+                    # 对于空参数值，按键名匹配。
+                    if not value and key in replacements:
+                        ds.params[key] = replacements[key]
+                        continue
                     for repl_key, repl_val in replacements.items():
                         repl_path = Path(repl_val)
-                        if old.suffix and repl_path.suffix == old.suffix:
-                            if repl_path.parent.parent == old.parent.parent:
-                                ds.params[key] = repl_val
-                                break
+                        if (
+                            (not old.suffix or repl_path.suffix == old.suffix)
+                            and repl_path.parent.parent == old.parent.parent
+                        ):
+                            ds.params[key] = repl_val
+                            break
 
 
 def _read_pair_for_key(key: str) -> str:
