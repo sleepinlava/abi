@@ -23,6 +23,7 @@ ABI 已是一个强大的工作流控制层：
 | 跨样本 QC 报告 | `multiqc` | Ewels et al., 2016, Bioinformatics, DOI: [10.1093/bioinformatics/btw354](https://doi.org/10.1093/bioinformatics/btw354) | 跨工具和样本的聚合 QC 报告 | 在启用 MultiQC 时添加预期的 MultiQC 产物检查。 |
 | 短读段宏基因组组装 | `megahit` | Li et al., 2015, Bioinformatics, DOI: [10.1093/bioinformatics/btv033](https://doi.org/10.1093/bioinformatics/btv033) | 使用简洁 de Bruijn 图进行大规模复杂宏基因组组装 | 维护带有最低 N50/contig 数量阈值的组装基准 fixtures。 |
 | 可移动遗传元件检测 | `genomad` | Camargo et al., 2023, Nature Biotechnology, DOI: [10.1038/s41587-023-01953-y](https://doi.org/10.1038/s41587-023-01953-y) | 质粒、病毒和其他可移动遗传元件的鉴定 | 版本化 geNomad 数据库，在冒烟数据集上断言已知阳性质粒/病毒命中。 |
+| 质粒检测（二级） | `platon` | Schwengers et al., 2020, bioRxiv, DOI: [10.1101/2020.06.24.168914](https://doi.org/10.1101/2020.06.24.168914) | 通过蛋白质和 contig 级特征的质粒、病毒和复制子类型判定 | 版本锁定 platon 数据库；在溯源中追踪数据库路径，并用已知参考质粒验证。 |
 | 细菌基因组注释 | `bakta` | Schwengers et al., 2021, Microbial Genomics, DOI: [10.1099/mgen.0.000685](https://doi.org/10.1099/mgen.0.000685) | 快速标准化的细菌基因组注释和结构化输出 | 对已知参考质粒添加注释验收检查。 |
 | 基因预测子任务 | `prodigal` | Hyatt et al., 2010, BMC Bioinformatics, DOI: [10.1186/1471-2105-11-119](https://doi.org/10.1186/1471-2105-11-119) | 原核生物编码序列预测 | 在启用时要求生成 GFF/FAA/FFN 文件和最低编码序列计数。 |
 
@@ -56,7 +57,7 @@ ABI 已是一个强大的工作流控制层：
 
 ### 第 2 阶段：生物学基准
 
-- 添加精心策划的小型阳性对照：已知质粒参考、阴性染色体对照以及混合样本。 ✅ 基准数据集已建立（`data/benchmarks/`）
+- 添加精心策划的小型阳性对照：已知质粒参考、阴性染色体对照以及混合样本。 ✅ 基准数据集已建立（`data/benchmarks/`）；RefSeq 质粒验证通过（3/3，genomad+platon majority_vote）
 - 定义质粒调用、注释、丰度行以及报告内容的标准表验收检查。
 - 附加预期失败案例：缺失数据库、格式错误的样本表、空输出、交换的 R1/R2 以及不兼容的平台/输入组合。
 

@@ -45,6 +45,89 @@ ruff format --check src/ tests/  # All files formatted
 mypy src/abi/ --ignore-missing-imports  # 0 errors
 ```
 
+## 2026-07-09 — v1.5.4-pre: RefSeq Plasmid Validation & Bug Fixes
+
+### Overview
+
+Full plasmid detection pipeline validation using 3 RefSeq plasmids on an
+AutoDL cloud server (128 cores, 1TB RAM): NC_002127.1 (3.3kb), NC_011977.1
+(7.6kb ColE9-J), NC_002483.1 (99kb F plasmid). Assembly-mode run with
+genomad + platon, majority_vote strategy. All 39/39 DAG steps passed.
+WGS bacteria plugin also validated with a synthetic MG1655 sample.
+
+### Plasmid Validation
+
+- **3 RefSeq plasmids** processed end-to-end: assembly → plasmid detection
+  (genomad + platon) → consensus → report with figures.
+- **Per-sample results correct**: NC_002127_1 (3306bp, genomad=0.99 high,
+  platon=3.7 low), NC_011977_1 (7577bp, genomad=0.99 high, platon=1.0 high),
+  NC_002483_1 (99159bp, genomad=0.995 high, platon=22.1 low).
+- **3 sciplot figures rendered**: assembly_metrics_by_sample,
+  plasmid_length_distribution, plasmid_score_vs_length. 6 other specs
+  gracefully skipped due to missing annotation/typing/host data (annotations
+  and typing tools were intentionally disabled in config).
+
+### Bug Fixes
+
+- **Cross-sample path propagation** (`src/abi/executor.py`):
+  `_propagate_resolved_paths` unconditionally propagated resolved paths to
+  all downstream steps regardless of `sample_id`, causing every sample to
+  receive the first sample's assembly path. Fixed with per-sample filtering.
+- **Platon `--db` flag missing** (`plugins/metagenomic_plasmid/tool_registry.yaml`):
+  The command template was missing `--db {database}` and the DAG did not
+  declare the database input dependency, causing platon runtime failures.
+- **Genomad duplicate results** (`_engine/parsers.py`):
+  The parser glob `*plasmid*summary*.tsv` matched both top-level and
+  per-contig subdirectory files, producing duplicate predictions. Fixed by
+  restricting to `contigs_summary/*plasmid*summary*.tsv`.
+- **Empty consensus table** (`__init__.py`, `schemas.py`, `dag_planner.py`):
+  `write_consensus_table()` was only called from `PipelineRunner._run_plan`,
+  but `abi run` uses `ABIExecutor` which never invoked it. Fixed by adding
+  the call in `write_report()` and adding `plasmid_strategy` field to
+  `ExecutionPlan`.
+
+### WGS Bacteria Validation
+
+- **Synthetic MG1655 sample**: fastp → SPAdes → Prokka → MLST (correct
+  ST10) → AMRFinderPlus (0 acquired / 11 intrinsic resistances). All
+  steps passed.
+
+### SciPlot Improvement
+
+- **Barplot auto-count mode** (`sciplot/renderers/plots/barplot.py`):
+  When `mapping.y` is not specified, auto-count occurrences of `mapping.x`
+  values instead of raising an error.
+
+### CLI Addition
+
+- **`abi --version` / `abi -V`** (`cli.py`): Prints the `abi-agent` version
+  from `pyproject.toml` via `importlib.metadata`. Uses a Typer callback.
+
+### Verification
+
+```
+ruff check src/ tests/           # 0 errors
+ruff format --check src/ tests/  # All files formatted
+mypy src/abi/ --ignore-missing-imports  # 0 errors
+pytest tests/ -q --tb=short      # 2252+ passed, 0 regressions
+```
+
+### Files Changed
+
+| File | Action |
+| --- | --- |
+| `src/abi/executor.py` | Fixed cross-sample path propagation with sample_id filtering |
+| `plugins/metagenomic_plasmid/tool_registry.yaml` | Added `--db {database}` to platon command template |
+| `plugins/metagenomic_plasmid/pipeline_dag.yaml` | Added platon database input, internal handler nodes |
+| `src/abi/plugins/metagenomic_plasmid/_engine/parsers.py` | Fixed genomad duplicate results (glob path) |
+| `src/abi/plugins/metagenomic_plasmid/__init__.py` | Added write_consensus_table in write_report, internal handlers |
+| `src/abi/schemas.py` | Added `plasmid_strategy` field to ExecutionPlan |
+| `src/abi/dag_planner.py` | Plumbed plasmid_strategy from config to ExecutionPlan |
+| `src/abi/sciplot/renderers/plots/barplot.py` | Added auto-count mode for barplot |
+| `src/abi/cli.py` | Added --version/-V flag |
+| `src/abi/plugins/metagenomic_plasmid/handlers.py` | NEW — internal handlers for passthrough DAG nodes |
+| `tests/unit/test_parsers.py` | Updated genomad test expectations |
+
 ## 2026-06-23 — v1.5.1-1.5.2: Release Identity & Planner Cleanup
 
 ### Overview

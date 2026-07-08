@@ -18,7 +18,7 @@ Nextflow 导出/运行支持、DAG/合约静态分析、资源自动发现 + 安
 [![Status](https://img.shields.io/badge/status-alpha-orange?style=flat-square)](https://github.com/sleepinlava/abi)
 [![License](https://img.shields.io/pypi/l/abi-agent?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
 
-> **工程状态（v1.5.3 源码，2026-07-07）：本地冻结候选。**
+> **工程状态（v1.5.3 源码，2026-07-09）：本地冻结候选。**
 > 约 2252 项测试通过（83% 语句覆盖率），高风险模块覆盖率门禁全部通过，
 > 全新环境安装 wheel 后 7 个内置插件 dry-run 全部通过。正式硬冻结仍需：
 > 远程 Python 3.10-3.13 矩阵全绿、带生物学判定标准的固定真实工具 benchmark、
@@ -43,6 +43,9 @@ pip install -e ".[dev,mcp]"
 ```bash
 # 列出已安装的分析插件
 abi list-types
+
+# 显示版本号
+abi --version
 
 # 构建执行计划（不运行工具）
 abi plan --type metatranscriptomics --config config.yaml --sample-sheet samples.tsv
@@ -114,7 +117,7 @@ abi job-service --workers 2 --store jobs.json --subprocess-workers
 | `metatranscriptomics` | 3 | 宏转录组：fastp → STAR/HISAT2 → featureCounts。**✅ 软件工作流验证通过** |
 | `easymetagenome` | 10 | P0 宏基因组：fastp → kneaddata → kraken2 → bracken → humann4 + HUMAnN 工具集 → seqkit。3 种工作流预设（分类、功能、全流程），DAG 驱动规划，内置处理器。**✅ 软件工作流验证通过** |
 | `viral_viwrap` | 1 | 病毒宏基因组：封装 ViWrap 1.3.1 — 分箱 → 分类 → 宿主预测 → 质量过滤。托管外部 CLI 插件，含环境检查器。**✅ 软件工作流验证通过** |
-| `metagenomic_plasmid` | 64 | 旗舰质粒分析：QC → 组装 → 质粒检测 → 注释 → 丰度 → 群落分析 → 可视化。10 个 conda 环境，**90 节点声明式 DAG**，16 张标准表，8 张 sciplot 图形。**⚠️ 软件工作流验证通过；全数据库生物学验证待完成** |
+| `metagenomic_plasmid` | 64 | 旗舰质粒分析：QC → 组装 → 质粒检测 → 注释 → 丰度 → 群落分析 → 可视化。10 个 conda 环境，**90 节点声明式 DAG**，16 张标准表，8 张 sciplot 图形。**✅ 软件工作流验证通过；assembly 模式 RefSeq 验证通过（3 个质粒，genomad+platon，majority_vote）** |
 
 `autoplasm` CLI 保留以维持向后兼容：
 

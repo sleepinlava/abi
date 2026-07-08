@@ -20,7 +20,7 @@ HTTP Job Service with force-kill capability.
 
 > :cn: [中文版](README.zh.md)
 
-> **Engineering status (v1.5.3 source, 2026-07-07): local freeze candidate.**
+> **Engineering status (v1.5.3 source, 2026-07-09): local freeze candidate.**
 > ~2252 tests pass (83% statement coverage), risk-based module coverage gates
 > pass, and a clean wheel runs all 7 built-in plugin dry-runs. Hard freeze still
 > requires a green remote Python 3.10-3.13 matrix, fixed real-tool benchmarks
@@ -46,6 +46,9 @@ Python 3.10-3.13 is supported.
 ```bash
 # List installed analysis plugins
 abi list-types
+
+# Show version
+abi --version
 
 # Build a plan without executing tools
 abi plan --type metatranscriptomics --config config.yaml --sample-sheet samples.tsv
@@ -117,7 +120,7 @@ All agent-facing commands support `--output-json`.
 | `metatranscriptomics` | 3 | Metatranscriptomics: fastp → STAR/HISAT2 → featureCounts. **✅ Software workflow validated** |
 | `easymetagenome` | 10 | P0 shotgun metagenomics: fastp → kneaddata → kraken2 → bracken → humann4 + HUMAnN utilities → seqkit. 3 workflow presets (taxonomy, functional, full), DAG-driven planner, internal handlers. **✅ Software workflow validated** |
 | `viral_viwrap` | 1 | Viral metagenomics: wraps ViWrap 1.3.1 — binning → taxonomy → host prediction → quality filtering. Managed external CLI plugin with environment checker. **✅ Software workflow validated** |
-| `metagenomic_plasmid` | 64 | Flagship plasmid analysis: QC → assembly → plasmid detection → annotation → abundance → community analysis → visualization. 10 conda envs, **90-node declarative DAG**, 16 standard tables, 8 sciplot figures. **⚠️ Software workflow validated; full-database biological validation pending** |
+| `metagenomic_plasmid` | 64 | Flagship plasmid analysis: QC → assembly → plasmid detection → annotation → abundance → community analysis → visualization. 10 conda envs, **90-node declarative DAG**, 16 standard tables, 8 sciplot figures. **✅ Software workflow validated; assembly-mode refseq validation passed (3 plasmids, genomad+platon, majority_vote)** |
 
 The `autoplasm` CLI is preserved for backward compatibility:
 

@@ -10,6 +10,15 @@
 - 合约 lint 扩展至 DAG 模板参数检查
 - 修复 DAG `source: config.*` 输入解析、FASTA 导出、Matplotlib boxplot 兼容性
 
+## 2026-07-09 — v1.5.4-pre: RefSeq 质粒验证与 Bug 修复
+
+- **Assembly 模式全流程验证**：3 个 RefSeq 质粒（NC_002127.1 3.3kb、NC_011977.1 7.6kb、NC_002483.1 99kb F 质粒）在 AutoDL 128 核云服务器上运行 39/39 DAG 步骤全部通过
+- **Bug 修复**：修复 cross-sample path propagation（executor 向所有样本泄漏首个样本的 assembly 路径）、platon `--db` 标志缺失、genomad 解析器重复读取结果
+- **Consensus table 修复**：`plasmid_consensus.tsv` 在 `abi run` 流程中始终为空 — 根因是 `write_consensus_table()` 仅在 `PipelineRunner` 路径中调用，`ABIExecutor`（`abi run` 使用）从未调用。在 `write_report()` 中增加调用，并在 `ExecutionPlan` 中新增 `plasmid_strategy` 字段
+- **WGS bacteria 验证**：合成 MG1655 样本完成 fastp → SPAdes → Prokka → MLST（ST10 正确）→ AMRFinderPlus（0 获得性 / 11 固有）全流程
+- **SciPlot 图表**：3/9 figure specs 成功渲染（assembly_metrics_by_sample、plasmid_length_distribution、plasmid_score_vs_length）；barplot 新增 auto-count 模式
+- **CLI 新增**：`abi --version` / `abi -V` 显示版本号
+
 ## 2026-06-23 — v1.5.1-1.5.2: 发布身份与规划器清理
 
 - `pyproject.toml` `project.version` 成为单一版本来源

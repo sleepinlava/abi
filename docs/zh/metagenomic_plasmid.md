@@ -1,5 +1,14 @@
 # 宏基因组质粒分析
 
+## 验证状态
+
+**2026-07-09** — Assembly 模式 RefSeq 验证通过：
+- 3 个 RefSeq 质粒全流程 39/39 步骤通过
+- NC_002127.1（3.3kb，genomad=0.99 high / platon=3.7 low）、NC_011977.1（7.6kb ColE9-J，两个工具均判为质粒）、NC_002483.1（99kb F 质粒，genomad=0.995 high / platon=22.1 low）
+- 工具：genomad + platon，策略：majority_vote
+- 3/9 张 sciplot 图形渲染成功（assembly_metrics、plasmid_length_distribution、plasmid_score_vs_length）
+- 已知限制：annotation/typing 工具在本次运行中被禁用；6 张图形因缺少注释/分型/宿主数据而跳过
+
 `metagenomic_plasmid` 是 ABI 面向 Illumina、ONT、PacBio HiFi、二代+三代
 混合数据和 assembly-only 项目的平台感知质粒工作流。规范拓扑位于
 `plugins/metagenomic_plasmid/pipeline_dag.yaml`；Python 引擎负责解析逐样本输入、

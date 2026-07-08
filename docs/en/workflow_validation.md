@@ -39,6 +39,7 @@ claim.
 | Cross-sample QC reporting | `multiqc` | Ewels et al., 2016, Bioinformatics, DOI: [10.1093/bioinformatics/btw354](https://doi.org/10.1093/bioinformatics/btw354) | Aggregated QC report across tools and samples | Add expected MultiQC artifact checks when MultiQC is enabled. |
 | Short-read metagenome assembly | `megahit` | Li et al., 2015, Bioinformatics, DOI: [10.1093/bioinformatics/btv033](https://doi.org/10.1093/bioinformatics/btv033) | Large and complex metagenomic assembly with succinct de Bruijn graphs | Maintain assembly benchmark fixtures with minimum N50/contig-count thresholds. |
 | Mobile genetic element detection | `genomad` | Camargo et al., 2023, Nature Biotechnology, DOI: [10.1038/s41587-023-01953-y](https://doi.org/10.1038/s41587-023-01953-y) | Identification of plasmids, viruses, and other mobile genetic elements | Version the geNomad database and assert known positive plasmid/viral hits in smoke datasets. |
+| Plasmid detection (secondary) | `platon` | Schwengers et al., 2020, bioRxiv, DOI: [10.1101/2020.06.24.168914](https://doi.org/10.1101/2020.06.24.168914) | Plasmid, virus, and replicon typing via protein- and contig-level features | Version-lock platon database; track database path in provenance and validate against known reference plasmids. |
 | Bacterial genome annotation | `bakta` | Schwengers et al., 2021, Microbial Genomics, DOI: [10.1099/mgen.0.000685](https://doi.org/10.1099/mgen.0.000685) | Rapid standardized bacterial genome annotation and structured outputs | Add annotation acceptance checks for known reference plasmids. |
 | Gene prediction subtask | `prodigal` | Hyatt et al., 2010, BMC Bioinformatics, DOI: [10.1186/1471-2105-11-119](https://doi.org/10.1186/1471-2105-11-119) | Prokaryotic coding sequence prediction | Require generated GFF/FAA/FFN files and minimum coding sequence counts where enabled. |
 
@@ -69,22 +70,22 @@ when all of the following are true:
 - Extend contract validation to inputs, not only outputs and checksum chaining.
 - Promote contract violations to stable diagnostic error codes in JSON
   envelopes.
-- Add contract-lint commands for `pipeline_dag.yaml` and `tool_contracts/*.yaml`.
+- Add contract-lint commands for `pipeline_dag.yaml` and `tool_contracts/*.yaml`. ✅ Implemented via abi.contracts.run_contract_lint
 - Keep `pytest`, `ruff check`, `ruff format --check`, and `mypy src/abi/`
-  passing on every change.
+  passing on every change. ✅ CI enforced
 
 ### Phase 1: Reproducibility Manifests
 
 - Generate `provenance/tool_versions.tsv` from real `--version` probes where
-  available.
-- Add `provenance/resource_manifest.json` with database/model checksums.
+  available. ✅ Implemented
+- Add `provenance/resource_manifest.json` with database/model checksums. ✅ Implemented
 - Pin smoke-test environments through explicit conda lock files or containers.
 - Record command templates and resolved command tokens in machine-readable form.
 
 ### Phase 2: Biological Benchmarks
 
 - Add curated tiny positive controls: known plasmid references, negative
-  chromosomal controls, and mixed samples.
+  chromosomal controls, and mixed samples. ✅ Benchmark datasets established in data/benchmarks/
 - Define standard-table acceptance checks for plasmid calls, annotations,
   abundance rows, and report contents.
 - Attach expected failure cases: missing database, malformed sample sheet,

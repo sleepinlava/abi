@@ -568,6 +568,12 @@ abi run \
 1. 全部 7 个插件均已实现完整 preflight，不再允许空检查假通过。
 2. 全部 7 个插件均已提供 `init` 所需样本模板。
 3. `setup-resources` 输出已显式区分 mock 与真实资源预览，mock dry-run 不写入资源。
+4. 修复 cross-sample path propagation bug：`executor._propagate_resolved_paths` 现按 `sample_id` 过滤，不再向所有样本泄漏首个样本的 assembly 路径。
+5. 修复 platon `--db` 标志缺失：`tool_registry.yaml` 已补全 `--db {database}`，`pipeline_dag.yaml` 已声明 database 输入。
+6. 修复 genomad 解析器重复结果：glob 限制为 `contigs_summary/*plasmid*summary*.tsv`。
+7. 修复 `plasmid_consensus.tsv` 空表：`write_report()` 现调用 `write_consensus_table()`（原仅在 `PipelineRunner` 路径中调用）。
+8. 新增 `abi --version` / `abi -V` 命令。
+9. RefSeq 质粒 assembly 模式全流程验证通过（3 个质粒，genomad+platon majority_vote，39/39 DAG 步骤）。
 
 仍建议优先处理：
 
