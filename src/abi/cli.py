@@ -83,6 +83,7 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import typer
 
+from abi import __version__
 from abi._shared import _common_overrides
 from abi.agent import ABIAgentInterface
 from abi.agent.context import render_doctor_agent
@@ -116,6 +117,21 @@ app = typer.Typer(
 # 用于 Job Service 操作的子 Typer，挂载在 ``abi job`` 下。
 job_app = typer.Typer(help="Submit and inspect queued ABI Job Service operations.")
 app.add_typer(job_app, name="job")
+
+
+@app.callback(invoke_without_command=True)
+def _abi_version_callback(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-V",
+        help="Show version and exit.",
+    ),
+) -> None:
+    """Global callback: prints version and exits when --version/-V is passed."""
+    if version:
+        typer.echo(__version__)
+        raise typer.Exit()
 
 
 def _fail(exc: Exception) -> None:
