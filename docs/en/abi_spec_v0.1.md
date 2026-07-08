@@ -96,7 +96,7 @@ cloud batch executors.
 
 ## Error Codes
 
-ABI uses 14 stable error codes from `abi.diagnostics`, enumerating every
+ABI uses 19 stable error codes from `abi.diagnostics`, enumerating every
 recognized failure mode:
 
 | Code | Triggers when |
@@ -115,6 +115,11 @@ recognized failure mode:
 | `empty_result` | the pipeline produced no output |
 | `artifact_missing` | a required result artifact is absent |
 | `internal_error` | unexpected/unclassified error at the ABI boundary |
+| `contract_violation` | a step contract assertion or output check failed |
+| `duplicate_sample_id` | sample sheet contains duplicate sample IDs |
+| `incomplete_pairs` | paired-end reads have mismatched R1/R2 files |
+| `invalid_platform` | platform identifier is not supported by the plugin |
+| `missing_sample_id` | a sample ID is missing from the expected set |
 
 The frozen set is defined in `abi.diagnostics.ERROR_CODES` and each error
 response carries a stable `error_code` + actionable `diagnostic_hints`.

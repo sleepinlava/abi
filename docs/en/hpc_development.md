@@ -146,6 +146,8 @@ abi setup-resources --type metagenomic_plasmid --confirm
 | wgs_bacteria | rnaseq | fastp, spades, prokka, mlst, amrfinderplus |
 | amplicon_16s | amplicon | cutadapt, vsearch, python-diversity |
 | metatranscriptomics | abi-qc, abi-stats | fastp, star, featurecounts |
+| easymetagenome | easymetagenome | fastp, megahit, quast, prokka, kraken2, metaphlan, humann |
+| viral_viwrap | viral_viwrap | ViWrap 1.3.1 toolchain |
 
 ### Container support
 

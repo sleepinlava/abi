@@ -18,8 +18,8 @@ Nextflow 导出/运行支持、DAG/合约静态分析、资源自动发现 + 安
 [![Status](https://img.shields.io/badge/status-alpha-orange?style=flat-square)](https://github.com/sleepinlava/abi)
 [![License](https://img.shields.io/pypi/l/abi-agent?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
 
-> **工程状态（v1.5.1 源码，2026-06-23）：本地冻结候选。**
-> 1364 项测试通过（83% 语句覆盖率），高风险模块覆盖率门禁全部通过，
+> **工程状态（v1.5.3 源码，2026-07-07）：本地冻结候选。**
+> 约 2252 项测试通过（83% 语句覆盖率），高风险模块覆盖率门禁全部通过，
 > 全新环境安装 wheel 后 7 个内置插件 dry-run 全部通过。正式硬冻结仍需：
 > 远程 Python 3.10-3.13 矩阵全绿、带生物学判定标准的固定真实工具 benchmark、
 > 连续两个仅修缺陷的候选版本，以及连续一周无新增 P0/P1 缺陷。
@@ -253,16 +253,17 @@ python -m twine check dist/*
 - [ABI Spec v0.1](docs/zh/abi_spec_v0.1.md)
 - [开发指南](docs/zh/development.md)
 - [API 参考](docs/en/api.rst) — Sphinx 自动从 docstring 生成
-- [abi_sciplot 设计文档](docs/en/abi_sciplot_design.md) — 科研图形编译器
+- [abi_sciplot 设计文档](docs/zh/abi_sciplot_design.md) — 科研图形编译器
 - [插件开发指南](docs/zh/plugin_development_guide.md)
-- [RNA-seq 工作流](docs/en/rnaseq_expression_workflow.md)
+- [RNA-seq 工作流](docs/zh/rnaseq_expression_workflow.md)
 - [工作流验证](docs/zh/workflow_validation.md)
 - [HPC 开发](docs/zh/hpc_development.md)
 - [OpenAI/LLM 接口标准](docs/zh/openai_interface_standard.md)
 - [Agent 使用指南](docs/zh/agent_usage.md)
 - [Job Service 指南](docs/zh/job_service.md)
 - [发布指南](docs/zh/release.md)
-- [开发日志](docs/en/devlog.md)
+- [开发日志](docs/zh/devlog.md)（[英文完整版](docs/en/devlog.md)）
+- [生产验收清单](docs/zh/production_manual_acceptance_checklist.md)（[英文版](docs/en/production_manual_acceptance_checklist.md)）
 
 ## 公共 SDK
 

@@ -12,7 +12,7 @@ src/abi/
                       citations, limitations, html — generic report system
   workflow/           ResourceManifest, workflow validation, figure_specs loading
   plugins/            Built-in analysis-type plugins
-    metagenomic_plasmid/   Self-contained plugin package (engine in _engine/, 67 tools, 84-node DAG)
+    metagenomic_plasmid/   Self-contained plugin package (engine in _engine/, 64 tools, 90-node DAG)
 	    easymetagenome/        P0 shotgun metagenomics (12 tools, 3 presets, internal handlers)
 	    viral_viwrap/          Managed external CLI plugin wrapping ViWrap 1.3.1 (1 tool)
     rnaseq_expression.py   Bulk RNA-seq (6 tools)
@@ -67,7 +67,7 @@ core modules for shared infrastructure.
 | `abi.contracts.step_contract` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, checksum chaining |
 | `abi.contracts` | `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec` — L1/L2/L3 workflow validation |
 | `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with literature + path + validation layers |
-| `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation, shared by all 5 plugins |
+| `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation, shared by all 7 plugins |
 | `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML-driven TSV/JSON/log parsing with 3 source types |
 | `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure` — publication-grade figure compiler, 15 plot types, plotnine+seaborn backends (v1.4.0) |
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
@@ -154,7 +154,7 @@ with this priority:
 3. ``PROJECT_ROOT / ".mamba"`` (default local install)
 4. ``PROJECT_ROOT.parent / "abi-envs"`` (sibling dir)
 The ``env_name`` for each tool is resolved at runtime from ``environments.yaml``
-(single source of truth for all 16 conda environments and 93 tool→env assignments).
+(single source of truth for all 18 conda environments and 98 tool→env assignments).
 (2026-06-21: fixed metaphlan/kraken2 env_name from ``autoplasm-stats`` → ``stats``;
 added mmseqs2 ResourceSpec; amrfinderplus install_post: makeblastdb; kraken2 S3 download).
 

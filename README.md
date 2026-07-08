@@ -20,8 +20,8 @@ HTTP Job Service with force-kill capability.
 
 > :cn: [中文版](README.zh.md)
 
-> **Engineering status (v1.5.1 source, 2026-07-06): local freeze candidate.**
-> 1364 tests pass (83% statement coverage), risk-based module coverage gates
+> **Engineering status (v1.5.3 source, 2026-07-07): local freeze candidate.**
+> ~2252 tests pass (83% statement coverage), risk-based module coverage gates
 > pass, and a clean wheel runs all 7 built-in plugin dry-runs. Hard freeze still
 > requires a green remote Python 3.10-3.13 matrix, fixed real-tool benchmarks
 > with biological acceptance criteria, two defect-only release candidates, and

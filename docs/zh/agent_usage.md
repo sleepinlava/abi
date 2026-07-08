@@ -10,7 +10,7 @@ Agent 应将 ABI 用作生命周期控制层，而非直接编写生物信息学
 abi install-skills
 ```
 
-这会将 41 个捆绑的 SKILL.md 文件复制到 `~/.claude/skills/abi/`。安装完成后，Claude Code 会自动加载这些技能并知晓如何使用 `abi` CLI 及其生物信息学工具。
+这会将 40 个捆绑的 SKILL.md 文件复制到 `~/.claude/skills/abi/`。安装完成后，Claude Code 会自动加载这些技能并知晓如何使用 `abi` CLI 及其生物信息学工具。
 
 使用 `--force` 覆盖已有文件，或使用 `--target` 自定义目标目录。
 

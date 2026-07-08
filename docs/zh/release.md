@@ -44,8 +44,12 @@ abi query --type rnaseq_expression --what tools
 autoplasm --help
 abi dry-run --type metagenomic_plasmid --config examples/config_minimal.yaml --profile dry_run
 abi doctor-agent --type metatranscriptomics
-abi export-openai-tools --type metatranscriptomics --format json
+abi export-tools --type metatranscriptomics --format json
 abi install-skills --target /tmp/abi-smoke-skills
+abi query --type amplicon_16s --what stages
+abi query --type wgs_bacteria --what tools
+abi query --type easymetagenome --what stages
+abi dry-run --type viral_viwrap --config examples/config_minimal.yaml --profile dry_run 2>/dev/null || echo "ViWrap smoke skipped (requires external CLI)"
 abi-mcp --help 2>/dev/null || python -m abi.mcp.server --help 2>/dev/null || true
 ```
 

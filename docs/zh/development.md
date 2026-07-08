@@ -12,7 +12,7 @@ src/abi/
                       citations、limitations、html — 通用报告系统
   workflow/           ResourceManifest、工作流验证、figure_specs 加载
   plugins/            内置分析类型插件
-    metagenomic_plasmid/   自包含插件包（引擎在 _engine/ 中，67 工具，84 节点 DAG）
+    metagenomic_plasmid/   自包含插件包（引擎在 _engine/ 中，64 工具，90 节点 DAG）
 	    easymetagenome/        P0 猎枪宏基因组（12 工具，3 预设，内部处理器）
 	    viral_viwrap/          托管外部 CLI 插件包装 ViWrap 1.3.1（1 工具）
     rnaseq_expression.py   批量 RNA-seq（6 工具）
@@ -66,7 +66,7 @@ src/abi/
 | `abi.contracts.step_contract` | `ContractViolationError`、`validate_output_contract`、`evaluate_assertions`、校验和链式追踪 |
 | `abi.contracts` | `WorkflowSpec`、`WorkflowStepSpec`、`load_workflow_spec` — L1/L2/L3 工作流验证 |
 | `abi.dag` | `infer_dag`、`ABIDAG`、`StepBinding` — DAG 推断，支持文献 + 路径 + 验证三层模型 |
-| `abi.dag_planner` | `UniversalDAG`、`build_plan_from_dag`、`PathTemplateContext` — 声明式计划生成，所有 5 个插件共用 |
+| `abi.dag_planner` | `UniversalDAG`、`build_plan_from_dag`、`PathTemplateContext` — 声明式计划生成，所有 7 个插件共用 |
 | `abi.tsv_mapping` | `TSVMapper`、`generate_rows` — YAML 驱动 TSV/JSON/日志解析，3 种源类型 |
 | `abi.sciplot` | `FigureSpec`、`render_figure`、`validate_spec`、`lint_figure` — 论文级科研图形编译器，15 种图表类型，plotnine+seaborn 后端（v1.4.0） |
 | `abi.errors` | `ABIError`、`ConfigError`、`SampleSheetError`、`ToolError` |
@@ -114,7 +114,7 @@ pytest tests/ -v --tb=short
 
 回归测试覆盖位于 `tests/unit/test_executor.py` 和 `tests/unit/test_step_contract.py` 中。
 
-**当前测试状态 (2026-07-06)**: 1364 通过, 11 跳过, 3 预存失败, 83% 覆盖率, 0 ruff 错误, 0 mypy 错误。
+**当前测试状态 (2026-07-07)**: 约 2252 通过, 11 跳过, 3 预存失败, 83% 覆盖率, 0 ruff 错误, 0 mypy 错误。
 
 ## 运行时资产
 
@@ -142,7 +142,7 @@ pytest tests/ -v --tb=short
 3. ``PROJECT_ROOT / ".mamba"``（默认本地安装）
 4. ``PROJECT_ROOT.parent / "abi-envs"``（同级目录）
 每个工具的 ``env_name`` 在运行时从 ``environments.yaml`` 解析
-（所有 16 个 conda 环境和 93 个工具→环境映射的单一事实来源）。
+（所有 18 个 conda 环境和 98 个工具→环境映射的单一事实来源）。
 （2026-06-21 修复：metaPhlAn/kraken2 的 env_name 从错误的 ``autoplasm-stats`` 更正为 ``stats``；
 新增 mmseqs2 ResourceSpec；amrfinderplus install_post: makeblastdb；kraken2 S3 下载）。
 （2026-06-21 pm 三维修复：图表系统从旧 FigureEngine 迁移至 abi-sciplot（8 张科学图表，PDF+SVG+PNG）；GenericABIExecutor 支持样本级并行执行（ThreadPoolExecutor）；CoverM 解析器修复动态列名匹配）。
@@ -178,8 +178,6 @@ execution:
 | `abi doctor-agent --type <plugin>` | 人类可读的操作指南 |
 | `abi check-resources --type <plugin>` | 检查资源/数据库可用性 |
 | `abi setup-resources --type <plugin> --confirm` | 资源设置（需要确认） |
-| `abi check-resources --type <plugin>` | 检查资源/数据库可用性 |
-| `abi setup-resources --type <plugin> --confirm` | 自动安装/设置资源 |
 | `abi install-skills` | 将 SKILL.md 文件安装到 `~/.claude/skills/abi/` |
 | `abi export-openai-tools --type <plugin>` | OpenAI 函数调用描述符 |
 | `abi-mcp` | 启动 MCP stdio 服务器 |

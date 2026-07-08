@@ -191,6 +191,15 @@ docs/_build/
 # Superpowers auto-generated plans
 docs/superpowers/
 
+# Paper, evaluation, and audit drafts (not for repo)
+docs/*/paper_*.md
+docs/*/*paper*.md
+docs/*/comprehensive-testing-audit.md
+docs/*/full-engineering-gap-audit.md
+docs/*/tool-engineering-gap-audit.md
+docs/*/plugin_report_figure_spec.md
+paper-evaluation/
+
 # Work report archives (generated, tracked via git)
 # (work_report_*.md files are intentional docs — NOT ignored)
 

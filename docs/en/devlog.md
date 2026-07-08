@@ -1,5 +1,83 @@
 # ABI Development Log
 
+## 2026-07-07 — v1.5.3: Release Quality Gate & DAG Fixes
+
+### Overview
+
+v1.5.3 tightened the release engineering pipeline, added paper-evaluation task scaffolding,
+and fixed declarative DAG input resolution for the metagenomic_plasmid plugin.
+
+### Release Engineering
+
+- **NEW** `scripts/release_check.sh` — unified local release verification entry point
+  that reproduces the CI quality gate locally before tagging.
+- CI release identity now strictly enforces tag/wheel/runtime/CHANGELOG alignment via
+  `scripts/check_release_identity.py`.
+- Coverage gate includes SciPlot tests (`src/abi/sciplot/tests/`); module coverage
+  is checked from `coverage.json` with risk-based per-module gates.
+
+### Paper-Evaluation Task Package
+
+- **NEW** paper-evaluation task package with benchmark task definitions, metrics schema,
+  bilingual evaluation notes, and manuscript outline drafts.
+
+### DAG & Contract Fixes
+
+- **Contract lint** extended to catch unresolved template parameters (command, params,
+  input, and output placeholders) in `pipeline_dag.yaml`.
+- **DAG input resolution** fixed for `source: config.*` references, including tool
+  database resources and cross-sample report inputs.
+- **FASTA export** and metagenomic plasmid reports now read assembly paths from
+  DAG-resolved step inputs/outputs after the planner refactor.
+- Metagenomic plasmid DAG-driven tests updated to assert current declarative step
+  and output contracts instead of old handwritten planner paths.
+
+### Bug Fixes
+
+- Matplotlib boxplot label argument compatibility across Python versions.
+- GitHub Actions opencode API key moved to GitHub Actions secret (no longer hardcoded).
+
+### Verification
+
+```
+ruff check src/ tests/           # 0 errors
+ruff format --check src/ tests/  # All files formatted
+mypy src/abi/ --ignore-missing-imports  # 0 errors
+```
+
+## 2026-06-23 — v1.5.1-1.5.2: Release Identity & Planner Cleanup
+
+### Overview
+
+v1.5.1 made package metadata the single runtime version source, removed the legacy
+handwritten plasmid planner, and raised the CI coverage gate to 75%. v1.5.2 was a
+CI-only release identity fix.
+
+### Key Changes
+
+- **Release identity**: `pyproject.toml` `project.version` is the single source of truth.
+  Strict checks validate tag/wheel/runtime/CHANGELOG alignment at CI time.
+- **Planner consolidation**: Removed `_engine/planner.py`'s legacy handwritten planner;
+  all 7 built-in workflows now use declarative `pipeline_dag.yaml` planning via
+  `UniversalDAG`.
+- **Protocol hardening**: Replaced concrete plugin implementation imports with optional
+  resource (`ABIResourcePlugin`) and result-validation (`ABIResultValidationPlugin`)
+  capability protocols.
+- **Coverage gate**: Raised to 75% (branch-aware), with risk-based per-module line/branch
+  gates for DAG, executor, resources, local/HPC runtimes, internal handlers, and step
+  execution modules.
+
+### Bug Fixes
+
+- Wheel-installed plasmid configuration discovery outside source checkout.
+- PBS scheduler job-ID validation in HPC runtime.
+- Resource selection filtering in `check_resources`/`setup_resources`.
+- Dry-run resource setup side effects.
+- Release and PyPI publication now consume the exact wheel that passed the quality gate.
+
+### Files Changed
+...
+
 ## 2026-06-21 (pm) — Three-Dimensional Engineering Fix: Environments, Charts, Execution
 
 ### Overview

@@ -44,19 +44,19 @@ ABI 已是一个强大的工作流控制层：
 
 - 将合约验证扩展到输入，而非仅限于输出和校验和链式追踪。
 - 将合约违规提升为 JSON 信封中稳定的诊断错误码。
-- 为 `pipeline_dag.yaml` 和 `tool_contracts/*.yaml` 添加 contract-lint 命令。
-- 在每次变更中保持 `pytest`、`ruff check`、`ruff format --check` 和 `mypy src/abi/` 通过。
+- 为 `pipeline_dag.yaml` 和 `tool_contracts/*.yaml` 添加 contract-lint 命令。 ✅ 已通过 `abi.contracts.run_contract_lint` 实现
+- 在每次变更中保持 `pytest`、`ruff check`、`ruff format --check` 和 `mypy src/abi/` 通过。 ✅ CI 强制执行
 
 ### 第 1 阶段：可复现性清单
 
-- 在可用的情况下通过真实的 `--version` 探测生成 `provenance/tool_versions.tsv`。
-- 添加带有数据库/模型校验和的 `provenance/resource_manifest.json`。
+- 在可用的情况下通过真实的 `--version` 探测生成 `provenance/tool_versions.tsv`。 ✅ 已实现
+- 添加带有数据库/模型校验和的 `provenance/resource_manifest.json`。 ✅ 已实现
 - 通过显式的 conda lock 文件或容器固定冒烟测试环境。
 - 以机器可读形式记录命令模板和解析后的命令令牌。
 
 ### 第 2 阶段：生物学基准
 
-- 添加精心策划的小型阳性对照：已知质粒参考、阴性染色体对照以及混合样本。
+- 添加精心策划的小型阳性对照：已知质粒参考、阴性染色体对照以及混合样本。 ✅ 基准数据集已建立（`data/benchmarks/`）
 - 定义质粒调用、注释、丰度行以及报告内容的标准表验收检查。
 - 附加预期失败案例：缺失数据库、格式错误的样本表、空输出、交换的 R1/R2 以及不兼容的平台/输入组合。
 
