@@ -142,3 +142,31 @@ class ToolError(ABIError):
     对于执行失败，智能体应检查 stdout/stderr 和返回码。
     临时性故障（OOM、网络超时）可重试；确定性故障（错误输入、缺失依赖）需要用户介入。
     """
+
+
+class PlanIntegrityError(ABIError):
+    """Raised when a DAG or compiled-plan invariant is violated."""
+
+
+class UnsupportedExecutionError(ABIError):
+    """Raised when a backend cannot preserve the requested execution semantics."""
+
+
+class ToolResolutionError(ABIError):
+    """Raised when a tool, contract, environment, or catalog resolution failed."""
+
+
+class ResourcePolicyError(ABIError):
+    """Raised when resource values are invalid or violate a declared minimum."""
+
+
+class ArtifactIntegrityError(ABIError):
+    """Raised when a downloaded or installed resource failed validation."""
+
+
+class PackagingError(ABIError):
+    """Raised when required installed package data is absent."""
+
+
+class InputPolicyError(ABIError):
+    """Raised when user input violates a security or validation policy."""

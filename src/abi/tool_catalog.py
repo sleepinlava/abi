@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
 
+from abi.errors import ToolResolutionError
 from abi.tools import ResourceSpec
 
 __all__ = [
@@ -25,8 +26,9 @@ __all__ = [
 ]
 
 
-class ToolResolutionError(ValueError):
-    """A tool could not be resolved during catalog compilation."""
+# ── Re-export for backward compatibility ─────────────────────────────────
+# ToolResolutionError is now defined in abi.errors.  Importing from here
+# still works (same class object).
 
 
 @dataclass(frozen=True)
