@@ -9,8 +9,8 @@ __pycache__
 *.egg-info
 docs/_build
 tests/
-Dockerfile*
-docker/
+# Dockerfiles and docker/.condarc are part of the build inputs. Do not ignore
+# them: every plugin Dockerfile copies docker/.condarc into the image.
 .claude/
 .codex/
 baseline_comparison/
@@ -25,7 +25,7 @@ abi-databases/
 *.log
 progress.json
 progress.jsonl
-# Generated env YAMLs (derived from environments.yaml)
-envs/*.yml
+# envs/*.yml are generated from environments.yaml, but they are required build
+# inputs for the plugin images and therefore must remain in the build context.
 # SciPlot test artifacts
 src/abi/sciplot/tests/_output/

@@ -163,6 +163,12 @@ jobs:
         run: |
           TAGS="${{ steps.meta-ghcr.outputs.tags }}"
           LABELS="${{ steps.meta-ghcr.outputs.labels }}"
+          # Non-push builds must always be loaded under the stable local tag
+          # consumed by the smoke test. PR metadata may otherwise produce no
+          # usable tag because semver/tag rules do not match pull requests.
+          if [ "${{ steps.flags.outputs.push }}" == "false" ]; then
+            TAGS="${TAGS}"$'\n'"${{ matrix.image-name }}:latest"
+          fi
           if [ -n "${{ steps.meta-dh.outputs.tags }}" ]; then
             TAGS="${TAGS}"$'\n'"${{ steps.meta-dh.outputs.tags }}"
           fi
@@ -187,8 +193,10 @@ jobs:
           load: ${{ steps.flags.outputs.push == 'false' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          provenance: mode=max
-          sbom: true
+          # Attestations create a manifest list, which the local Docker
+          # exporter cannot load. Generate them only for registry pushes.
+          provenance: ${{ steps.flags.outputs.push == 'true' && 'mode=max' || 'false' }}
+          sbom: ${{ steps.flags.outputs.push == 'true' }}
 
       # ── Smoke-test (local image, when not pushing) ────────────────
       - name: Smoke-test (local)

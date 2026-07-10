@@ -31,6 +31,24 @@ Name test files `test_<feature>.py` and test functions `test_<behavior>`. Add fa
 
 History uses concise imperative subjects prefixed by scope, such as `feat:`, `fix:`, and `docs:`. Keep each commit focused. Pull requests should explain the problem and solution, list validation commands, link relevant issues, and note configuration or compatibility effects. Include screenshots or generated artifacts for report, documentation, or figure changes. Ensure lint, formatting, typing, tests, and bilingual documentation updates (when applicable) pass before review.
 
+## End-to-End Development Workflow
+
+Treat every change as a traceable sequence: define the behavior and acceptance criteria; inspect the
+owning core, adapter, plugin, and documentation boundaries; implement the smallest coherent change;
+add a regression test; run focused checks; then run the repository quality gates. Do not mix unrelated
+refactors with behavior changes. Keep generated Conda YAMLs synchronized with `environments.yaml`, and
+keep Docker build inputs (`docker/`, `envs/*.yml`, package metadata, plugin definitions, and runtime
+scripts) available in the build context.
+
+Before requesting review, run the checks proportional to the change. Python changes require Ruff,
+mypy, focused pytest, and the affected integration tests. Plugin changes also require strict
+`abi contract-lint`, dry-run validation, and relevant smoke tests. Docker changes require Compose
+configuration validation, Docker configuration regression tests, a representative image build, and
+`abi list-types` inside the image. Documentation changes require `bash docs/build_docs.sh`. Release
+changes additionally require package build, `twine check`, wheel smoke tests, and release-identity
+validation. Record every command and result in the pull request; explicitly identify checks that could
+not be run and their residual risk. See `docs/zh/development_workflow.md` for the full developer guide.
+
 ## Local Codex Cloud Access
 
 This workspace may include a local, git-ignored `.key` file for the cloud
