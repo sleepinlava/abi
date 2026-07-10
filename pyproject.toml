@@ -110,6 +110,7 @@ include = [
     "data/examples",
     "docs",
     "envs",
+    "environments.yaml",
     "golden_traces",
     "src/abi",
     "plugins",

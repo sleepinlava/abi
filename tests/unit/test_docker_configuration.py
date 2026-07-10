@@ -23,6 +23,23 @@ def test_non_push_docker_build_has_the_local_smoke_test_tag():
     assert "docker run --rm ${{ matrix.image-name }}:latest list-types" in workflow
 
 
+def test_local_docker_export_disables_registry_attestations():
+    workflow = (ROOT / ".github" / "workflows" / "docker.yml").read_text(encoding="utf-8")
+
+    push_condition = "steps.flags.outputs.push == 'true'"
+    assert f"provenance: ${{{{ {push_condition} && 'mode=max' || 'false' }}}}" in workflow
+    assert f"sbom: ${{{{ {push_condition} }}}}" in workflow
+
+
+def test_sdist_contains_files_forced_into_the_wheel():
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    sdist_section = pyproject.split("[tool.hatch.build.targets.sdist]", maxsplit=1)[1]
+    force_include_header = "[tool.hatch.build.targets.sdist.force-include]"
+    sdist_section = sdist_section.split(force_include_header, maxsplit=1)[0]
+
+    assert '"environments.yaml"' in sdist_section
+
+
 def test_every_dockerfile_copy_source_exists():
     required_sources = (
         "docker/.condarc",

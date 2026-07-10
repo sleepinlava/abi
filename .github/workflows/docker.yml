@@ -193,8 +193,10 @@ jobs:
           load: ${{ steps.flags.outputs.push == 'false' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          provenance: mode=max
-          sbom: true
+          # Attestations create a manifest list, which the local Docker
+          # exporter cannot load. Generate them only for registry pushes.
+          provenance: ${{ steps.flags.outputs.push == 'true' && 'mode=max' || 'false' }}
+          sbom: ${{ steps.flags.outputs.push == 'true' }}
 
       # ── Smoke-test (local image, when not pushing) ────────────────
       - name: Smoke-test (local)
