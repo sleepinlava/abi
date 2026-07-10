@@ -1,6 +1,5 @@
 import pytest
 
-from abi.errors import ToolError
 from abi.exporters import NextflowExporter
 from abi.plugins import get_plugin
 
@@ -63,9 +62,11 @@ def test_nextflow_exporter_writes_script(tmp_path):
 
 
 def test_nextflow_exporter_serializes_metagenomic_plasmid_steps_without_path_edges(tmp_path):
-    """Metagenomic plasmid DAG has worker-scoped internal handlers that feed
-    external steps — export must fail-fast because Nextflow cannot execute
-    those internal handlers."""
+    """C09: worker-scoped internal handlers now generate Nextflow processes.
+
+    Metagenomic plasmid DAG has worker-scoped internal handlers that previously
+    blocked export.  C09 generates Nextflow processes for them via
+    ``abi run-step``."""
     plugin = get_plugin("metagenomic_plasmid")
     config = plugin.load_config(
         "examples/config_minimal.yaml",
@@ -73,5 +74,11 @@ def test_nextflow_exporter_serializes_metagenomic_plasmid_steps_without_path_edg
     )
     plan = plugin.build_plan(config)
 
-    with pytest.raises(ToolError, match="worker-scoped internal handler"):
-        NextflowExporter().export(plan, config, plugin.registry())
+    # Export must succeed — no longer blocked by internal worker steps.
+    script = NextflowExporter().export(plan, config, plugin.registry())
+
+    # The generated script should contain process definitions.
+    assert "process " in script
+
+    # Internal worker processes should invoke abi run-step.
+    assert "abi run-step" in script or "abi-nextflow-smoke" in script

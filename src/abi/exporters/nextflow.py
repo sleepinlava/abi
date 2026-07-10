@@ -106,17 +106,14 @@ class NextflowExporter:
 
     @staticmethod
     def _check_internal_dependencies(dag: ABIDAG) -> None:
-        """Raise :exc:`ToolError` if any **worker**-scoped internal step feeds
-        an external step.
+        """Raise :exc:`ToolError` if any **driver**-scoped internal step would
+        need a Nextflow process.
 
-        Driver-scoped internal handlers are OK: they run on the control node
-        before submission and their outputs are already on disk when Nextflow
-        starts.  Worker-scoped handlers would need a Nextflow process, but
-        internal steps have none — so downstream external processes would wait
-        on channels that are never emitted.
-
-        This check runs before generating any output so the user sees a clear
-        error instead of a Nextflow script that silently drops steps.
+        Worker-scoped handlers are now supported by C09 — they generate
+        Nextflow processes that call ``abi run-step``.  Driver-scoped
+        handlers run on the control node before Nextflow starts; if a
+        driver would be needed inside the workflow (e.g., it has upstream
+        dependencies), the export is blocked.
         """
         # Build reverse dependency map: step_id → list of consumer step_ids
         reverse_deps: dict[str, list[str]] = {}
@@ -129,36 +126,40 @@ class NextflowExporter:
             tool_id = str(getattr(binding.step, "tool_id", ""))
             if tool_id != "internal":
                 continue
-            # Only worker-scoped handlers need a Nextflow process — driver
-            # handlers complete before submission and write results to disk.
             _handler_id, scope = internal_handler_spec(binding.step)
-            if scope == "driver":
+            if scope == "worker":
+                # Supported — will generate a Nextflow process.
                 continue
-
-            consumers = reverse_deps.get(binding.step.step_id, [])
-            if not consumers:
+            # Driver-scoped handlers run before submission.  If they have
+            # upstream dependencies, those dependencies must also be drivers
+            # or pre-existing on disk — otherwise the export is unsupported.
+            upstream = dag.edges.get(binding.step.step_id, [])
+            if not upstream:
+                # No upstream deps → driver runs fine before Nextflow.
                 continue
-            external_consumers = [
-                cid
-                for cid in consumers
-                if str(getattr(dag.binding_for(cid).step, "tool_id", "")) != "internal"
-            ]
-            if external_consumers:
+            upstream_tool_ids = {
+                uid: str(getattr(dag.binding_for(uid).step, "tool_id", "")) for uid in upstream
+            }
+            non_internal_upstream = {
+                uid: tid for uid, tid in upstream_tool_ids.items() if tid != "internal"
+            }
+            if non_internal_upstream:
                 step_id = str(getattr(binding.step, "step_id", "?"))
                 handler_id = _handler_id or "?"
                 affected.append(
-                    f"  Worker-scoped internal handler {step_id} "
-                    f"({handler_id!r}) is required by external "
-                    f"step(s): {', '.join(external_consumers)}"
+                    f"  Driver-scoped handler {step_id} ({handler_id!r}) has "
+                    f"non-internal upstream step(s) that cannot be satisfied "
+                    f"before Nextflow starts: "
+                    + ", ".join(f"{uid}({tid})" for uid, tid in non_internal_upstream.items())
                 )
 
         if affected:
             raise ToolError(
-                "Nextflow export blocked: worker-scoped internal handler steps "
-                "have external consumers that Nextflow cannot execute.\n"
+                "Nextflow export blocked: driver-scoped internal handler steps "
+                "with external upstream dependencies cannot be exported.\n"
                 + "\n".join(affected)
                 + "\n\nRun the workflow with the local (LSF/HPC) runtime "
-                "or refactor the DAG to avoid internal→external edges."
+                "or refactor the DAG to move these steps before Nextflow."
             )
 
     def _header(self, plan: Any, *, smoke: bool) -> str:
@@ -211,10 +212,24 @@ class NextflowExporter:
         processes = []
         for step_id in dag.topological_order:
             binding = dag.binding_for(step_id)
-            # Internal steps are Python-side processing with no Nextflow
-            # equivalent — skip them during export.
-            # 内部步骤是 Python 端处理，没有 Nextflow 等价物——在导出时跳过。
-            if getattr(binding.step, "tool_id", "") == "internal":
+            tool_id = str(getattr(binding.step, "tool_id", ""))
+            if tool_id == "internal":
+                _handler_id, scope = internal_handler_spec(binding.step)
+                if scope == "driver":
+                    # Driver handlers run on the control node before
+                    # Nextflow starts — they have no process.
+                    continue
+                # Worker-scoped internal handler → generate a Nextflow
+                # process that calls abi run-step (C09).
+                processes.append(
+                    self._internal_worker_process(
+                        binding,
+                        handler_id=_handler_id,
+                        smoke=smoke,
+                        project_root=project_root,
+                        mamba_root=mamba_root,
+                    )
+                )
                 continue
             processes.append(
                 self._step_to_process(
@@ -264,6 +279,78 @@ class NextflowExporter:
     cpus params.threads
     errorStrategy 'terminate'
 {chr(10).join(resource_dirs)}
+    input:
+    val abi_trigger
+
+    output:
+    stdout
+
+    script:
+    '''
+{script}
+    '''
+}}"""
+
+    def _internal_worker_process(
+        self,
+        binding: StepBinding,
+        *,
+        handler_id: str,
+        smoke: bool,
+        project_root: Path,
+        mamba_root: Path,
+    ) -> str:
+        """Generate a Nextflow process for a worker-scoped internal handler.
+
+        The process writes a step payload, invokes ``abi run-step``, and
+        emits the result JSON as stdout.  This reuses the existing step
+        runner and CLI path so there is exactly one execution path.
+        """
+        step = binding.step
+        process_name = binding.process_name
+        step_id = str(getattr(step, "step_id", process_name))
+        outdir = getattr(step, "outputs", {}).get("output_dir", ".abi-work")
+
+        if smoke:
+            cmd = "abi-nextflow-smoke --step-id " + step_id
+            payload_section = ""
+        else:
+            # Inline the payload as a heredoc so the worker can reconstruct
+            # the step without relying on a shared filesystem.
+            import json
+
+            payload = {
+                "handler_id": handler_id,
+                "step_id": step_id,
+                "category": str(getattr(step, "category", "")),
+                "sample_id": getattr(step, "sample_id", None),
+                "outdir": str(outdir),
+                "provenance_dir": str(outdir) + "/provenance",
+                "tables_dir": str(outdir) + "/tables",
+            }
+            payload_json = json.dumps(payload, indent=2)
+            escaped = payload_json.replace("\\", "\\\\").replace("'", "\\'")
+            payload_section = (
+                f"echo '{escaped}' > .abi_payload.json\n"
+            )
+            cmd = "abi run-step --payload-file .abi_payload.json"
+
+        marker = f"__ABI_STEP_DONE_{_shell_token(step_id)}__"
+        script_lines = [
+            "set -euo pipefail",
+            f"mkdir -p {shlex.quote(str(outdir))}",
+            f"mkdir -p {shlex.quote(str(outdir))}/provenance/step_logs",
+            payload_section,
+            cmd,
+            f"echo {shlex.quote(marker)}",
+        ]
+        script = "\n".join(f"    {line}" for line in script_lines if line)
+
+        return f"""process {process_name} {{
+    tag {_groovy_literal(step_id)}
+    cpus 1
+    errorStrategy 'terminate'
+
     input:
     val abi_trigger
 
