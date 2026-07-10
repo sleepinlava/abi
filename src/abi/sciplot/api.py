@@ -98,8 +98,16 @@ def render_figure(spec: FigureSpec) -> RenderResult:
     # Keep ``import abi.sciplot`` usable in planning-only environments that do
     # not install NumPy/pandas/matplotlib.  Rendering loads the heavy backend
     # only at the point where those dependencies are actually required.
-    from abi.sciplot.renderers.matplotlib_renderer import MatplotlibRenderer
-
+    try:
+        from abi.sciplot.renderers.matplotlib_renderer import MatplotlibRenderer
+    except ImportError as e:
+        return RenderResult(
+            figure_id=spec.figure_id,
+            errors=[
+                f"Missing visualization dependencies: {e}. "
+                "Install with: pip install abi-agent[report]"
+            ],
+        )
     renderer = MatplotlibRenderer()
     return renderer.render(spec)
 

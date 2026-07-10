@@ -172,6 +172,24 @@ class GenericCommandSkill(ToolSkill):
             "auto_selection_reason",
             f"{self.name} parameters selected by {mode} mode",
         )
+        # ── Auto-derive composite inputs from granular fields ──
+        if "metaphlan_input" not in selected:
+            r1 = selected.get("read1")
+            r2 = selected.get("read2")
+            lr = selected.get("long_reads")
+            if r1 and r2:
+                selected["metaphlan_input"] = f"{r1},{r2}"
+            elif r1:
+                selected["metaphlan_input"] = str(r1)
+            elif lr:
+                selected["metaphlan_input"] = str(lr)
+        if "metaphlan_long_reads_flag" not in selected:
+            if r1 and r2:
+                selected["metaphlan_long_reads_flag"] = ""
+            elif lr:
+                selected["metaphlan_long_reads_flag"] = "--long_reads"
+            else:
+                selected["metaphlan_long_reads_flag"] = ""
         return selected
 
     def command_text(self, params: Dict[str, Any]) -> str:

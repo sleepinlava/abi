@@ -19,9 +19,7 @@ outputs:
     type: directory
 execution:
   executable: python
-  command_template: python -c "from pyvis.network import Network; import pandas as
-    pd; links = pd.read_csv('{host_plasmid_links}', sep='\t'); net = Network(height='750px',
-    width='100%'); net.show_buttons(); net.save_graph('{output_dir}/{sample_id}.host_plasmid_network.html')"
+  command_template: python {project_root}/plugins/metagenomic_plasmid/scripts/pyvis_viz.py --links {host_plasmid_links} --sample {sample_id} --outdir {output_dir}
   network: false
   writes_output: true
 failure_handling:

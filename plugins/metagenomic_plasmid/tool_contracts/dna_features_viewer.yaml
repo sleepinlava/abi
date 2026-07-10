@@ -19,9 +19,7 @@ outputs:
     type: directory
 execution:
   executable: python
-  command_template: python -c "from dna_features_viewer import GraphicRecord; from
-    Bio import SeqIO; rec = SeqIO.read('{plasmid_contigs}', 'fasta'); graph = GraphicRecord(sequence=rec,
-    features=[]); graph.plot(figure_width=10, output='{output_dir}/{sample_id}.features.png')"
+  command_template: python {project_root}/plugins/metagenomic_plasmid/scripts/dna_features_viz.py --contigs {plasmid_contigs} --sample {sample_id} --outdir {output_dir}
   network: false
   writes_output: true
 failure_handling:

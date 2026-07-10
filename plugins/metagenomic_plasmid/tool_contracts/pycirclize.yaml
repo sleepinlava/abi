@@ -28,9 +28,7 @@ outputs:
     type: directory
 execution:
   executable: python
-  command_template: python -c "from pycirclize import Circos; import pandas as pd;
-    ann = pd.read_csv('{annotations}', sep='\t'); typing = pd.read_csv('{typing}',
-    sep='\t'); circos = Circos({plasmid_contigs}, size=500); circos.savefig('{output_dir}/{sample_id}.circular_map.png')"
+  command_template: python {project_root}/plugins/metagenomic_plasmid/scripts/pycirclize_viz.py --annotations {annotations} --typing {typing} --contigs {plasmid_contigs} --sample {sample_id} --outdir {output_dir}
   network: false
   writes_output: true
 failure_handling:

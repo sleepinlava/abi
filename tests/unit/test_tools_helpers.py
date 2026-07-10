@@ -84,6 +84,7 @@ def test_derive_composite_paired_end():
     params: dict = {"read1": "fwd.fq", "read2": "rev.fq"}
     _derive_composite_params(params)
     assert params["metaphlan_input"] == "fwd.fq,rev.fq"
+    assert params["metaphlan_long_reads_flag"] == ""
     assert params["read1"] == "fwd.fq"  # original keys preserved
     assert params["read2"] == "rev.fq"
 
@@ -93,6 +94,7 @@ def test_derive_composite_single_end():
     params: dict = {"read1": "reads.fq"}
     _derive_composite_params(params)
     assert params["metaphlan_input"] == "reads.fq"
+    assert params["metaphlan_long_reads_flag"] == ""
 
 
 def test_derive_composite_long_read():
@@ -100,6 +102,7 @@ def test_derive_composite_long_read():
     params: dict = {"long_reads": "long.fq"}
     _derive_composite_params(params)
     assert params["metaphlan_input"] == "long.fq"
+    assert params["metaphlan_long_reads_flag"] == "--long_reads"
 
 
 def test_derive_composite_paired_wins_over_long_reads():
@@ -107,6 +110,8 @@ def test_derive_composite_paired_wins_over_long_reads():
     params: dict = {"read1": "fwd.fq", "read2": "rev.fq", "long_reads": "long.fq"}
     _derive_composite_params(params)
     assert params["metaphlan_input"] == "fwd.fq,rev.fq"
+    # metaphlan_long_reads_flag is "" because paired-end wins (input type matches metaphlan_input)
+    assert params["metaphlan_long_reads_flag"] == ""
 
 
 def test_derive_composite_no_inputs():
@@ -114,6 +119,7 @@ def test_derive_composite_no_inputs():
     params: dict = {}
     _derive_composite_params(params)
     assert "metaphlan_input" not in params
+    assert params["metaphlan_long_reads_flag"] == ""
 
 
 def test_derive_composite_already_set():
@@ -121,6 +127,7 @@ def test_derive_composite_already_set():
     params: dict = {"metaphlan_input": "custom_input", "read1": "fwd.fq", "read2": "rev.fq"}
     _derive_composite_params(params)
     assert params["metaphlan_input"] == "custom_input"
+    assert params["metaphlan_long_reads_flag"] == ""
 
 
 # ── GenericCommandSkill._check_dotted_fields ────────────────────────────────

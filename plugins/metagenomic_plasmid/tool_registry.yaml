@@ -486,26 +486,22 @@ tools:
   executable: python
   default_enabled: false
   required: false
-  command_template: python -c "from pycirclize import Circos; import pandas as pd;
-    ann = pd.read_csv('{annotations}', sep='\t'); typing = pd.read_csv('{typing}',
-    sep='\t'); circos = Circos({plasmid_contigs}, size=500); circos.savefig('{output_dir}/{sample_id}.circular_map.png')"
+  command_template: python {project_root}/plugins/metagenomic_plasmid/scripts/pycirclize_viz.py --annotations {annotations} --typing {typing} --contigs {plasmid_contigs} --sample {sample_id} --outdir {output_dir}
   inputs:
   - annotations
   - typing
   - plasmid_contigs
-  limitations: Requires pycirclize Python package; uses inline script for integration.
+  limitations: Requires pycirclize Python package; uses adapter script for integration.
 - id: pyvis
   name: pyvis
   category: visualization
   executable: python
   default_enabled: false
   required: false
-  command_template: python -c "from pyvis.network import Network; import pandas as
-    pd; links = pd.read_csv('{host_plasmid_links}', sep='\t'); net = Network(height='750px',
-    width='100%'); net.show_buttons(); net.save_graph('{output_dir}/{sample_id}.host_plasmid_network.html')"
+  command_template: python {project_root}/plugins/metagenomic_plasmid/scripts/pyvis_viz.py --links {host_plasmid_links} --sample {sample_id} --outdir {output_dir}
   inputs:
   - host_plasmid_links
-  limitations: Requires pyvis Python package; uses inline script for integration.
+  limitations: Requires pyvis Python package; uses adapter script for integration.
 - id: platon
   name: Platon
   category: plasmid_detection
@@ -647,9 +643,7 @@ tools:
   executable: python
   default_enabled: false
   required: false
-  command_template: python -c "from dna_features_viewer import GraphicRecord; from
-    Bio import SeqIO; rec = SeqIO.read('{plasmid_contigs}', 'fasta'); graph = GraphicRecord(sequence=rec,
-    features=[]); graph.plot(figure_width=10, output='{output_dir}/{sample_id}.features.png')"
+  command_template: python {project_root}/plugins/metagenomic_plasmid/scripts/dna_features_viz.py --contigs {plasmid_contigs} --sample {sample_id} --outdir {output_dir}
   inputs:
   - plasmid_contigs
   limitations: Requires dna_features_viewer + biopython Python packages.
