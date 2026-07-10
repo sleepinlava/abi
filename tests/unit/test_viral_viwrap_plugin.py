@@ -160,6 +160,7 @@ def test_viwrap_dag_executes_end_to_end_with_fixture_tool(tmp_path, monkeypatch)
     config.update(
         {
             "outdir": str(tmp_path / "abi-result"),
+            "out_dir": str(tmp_path / "abi-result" / "viwrap-output"),
             "log_dir": str(tmp_path / "logs"),
             "skip_runtime_check": True,
         }

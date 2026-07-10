@@ -580,6 +580,31 @@ def _setup_rnaseq_expression(
             mock=mock,
         )
 
+    if mock:
+        target = _configured_or_default_resource_path(config, "rnaseq_environment")
+        environment = ResourceDownloader(Path(), mock=True).ensure(
+            DownloadSpec(resource_id="rnaseq_environment", destination=target)
+        )
+        mock_rows = [
+            _download_result_to_row(
+                environment,
+                tool_id="deseq2",
+                field="env_setup",
+                ready_check="sentinel",
+                mock=True,
+            )
+        ]
+        mock_rows.extend(
+            _setup_reference_resources(
+                "rnaseq_expression",
+                config,
+                resource_ids=resource_ids,
+                dry_run=False,
+                mock=True,
+            )
+        )
+        return mock_rows
+
     setup_script = PROJECT_ROOT / "scripts" / "setup_rnaseq_env.sh"
     if not setup_script.exists():
         raise ABIError(

@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from abi.contracts.step_contract import ContractViolationError
+from abi.errors import InputPolicyError
 from abi.executor import (
     GenericABIExecutor,
     _bridge_consensus_for_single_detector,
@@ -104,6 +105,56 @@ def _executor(
     )
     executor._config = {"outdir": str(tmp_path)}
     return executor
+
+
+def test_prepare_output_directories_rejects_all_outputs_outside_root(tmp_path: Path) -> None:
+    outdir = tmp_path / "pipeline"
+    outside_file = tmp_path / "escaped" / "result.tsv"
+    step = _step(
+        outputs={
+            "output_dir": str(outdir / "safe"),
+            "result": str(outside_file),
+        }
+    )
+
+    with pytest.raises(InputPolicyError, match="result for step step escapes output root"):
+        GenericABIExecutor._ensure_step_output_dirs([step], outdir=outdir)
+
+    assert not outside_file.parent.exists()
+
+
+def test_prepare_output_directories_rejects_symlink_escape_before_mkdir(tmp_path: Path) -> None:
+    outdir = tmp_path / "pipeline"
+    outside = tmp_path / "outside"
+    outdir.mkdir()
+    outside.mkdir()
+    (outdir / "escape").symlink_to(outside, target_is_directory=True)
+    step = _step(outputs={"output_dir": str(outdir / "escape" / "created")})
+
+    with pytest.raises(InputPolicyError, match="output_dir for step step escapes output root"):
+        GenericABIExecutor._ensure_step_output_dirs([step], outdir=outdir)
+
+    assert not (outside / "created").exists()
+
+
+def test_prepare_output_directories_preserves_must_not_exist(tmp_path: Path) -> None:
+    outdir = tmp_path / "pipeline"
+    output_dir = outdir / "parent" / "tool-created"
+    step = _step(
+        outputs={
+            "output_dir": str(output_dir),
+            "result": str(output_dir / "result.tsv"),
+        }
+    )
+    registry = SimpleNamespace(
+        has=lambda tool_id: True,
+        get=lambda tool_id: {"output_dir_policy": "must_not_exist"},
+    )
+
+    GenericABIExecutor._ensure_step_output_dirs([step], registry=registry, outdir=outdir)
+
+    assert output_dir.parent.is_dir()
+    assert not output_dir.exists()
 
 
 def test_generic_executor_parallel_dry_run_preserves_plan_order(tmp_path: Path) -> None:

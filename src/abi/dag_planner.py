@@ -787,7 +787,7 @@ def build_plan_from_dag(
     # Resolve effective dependencies (handling fallback_depends) for
     # topological ordering so that downstream nodes that rely on fallbacks
     # are ordered after their actual active upstreams.
-    all_active_list = list(all_active)
+    all_active_list = sorted(all_active)
     resolved_deps = dag.resolve_dependencies(all_active_list)
     ordered_ids = dag.topological_order(resolved_deps)
 

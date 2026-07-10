@@ -42,6 +42,7 @@ writers can traverse it with attribute access.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
@@ -65,6 +66,7 @@ from ._engine.resources import check_resources as check_plugin_resources
 from ._engine.resources import setup_resources as setup_plugin_resources
 from ._engine.result_validation import validate_result_dir as validate_plugin_result_dir
 from ._engine.standard_tables import summarize_standard_tables
+from ._engine.tool_defaults import default_tools_for_category
 from .handlers import handlers as _metagenomic_plasmid_handlers
 
 # ── Context resolver & hooks (migrated from _engine/planner.py) ──────────
@@ -78,7 +80,6 @@ def _plugin_context_resolver(
     Replaces ``_engine/planner.py:_resolve_context_conditions()``.
     """
     from collections import Counter
-    from copy import deepcopy
 
     resolved = deepcopy(dict(config))
     sample_count = len(context.samples)
@@ -228,28 +229,20 @@ def _plugin_context_resolver(
             tools.extend(str(t) for t in annotation.get("mobile_element_tools", []) if t)
             annotation["tools"] = tools
 
-    # Resolve ``auto`` tool lists for typed categories.
-    # Use the first available sample's platform for data_profile fallback.
-    data_profile = None
-    workflow = resolved.get("workflow", {})
-    if isinstance(workflow, Mapping) and workflow.get("data_profile"):
-        data_profile = str(workflow["data_profile"])
-    if data_profile is None:
-        input_cfg = resolved.get("input", {})
-        if isinstance(input_cfg, Mapping) and input_cfg.get("data_profile"):
-            data_profile = str(input_cfg["data_profile"])
-    if data_profile is None and context.samples:
-        first_plat = _detect_platform(context.samples[0])
-        data_profile = DATA_PROFILE_BY_PLATFORM.get(first_plat, first_plat)
-
-    for category in ("plasmid_binning", "typing", "host_prediction"):
-        block = resolved.get(category)
-        if not isinstance(block, dict):
-            block = {}
-            resolved[category] = block
-        configured_tools = block.get("tools", "auto")
-        if block.get("enable") and (configured_tools == "auto" or configured_tools is None):
-            block["tools"] = _default_tools_for_category(category, data_profile or "")
+    # Resolve project-wide ``auto`` tool lists only when every sample has the
+    # same data profile. Mixed projects must defer this decision to the
+    # per-sample hook below.
+    data_profiles = {_data_profile_dag(sample, resolved) for sample in context.samples}
+    data_profile = next(iter(data_profiles)) if len(data_profiles) == 1 else None
+    if data_profile is not None:
+        for category in ("plasmid_binning", "typing", "host_prediction"):
+            block = resolved.get(category)
+            if not isinstance(block, dict):
+                block = {}
+                resolved[category] = block
+            configured_tools = block.get("tools", "auto")
+            if block.get("enable") and (configured_tools == "auto" or configured_tools is None):
+                block["tools"] = default_tools_for_category(category, data_profile)
 
     # If annotation is already set (from defaults), add mob_suite for isolate
     # profiles even when no arg_tools/vf_tools are present.
@@ -352,20 +345,6 @@ def _annotation_tools(config: Mapping[str, Any], data_profile: str) -> list[str]
     return tools
 
 
-def _default_tools_for_category(category: str, data_profile: str) -> list[str]:
-    if category == "plasmid_detection":
-        return ["genomad"]
-    if category == "plasmid_binning":
-        return ["gplas2"]
-    if category == "typing" and _is_isolate_profile(data_profile):
-        return ["mob_typer", "plasmidfinder"]
-    if category == "host_prediction":
-        if data_profile in {"illumina_short", "ont_long", "pacbio_hifi", "hybrid_short_long"}:
-            return ["metaphlan"]
-        return ["plasmidhostfinder"]
-    return []
-
-
 def _plugin_sample_config_hook(config: Mapping[str, Any], sample: SampleInput) -> dict[str, Any]:
     """Customize config per sample — replaces ``_config_for_sample()``.
 
@@ -373,33 +352,30 @@ def _plugin_sample_config_hook(config: Mapping[str, Any], sample: SampleInput) -
     ``auto`` tool lists, and sets ``host_removal.host_reference`` from
     the sample's own field.
     """
-    from copy import deepcopy
+    # Copy only blocks this hook mutates.  A full deepcopy per sample made
+    # 100-sample planning exceed the documented latency budget.
+    resolved = dict(config)
 
-    resolved = deepcopy(dict(config))
+    def mutable_block(name: str) -> dict[str, Any]:
+        current = resolved.get(name)
+        block = dict(current) if isinstance(current, Mapping) else {}
+        resolved[name] = block
+        return block
 
     # Merge sample input fields into config for enable_condition resolution
-    input_block = resolved.setdefault("input", {})
-    if not isinstance(input_block, dict):
-        input_block = {}
-        resolved["input"] = input_block
+    input_block = mutable_block("input")
     for field in ("long_reads", "pod5", "bam"):
         val = getattr(sample, field, None)
         if val is not None:
             input_block[field] = val
 
     # host_removal.host_reference from sample
-    host_removal = resolved.setdefault("host_removal", {})
-    if not isinstance(host_removal, dict):
-        host_removal = {}
-        resolved["host_removal"] = host_removal
+    host_removal = mutable_block("host_removal")
     if sample.host_reference:
         host_removal["host_reference"] = sample.host_reference
 
     # Assembly defaults
-    assembly = resolved.setdefault("assembly", {})
-    if not isinstance(assembly, dict):
-        assembly = {}
-        resolved["assembly"] = assembly
+    assembly = mutable_block("assembly")
     assembly.setdefault("short_read_assembler", "megahit")
     assembly.setdefault("long_read_assembler", "metaflye")
     assembly.setdefault("pacbio_hifi_assembler", "hifiasm_meta")
@@ -410,22 +386,20 @@ def _plugin_sample_config_hook(config: Mapping[str, Any], sample: SampleInput) -
     data_profile = _data_profile_dag(sample, resolved)
 
     for category in ("plasmid_binning", "typing", "host_prediction"):
-        block = resolved.get(category)
-        if not isinstance(block, dict):
-            block = {}
-            resolved[category] = block
+        block = mutable_block(category)
         configured_tools = block.get("tools", "auto")
         if block.get("enable") and (configured_tools == "auto" or configured_tools is None):
-            block["tools"] = _default_tools_for_category(category, data_profile)
+            block["tools"] = default_tools_for_category(category, data_profile)
 
-    annotation = resolved.get("annotation")
-    if isinstance(annotation, dict) and (
+    raw_annotation = resolved.get("annotation")
+    if isinstance(raw_annotation, Mapping) and (
         _is_isolate_profile(data_profile)
         or any(
-            key in annotation
+            key in raw_annotation
             for key in ("general_annotator", "arg_tools", "vf_tools", "mobile_element_tools")
         )
     ):
+        annotation = mutable_block("annotation")
         annotation["tools"] = _annotation_tools(resolved, data_profile)
 
     return resolved
@@ -457,6 +431,7 @@ def build_plan_from_dag(
         resolved_config,
         ctx,
         context_resolver=None,
+        sample_config_hook=_plugin_sample_config_hook,
         skip_step_hook=_plugin_skip_step_hook,
     )
 

@@ -113,7 +113,7 @@ from abi.internal import (
     InternalHandlerContext,
     internal_handler_spec,
 )
-from abi.path_policy import InputPolicyError, resolve_within
+from abi.path_policy import resolve_within
 from abi.provenance import (
     PipelineProgressRecorder,
     RunLogger,
@@ -1214,8 +1214,9 @@ class GenericABIExecutor:
         This is called before any step executes, so tools don't fail because
         their expected output directory doesn't exist yet.
 
-        When *outdir* is provided, each step's ``output_dir`` is checked for
-        path-traversal containment via :func:`resolve_within` before creation.
+        When *outdir* is provided, every declared output is checked for
+        path-traversal containment via :func:`resolve_within` before any
+        directory is created.
 
         为所有步骤预创建输出目录。
 
@@ -1225,33 +1226,32 @@ class GenericABIExecutor:
         这在任何步骤执行之前调用，因此工具不会因其预期的输出目录尚不存在而失败。
         """
         for step in steps:
+            resolved_outputs: dict[str, Path] = {}
+            if outdir is not None:
+                # Validate the complete output set before creating anything.
+                # This prevents an invalid later item from leaving partial
+                # directories behind and follows symlinks to catch escapes.
+                for key, output_path in step.outputs.items():
+                    if output_path is None or str(output_path) == "":
+                        continue
+                    resolved_outputs[key] = resolve_within(
+                        outdir,
+                        Path(str(output_path)),
+                        label=f"{key} for step {step.step_id}",
+                    )
             metadata: Mapping[str, Any] = {}
             if registry is not None and registry.has(step.tool_id):
                 metadata = registry.get(step.tool_id)
             must_not_exist = str(metadata.get("output_dir_policy", "create")) == "must_not_exist"
             declared_output_dir = step.outputs.get("output_dir")
-            output_dir_path = Path(str(declared_output_dir)) if declared_output_dir else None
+            output_dir_path = resolved_outputs.get("output_dir") or (
+                Path(str(declared_output_dir)) if declared_output_dir else None
+            )
             for key, output_path in step.outputs.items():
                 if output_path is None:
                     continue
-                path = Path(str(output_path))
+                path = resolved_outputs.get(key, Path(str(output_path)))
                 if key == "output_dir":
-                    # Defense in depth: verify containment before creating.
-                    # 纵深防御：创建前验证路径包含关系。
-                    if outdir is not None and declared_output_dir:
-                        try:
-                            resolve_within(
-                                outdir,
-                                Path(str(declared_output_dir)),
-                                label=f"output_dir for step {step.step_id}",
-                            )
-                        except InputPolicyError:
-                            _logger.warning(
-                                "output_dir for step %s is outside outdir: %s (outdir=%s)",
-                                step.step_id,
-                                declared_output_dir,
-                                outdir,
-                            )
                     if must_not_exist:
                         ensure_directory(
                             path.parent.resolve(),

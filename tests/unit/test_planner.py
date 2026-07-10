@@ -1,10 +1,12 @@
-import pytest
+import json
+import os
+import subprocess
+import sys
 
 from abi.autoplasm.config import load_config
 from abi.autoplasm.planner import build_plan
 
 
-@pytest.mark.xfail(reason="planner rewritten to use DAG-driven output; params migrated to inputs")
 def test_build_plan_selects_expected_routes():
     config = load_config("examples/config_minimal.yaml", profile="dry_run")
     plan = build_plan(config)
@@ -17,7 +19,7 @@ def test_build_plan_selects_expected_routes():
     assert "mob_suite" not in tool_ids
     assert "plasmidhostfinder" not in tool_ids
     assert plan.sample_context.enable_differential_abundance is True
-    assert any(step.reason == "Assembly-only input skips read QC" for step in plan.skipped_steps)
+    assert any(step.sample_id == "S2" and step.tool_id == "fastp" for step in plan.skipped_steps)
     assert "S2_host_prediction_metaphlan" not in {step.step_id for step in plan.steps}
 
 
@@ -52,7 +54,6 @@ def test_isolate_profile_enables_isolate_specific_typing_and_mob_suite():
     assert "mob_suite" in tool_ids
 
 
-@pytest.mark.xfail(reason="planner rewritten to use DAG-driven output; params migrated to inputs")
 def test_optional_auto_tools_require_explicit_enable():
     config = load_config(
         "examples/config_minimal.yaml",
@@ -70,7 +71,6 @@ def test_optional_auto_tools_require_explicit_enable():
     assert "plasmidhostfinder" in tool_ids
 
 
-@pytest.mark.xfail(reason="planner rewritten to use DAG-driven output; params migrated to inputs")
 def test_illumina_route_uses_cleaned_reads_and_megahit_contigs(tmp_path):
     config = load_config(
         "examples/config_minimal.yaml",
@@ -81,11 +81,11 @@ def test_illumina_route_uses_cleaned_reads_and_megahit_contigs(tmp_path):
     steps = {step.step_id: step for step in plan.steps if step.sample_id == "S1"}
 
     megahit = steps["S1_assembly_megahit"]
-    assert megahit.params["read1"].endswith("01_qc/S1/S1_R1.clean.fastq.gz")
-    assert megahit.params["read2"].endswith("01_qc/S1/S1_R2.clean.fastq.gz")
+    assert megahit.inputs["read1"].endswith("01_qc/S1/S1_R1.clean.fastq.gz")
+    assert megahit.inputs["read2"].endswith("01_qc/S1/S1_R2.clean.fastq.gz")
 
     quast = steps["S1_assembly_qc_quast"]
-    assert quast.params["assembly"].endswith("02_assembly/S1/final.contigs.fa")
+    assert quast.inputs["assembly"].endswith("02_assembly/S1/final.contigs.fa")
 
 
 def test_ont_route_uses_filtered_long_reads_and_metaflye_contigs(tmp_path):
@@ -153,7 +153,6 @@ def test_pacbio_hifi_route_uses_filtered_reads_and_hifiasm_contigs(tmp_path):
     assert selected["metaphlan_long_reads_flag"] == "--long_reads"
 
 
-@pytest.mark.xfail(reason="DAG refactoring: step_id naming changed")
 def test_hybrid_route_uses_cleaned_reads_opera_ms_and_split_abundance(tmp_path):
     from abi.autoplasm.skills.registry import ToolRegistry
 
@@ -193,15 +192,48 @@ def test_hybrid_route_uses_cleaned_reads_opera_ms_and_split_abundance(tmp_path):
     assert metaphlan_read2.endswith("01_qc/HYB1/HYB1_R2.clean.fastq.gz")
     assert selected["metaphlan_long_reads_flag"] == ""
 
-    assert (
-        steps["HYB1_abundance_samtools_abundance_samtools_short"]
-        .outputs["bam"]
-        .endswith("HYB1.short.bam")
-    )
-    assert steps["HYB1_abundance_samtools"].outputs["bam"].endswith("HYB1.long.bam")
-    assert (
-        steps["HYB1_abundance_coverm_abundance_coverm_short"]
-        .outputs["abundance"]
-        .endswith("HYB1.short.coverm.tsv")
-    )
-    assert steps["HYB1_abundance_coverm"].outputs["abundance"].endswith("HYB1.long.coverm.tsv")
+    samtools_by_source = {
+        step.inputs["abundance_source"]: step
+        for step in steps.values()
+        if step.tool_id == "samtools" and "abundance_source" in step.inputs
+    }
+    assert samtools_by_source["short"].outputs["bam"].endswith("HYB1.short.bam")
+    assert samtools_by_source["long"].outputs["bam"].endswith("HYB1.long.bam")
+
+    coverm_by_source = {
+        step.inputs["abundance_source"]: step
+        for step in steps.values()
+        if step.tool_id == "coverm" and "abundance_source" in step.inputs
+    }
+    assert coverm_by_source["short"].outputs["abundance"].endswith("HYB1.short.coverm.tsv")
+    assert coverm_by_source["long"].outputs["abundance"].endswith("HYB1.long.coverm.tsv")
+
+
+def test_hybrid_step_ids_are_stable_across_hash_seeds():
+    script = """
+import json
+from abi.autoplasm.config import load_config
+from abi.autoplasm.planner import build_plan
+
+config = load_config('examples/config_hybrid_smoke.yaml', profile='dry_run')
+plan = build_plan(config)
+print(json.dumps([
+    step.step_id
+    for step in plan.steps
+    if step.sample_id == 'HYB1' and step.tool_id in {'samtools', 'coverm'}
+]))
+"""
+    outputs = []
+    for seed in ("1", "3"):
+        env = os.environ.copy()
+        env["PYTHONHASHSEED"] = seed
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        outputs.append(json.loads(result.stdout))
+
+    assert outputs[0] == outputs[1]

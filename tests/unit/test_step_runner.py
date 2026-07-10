@@ -130,6 +130,63 @@ def test_execute_external_step_honours_must_not_exist_and_reports_tool_failure(
     assert not output_dir.exists()
 
 
+def test_execute_external_step_rejects_output_outside_configured_outdir(tmp_path: Path) -> None:
+    outdir = tmp_path / "pipeline"
+    escaped = tmp_path / "escaped" / "result.tsv"
+    skill = _Skill()
+    step = _step(outputs={"result": str(escaped)})
+
+    result = execute_step(
+        _ExternalPlugin(skill),
+        step,
+        {"outdir": str(outdir)},
+        provenance_dir=outdir / "provenance",
+    )
+
+    assert result.status == "failed"
+    assert "InputPolicyError" in result.reason
+    assert "escapes output root" in result.reason
+    assert skill.params is None
+    assert not escaped.parent.exists()
+
+
+def test_execute_external_step_rejects_symlink_escape(tmp_path: Path) -> None:
+    outdir = tmp_path / "pipeline"
+    outside = tmp_path / "outside"
+    outdir.mkdir()
+    outside.mkdir()
+    (outdir / "escape").symlink_to(outside, target_is_directory=True)
+    escaped = outdir / "escape" / "created" / "result.tsv"
+    skill = _Skill()
+
+    result = execute_step(
+        _ExternalPlugin(skill),
+        _step(outputs={"result": str(escaped)}),
+        {"outdir": str(outdir)},
+        provenance_dir=outdir / "provenance",
+    )
+
+    assert result.status == "failed"
+    assert "InputPolicyError" in result.reason
+    assert skill.params is None
+    assert not (outside / "created").exists()
+
+
+def test_execute_external_step_normalizes_relative_outputs_under_outdir(tmp_path: Path) -> None:
+    outdir = tmp_path / "pipeline"
+    skill = _Skill(return_code=23)
+
+    result = execute_step(
+        _ExternalPlugin(skill),
+        _step(outputs={"result": "relative/result.tsv"}),
+        {"outdir": str(outdir)},
+        provenance_dir=outdir / "provenance",
+    )
+
+    assert result.status == "failed"
+    assert skill.params["result"] == str(outdir / "relative" / "result.tsv")
+
+
 def test_execute_internal_step_normalizes_tables_and_artifacts(tmp_path: Path) -> None:
     captured = {}
 
@@ -160,6 +217,34 @@ def test_execute_internal_step_normalizes_tables_and_artifacts(tmp_path: Path) -
     assert result.standard_tables == {"summary": [{"sample_id": "S1"}]}
     assert result.artifacts == {"report": str(tmp_path / "report.html")}
     assert captured["context"].tables_dir == tmp_path / "tables"
+
+
+def test_execute_internal_step_rejects_output_outside_configured_outdir(tmp_path: Path) -> None:
+    handler_called = False
+
+    def run(*args):
+        nonlocal handler_called
+        handler_called = True
+        return InternalHandlerResult()
+
+    handler = FunctionInternalHandler("normalize", run)
+    plugin = SimpleNamespace(internal_handlers=lambda: {"normalize": handler})
+    step = _step(
+        tool_id="internal",
+        outputs={"report": str(tmp_path / "escaped" / "report.html")},
+        params={"_internal_handler": {"handler_id": "normalize"}},
+    )
+
+    result = execute_step(
+        plugin,
+        step,
+        {"outdir": str(tmp_path / "pipeline")},
+        provenance_dir=tmp_path / "pipeline" / "provenance",
+    )
+
+    assert result.status == "failed"
+    assert "InputPolicyError" in result.reason
+    assert handler_called is False
 
 
 def test_execute_internal_step_handles_declared_and_missing_handler_failures(

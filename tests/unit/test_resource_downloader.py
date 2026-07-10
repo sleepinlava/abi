@@ -3,9 +3,32 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 from abi.resources.downloader import DownloadSpec, ResourceDownloader
+
+
+def test_command_download_is_staged_and_preserves_existing_on_failure(
+    tmp_path, monkeypatch
+) -> None:
+    downloader = ResourceDownloader(tmp_path)
+    dest = tmp_path / "db"
+    dest.mkdir()
+    (dest / "old.txt").write_text("keep", encoding="utf-8")
+
+    def fail(command, **kwargs):
+        assert command[-1] == str(tmp_path / "db.part")
+        assert kwargs["cwd"] == tmp_path / "db.part"
+        (kwargs["cwd"] / "partial.txt").write_text("partial", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 1, b"", b"failed")
+
+    monkeypatch.setattr(subprocess, "run", fail)
+    result = downloader.ensure(DownloadSpec(resource_id="db", command=["download", str(dest)]))
+
+    assert result.status == "error"
+    assert (dest / "old.txt").read_text(encoding="utf-8") == "keep"
+    assert not (tmp_path / "db.part").exists()
 
 
 def test_url_success_is_atomic_and_writes_sentinel(tmp_path, monkeypatch) -> None:
@@ -256,3 +279,59 @@ class TestIntegrityEnforcement:
         spec = DownloadSpec(resource_id="db", min_file_count=10)
         result = downloader.check(spec)
         assert result.status == "corrupted"
+
+    def test_legacy_sentinel_does_not_bypass_expected_files(self, tmp_path) -> None:
+        downloader = ResourceDownloader(tmp_path)
+        dest = tmp_path / "db"
+        dest.mkdir()
+        (dest / ".abi_ready").touch()
+
+        result = downloader.check(DownloadSpec(resource_id="db", expected_files=["required.dat"]))
+
+        assert result.status == "corrupted"
+        assert "missing expected files" in result.message
+
+    def test_non_empty_dir_does_not_bypass_min_file_count(self, tmp_path) -> None:
+        downloader = ResourceDownloader(tmp_path)
+        dest = tmp_path / "db"
+        dest.mkdir()
+        (dest / "only.txt").touch()
+
+        result = downloader.check(
+            DownloadSpec(resource_id="db", ready_check="non_empty_dir", min_file_count=2)
+        )
+
+        assert result.status == "corrupted"
+
+    def test_path_exists_runs_custom_check_on_existing_resource(self, tmp_path) -> None:
+        downloader = ResourceDownloader(tmp_path)
+        (tmp_path / "db").mkdir()
+
+        result = downloader.check(
+            DownloadSpec(
+                resource_id="db",
+                ready_check="path_exists",
+                custom_check=lambda path: (path / "marker").exists(),
+            )
+        )
+
+        assert result.status == "corrupted"
+        assert "custom check failed" in result.message
+
+    def test_custom_check_runs_after_download(self, tmp_path, monkeypatch) -> None:
+        downloader = ResourceDownloader(tmp_path)
+
+        def fake_download(url: str, dest: Path) -> None:
+            (dest / "payload.txt").write_text("payload", encoding="utf-8")
+
+        monkeypatch.setattr(downloader, "_download_url", fake_download)
+        result = downloader.ensure(
+            DownloadSpec(
+                resource_id="db",
+                source_url="https://example/db",
+                custom_check=lambda path: False,
+            )
+        )
+
+        assert result.status == "error"
+        assert "custom check failed" in result.message

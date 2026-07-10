@@ -26,6 +26,7 @@ class RuntimeOptions:
     memory_override: str | None = None
     walltime_override: str | None = None
     accelerator_override: str | None = None
+    disk_override: str | None = None
     # Container overrides (shared across all engines) / 容器覆盖（所有引擎共享）
     container_image: str | None = None
     container_runtime: str | None = None

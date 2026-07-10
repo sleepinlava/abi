@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from abi.errors import ToolError
+from abi.errors import ResourcePolicyError
 from abi.tools import ResourceSpec
 
 __all__ = [
@@ -24,10 +24,6 @@ __all__ = [
     "apply_resource_policy",
     "resolve_resources_v2",
 ]
-
-
-class ResourcePolicyError(ToolError):
-    """Resource override violates a declared minimum or constraint."""
 
 
 @dataclass(frozen=True)
@@ -66,8 +62,7 @@ class ResourceOverride:
     def is_empty(self) -> bool:
         """``True`` when every field is ``None``."""
         return all(
-            getattr(self, f) is None
-            for f in ("cpu", "memory", "walltime", "accelerator", "disk")
+            getattr(self, f) is None for f in ("cpu", "memory", "walltime", "accelerator", "disk")
         )
 
 
@@ -122,7 +117,7 @@ def resolve_resources_v2(
     tool_metadata: Mapping[str, Any],
     *,
     config: Mapping[str, Any] | None = None,
-    cli_overrides: ResourceSpec | None = None,
+    cli_overrides: ResourceSpec | ResourceOverride | None = None,
     resource_profile: str | None = None,
     resource_profiles_dir: str | Path | None = None,
 ) -> ResourceSpec:
@@ -142,7 +137,11 @@ def resolve_resources_v2(
 
     # Layer 2: tool contract → catalog override
     tool_resources = tool_metadata.get("resources", {}) or {}
-    catalog = ResourceOverride.from_mapping(tool_resources) if isinstance(tool_resources, Mapping) else ResourceOverride()
+    catalog = (
+        ResourceOverride.from_mapping(tool_resources)
+        if isinstance(tool_resources, Mapping)
+        else ResourceOverride()
+    )
 
     # Layer 3: resource profile → workflow override
     workflow_data: dict[str, Any] = {}
@@ -170,7 +169,9 @@ def resolve_resources_v2(
 
     # Layer 6: CLI overrides → invocation override
     invocation = ResourceOverride()
-    if cli_overrides:
+    if isinstance(cli_overrides, ResourceOverride):
+        invocation = cli_overrides
+    elif cli_overrides:
         invocation = ResourceOverride(
             cpu=cli_overrides.cpu,
             memory=cli_overrides.memory,

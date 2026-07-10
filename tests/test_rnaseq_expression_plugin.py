@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from abi.plugins import get_plugin, list_plugins
 from abi.testing import assert_plugin_contract
 
@@ -229,7 +227,6 @@ def test_unknown_tool_returns_empty():
 # ── Report test ───────────────────────────────────────────────────────────
 
 
-@pytest.mark.xfail(reason="rna_seq platform removed from VALID_PLATFORMS; needs plugin update")
 def test_write_report_with_figures(tmp_path):
     """write_report() produces report.html, methods.md even without real data."""
     from abi.tables import StandardTableManager

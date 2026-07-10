@@ -185,26 +185,19 @@ class ResourceDownloader:
                 meta = json.loads(sentinel.read_text(encoding="utf-8"))
                 # Always re-verify integrity on existing resources so corrupted
                 # downloads are detected even if the sentinel says ok.
-                if (
-                    meta.get("integrity_validated")
-                    or spec.expected_checksum
-                    or spec.min_file_count
-                    or spec.min_size_bytes
-                    or spec.expected_files
-                ):
-                    integrity_errors = self._verify_integrity(spec, dest)
-                    if integrity_errors:
-                        return DownloadResult(
-                            resource_id=spec.resource_id,
-                            path=dest,
-                            status="corrupted",
-                            version=meta.get("version", ""),
-                            checksum=meta.get("checksum", ""),
-                            file_count=meta.get("file_count", 0),
-                            size_bytes=meta.get("total_size_bytes", 0),
-                            downloaded_at=meta.get("downloaded_at", ""),
-                            message="; ".join(integrity_errors),
-                        )
+                integrity_errors = self._verify_integrity(spec, dest)
+                if integrity_errors:
+                    return DownloadResult(
+                        resource_id=spec.resource_id,
+                        path=dest,
+                        status="corrupted",
+                        version=meta.get("version", ""),
+                        checksum=meta.get("checksum", ""),
+                        file_count=meta.get("file_count", 0),
+                        size_bytes=meta.get("total_size_bytes", 0),
+                        downloaded_at=meta.get("downloaded_at", ""),
+                        message="; ".join(integrity_errors),
+                    )
                 return DownloadResult(
                     resource_id=spec.resource_id,
                     path=dest,
@@ -223,33 +216,18 @@ class ResourceDownloader:
         for legacy_name in self.LEGACY_SENTINELS:
             legacy = dest / legacy_name
             if legacy.exists():
-                return DownloadResult(
-                    resource_id=spec.resource_id,
-                    path=dest,
-                    status="ok",
+                return self._ready_result(
+                    spec,
+                    dest,
                     message=f"Legacy sentinel ({legacy_name})",
                 )
 
         if spec.ready_check == "non_empty_dir":
             if dest.is_dir() and any(dest.iterdir()):
-                file_count = sum(1 for _ in dest.rglob("*") if _.is_file())
-                total_size = sum(f.stat().st_size for f in dest.rglob("*") if f.is_file())
-                return DownloadResult(
-                    resource_id=spec.resource_id,
-                    path=dest,
-                    status="ok",
-                    file_count=file_count,
-                    size_bytes=total_size,
-                    message="Non-empty directory",
-                )
+                return self._ready_result(spec, dest, message="Non-empty directory")
 
         if spec.ready_check == "path_exists":
-            return DownloadResult(
-                resource_id=spec.resource_id,
-                path=dest,
-                status="ok",
-                message="Path exists",
-            )
+            return self._ready_result(spec, dest, message="Path exists")
 
         return DownloadResult(
             resource_id=spec.resource_id,
@@ -258,12 +236,32 @@ class ResourceDownloader:
             message="No valid sentinel or ready_check found",
         )
 
+    def _ready_result(self, spec: DownloadSpec, dest: Path, *, message: str) -> DownloadResult:
+        """Return readiness only after enforcing all declared integrity checks."""
+        integrity_errors = self._verify_integrity(spec, dest)
+        if integrity_errors:
+            return DownloadResult(
+                resource_id=spec.resource_id,
+                path=dest,
+                status="corrupted",
+                message="; ".join(integrity_errors),
+            )
+
+        return DownloadResult(
+            resource_id=spec.resource_id,
+            path=dest,
+            status="ok",
+            file_count=sum(1 for f in self._resource_files(dest)),
+            size_bytes=sum(f.stat().st_size for f in self._resource_files(dest)),
+            message=message,
+        )
+
     def _download_atomic(self, spec: DownloadSpec, dest: Path) -> DownloadResult:
         """原子下载：.part → os.replace() + 哨兵写入。
 
-        对于 command 类下载，直接在 dest 中执行（不经过 .part）——
-        因为工具可能通过绝对参数写指定路径，.part 重命名不适用。
-        对于 source_url 类下载，使用 .part → os.replace 保证原子性。
+        原子模式下，所有下载方式都写入同级 ``.part`` 暂存目录，完整性
+        校验通过后再替换目标。command 参数中精确匹配目标目录的参数会
+        重写为暂存目录，从而避免破坏已有安装。
         """
         try:
             from filelock import FileLock
@@ -285,21 +283,17 @@ class ResourceDownloader:
                 if existing.status == "ok":
                     return existing
 
-                if spec.command:
-                    work_dir = dest
-                    is_atomic = spec.atomic
+                if spec.atomic:
+                    part = dest.with_name(dest.name + ".part")
+                    if part.exists():
+                        shutil.rmtree(part, ignore_errors=True)
+                    part.mkdir(parents=True, exist_ok=True)
+                    work_dir = part
+                    is_atomic = True
                 else:
-                    if spec.atomic:
-                        part = dest.with_name(dest.name + ".part")
-                        if part.exists():
-                            shutil.rmtree(part, ignore_errors=True)
-                        part.mkdir(parents=True, exist_ok=True)
-                        work_dir = part
-                        is_atomic = True
-                    else:
-                        work_dir = dest
-                        dest.mkdir(parents=True, exist_ok=True)
-                        is_atomic = False
+                    work_dir = dest
+                    dest.mkdir(parents=True, exist_ok=True)
+                    is_atomic = False
 
                 try:
                     if spec.command:
@@ -309,11 +303,16 @@ class ResourceDownloader:
                             " ".join(str(c) for c in spec.command),
                         )
                         work_dir.mkdir(parents=True, exist_ok=True)
+                        command = [
+                            str(work_dir) if str(argument) == str(dest) else str(argument)
+                            for argument in spec.command
+                        ]
                         proc = subprocess.run(
-                            spec.command,
+                            command,
                             check=False,
                             timeout=spec.timeout_seconds,
                             capture_output=True,
+                            cwd=work_dir,
                         )
                         if proc.returncode != 0:
                             stderr = str((proc.stderr or "")).strip()[-500:]
@@ -430,9 +429,8 @@ class ResourceDownloader:
         if path.is_file():
             h.update(path.read_bytes())
         elif path.is_dir():
-            for f in sorted(path.rglob("*")):
-                if f.is_file() and f.name != self.SENTINEL:
-                    h.update(f.read_bytes())
+            for f in sorted(self._resource_files(path)):
+                h.update(f.read_bytes())
         return h.hexdigest()
 
     def _write_sentinel(
@@ -458,6 +456,7 @@ class ResourceDownloader:
                 or spec.min_file_count
                 or spec.min_size_bytes
                 or spec.expected_files
+                or spec.custom_check
             ),
             "integrity_checks_passed": True,
             "downloaded_at": datetime.now(timezone.utc).isoformat(),
@@ -484,9 +483,7 @@ class ResourceDownloader:
 
         # ── file count ──
         if spec.min_file_count > 0:
-            actual_count = sum(
-                1 for _ in dest.rglob("*") if _.is_file() and _.name != self.SENTINEL
-            )
+            actual_count = sum(1 for _ in self._resource_files(dest))
             if actual_count < spec.min_file_count:
                 errors.append(
                     f"insufficient files: got {actual_count}, need at least {spec.min_file_count}"
@@ -494,9 +491,7 @@ class ResourceDownloader:
 
         # ── total size ──
         if spec.min_size_bytes > 0:
-            actual_size = sum(
-                f.stat().st_size for f in dest.rglob("*") if f.is_file() and f.name != self.SENTINEL
-            )
+            actual_size = sum(f.stat().st_size for f in self._resource_files(dest))
             if actual_size < spec.min_size_bytes:
                 errors.append(
                     f"insufficient size: got {actual_size} bytes, "
@@ -509,7 +504,21 @@ class ResourceDownloader:
             if missing:
                 errors.append(f"missing expected files: {', '.join(missing)}")
 
+        if spec.custom_check is not None:
+            try:
+                if not spec.custom_check(dest):
+                    errors.append("custom check failed")
+            except Exception as exc:
+                errors.append(f"custom check failed: {exc}")
+
         return errors
+
+    def _resource_files(self, dest: Path) -> list[Path]:
+        """List payload files, excluding current and legacy readiness sentinels."""
+        excluded = {self.SENTINEL, *self.LEGACY_SENTINELS}
+        if dest.is_file():
+            return [] if dest.name in excluded else [dest]
+        return [f for f in dest.rglob("*") if f.is_file() and f.name not in excluded]
 
     def _cleanup_partial(self, path: Path) -> None:
         """清空部分下载的残留目录。"""

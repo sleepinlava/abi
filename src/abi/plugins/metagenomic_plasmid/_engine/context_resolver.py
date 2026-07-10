@@ -12,6 +12,12 @@ from typing import Any, Mapping
 
 from abi.dag_planner import EligibilityResult, PluginContextResolver
 
+from .tool_defaults import default_tools_for_category
+
+# Backward-compatible private alias for callers/tests that imported the
+# former local helper before it was centralized.
+_default_tools_for_category = default_tools_for_category
+
 
 class PlasmidContextResolver(PluginContextResolver):
     """Resolve auto/conditional plasmid pipeline settings from sample metadata.
@@ -247,20 +253,6 @@ def _category_enabled(
     return bool(state)
 
 
-def _default_tools_for_category(category: str, data_profile: str) -> list:
-    if category == "plasmid_detection":
-        return ["genomad"]
-    if category == "plasmid_binning":
-        return ["gplas2"]
-    if category == "typing" and _is_isolate_profile(data_profile):
-        return ["mob_typer", "plasmidfinder"]
-    if category == "host_prediction":
-        if data_profile in {"illumina_short", "ont_long", "pacbio_hifi", "hybrid_short_long"}:
-            return ["metaphlan"]
-        return ["plasmidhostfinder"]
-    return []
-
-
 def _annotation_tools(config: Mapping[str, Any], data_profile: str) -> list:
     annotation = config.get("annotation", {})
     if not isinstance(annotation, Mapping):
@@ -338,7 +330,7 @@ def config_for_sample(config: Mapping[str, Any], sample: Any) -> dict[str, Any]:
             block["enable"] = _category_enabled(resolved, category, data_profile, sample)
         configured_tools = block.get("tools", "auto")
         if block.get("enable") and (configured_tools == "auto" or configured_tools is None):
-            block["tools"] = _default_tools_for_category(category, data_profile)
+            block["tools"] = default_tools_for_category(category, data_profile)
 
     annotation = resolved.get("annotation")
     if isinstance(annotation, dict) and (

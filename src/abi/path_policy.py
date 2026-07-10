@@ -11,14 +11,13 @@ from __future__ import annotations
 
 import os
 import re
+from functools import lru_cache
 from pathlib import Path
+
+from abi.errors import InputPolicyError
 
 _MAX_SAMPLE_ID_LENGTH = 128
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
-
-
-class InputPolicyError(ValueError):
-    """Unsafe or invalid user input."""
 
 
 def validate_sample_id(value: str) -> str:
@@ -73,6 +72,12 @@ def validate_sample_id(value: str) -> str:
     return stripped
 
 
+@lru_cache(maxsize=128)
+def _resolve_root(root: str) -> Path:
+    """Resolve stable output roots once across large multi-sample plans."""
+    return Path(root).resolve()
+
+
 def resolve_within(root: Path, candidate: str | Path, *, label: str = "path") -> Path:
     """Resolve *candidate* and verify it is strictly contained within *root*.
 
@@ -88,7 +93,7 @@ def resolve_within(root: Path, candidate: str | Path, *, label: str = "path") ->
     Returns the resolved, real :class:`Path`.
     Raises :exc:`InputPolicyError` on escape.
     """
-    root = Path(root).resolve()
+    root = _resolve_root(os.path.abspath(os.fspath(root)))
 
     # Reject NUL bytes before pathlib swallows the error with a different type.
     candidate_str = str(candidate)

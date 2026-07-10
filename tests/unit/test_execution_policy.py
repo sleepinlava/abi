@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from abi.errors import ResourcePolicyError as PublicResourcePolicyError
 from abi.execution_policy import (
     ExecutionPolicy,
     ResourceOverride,
+    ResourcePolicyError,
     apply_resource_policy,
     resolve_resources_v2,
 )
 from abi.tools import ResourceSpec
+
+
+def test_resource_policy_error_uses_public_error_contract() -> None:
+    assert ResourcePolicyError is PublicResourcePolicyError
 
 
 class TestResourceOverride:
@@ -48,9 +54,7 @@ class TestApplyResourcePolicy:
 
     def test_single_layer_override(self) -> None:
         base = ResourceSpec(cpu=1, memory="4GB")
-        result = apply_resource_policy(
-            base=base, invocation=ResourceOverride(cpu=16)
-        )
+        result = apply_resource_policy(base=base, invocation=ResourceOverride(cpu=16))
         assert result.cpu == 16
         assert result.memory == "4GB"  # unchanged
 
@@ -81,7 +85,7 @@ class TestApplyResourcePolicy:
         base = ResourceSpec(cpu=4, memory="8GB")
         result = apply_resource_policy(
             base=base,
-            catalog=ResourceOverride(),   # empty
+            catalog=ResourceOverride(),  # empty
             workflow=ResourceOverride(),  # empty
             invocation=ResourceOverride(cpu=64),
         )
@@ -178,17 +182,23 @@ class TestResolveResourcesV2:
         result = resolve_resources_v2("fastp", meta, config=config, cli_overrides=cli)
         assert result.cpu == 16
 
+    def test_partial_resource_override_preserves_catalog_values(self) -> None:
+        """ExecutionPolicy overrides must retain unset catalog fields."""
+        meta = {"resources": {"cpu": 4, "memory": "16GB"}}
+        cli = ResourceOverride(cpu=1)
+        result = resolve_resources_v2("fastp", meta, cli_overrides=cli)
+        assert result.cpu == 1
+        assert result.memory == "16GB"
+
     def test_resource_profile(self) -> None:
         """Resource profile should be loaded and applied."""
         # No profile exists for "test_profile" — falls back to defaults.
-        result = resolve_resources_v2(
-            "fastp", {}, resource_profile="test_profile"
-        )
+        result = resolve_resources_v2("fastp", {}, resource_profile="test_profile")
         assert result.cpu == 1  # no effect
 
     def test_partial_cli_override(self) -> None:
         """CLI from ResourceSpec fills all defaults — memory=4GB overrides catalog.
-        
+
         This mirrors the pre-C06 behaviour. Once callers migrate to
         ResourceOverride for CLI overrides, this test should be updated
         to reflect proper sentinel semantics.

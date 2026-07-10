@@ -252,12 +252,16 @@ def test_resolve_step_resources_with_cli_overrides() -> None:
         cpu_override=8,
         memory_override="16GB",
         walltime_override="02:00:00",
+        accelerator_override="gpu:1",
+        disk_override="100GB",
     )
     rt = HpcRuntime(mock.Mock(), options=opts)
     resources = rt._resolve_step_resources("fastp", {}, {})
     assert resources.cpu == 8
     assert resources.memory == "16GB"
     assert resources.walltime == "02:00:00"
+    assert resources.accelerator == "gpu:1"
+    assert resources.disk == "100GB"
 
 
 # ── HpcRuntime._build_submit_command ─────────────────────────────────────

@@ -13,10 +13,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Set
+from typing import Any, Dict, List, Mapping, Set
 
-from abi.errors import PlanIntegrityError, UnsupportedExecutionError
+from abi.errors import PlanIntegrityError, ToolResolutionError, UnsupportedExecutionError
 from abi.execution_policy import ExecutionPolicy, apply_resource_policy
+from abi.path_policy import InputPolicyError, resolve_within
 from abi.tool_catalog import ToolCatalog
 from abi.tools import ResourceSpec
 
@@ -116,19 +117,11 @@ class CompiledPlan:
 
     @property
     def internal_worker_steps(self) -> List[CompiledStep]:
-        return [
-            s
-            for s in self.steps
-            if s.execution_kind == ExecutionKind.INTERNAL_WORKER
-        ]
+        return [s for s in self.steps if s.execution_kind == ExecutionKind.INTERNAL_WORKER]
 
     @property
     def internal_driver_steps(self) -> List[CompiledStep]:
-        return [
-            s
-            for s in self.steps
-            if s.execution_kind == ExecutionKind.INTERNAL_DRIVER
-        ]
+        return [s for s in self.steps if s.execution_kind == ExecutionKind.INTERNAL_DRIVER]
 
 
 # ── Compilation ──────────────────────────────────────────────────────────────
@@ -186,6 +179,10 @@ def compile_plan(
         enabled_step_ids.add(sid)
 
         kind = _resolve_execution_kind(pstep, warnings)
+        if kind == ExecutionKind.EXTERNAL and not catalog.has(str(pstep.tool_id)):
+            raise ToolResolutionError(
+                f"Step {sid!r} references unknown external tool {pstep.tool_id!r}"
+            )
         resources = _resolve_resources(pstep, catalog, policy, warnings)
         env_name = _resolve_environment(pstep, catalog, warnings)
         container = _resolve_container(pstep, catalog, warnings)
@@ -229,9 +226,7 @@ def compile_plan(
 # ── Resolvers ────────────────────────────────────────────────────────────────
 
 
-def _resolve_execution_kind(
-    pstep: Any, warnings: List[CompilationWarning]
-) -> ExecutionKind:
+def _resolve_execution_kind(pstep: Any, warnings: List[CompilationWarning]) -> ExecutionKind:
     """Determine execution kind from step metadata."""
     tool_id = str(getattr(pstep, "tool_id", "") or "")
     params = dict(getattr(pstep, "params", {}) or {})
@@ -353,19 +348,22 @@ def _resolve_dependencies(pstep: Any) -> List[str]:
 
 
 def _validate_paths(pstep: Any, outdir: Path) -> List[str]:
-    """Validate output paths are within *outdir*.  Returns the validated list."""
+    """Validate every declared output path within *outdir*."""
     validated: List[str] = []
     outputs = dict(getattr(pstep, "outputs", {}) or {})
 
-    output_dir = str(outputs.get("output_dir", ""))
-    if output_dir:
-        resolved_dir = Path(output_dir).resolve()
-        if not str(resolved_dir).startswith(str(outdir.resolve())):
+    for name, value in outputs.items():
+        if value is None or value == "":
+            continue
+        if not isinstance(value, (str, Path)):
             raise PlanIntegrityError(
-                f"Step {pstep.step_id!r} output_dir {output_dir!r} "
-                f"escapes outdir {outdir!s}"
+                f"Step {pstep.step_id!r} output {name!r} must be a path, got {type(value).__name__}"
             )
-        validated.append(output_dir)
+        try:
+            resolve_within(outdir, value, label=f"output {name!r}")
+        except InputPolicyError as exc:
+            raise PlanIntegrityError(f"Step {pstep.step_id!r}: {exc}") from exc
+        validated.append(str(value))
 
     return validated
 
@@ -409,16 +407,12 @@ def _validate_invariants(
     for s in compiled.steps:
         for dep in s.dependencies:
             if dep not in compiled_ids:
-                raise PlanIntegrityError(
-                    f"Step {s.step_id!r} depends on undefined step {dep!r}"
-                )
+                raise PlanIntegrityError(f"Step {s.step_id!r} depends on undefined step {dep!r}")
 
     # No self-dependency
     for s in compiled.steps:
         if s.step_id in s.dependencies:
-            raise PlanIntegrityError(
-                f"Step {s.step_id!r} depends on itself"
-            )
+            raise PlanIntegrityError(f"Step {s.step_id!r} depends on itself")
 
     # Cycle check via Kahn's algorithm
     _check_acyclic(compiled)
@@ -447,6 +441,4 @@ def _check_acyclic(compiled: CompiledPlan) -> None:
 
     if removed != len(graph):
         remaining = [sid for sid, deg in in_degree.items() if deg > 0]
-        raise PlanIntegrityError(
-            f"Cycle detected in compiled plan: {sorted(remaining)}"
-        )
+        raise PlanIntegrityError(f"Cycle detected in compiled plan: {sorted(remaining)}")

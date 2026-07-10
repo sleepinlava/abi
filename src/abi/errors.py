@@ -40,10 +40,17 @@ from __future__ import annotations
 
 __all__ = [
     "ABIError",
+    "ArtifactIntegrityError",
     "ConfigError",
+    "InputPolicyError",
     "MissingTemplateParamError",
+    "PackagingError",
+    "PlanIntegrityError",
+    "ResourcePolicyError",
     "SampleSheetError",
     "ToolError",
+    "ToolResolutionError",
+    "UnsupportedExecutionError",
 ]
 
 

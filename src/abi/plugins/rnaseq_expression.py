@@ -243,7 +243,11 @@ def _parse_sample_sheet(path: str | Path, *, check_files: bool) -> ABISampleCont
     samples = [
         ABISample(
             sample_id=str(row["sample_id"]),
-            platform=str(row.get("platform") or "illumina"),
+            platform=(
+                "illumina"
+                if str(row.get("platform") or "illumina") == "rna_seq"
+                else str(row.get("platform") or "illumina")
+            ),
             group=row.get("group") or row.get("condition"),
             read1=str(row["read1"]),
             read2=str(row["read2"]),

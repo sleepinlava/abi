@@ -15,6 +15,7 @@ from typing import Any, Mapping
 from abi.config import PROJECT_ROOT
 from abi.contracts.step_contract import compute_file_checksum, load_checksums
 from abi.dag import ABIDAG, infer_dag
+from abi.execution_policy import ResourceOverride, resolve_resources_v2
 from abi.internal import internal_handler_spec, run_plugin_preflight
 from abi.results import ABIResultWriter
 from abi.runtimes.base import RuntimeOptions, RuntimeResult
@@ -22,7 +23,6 @@ from abi.schemas import ABIError
 from abi.step_runner import StepExecutionResult, execute_step, write_step_payload
 from abi.tables import StandardTableManager
 from abi.tools import ResourceSpec, resolve_container_image
-from abi.execution_policy import resolve_resources_v2
 
 SLURM_SUCCESS_STATES = frozenset({"COMPLETED"})
 SLURM_FAILURE_STATES = frozenset(
@@ -201,21 +201,18 @@ class HpcRuntime:
         tool_meta: Mapping[str, Any],
         config: Mapping[str, Any],
     ) -> ResourceSpec:
-        cli = None
-        if any(
-            getattr(self.options, field, None)
-            for field in ("cpu_override", "memory_override", "walltime_override")
-        ):
-            cli = ResourceSpec(
-                cpu=self.options.cpu_override or 1,
-                memory=self.options.memory_override or "4GB",
-                walltime=self.options.walltime_override or "01:00:00",
-            )
+        cli = ResourceOverride(
+            cpu=self.options.cpu_override,
+            memory=self.options.memory_override,
+            walltime=self.options.walltime_override,
+            accelerator=self.options.accelerator_override,
+            disk=self.options.disk_override,
+        )
         return resolve_resources_v2(
             tool_id,
             tool_meta,
             config=config,
-            cli_overrides=cli,
+            cli_overrides=None if cli.is_empty() else cli,
             resource_profile=self.options.resource_profile,
         )
 

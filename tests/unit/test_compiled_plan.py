@@ -6,19 +6,17 @@ from pathlib import Path
 
 import pytest
 
+from abi.errors import PlanIntegrityError, ToolResolutionError
 from abi.execution_policy import ExecutionPolicy, ResourceOverride
 from abi.tool_catalog import ToolCatalog
 from abi.tools import ResourceSpec
 from abi.workflow.compiled_plan import (
     CompiledPlan,
     CompiledStep,
-    CompilationWarning,
     ExecutionKind,
     _validate_invariants,
     compile_plan,
 )
-from abi.errors import PlanIntegrityError, UnsupportedExecutionError
-
 
 # ── Test helpers ─────────────────────────────────────────────────────────────
 
@@ -180,9 +178,17 @@ class TestCompilePlan:
         """Compile a trivial external-step plan."""
         outdir = tmp_path / "output"
         outdir.mkdir()
-        step = _plan_step("sample1_qc_fastp", outputs={"output_dir": str(outdir / "qc" / "sample1")})
+        step = _plan_step(
+            "sample1_qc_fastp", outputs={"output_dir": str(outdir / "qc" / "sample1")}
+        )
         plan = _exec_plan([step], outdir=str(outdir))
-        compiled = compile_plan(plan, catalog=ToolCatalog(), outdir=outdir)
+        from abi.tool_catalog import RuntimeToolDescriptor
+
+        compiled = compile_plan(
+            plan,
+            catalog=ToolCatalog([RuntimeToolDescriptor(tool_id="fastp")]),
+            outdir=outdir,
+        )
         assert len(compiled.steps) == 1
         cs = compiled.steps[0]
         assert cs.step_id == "sample1_qc_fastp"
@@ -196,7 +202,13 @@ class TestCompilePlan:
             _plan_step("s2", outputs={"output_dir": str(outdir / "qc" / "s2")}, skipped=True),
         ]
         plan = _exec_plan(steps, outdir=str(outdir))
-        compiled = compile_plan(plan, catalog=ToolCatalog(), outdir=outdir)
+        from abi.tool_catalog import RuntimeToolDescriptor
+
+        compiled = compile_plan(
+            plan,
+            catalog=ToolCatalog([RuntimeToolDescriptor(tool_id="fastp")]),
+            outdir=outdir,
+        )
         assert len(compiled.steps) == 1
         assert compiled.steps[0].step_id == "s1"
 
@@ -230,6 +242,8 @@ class TestCompilePlan:
         assert compiled.steps[0].execution_kind == ExecutionKind.INTERNAL_DRIVER
 
     def test_path_escape_rejected(self, tmp_path: Path) -> None:
+        from abi.tool_catalog import RuntimeToolDescriptor
+
         outdir = tmp_path / "output"
         outdir.mkdir()
         step = _plan_step(
@@ -238,7 +252,53 @@ class TestCompilePlan:
         )
         plan = _exec_plan([step], outdir=str(outdir))
         with pytest.raises(PlanIntegrityError, match="escapes"):
+            compile_plan(
+                plan,
+                catalog=ToolCatalog([RuntimeToolDescriptor(tool_id="fastp")]),
+                outdir=outdir,
+            )
+
+    def test_unknown_external_tool_is_rejected(self, tmp_path: Path) -> None:
+        outdir = tmp_path / "output"
+        outdir.mkdir()
+        step = _plan_step("unknown", tool_id="not_registered", outputs={})
+        plan = _exec_plan([step], outdir=str(outdir))
+
+        with pytest.raises(ToolResolutionError, match="not_registered"):
             compile_plan(plan, catalog=ToolCatalog(), outdir=outdir)
+
+    def test_every_output_path_is_validated(self, tmp_path: Path) -> None:
+        from abi.tool_catalog import RuntimeToolDescriptor
+
+        outdir = tmp_path / "output"
+        outdir.mkdir()
+        step = _plan_step(
+            "bad",
+            outputs={"output_dir": str(outdir / "safe"), "report": "/etc/passwd"},
+        )
+        plan = _exec_plan([step], outdir=str(outdir))
+
+        with pytest.raises(PlanIntegrityError, match="report"):
+            compile_plan(
+                plan,
+                catalog=ToolCatalog([RuntimeToolDescriptor(tool_id="fastp")]),
+                outdir=outdir,
+            )
+
+    def test_similar_prefix_path_is_rejected(self, tmp_path: Path) -> None:
+        from abi.tool_catalog import RuntimeToolDescriptor
+
+        outdir = tmp_path / "output"
+        outdir.mkdir()
+        step = _plan_step("bad", outputs={"report": str(tmp_path / "output-escape" / "x")})
+        plan = _exec_plan([step], outdir=str(outdir))
+
+        with pytest.raises(PlanIntegrityError, match="escapes"):
+            compile_plan(
+                plan,
+                catalog=ToolCatalog([RuntimeToolDescriptor(tool_id="fastp")]),
+                outdir=outdir,
+            )
 
     def test_registry_tool_with_catalog(self, tmp_path: Path) -> None:
         """Compile with a catalog that knows about the tool."""
@@ -253,7 +313,9 @@ class TestCompilePlan:
             resources=ResourceSpec(cpu=4, memory="8GB"),
         )
         catalog = ToolCatalog([desc])
-        step = _plan_step("sample1_qc_fastp", outputs={"output_dir": str(outdir / "qc" / "sample1")})
+        step = _plan_step(
+            "sample1_qc_fastp", outputs={"output_dir": str(outdir / "qc" / "sample1")}
+        )
         plan = _exec_plan([step], outdir=str(outdir))
         compiled = compile_plan(plan, catalog=catalog, outdir=outdir)
         cs = compiled.steps[0]
@@ -328,12 +390,20 @@ class TestInvariants:
 
     def test_cycle(self) -> None:
         a = CompiledStep(
-            step_id="a", tool_id="x", category="c", sample_id=None,
-            execution_kind=ExecutionKind.EXTERNAL, dependencies=["b"],
+            step_id="a",
+            tool_id="x",
+            category="c",
+            sample_id=None,
+            execution_kind=ExecutionKind.EXTERNAL,
+            dependencies=["b"],
         )
         b = CompiledStep(
-            step_id="b", tool_id="y", category="c", sample_id=None,
-            execution_kind=ExecutionKind.EXTERNAL, dependencies=["a"],
+            step_id="b",
+            tool_id="y",
+            category="c",
+            sample_id=None,
+            execution_kind=ExecutionKind.EXTERNAL,
+            dependencies=["a"],
         )
         cp = CompiledPlan(
             project_name="test",
@@ -348,7 +418,10 @@ class TestInvariants:
 
     def test_mismatched_enabled(self) -> None:
         cs = CompiledStep(
-            step_id="a", tool_id="x", category="qc", sample_id=None,
+            step_id="a",
+            tool_id="x",
+            category="qc",
+            sample_id=None,
             execution_kind=ExecutionKind.EXTERNAL,
         )
         cp = CompiledPlan(

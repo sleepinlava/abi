@@ -12,6 +12,7 @@ from typing import Any, Dict, Iterable, Mapping
 
 from abi.config import resolved_mamba_root
 from abi.dag import ABIDAG, infer_dag, process_name
+from abi.execution_policy import ExecutionPolicy, ResourceOverride
 from abi.exporters import NextflowExporter
 from abi.results import ABIResultWriter
 from abi.runtimes.base import RuntimeOptions, RuntimeResult
@@ -31,6 +32,20 @@ class NextflowRuntime:
         self.options = options or RuntimeOptions(engine="nextflow", smoke=True)
         self.exporter = NextflowExporter()
 
+    def _execution_policy(self) -> ExecutionPolicy:
+        return ExecutionPolicy(
+            mamba_root=self.options.mamba_root,
+            container_image=self.options.container_image,
+            container_runtime=self.options.container_runtime,
+            resource_profile=self.options.resource_profile,
+            invocation_overrides=ResourceOverride(
+                cpu=self.options.cpu_override,
+                memory=self.options.memory_override,
+                walltime=self.options.walltime_override,
+                accelerator=self.options.accelerator_override,
+            ),
+        )
+
     def check(self) -> None:
         resolve_nextflow_bin(self.options.nextflow_bin, self.options.mamba_root)
 
@@ -47,6 +62,8 @@ class NextflowRuntime:
             smoke=self.options.smoke,
             mamba_root=self.options.mamba_root,
             dag=dag,
+            execution_policy=self._execution_policy(),
+            plugin_id=str(getattr(self.plugin, "plugin_id", getattr(plan, "analysis_type", ""))),
         )
         writer = ABIResultWriter(self.plugin, self.plugin.registry())
         outputs = writer.write(
@@ -101,6 +118,8 @@ class NextflowRuntime:
             smoke=self.options.smoke,
             mamba_root=self.options.mamba_root,
             dag=dag,
+            execution_policy=self._execution_policy(),
+            plugin_id=str(getattr(self.plugin, "plugin_id", getattr(plan, "analysis_type", ""))),
         )
         nextflow_dir.mkdir(parents=True, exist_ok=True)
         work_dir.mkdir(parents=True, exist_ok=True)

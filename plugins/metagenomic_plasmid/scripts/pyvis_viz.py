@@ -3,6 +3,9 @@
 
 import argparse
 import sys
+from pathlib import Path
+
+from abi.path_policy import validate_sample_id
 
 
 def main():
@@ -11,6 +14,9 @@ def main():
     parser.add_argument("--sample", required=True, help="Sample ID for output filename")
     parser.add_argument("--outdir", required=True, help="Output directory")
     args = parser.parse_args()
+    sample_id = validate_sample_id(args.sample)
+    outdir = Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
 
     try:
         import pandas as pd
@@ -33,7 +39,7 @@ def main():
         net.add_edge(host, plasmid, value=float(weight))
 
     net.show_buttons()
-    net.save_graph(f"{args.outdir}/{args.sample}.host_plasmid_network.html")
+    net.save_graph(str(outdir / f"{sample_id}.host_plasmid_network.html"))
 
 
 if __name__ == "__main__":

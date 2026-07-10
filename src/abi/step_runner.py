@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -17,6 +17,7 @@ from abi.contracts.step_contract import (
 )
 from abi.executor import _build_assertion_context, _resolve_actual_outputs
 from abi.internal import InternalHandlerContext, internal_handler_spec, plugin_internal_handlers
+from abi.path_policy import resolve_within
 from abi.plugins import get_plugin
 from abi.schemas import PlanStep
 
@@ -68,6 +69,17 @@ def execute_step(
     artifacts: dict[str, str] = {}
     command: list[str] = []
     try:
+        outdir = Path(str(config["outdir"]))
+        resolved_declared_outputs = {
+            key: resolve_within(outdir, Path(str(value)), label=f"{key} for step {step.step_id}")
+            for key, value in step.outputs.items()
+            if value
+        }
+        effective_outputs = dict(step.outputs)
+        effective_outputs.update(
+            {key: str(path) for key, path in resolved_declared_outputs.items()}
+        )
+        step = replace(step, outputs=effective_outputs)
         if step.tool_id == "internal":
             handler_id, _ = internal_handler_spec(step)
             handler = plugin_internal_handlers(plugin).get(handler_id)
@@ -78,9 +90,9 @@ def execute_step(
                 step,
                 config,
                 InternalHandlerContext(
-                    outdir=Path(str(config["outdir"])),
+                    outdir=outdir,
                     provenance_dir=provenance,
-                    tables_dir=Path(str(config["outdir"])) / "tables",
+                    tables_dir=outdir / "tables",
                 ),
             )
             if handler_result.status != "success":
@@ -95,7 +107,14 @@ def execute_step(
             tables = {
                 name: [dict(row) for row in rows] for name, rows in handler_result.tables.items()
             }
-            artifacts = {name: str(path) for name, path in handler_result.artifacts.items()}
+            artifacts = {
+                name: str(
+                    resolve_within(
+                        outdir, Path(str(path)), label=f"artifact {name} for {step.step_id}"
+                    )
+                )
+                for name, path in handler_result.artifacts.items()
+            }
             reason = handler_result.message
         else:
             registry = plugin.registry()
@@ -103,20 +122,22 @@ def execute_step(
             metadata = registry.get(step.tool_id)
             must_not_exist = str(metadata.get("output_dir_policy", "create")) == "must_not_exist"
             declared_output_dir = step.outputs.get("output_dir")
+            resolved_outputs = resolved_declared_outputs
+            effective_outputs.update({key: str(path) for key, path in resolved_outputs.items()})
             for key, value in step.outputs.items():
                 if not value:
                     continue
-                output_path = Path(str(value))
+                output_path = resolved_outputs[key]
                 if key == "output_dir":
                     target = output_path.parent if must_not_exist else output_path
                 elif must_not_exist and declared_output_dir:
-                    target = Path(str(declared_output_dir)).parent
+                    target = resolved_outputs["output_dir"].parent
                 else:
                     target = output_path.parent
                 target.mkdir(parents=True, exist_ok=True)
             params = dict(step.inputs)
             params.update(step.params)
-            params.update(step.outputs)
+            params.update(effective_outputs)
             params["stdout_path"] = str(log_dir / f"{step.step_id}.stdout.log")
             params["stderr_path"] = str(log_dir / f"{step.step_id}.stderr.log")
             command = skill.build_command(params)
@@ -130,7 +151,7 @@ def execute_step(
                     f"Tool exited with {run_result.return_code}; see {params['stderr_path']}",
                     _display_command(command),
                 )
-            output_dir = step.outputs.get("output_dir", params.get("output_dir", ""))
+            output_dir = params.get("output_dir", "")
             parsed = plugin.parse_outputs(
                 step.tool_id,
                 output_dir,
@@ -141,7 +162,7 @@ def execute_step(
 
         contract = step.params.get("_contract", {})
         resolved_outputs = _resolve_actual_outputs(
-            step.outputs,
+            effective_outputs,
             contract.get("outputs", {}),
             step.sample_id or "",
         )

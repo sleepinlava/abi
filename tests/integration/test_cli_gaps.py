@@ -135,8 +135,7 @@ def test_export_tools_gemini(runner: CliRunner) -> None:
 # ── setup-resources --mock ───────────────────────────────────────────────────
 
 
-@pytest.mark.xfail(reason="missing setup_rnaseq_env.sh on test environment")
-def test_setup_resources_mock(runner: CliRunner) -> None:
+def test_setup_resources_mock(runner: CliRunner, tmp_path: Path) -> None:
     """setup-resources --mock creates placeholder resource entries."""
     result = runner.invoke(
         app,
@@ -144,6 +143,8 @@ def test_setup_resources_mock(runner: CliRunner) -> None:
             "setup-resources",
             "--type",
             "rnaseq_expression",
+            "--outdir",
+            str(tmp_path / "results"),
             "--mock",
             "--confirm",
         ],

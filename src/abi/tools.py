@@ -112,16 +112,18 @@ def _derive_composite_params(params: Dict[str, Any]) -> None:
         elif lr:
             params["metaphlan_input"] = str(lr)
 
-    if "metaphlan_long_reads_flag" not in params:
+    if "metaphlan_long_reads" not in params:
         r1 = params.get("read1")
         r2 = params.get("read2")
         lr = params.get("long_reads")
-        if r1 and r2:
-            params["metaphlan_long_reads_flag"] = ""
-        elif lr:
-            params["metaphlan_long_reads_flag"] = "--long_reads"
-        else:
-            params["metaphlan_long_reads_flag"] = ""
+        params["metaphlan_long_reads"] = bool(lr and not (r1 or r2))
+
+    # Compatibility projection for the current MetaPhlAn command template.
+    # The canonical planner value above remains a structured boolean.
+    params.setdefault(
+        "metaphlan_long_reads_flag",
+        "--long_reads" if params["metaphlan_long_reads"] else "",
+    )
 
 
 # Template fields that represent external resource files (databases, models, indexes).
@@ -1573,6 +1575,19 @@ class ToolRegistry:
         tools = data.get("tools")
         if not isinstance(tools, list):
             raise ConfigError("tool_registry.yaml must contain a tools list")
+
+        contracts_dir = registry_path.parent / "tool_contracts"
+        if contracts_dir.is_dir():
+            # Compatibility adapter: runtime callers keep using ToolRegistry,
+            # while ToolCatalog provides the single registry/contract merge.
+            from abi.tool_catalog import ToolCatalog
+
+            catalog = ToolCatalog.from_plugin_dir(registry_path.parent)
+            tools = [
+                dict(descriptor.metadata)
+                for descriptor in catalog
+                if descriptor.plugin == registry_path.parent.name
+            ]
 
         # Auto-detect plugin name from path
         plugin = registry_path.parent.name if "plugins" in str(registry_path) else "_default"

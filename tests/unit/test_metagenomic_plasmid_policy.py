@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-import pytest
 import yaml
 
 from abi.contracts.lint import validate_pipeline_template_params
@@ -246,7 +245,6 @@ def test_markdown_report_counts_dag_input_assembly_contigs(tmp_path):
     assert "- Total contigs: 3" in report_path.read_text(encoding="utf-8")
 
 
-@pytest.mark.xfail(reason="host_removal step IDs changed in DAG refactoring")
 def test_host_removal_is_resolved_per_sample(tmp_path):
     samples = [
         SampleInput(
@@ -268,7 +266,7 @@ def test_host_removal_is_resolved_per_sample(tmp_path):
     host_steps = [
         step
         for step in plan.steps
-        if step.sample_id == "hosted" and step.step_id.endswith("host_removal_bowtie2")
+        if step.sample_id == "hosted" and step.tool_id == "bowtie2_host_removal"
     ]
     environmental_steps = [
         step
@@ -333,7 +331,6 @@ def test_platon_is_optional_consensus_evidence_after_genomad(tmp_path):
     assert consensus.inputs["platon_predictions"] == platon.outputs["output_dir"]
 
 
-@pytest.mark.xfail(reason="dorado basecalling step removed during DAG refactoring")
 def test_ont_pod5_is_basecalled_before_long_read_qc(tmp_path):
     sample = SampleInput(sample_id="ONT1", platform="ont", pod5="signals.pod5")
 
@@ -346,7 +343,6 @@ def test_ont_pod5_is_basecalled_before_long_read_qc(tmp_path):
     assert filtlong.inputs["long_reads"] == dorado.outputs["long_reads"]
 
 
-@pytest.mark.xfail(reason="samtools_fastq conversion step removed during DAG refactoring")
 def test_hifi_bam_is_converted_before_qc(tmp_path):
     sample = SampleInput(sample_id="HIFI1", platform="pacbio_hifi", bam="reads.bam")
 

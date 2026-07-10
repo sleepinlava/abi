@@ -11,8 +11,22 @@ from typing import Any, Dict, Mapping
 from abi.config import PROJECT_ROOT
 from abi.dag import ABIDAG, StepBinding, infer_dag
 from abi.errors import ToolError
+from abi.execution_policy import ExecutionPolicy
 from abi.internal import internal_handler_spec
 from abi.tools import ToolRegistry, _disk_to_nextflow, _memory_to_nextflow
+
+
+def _transitive_downstream(dag: ABIDAG, step_id: str) -> list[str]:
+    """Return stable transitive consumers of *step_id*."""
+    descendants: set[str] = set()
+    frontier = [step_id]
+    while frontier:
+        current = frontier.pop()
+        for candidate, dependencies in dag.edges.items():
+            if current in dependencies and candidate not in descendants:
+                descendants.add(candidate)
+                frontier.append(candidate)
+    return [candidate for candidate in dag.topological_order if candidate in descendants]
 
 
 class NextflowExporter:
@@ -28,19 +42,18 @@ class NextflowExporter:
         project_root: str | Path | None = None,
         mamba_root: str | Path | None = None,
         dag: ABIDAG | None = None,
+        execution_policy: ExecutionPolicy | None = None,
+        plugin_id: str | None = None,
     ) -> str:
         """Generate a complete Nextflow DSL2 script."""
         root = Path(project_root or PROJECT_ROOT).resolve()
-        mamba = Path(mamba_root or root / ".mamba").resolve()
+        policy = execution_policy or ExecutionPolicy()
+        mamba = Path(mamba_root or policy.mamba_root or root / ".mamba").resolve()
         abi_dag = dag or infer_dag(
             getattr(plan, "steps", []),
             project_root=root,
             sequential_fallback=True,
         )
-        # Fail-fast: internal steps with external downstream dependents
-        # cannot be exported — Nextflow cannot execute Python handlers.
-        # 快速失败：有外部下游依赖的内部步骤无法导出 —
-        # Nextflow 无法执行 Python 处理器。
         self._check_internal_dependencies(abi_dag)
         sections = [
             self._header(plan, smoke=smoke),
@@ -51,6 +64,9 @@ class NextflowExporter:
                 smoke=smoke,
                 project_root=root,
                 mamba_root=mamba,
+                config=config,
+                execution_policy=policy,
+                plugin_id=plugin_id or str(getattr(plan, "analysis_type", "")),
             ),
             self._workflow_block(abi_dag),
         ]
@@ -67,27 +83,26 @@ class NextflowExporter:
         project_root: str | Path | None = None,
         mamba_root: str | Path | None = None,
         dag: ABIDAG | None = None,
+        execution_policy: ExecutionPolicy | None = None,
+        plugin_id: str | None = None,
     ) -> Path:
         """Write the generated Nextflow DSL2 script to disk."""
         path = Path(output_path)
-        if path.exists():
-            raise ToolError(
-                f"Nextflow script already exists and would be overwritten: {path}. "
-                f"Remove it manually or specify a different output path."
-            )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            self.export(
-                plan,
-                config,
-                registry,
-                smoke=smoke,
-                project_root=project_root,
-                mamba_root=mamba_root,
-                dag=dag,
-            ),
-            encoding="utf-8",
+        rendered = self.export(
+            plan,
+            config,
+            registry,
+            smoke=smoke,
+            project_root=project_root,
+            mamba_root=mamba_root,
+            dag=dag,
+            execution_policy=execution_policy,
+            plugin_id=plugin_id,
         )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        temporary.write_text(rendered, encoding="utf-8")
+        os.replace(temporary, path)
         return path
 
     def command_for_step(
@@ -106,21 +121,13 @@ class NextflowExporter:
 
     @staticmethod
     def _check_internal_dependencies(dag: ABIDAG) -> None:
-        """Raise :exc:`ToolError` if any **driver**-scoped internal step would
-        need a Nextflow process.
+        """Raise :exc:`ToolError` for every **driver**-scoped internal step.
 
         Worker-scoped handlers are now supported by C09 — they generate
-        Nextflow processes that call ``abi run-step``.  Driver-scoped
-        handlers run on the control node before Nextflow starts; if a
-        driver would be needed inside the workflow (e.g., it has upstream
-        dependencies), the export is blocked.
+        Nextflow processes that call ``abi run-step``. Driver-scoped handlers
+        do not yet have a verified control-node execution path, so exporting
+        one would silently skip required work.
         """
-        # Build reverse dependency map: step_id → list of consumer step_ids
-        reverse_deps: dict[str, list[str]] = {}
-        for step_id, deps in dag.edges.items():
-            for dep in deps:
-                reverse_deps.setdefault(dep, []).append(step_id)
-
         affected: list[str] = []
         for binding in dag.bindings:
             tool_id = str(getattr(binding.step, "tool_id", ""))
@@ -130,36 +137,18 @@ class NextflowExporter:
             if scope == "worker":
                 # Supported — will generate a Nextflow process.
                 continue
-            # Driver-scoped handlers run before submission.  If they have
-            # upstream dependencies, those dependencies must also be drivers
-            # or pre-existing on disk — otherwise the export is unsupported.
-            upstream = dag.edges.get(binding.step.step_id, [])
-            if not upstream:
-                # No upstream deps → driver runs fine before Nextflow.
-                continue
-            upstream_tool_ids = {
-                uid: str(getattr(dag.binding_for(uid).step, "tool_id", "")) for uid in upstream
-            }
-            non_internal_upstream = {
-                uid: tid for uid, tid in upstream_tool_ids.items() if tid != "internal"
-            }
-            if non_internal_upstream:
-                step_id = str(getattr(binding.step, "step_id", "?"))
-                handler_id = _handler_id or "?"
-                affected.append(
-                    f"  Driver-scoped handler {step_id} ({handler_id!r}) has "
-                    f"non-internal upstream step(s) that cannot be satisfied "
-                    f"before Nextflow starts: "
-                    + ", ".join(f"{uid}({tid})" for uid, tid in non_internal_upstream.items())
-                )
+            step_id = str(getattr(binding.step, "step_id", "?"))
+            handler_id = _handler_id or "?"
+            downstream = _transitive_downstream(dag, step_id)
+            suffix = f"; downstream: {', '.join(downstream)}" if downstream else ""
+            affected.append(f"  step {step_id} (handler {handler_id!r}){suffix}")
 
         if affected:
             raise ToolError(
-                "Nextflow export blocked: driver-scoped internal handler steps "
-                "with external upstream dependencies cannot be exported.\n"
+                "Nextflow export blocked: driver-scoped internal handlers are not "
+                "executed by the Nextflow runtime and must not be skipped silently.\n"
                 + "\n".join(affected)
-                + "\n\nRun the workflow with the local (LSF/HPC) runtime "
-                "or refactor the DAG to move these steps before Nextflow."
+                + "\n\nRun the workflow with a runtime that executes driver handlers."
             )
 
     def _header(self, plan: Any, *, smoke: bool) -> str:
@@ -208,6 +197,9 @@ class NextflowExporter:
         smoke: bool,
         project_root: Path,
         mamba_root: Path,
+        config: Mapping[str, Any],
+        execution_policy: ExecutionPolicy,
+        plugin_id: str,
     ) -> str:
         processes = []
         for step_id in dag.topological_order:
@@ -224,10 +216,11 @@ class NextflowExporter:
                 processes.append(
                     self._internal_worker_process(
                         binding,
-                        handler_id=_handler_id,
                         smoke=smoke,
                         project_root=project_root,
                         mamba_root=mamba_root,
+                        config=config,
+                        plugin_id=plugin_id,
                     )
                 )
                 continue
@@ -238,6 +231,8 @@ class NextflowExporter:
                     smoke=smoke,
                     project_root=project_root,
                     mamba_root=mamba_root,
+                    config=config,
+                    execution_policy=execution_policy,
                 )
             )
         return "\n\n".join(processes)
@@ -250,6 +245,8 @@ class NextflowExporter:
         smoke: bool,
         project_root: Path,
         mamba_root: Path,
+        config: Mapping[str, Any],
+        execution_policy: ExecutionPolicy,
     ) -> str:
         step = binding.step
         process_name = binding.process_name
@@ -270,13 +267,16 @@ class NextflowExporter:
         ]
         script = "\n".join(f"    {line}" for line in script_lines if line)
         # Resource and container directives / 资源和容器指令
-        resource_dirs = self._resource_directive_lines(binding, registry)
-        container_dir = self._container_directive_line(binding, registry)
+        resource_dirs = self._resource_directive_lines(
+            binding, registry, config=config, execution_policy=execution_policy
+        )
+        container_dir = self._container_directive_line(
+            binding, registry, execution_policy=execution_policy
+        )
         if container_dir:
             resource_dirs.append(container_dir)
         return f"""process {process_name} {{
     tag {_groovy_literal(str(getattr(step, "step_id", process_name)))}
-    cpus params.threads
     errorStrategy 'terminate'
 {chr(10).join(resource_dirs)}
     input:
@@ -295,10 +295,11 @@ class NextflowExporter:
         self,
         binding: StepBinding,
         *,
-        handler_id: str,
         smoke: bool,
         project_root: Path,
         mamba_root: Path,
+        config: Mapping[str, Any],
+        plugin_id: str,
     ) -> str:
         """Generate a Nextflow process for a worker-scoped internal handler.
 
@@ -313,25 +314,26 @@ class NextflowExporter:
 
         if smoke:
             cmd = "abi-nextflow-smoke --step-id " + step_id
-            payload_section = ""
+            payload_section = "printf '{}\\n' > .abi_result.json\n"
         else:
             # Inline the payload as a heredoc so the worker can reconstruct
             # the step without relying on a shared filesystem.
             import json
 
+            provenance_dir = getattr(step, "provenance_dir", None) or config.get(
+                "provenance_dir", Path(str(config.get("outdir", outdir))) / "provenance"
+            )
             payload = {
-                "handler_id": handler_id,
-                "step_id": step_id,
-                "category": str(getattr(step, "category", "")),
-                "sample_id": getattr(step, "sample_id", None),
-                "outdir": str(outdir),
-                "provenance_dir": str(outdir) + "/provenance",
-                "tables_dir": str(outdir) + "/tables",
+                "plugin_id": plugin_id,
+                "step": step.to_dict(),
+                "config": dict(config),
+                "provenance_dir": str(provenance_dir),
+                "result_path": ".abi_result.json",
             }
-            payload_json = json.dumps(payload, indent=2)
-            escaped = payload_json.replace("\\", "\\\\").replace("'", "\\'")
+            payload_json = json.dumps(payload, indent=2, default=str)
             payload_section = (
-                f"echo '{escaped}' > .abi_payload.json\n"
+                f"cat > .abi_payload.json <<'ABI_PAYLOAD'\n{payload_json}\nABI_PAYLOAD\n"
+                "chmod 600 .abi_payload.json\n"
             )
             cmd = "abi run-step --payload-file .abi_payload.json"
 
@@ -355,7 +357,7 @@ class NextflowExporter:
     val abi_trigger
 
     output:
-    stdout
+    path '.abi_result.json'
 
     script:
     '''
@@ -367,6 +369,9 @@ class NextflowExporter:
         self,
         binding: StepBinding,
         registry: ToolRegistry,
+        *,
+        config: Mapping[str, Any] | None = None,
+        execution_policy: ExecutionPolicy | None = None,
     ) -> list[str]:
         """Render Nextflow process directive lines for resource requests.
 
@@ -381,11 +386,20 @@ class NextflowExporter:
         step = binding.step
         tool_id = getattr(step, "tool_id", "")
         meta = registry.get(tool_id) if tool_id else {}
-        spec = resolve_resources_v2(tool_id, meta)
+        policy = execution_policy or ExecutionPolicy()
+        spec = resolve_resources_v2(
+            tool_id,
+            meta,
+            config=config,
+            cli_overrides=policy.invocation_overrides,
+            resource_profile=policy.resource_profile,
+            resource_profiles_dir=policy.resource_profiles_dir,
+        )
 
         # Only emit non-default values / 只输出非默认值
         lines: list[str] = []
         defaults = ResourceSpec()
+        lines.append(f"    cpus {spec.cpu}")
         if spec.memory != defaults.memory:
             lines.append(f"    memory '{_memory_to_nextflow(spec.memory)}'")
         if spec.walltime != defaults.walltime:
@@ -400,6 +414,8 @@ class NextflowExporter:
         self,
         binding: StepBinding,
         registry: ToolRegistry,
+        *,
+        execution_policy: ExecutionPolicy | None = None,
     ) -> str | None:
         """Render Nextflow ``container`` directive if a container image is set.
 
@@ -411,7 +427,8 @@ class NextflowExporter:
         step = binding.step
         tool_id = getattr(step, "tool_id", "")
         meta = registry.get(tool_id) if tool_id else {}
-        image = resolve_container_image(tool_id, meta)
+        policy = execution_policy or ExecutionPolicy()
+        image = policy.container_image or resolve_container_image(tool_id, meta)
         if image:
             return f"    container '{image}'"
         return None
@@ -429,18 +446,12 @@ class NextflowExporter:
         channel_by_step: Dict[str, str] = {}
         for step_id in dag.topological_order:
             binding = dag.binding_for(step_id)
-            # Internal steps have no Nextflow process — pass the input channel
-            # through unchanged so downstream external steps can still wire.
-            # 内部步骤没有 Nextflow 进程 — 将输入通道原样传递，
-            # 以便下游外部步骤仍可连接。
             if getattr(binding.step, "tool_id", "") == "internal":
-                if binding.dependencies:
-                    # Pass through the first dependency's channel
-                    dep_channel = channel_by_step.get(binding.dependencies[0], "abi_root")
-                    channel_by_step[step_id] = dep_channel
-                else:
-                    channel_by_step[step_id] = "abi_root"
-                continue
+                _handler_id, scope = internal_handler_spec(binding.step)
+                if scope == "driver":
+                    raise ToolError(
+                        f"Driver-scoped internal step {step_id} ({_handler_id!r}) was not rejected"
+                    )
             output_channel = _channel_name(binding.process_name)
             input_channel = "abi_root"
             if binding.dependencies:

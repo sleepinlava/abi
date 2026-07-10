@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 from abi.tool_catalog import (
     CatalogComparison,
     RuntimeToolDescriptor,
     ToolCatalog,
 )
-from abi.tools import ResourceSpec
+from abi.tools import ToolRegistry
 
 
 class TestRuntimeToolDescriptor:
@@ -48,9 +50,7 @@ class TestRuntimeToolDescriptor:
         assert d.inputs == {"read1": {"type": "file"}}
 
     def test_from_registry_entry_none_container(self) -> None:
-        d = RuntimeToolDescriptor.from_registry_entry(
-            "t", {"id": "t"}, env_name="env"
-        )
+        d = RuntimeToolDescriptor.from_registry_entry("t", {"id": "t"}, env_name="env")
         assert d.container_image is None
 
 
@@ -61,39 +61,111 @@ class TestToolCatalog:
         assert c.tool_ids() == []
         assert not c.has("x")
 
-    def test_from_project_root(self) -> None:
-        """Smoke test: catalog compiles from the real project root."""
-        catalog = ToolCatalog.from_project_root()
-        assert len(catalog) > 0
-        # Check a known tool exists.
-        assert catalog.has("fastp")
-        fastp = catalog.get("fastp")
-        assert fastp.tool_id == "fastp"
-        assert fastp.name
+    def test_from_project_root_merges_authoritative_contract(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        plugin = tmp_path / "plugins" / "demo"
+        contracts = plugin / "tool_contracts"
+        contracts.mkdir(parents=True)
+        (plugin / "tool_registry.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "tools": [
+                        {
+                            "id": "aligner",
+                            "name": "Registry Name",
+                            "executable": "old-aligner",
+                            "inputs": ["reads"],
+                            "resources": {"cpu": 1, "memory": "1GB"},
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        (contracts / "aligner.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "tool_id": "aligner",
+                    "name": "Contract Name",
+                    "inputs": {"reads": {"type": "file", "required": True}},
+                    "outputs": {"bam": {"type": "file"}},
+                    "resources": {"cpu": 8, "memory": "16GB"},
+                    "execution": {
+                        "executable": "new-aligner",
+                        "command_template": "new-aligner {reads} -o {bam}",
+                        "network": False,
+                        "writes_output": True,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "abi.runtime_environment.load_environment_assignments",
+            lambda: {"tool_assignments": {"demo": {"aligner": "demo-env"}}},
+        )
 
-    def test_shadow_comparison_per_plugin(self) -> None:
-        """Compare catalog against per-plugin registries.
+        descriptor = ToolCatalog.from_project_root(tmp_path).get("aligner")
 
-        The catalog compiles all plugins; ToolRegistry is per-plugin.
-        Compare each plugin's registry against the catalog's view of it.
-        """
-        from abi.tools import ToolRegistry
+        assert descriptor.name == "Contract Name"
+        assert descriptor.executable == "new-aligner"
+        assert descriptor.command_template == "new-aligner {reads} -o {bam}"
+        assert descriptor.env_name == "demo-env"
+        assert descriptor.resources.cpu == 8
+        assert descriptor.inputs["reads"]["required"] is True
+        assert descriptor.outputs == {"bam": {"type": "file"}}
+        assert descriptor.execution == {
+            "executable": "new-aligner",
+            "command_template": "new-aligner {reads} -o {bam}",
+            "network": False,
+            "writes_output": True,
+        }
 
-        catalog = ToolCatalog.from_project_root()
-        plugins_dir = Path(__file__).parent.parent.parent / "plugins"
+    def test_tool_registry_uses_catalog_merged_contract(self, tmp_path: Path, monkeypatch) -> None:
+        plugin = tmp_path / "plugins" / "demo"
+        contracts = plugin / "tool_contracts"
+        contracts.mkdir(parents=True)
+        (plugin / "tool_registry.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "tools": [
+                        {
+                            "id": "aligner",
+                            "executable": "old-aligner",
+                            "resources": {"cpu": 1, "memory": "1GB"},
+                            "output_dir_policy": "must_not_exist",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        (contracts / "aligner.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "tool_id": "aligner",
+                    "resources": {"cpu": 8, "memory": "16GB"},
+                    "execution": {
+                        "executable": "new-aligner",
+                        "command_template": "new-aligner {input}",
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "abi.runtime_environment.load_environment_assignments",
+            lambda: {"tool_assignments": {"demo": {"aligner": "demo-env"}}},
+        )
 
-        for plugin_dir in sorted(plugins_dir.iterdir()):
-            if not plugin_dir.is_dir():
-                continue
-            reg_path = plugin_dir / "tool_registry.yaml"
-            if not reg_path.exists():
-                continue
-            reg = ToolRegistry.from_path(reg_path)
-            reg_ids = set(reg.ids() or ())
+        metadata = ToolRegistry.from_path(plugin / "tool_registry.yaml").get("aligner")
 
-            # Every tool in this plugin's registry should be in the catalog.
-            for tid in reg_ids:
-                assert catalog.has(tid), f"Catalog missing {tid} from {plugin_dir.name}"
+        assert metadata["resources"] == {"cpu": 8, "memory": "16GB"}
+        assert metadata["executable"] == "new-aligner"
+        assert metadata["command_template"] == "new-aligner {input}"
+        assert metadata["env_name"] == "demo-env"
+        assert metadata["output_dir_policy"] == "must_not_exist"
 
 
 class TestCatalogComparison:

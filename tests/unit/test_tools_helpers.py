@@ -85,6 +85,7 @@ def test_derive_composite_paired_end():
     _derive_composite_params(params)
     assert params["metaphlan_input"] == "fwd.fq,rev.fq"
     assert params["metaphlan_long_reads_flag"] == ""
+    assert params["metaphlan_long_reads"] is False
     assert params["read1"] == "fwd.fq"  # original keys preserved
     assert params["read2"] == "rev.fq"
 
@@ -103,6 +104,7 @@ def test_derive_composite_long_read():
     _derive_composite_params(params)
     assert params["metaphlan_input"] == "long.fq"
     assert params["metaphlan_long_reads_flag"] == "--long_reads"
+    assert params["metaphlan_long_reads"] is True
 
 
 def test_derive_composite_paired_wins_over_long_reads():
@@ -128,6 +130,25 @@ def test_derive_composite_already_set():
     _derive_composite_params(params)
     assert params["metaphlan_input"] == "custom_input"
     assert params["metaphlan_long_reads_flag"] == ""
+
+
+def test_plasmid_skill_uses_canonical_metaphlan_derivation():
+    from abi.plugins.metagenomic_plasmid._engine.skills.base import (
+        GenericCommandSkill as PlasmidCommandSkill,
+    )
+
+    params = {"long_reads": "long.fq"}
+    expected = dict(params)
+    _derive_composite_params(expected)
+    selected = PlasmidCommandSkill(
+        {
+            "id": "metaphlan",
+            "command_template": "metaphlan {metaphlan_input} {metaphlan_long_reads_flag}",
+        }
+    ).select_params(params)
+
+    assert selected["metaphlan_input"] == expected["metaphlan_input"]
+    assert selected["metaphlan_long_reads_flag"] == expected["metaphlan_long_reads_flag"]
 
 
 # ── GenericCommandSkill._check_dotted_fields ────────────────────────────────

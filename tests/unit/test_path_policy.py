@@ -7,12 +7,18 @@ from pathlib import Path
 
 import pytest
 
+from abi.errors import InputPolicyError as PublicInputPolicyError
 from abi.path_policy import (
     _MAX_SAMPLE_ID_LENGTH,
     InputPolicyError,
     resolve_within,
     validate_sample_id,
 )
+
+
+def test_input_policy_error_uses_public_error_contract() -> None:
+    assert InputPolicyError is PublicInputPolicyError
+
 
 # ── validate_sample_id ──────────────────────────────────────────────────────
 

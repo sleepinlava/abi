@@ -1,8 +1,10 @@
 from abi.dag import infer_dag
 from abi.exporters import NextflowExporter
 from abi.plugins import get_plugin
+from abi.runtimes.base import RuntimeOptions
 from abi.runtimes.hpc import _safe_name
 from abi.runtimes.nextflow import (
+    NextflowRuntime,
     _command_rows,
     _remote_scheduler_jobs,
     _trace_by_process_name,
@@ -84,6 +86,32 @@ def test_nextflow_command_rows_include_remote_scheduler_job_id(tmp_path):
 
     assert rows_by_step["RNA1_alignment_star"]["remote_scheduler_job_id"] == "12345.cluster"
     assert rows_by_step["RNA1_qc_fastp"]["remote_scheduler_job_id"] == ""
+
+
+def test_runtime_forwards_resource_and_container_options_to_exporter(tmp_path):
+    plugin = get_plugin("metatranscriptomics")
+    config = plugin.load_config(overrides={"outdir": str(tmp_path / "results")})
+    plan = plugin.build_plan(config)
+    options = RuntimeOptions(
+        engine="nextflow",
+        smoke=True,
+        cpu_override=7,
+        memory_override="23GB",
+        walltime_override="05:00:00",
+        accelerator_override="gpu",
+        resource_profile=None,
+        container_image="docker://example/tool:1",
+    )
+    runtime = NextflowRuntime(plugin, options=options)
+
+    result = runtime.dry_run(plan, config)
+    script = result.outputs["workflow"].read_text(encoding="utf-8")
+
+    assert "cpus 7" in script
+    assert "memory '23.GB'" in script
+    assert "time '05:00:00'" in script
+    assert "accelerator gpu" in script
+    assert "container 'docker://example/tool:1'" in script
 
 
 # ═══════════════════════════════════════════════════════════════════════════
