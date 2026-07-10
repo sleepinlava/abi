@@ -88,6 +88,7 @@ Generic executer — the orchestration engine for ABI pipelines.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -112,6 +113,7 @@ from abi.internal import (
     InternalHandlerContext,
     internal_handler_spec,
 )
+from abi.path_policy import InputPolicyError, resolve_within
 from abi.provenance import (
     PipelineProgressRecorder,
     RunLogger,
@@ -125,6 +127,8 @@ from abi.provenance import (
 from abi.report import write_generic_report
 from abi.tables import StandardTableManager
 from abi.tools import ToolRegistry
+
+_logger = logging.getLogger(__name__)
 
 
 class GenericABIExecutor:
@@ -248,7 +252,7 @@ class GenericABIExecutor:
         self.table_manager.ensure_tables(tables_dir)
         # Pre-create per-step output directories so tools don't fail on missing dirs.
         # 预先创建每个步骤的输出目录，避免工具因缺少目录而失败。
-        self._ensure_step_output_dirs(plan.steps, registry=self.registry)
+        self._ensure_step_output_dirs(plan.steps, registry=self.registry, outdir=outdir)
 
         # Persist the plan so it can be inspected later (e.g., by `abi inspect`).
         # 持久化计划，以便后续检查（例如通过 `abi inspect`）。
@@ -1200,6 +1204,7 @@ class GenericABIExecutor:
         steps: Iterable[Any],
         *,
         registry: ToolRegistry | None = None,
+        outdir: Path | None = None,
     ) -> None:
         """Pre-create output directories for all steps.
 
@@ -1208,6 +1213,9 @@ class GenericABIExecutor:
 
         This is called before any step executes, so tools don't fail because
         their expected output directory doesn't exist yet.
+
+        When *outdir* is provided, each step's ``output_dir`` is checked for
+        path-traversal containment via :func:`resolve_within` before creation.
 
         为所有步骤预创建输出目录。
 
@@ -1228,6 +1236,22 @@ class GenericABIExecutor:
                     continue
                 path = Path(str(output_path))
                 if key == "output_dir":
+                    # Defense in depth: verify containment before creating.
+                    # 纵深防御：创建前验证路径包含关系。
+                    if outdir is not None and declared_output_dir:
+                        try:
+                            resolve_within(
+                                outdir,
+                                Path(str(declared_output_dir)),
+                                label=f"output_dir for step {step.step_id}",
+                            )
+                        except InputPolicyError:
+                            _logger.warning(
+                                "output_dir for step %s is outside outdir: %s (outdir=%s)",
+                                step.step_id,
+                                declared_output_dir,
+                                outdir,
+                            )
                     if must_not_exist:
                         ensure_directory(
                             path.parent.resolve(),
@@ -1658,9 +1682,8 @@ def _propagate_resolved_paths(completed_step: Any, downstream_steps: List[Any]) 
                     for repl_key, repl_val in replacements.items():
                         repl_path = Path(repl_val)
                         if (
-                            (not old.suffix or repl_path.suffix == old.suffix)
-                            and repl_path.parent.parent == old.parent.parent
-                        ):
+                            not old.suffix or repl_path.suffix == old.suffix
+                        ) and repl_path.parent.parent == old.parent.parent:
                             ds.params[key] = repl_val
                             break
 

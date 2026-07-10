@@ -38,6 +38,7 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Typed
 
 import yaml
 
+from abi.path_policy import resolve_within, validate_sample_id
 from abi.schemas import VALID_PLATFORMS, ExecutionPlan, PlanStep, SampleContext, SampleInput
 
 _logger = logging.getLogger("abi.dag_planner")
@@ -92,7 +93,7 @@ class PathTemplateContext(dict):
 
         # Per-sample variables / 每个样本的变量
         if sample is not None:
-            self["sample_id"] = sample.sample_id
+            self["sample_id"] = validate_sample_id(sample.sample_id)
             self["sample.platform"] = sample.platform
             for attr in (
                 "platform",
@@ -1388,6 +1389,17 @@ def _resolve_outputs(
     # Ensure output_dir is always present / 确保 output_dir 始终存在
     if not has_output_dir:
         resolved["output_dir"] = default_output_template.format_map(template_ctx)
+
+    # Defense in depth: verify output_dir is contained within outdir.
+    # 纵深防御：验证 output_dir 包含在 outdir 内。
+    _output_dir = resolved.get("output_dir")
+    _outdir = template_ctx.get("outdir")
+    if _output_dir and _outdir:
+        resolve_within(
+            Path(_outdir),
+            Path(_output_dir),
+            label=f"output_dir for node {node_id}",
+        )
 
     return resolved
 

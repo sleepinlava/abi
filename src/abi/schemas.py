@@ -41,6 +41,7 @@ from pydantic.dataclasses import dataclass
 
 from abi.errors import ABIError, ConfigError, SampleSheetError, ToolError
 from abi.filesystem import ensure_parent
+from abi.path_policy import validate_sample_id
 
 __all__ = [
     "ABIError",
@@ -212,6 +213,17 @@ class SampleInput:
         if v not in VALID_PLATFORMS:
             raise ValueError(f"Invalid platform {v!r}. Must be one of {sorted(VALID_PLATFORMS)}")
         return v
+
+    @field_validator("sample_id")
+    @classmethod
+    def validate_sample_id(cls, v: str) -> str:
+        """Reject unsafe sample_id values via Path Policy.
+
+        Delegates to :func:`validate_sample_id` from the Path Policy module so
+        that the same rules apply at every boundary (schema validation,
+        plan construction, and execution).
+        """
+        return validate_sample_id(v)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to a JSON-round-trip-safe dictionary.
