@@ -370,17 +370,18 @@ class NextflowExporter:
     ) -> list[str]:
         """Render Nextflow process directive lines for resource requests.
 
-        Reads the tool's ``resources:`` block from its tool contract and
-        converts to Nextflow directives (``memory``, ``time``, ``disk``,
-        ``accelerator``). Falls back gracefully when resources are absent.
+        Uses the sentinel-based ``resolve_resources_v2`` (C06) so that
+        explicit overrides (e.g. ``cpu=1``) are preserved even when they
+        happen to equal the default value.
         / 从工具合同读取 resources 块并转为 Nextflow 指令。
         """
+        from abi.execution_policy import resolve_resources_v2
         from abi.tools import ResourceSpec
 
         step = binding.step
         tool_id = getattr(step, "tool_id", "")
         meta = registry.get(tool_id) if tool_id else {}
-        spec = ResourceSpec.from_metadata(meta)
+        spec = resolve_resources_v2(tool_id, meta)
 
         # Only emit non-default values / 只输出非默认值
         lines: list[str] = []

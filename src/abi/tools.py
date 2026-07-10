@@ -333,6 +333,13 @@ def resolve_resources(
 ) -> ResourceSpec:
     """Resolve compute resources through the layered override chain.
 
+    .. deprecated:: 2026-07 (C06)
+        Use :func:`abi.execution_policy.resolve_resources_v2` instead, which
+        fixes the sentinel bug (F05) where explicit overrides equal to the
+        default were silently dropped by ``ResourceSpec.merge()``.
+
+        Maintained as a public compatibility interface for one release cycle.
+
     Resolution order (most specific wins): / 解析顺序（最具体的优先）
     1. Hardcoded defaults (cpu=1, memory="4GB", walltime="01:00:00")
     2. Tool contract ``resources:`` block (authoritative per-tool default)

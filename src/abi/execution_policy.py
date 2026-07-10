@@ -22,6 +22,7 @@ __all__ = [
     "ResourceOverride",
     "ResourcePolicyError",
     "apply_resource_policy",
+    "resolve_resources_v2",
 ]
 
 
@@ -111,6 +112,96 @@ def apply_resource_policy(
         )
 
     return spec
+
+
+# ── Bridge: resolve_resources_v2 ───────────────────────────────────────────────
+
+
+def resolve_resources_v2(
+    tool_id: str,
+    tool_metadata: Mapping[str, Any],
+    *,
+    config: Mapping[str, Any] | None = None,
+    cli_overrides: ResourceSpec | None = None,
+    resource_profile: str | None = None,
+    resource_profiles_dir: str | Path | None = None,
+) -> ResourceSpec:
+    """Resolve resources using the C06 sentinel-based policy.
+
+    Same layered precedence as ``resolve_resources()`` but uses
+    ``apply_resource_policy()`` internally so that an explicit override
+    that equals the default (e.g. ``cpu=1``) still wins.
+
+    .. deprecated:: 2026-07
+        Prefer building an ``ExecutionPolicy`` and using
+        ``apply_resource_policy()`` directly.  This function exists as a
+        drop-in migration bridge.
+    """
+    # Layer 1: hardcoded defaults
+    base = ResourceSpec()
+
+    # Layer 2: tool contract → catalog override
+    tool_resources = tool_metadata.get("resources", {}) or {}
+    catalog = ResourceOverride.from_mapping(tool_resources) if isinstance(tool_resources, Mapping) else ResourceOverride()
+
+    # Layer 3: resource profile → workflow override
+    workflow_data: dict[str, Any] = {}
+    if resource_profile:
+        profile_data = _load_resource_profile(resource_profile, resource_profiles_dir)
+        if profile_data:
+            workflow_data.update(profile_data)
+
+    # Layers 4-5: user config overrides → also workflow
+    if config:
+        exec_cfg = config.get("execution", {})
+        if isinstance(exec_cfg, Mapping):
+            resources_cfg = exec_cfg.get("resources", {})
+            if isinstance(resources_cfg, Mapping):
+                defaults = resources_cfg.get("defaults")
+                if isinstance(defaults, Mapping):
+                    workflow_data.update(defaults)
+                overrides = resources_cfg.get("tool_overrides", {})
+                if isinstance(overrides, Mapping):
+                    tool_override = overrides.get(tool_id)
+                    if isinstance(tool_override, Mapping):
+                        workflow_data.update(tool_override)
+
+    workflow = ResourceOverride.from_mapping(workflow_data) if workflow_data else ResourceOverride()
+
+    # Layer 6: CLI overrides → invocation override
+    invocation = ResourceOverride()
+    if cli_overrides:
+        invocation = ResourceOverride(
+            cpu=cli_overrides.cpu,
+            memory=cli_overrides.memory,
+            walltime=cli_overrides.walltime,
+            accelerator=cli_overrides.accelerator,
+            disk=cli_overrides.disk,
+        )
+
+    return apply_resource_policy(
+        base=base,
+        catalog=catalog,
+        workflow=workflow,
+        invocation=invocation,
+    )
+
+
+def _load_resource_profile(
+    name: str,
+    profiles_dir: str | Path | None = None,
+) -> Mapping[str, Any] | None:
+    """Load a named resource profile YAML file."""
+    from abi.config import PROJECT_ROOT, load_yaml
+
+    candidates = []
+    if profiles_dir:
+        candidates.append(Path(profiles_dir) / f"{name}.yaml")
+    candidates.append(PROJECT_ROOT / "config" / "resource_profiles" / f"{name}.yaml")
+    for candidate in candidates:
+        if candidate.exists():
+            return load_yaml(str(candidate))
+    return None
 
 
 # ── Execution policy ─────────────────────────────────────────────────────────

@@ -21,7 +21,8 @@ from abi.runtimes.base import RuntimeOptions, RuntimeResult
 from abi.schemas import ABIError
 from abi.step_runner import StepExecutionResult, execute_step, write_step_payload
 from abi.tables import StandardTableManager
-from abi.tools import ResourceSpec, resolve_container_image, resolve_resources
+from abi.tools import ResourceSpec, resolve_container_image
+from abi.execution_policy import resolve_resources_v2
 
 SLURM_SUCCESS_STATES = frozenset({"COMPLETED"})
 SLURM_FAILURE_STATES = frozenset(
@@ -210,7 +211,7 @@ class HpcRuntime:
                 memory=self.options.memory_override or "4GB",
                 walltime=self.options.walltime_override or "01:00:00",
             )
-        return resolve_resources(
+        return resolve_resources_v2(
             tool_id,
             tool_meta,
             config=config,
