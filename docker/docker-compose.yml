@@ -2,14 +2,12 @@
 # Usage:
 #   docker compose -f docker/docker-compose.yml build   # build all images
 #   docker compose -f docker/docker-compose.yml up -d   # start job service
-#   docker compose -f docker/docker-compose.yml run amplicon abi plan ...
+#   docker compose -f docker/docker-compose.yml run --rm amplicon plan ...
 #
 # Each plugin image contains:
 #   - The plugin's conda environment(s) + tool binaries
 #   - ABI core library (abi-agent)
 #   - Entry point: abi CLI
-
-version: "3.8"
 
 services:
   # ── Plugin images ──────────────────────────────────────────────────────

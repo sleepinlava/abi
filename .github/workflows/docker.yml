@@ -163,6 +163,12 @@ jobs:
         run: |
           TAGS="${{ steps.meta-ghcr.outputs.tags }}"
           LABELS="${{ steps.meta-ghcr.outputs.labels }}"
+          # Non-push builds must always be loaded under the stable local tag
+          # consumed by the smoke test. PR metadata may otherwise produce no
+          # usable tag because semver/tag rules do not match pull requests.
+          if [ "${{ steps.flags.outputs.push }}" == "false" ]; then
+            TAGS="${TAGS}"$'\n'"${{ matrix.image-name }}:latest"
+          fi
           if [ -n "${{ steps.meta-dh.outputs.tags }}" ]; then
             TAGS="${TAGS}"$'\n'"${{ steps.meta-dh.outputs.tags }}"
           fi

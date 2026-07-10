@@ -1,6 +1,6 @@
 # ── ABI wgs_bacteria Docker image ────────────────────────────────────────
 # Build:  docker build -f docker/Dockerfile.wgs -t abi-wgs .
-# Run:    docker run --rm -v $(pwd):/data abi-wgs abi plan --type wgs_bacteria ...
+# Run:    docker run --rm -v $(pwd):/data abi-wgs plan --type wgs_bacteria ...
 
 FROM condaforge/miniforge3:latest AS base
 

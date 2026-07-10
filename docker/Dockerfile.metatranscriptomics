@@ -1,6 +1,6 @@
 # ── ABI metatranscriptomics Docker image ─────────────────────────────────
 # Build:  docker build -f docker/Dockerfile.metatranscriptomics -t abi-meta .
-# Run:    docker run --rm -v $(pwd):/data abi-meta abi plan --type metatranscriptomics ...
+# Run:    docker run --rm -v $(pwd):/data abi-meta plan --type metatranscriptomics ...
 
 FROM condaforge/miniforge3:latest AS base
 

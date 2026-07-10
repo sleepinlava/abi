@@ -1,6 +1,6 @@
 # ── ABI amplicon_16s Docker image ────────────────────────────────────────
 # Build:  docker build -f docker/Dockerfile.amplicon -t abi-amplicon .
-# Run:    docker run --rm -v $(pwd):/data abi-amplicon abi plan --type amplicon_16s ...
+# Run:    docker run --rm -v $(pwd):/data abi-amplicon plan --type amplicon_16s ...
 
 FROM condaforge/miniforge3:latest AS base
 
