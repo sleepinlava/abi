@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -13,6 +15,16 @@ def test_docker_build_inputs_are_not_excluded_from_context():
 
     assert "docker/" not in active_patterns
     assert "envs/*.yml" not in active_patterns
+
+
+def test_conda_mirror_maps_defaults_to_existing_repositories():
+    condarc = yaml.safe_load((ROOT / "docker" / ".condarc").read_text(encoding="utf-8"))
+
+    assert "defaults" not in condarc["custom_channels"]
+    assert condarc["default_channels"] == [
+        "https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main",
+        "https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r",
+    ]
 
 
 def test_non_push_docker_build_has_the_local_smoke_test_tag():
