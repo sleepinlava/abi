@@ -57,6 +57,7 @@ def test_every_dockerfile_copy_source_exists():
         "docker/.condarc",
         "pyproject.toml",
         "README.md",
+        "environments.yaml",
         "src",
         "plugins",
         "config",
@@ -69,3 +70,12 @@ def test_every_dockerfile_copy_source_exists():
 
     for source in required_sources:
         assert (ROOT / source).exists(), f"Docker build input is missing: {source}"
+
+
+def test_every_dockerfile_copies_the_root_environment_manifest():
+    dockerfiles = sorted((ROOT / "docker").glob("Dockerfile.*"))
+
+    assert dockerfiles
+    for dockerfile in dockerfiles:
+        contents = dockerfile.read_text(encoding="utf-8")
+        assert "COPY environments.yaml /app/" in contents, dockerfile.name

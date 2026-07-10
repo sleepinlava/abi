@@ -25,6 +25,7 @@ RUN /opt/conda/envs/rnaseq/bin/Rscript /tmp/install_deseq2.R && \
 
 # ── ABI package ──────────────────────────────────────────────────────────
 COPY pyproject.toml README.md /app/
+COPY environments.yaml /app/
 COPY src/ /app/src/
 COPY plugins/ /app/plugins/
 COPY config/ /app/config/
@@ -35,7 +36,7 @@ COPY examples/ /app/examples/
 COPY golden_traces/ /app/golden_traces/
 
 RUN /opt/conda/envs/rnaseq/bin/pip install --no-cache-dir /app/ && \
-    rm -rf /app/src /app/plugins /app/config /app/pyproject.toml \
+    rm -rf /app/src /app/plugins /app/config /app/pyproject.toml /app/environments.yaml \
     /app/data /app/envs /app/examples /app/golden_traces
 
 # ── Runtime ──────────────────────────────────────────────────────────────
