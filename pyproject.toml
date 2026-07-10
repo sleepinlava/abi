@@ -92,6 +92,7 @@ packages = ["src/abi"]
 [tool.hatch.build.targets.wheel.force-include]
 "config" = "config"
 "data/examples" = "data/examples"
+"environments.yaml" = "abi/data/environments.yaml"
 "envs" = "envs"
 "examples" = "examples"
 "golden_traces" = "golden_traces"
