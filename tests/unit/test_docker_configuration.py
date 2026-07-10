@@ -79,3 +79,4 @@ def test_every_dockerfile_copies_the_root_environment_manifest():
     for dockerfile in dockerfiles:
         contents = dockerfile.read_text(encoding="utf-8")
         assert "COPY environments.yaml /app/" in contents, dockerfile.name
+        assert "/app/environments.yaml" in contents.split("rm -rf", maxsplit=1)[1], dockerfile.name
