@@ -11,6 +11,9 @@ inputs:
     type: file
     format: fasta
     required: true
+  database:
+    type: directory
+    required: false
   threads:
     type: integer
     minimum: 1
@@ -23,7 +26,7 @@ outputs:
 execution:
   executable: platon
   command_template: platon --threads {threads} --output {output_dir} --prefix {sample_id}
-    {assembly}
+    --meta --db {database} {assembly}
   network: false
   writes_output: true
 normalization:

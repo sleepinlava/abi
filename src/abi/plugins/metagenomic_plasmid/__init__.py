@@ -56,8 +56,6 @@ from abi.provenance import RunLogger
 from abi.schemas import ExecutionPlan, PlanStep, SampleContext, SampleInput
 from abi.tools import ToolRegistry
 
-from .handlers import handlers as _metagenomic_plasmid_handlers
-
 from ._engine.config import load_config as load_autoplasm_config
 from ._engine.parsers import parse_standard_outputs
 from ._engine.pipeline import PipelineExecutor
@@ -67,6 +65,7 @@ from ._engine.resources import check_resources as check_plugin_resources
 from ._engine.resources import setup_resources as setup_plugin_resources
 from ._engine.result_validation import validate_result_dir as validate_plugin_result_dir
 from ._engine.standard_tables import summarize_standard_tables
+from .handlers import handlers as _metagenomic_plasmid_handlers
 
 # ── Context resolver & hooks (migrated from _engine/planner.py) ──────────
 
@@ -681,9 +680,11 @@ class MetagenomicPlasmidPlugin:
             from abi.plugins.metagenomic_plasmid._engine.standard_tables import (
                 write_consensus_table,
             )
+
             plasmid_strategy = getattr(plan, "plasmid_strategy", None) or "majority_vote"
             detection_tools = [
-                step.tool_id for step in plan.steps
+                step.tool_id
+                for step in plan.steps
                 if getattr(step, "category", "") == "plasmid_detection"
             ] or None
             write_consensus_table(

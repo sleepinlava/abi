@@ -309,7 +309,6 @@ def test_medaka_is_opt_in_and_replaces_ont_assembly_for_downstream_inputs(tmp_pa
     assert genomad.inputs["assembly"] == medaka.outputs["assembly"]
 
 
-@pytest.mark.xfail(reason="platon tool removed during DAG refactoring")
 def test_platon_is_optional_consensus_evidence_after_genomad(tmp_path):
     sample = SampleInput(
         sample_id="S1", platform="illumina", read1="R1.fastq.gz", read2="R2.fastq.gz"
@@ -326,7 +325,9 @@ def test_platon_is_optional_consensus_evidence_after_genomad(tmp_path):
 
     plan = build_plan_from_dag(config, _context([sample]), check_files=False)
     platon = next(step for step in plan.steps if step.tool_id == "platon")
-    consensus = next(step for step in plan.steps if step.step_id.endswith("plasmid_consensus"))
+    consensus = next(
+        step for step in plan.steps if step.step_id.endswith("plasmid_consensus_internal")
+    )
 
     assert plan.steps.index(platon) < plan.steps.index(consensus)
     assert consensus.inputs["platon_predictions"] == platon.outputs["output_dir"]

@@ -51,8 +51,8 @@ def _make_synthetic_tsv(rows: list[dict]) -> Path:
 
 @pytest.mark.skipif(not HAS_MPL, reason="matplotlib not installed")
 class TestBarplotErrorPaths:
-    def test_missing_y_column(self, palette, theme) -> None:
-        """mapping.y=None → should raise ValueError about mapping.y."""
+    def test_missing_y_column_and_invalid_x(self, palette, theme) -> None:
+        """mapping.y=None with x not in data → should raise ValueError."""
         from abi.sciplot.renderers.plots.barplot import plot_barplot
 
         tsv = _make_synthetic_tsv(
@@ -65,13 +65,13 @@ class TestBarplotErrorPaths:
                 figure_id="test",
                 figure_type="barplot",
                 data=DataSpec(table=tsv),
-                mapping=MappingSpec(x="label"),  # y is None
+                mapping=MappingSpec(x="nonexistent_column"),  # y is None, x not in data
                 style=StyleSpec(palette="colorblind_safe"),
                 export=ExportSpec(output_dir=Path("/tmp/out"), basename="test"),
             )
             data = pd.read_csv(tsv, sep="\t")
             fig, ax = plt.subplots()
-            with pytest.raises(ValueError, match="mapping.y"):
+            with pytest.raises(ValueError, match="barplot requires either"):
                 plot_barplot(spec, data, ax, palette, theme)
             plt.close(fig)
         finally:

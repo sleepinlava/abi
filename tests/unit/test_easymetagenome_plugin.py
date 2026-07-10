@@ -327,7 +327,6 @@ elif name == 'bracken':
     assert (tmp_path / "result/report.md").stat().st_size > 0
 
 
-@pytest.mark.xfail(reason="fastp tool fixture not available on test environment")
 def test_humann4_dag_executes_end_to_end_with_fixture_tools(tmp_path, monkeypatch):
     manifest = _manifest(tmp_path)
     resources = {}

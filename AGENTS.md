@@ -4,7 +4,7 @@
 
 Core Python code lives in `src/abi/`. Keep transport-neutral behavior in the core; CLI, MCP, HTTP, and provider integrations should remain thin adapters. Built-in workflow implementations are split between Python entry points in `src/abi/plugins/` and declarative definitions in `plugins/<analysis_type>/` (`pipeline_dag.yaml`, tool registries, schemas, and report metadata). Tests are organized under `tests/unit/`, `tests/integration/`, and `tests/smoke/`; SciPlot also has focused tests in `src/abi/sciplot/tests/`. Use `examples/` for runnable configuration samples, `docs/en/` and `docs/zh/` for documentation, `envs/` for Conda environments, `environments.yaml` for tool→env assignments (18 envs, 98 tools), and `scripts/` for maintenance utilities.
 
-Current codebase (2026-07-07): 208 Python source files (~51k lines), plasmid engine (11,586 lines), 44-file sciplot module (7,201 lines), 134 test files (~2252 passed), 83% coverage.
+Current codebase (2026-07-09): 209 Python source files (~51.5k lines), plasmid engine (11,823 lines), 44-file sciplot module (3,912 lines), 134 test files (2,121 passed), 79% coverage.
 
 ## Build, Test, and Development Commands
 

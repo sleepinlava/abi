@@ -423,8 +423,11 @@ def _resolve_conda_executable(explicit: str | Path | None) -> Path | None:
         ]
     )
     for candidate in candidates:
-        if candidate.exists():
-            return candidate
+        try:
+            if candidate.exists():
+                return candidate
+        except PermissionError:
+            continue
     return None
 
 
