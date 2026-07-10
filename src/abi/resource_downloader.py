@@ -183,6 +183,28 @@ class ResourceDownloader:
         if sentinel.exists():
             try:
                 meta = json.loads(sentinel.read_text(encoding="utf-8"))
+                # Always re-verify integrity on existing resources so corrupted
+                # downloads are detected even if the sentinel says ok.
+                if (
+                    meta.get("integrity_validated")
+                    or spec.expected_checksum
+                    or spec.min_file_count
+                    or spec.min_size_bytes
+                    or spec.expected_files
+                ):
+                    integrity_errors = self._verify_integrity(spec, dest)
+                    if integrity_errors:
+                        return DownloadResult(
+                            resource_id=spec.resource_id,
+                            path=dest,
+                            status="corrupted",
+                            version=meta.get("version", ""),
+                            checksum=meta.get("checksum", ""),
+                            file_count=meta.get("file_count", 0),
+                            size_bytes=meta.get("total_size_bytes", 0),
+                            downloaded_at=meta.get("downloaded_at", ""),
+                            message="; ".join(integrity_errors),
+                        )
                 return DownloadResult(
                     resource_id=spec.resource_id,
                     path=dest,
@@ -335,6 +357,14 @@ class ResourceDownloader:
                     if spec.expected_checksum:
                         checksum = self._compute_checksum(work_dir, spec.checksum_algorithm)
 
+                    # Run all integrity checks before writing sentinel.
+                    # (expected_checksum comparison is handled in _verify_integrity below.)
+
+                    # Run all integrity checks before writing sentinel.
+                    integrity_errors = self._verify_integrity(spec, work_dir)
+                    if integrity_errors:
+                        raise ValueError("; ".join(integrity_errors))
+
                     sentinel_dir = work_dir if is_atomic else dest
                     self._write_sentinel(sentinel_dir, spec, checksum, file_count, total_size)
 
@@ -423,9 +453,63 @@ class ResourceDownloader:
             "checksum": checksum,
             "file_count": file_count,
             "total_size_bytes": total_size,
+            "integrity_validated": bool(
+                spec.expected_checksum
+                or spec.min_file_count
+                or spec.min_size_bytes
+                or spec.expected_files
+            ),
+            "integrity_checks_passed": True,
             "downloaded_at": datetime.now(timezone.utc).isoformat(),
         }
         (dest / self.SENTINEL).write_text(json.dumps(sentinel, indent=2), encoding="utf-8")
+
+    def _verify_integrity(self, spec: DownloadSpec, dest: Path) -> list[str]:
+        """Run all declared integrity checks on a downloaded resource.
+
+        Returns a list of error messages (empty list = all checks passed).
+        This is called both after download and when re-checking existing
+        resources, so enforcement is always active.
+        """
+        errors: list[str] = []
+
+        # ── checksum comparison ──
+        if spec.expected_checksum:
+            computed = self._compute_checksum(dest, spec.checksum_algorithm)
+            if computed != spec.expected_checksum:
+                errors.append(
+                    f"checksum mismatch: expected={spec.expected_checksum[:16]}… "
+                    f"got={computed[:16]}… (algorithm={spec.checksum_algorithm})"
+                )
+
+        # ── file count ──
+        if spec.min_file_count > 0:
+            actual_count = sum(
+                1 for _ in dest.rglob("*") if _.is_file() and _.name != self.SENTINEL
+            )
+            if actual_count < spec.min_file_count:
+                errors.append(
+                    f"insufficient files: got {actual_count}, need at least {spec.min_file_count}"
+                )
+
+        # ── total size ──
+        if spec.min_size_bytes > 0:
+            actual_size = sum(
+                f.stat().st_size for f in dest.rglob("*") if f.is_file() and f.name != self.SENTINEL
+            )
+            if actual_size < spec.min_size_bytes:
+                errors.append(
+                    f"insufficient size: got {actual_size} bytes, "
+                    f"need at least {spec.min_size_bytes}"
+                )
+
+        # ── expected files ──
+        if spec.expected_files:
+            missing = [f for f in spec.expected_files if not (dest / f).exists()]
+            if missing:
+                errors.append(f"missing expected files: {', '.join(missing)}")
+
+        return errors
 
     def _cleanup_partial(self, path: Path) -> None:
         """清空部分下载的残留目录。"""
