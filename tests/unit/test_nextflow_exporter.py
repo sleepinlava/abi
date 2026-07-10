@@ -1,3 +1,6 @@
+import pytest
+
+from abi.errors import ToolError
 from abi.exporters import NextflowExporter
 from abi.plugins import get_plugin
 
@@ -60,6 +63,9 @@ def test_nextflow_exporter_writes_script(tmp_path):
 
 
 def test_nextflow_exporter_serializes_metagenomic_plasmid_steps_without_path_edges(tmp_path):
+    """Metagenomic plasmid DAG has worker-scoped internal handlers that feed
+    external steps — export must fail-fast because Nextflow cannot execute
+    those internal handlers."""
     plugin = get_plugin("metagenomic_plasmid")
     config = plugin.load_config(
         "examples/config_minimal.yaml",
@@ -67,19 +73,5 @@ def test_nextflow_exporter_serializes_metagenomic_plasmid_steps_without_path_edg
     )
     plan = plugin.build_plan(config)
 
-    script = NextflowExporter().export(plan, config, plugin.registry())
-
-    # DAG-driven planner generates steps from pipeline_dag.yaml.
-    # FastQC is optional — not generated unless explicitly enabled.
-    # Verify the core pipeline structure is present.
-    assert "process S1_QC_FASTP" in script
-    assert "process S1_ASSEMBLY_MEGAHIT" in script
-    assert "process S1_ASSEMBLY_QC_QUAST" in script
-    assert "process S1_PLASMID_DETECTION_GENOMAD" in script
-    # Verify channel wiring exists for key steps.
-    # The DAG-driven planner inserts host_prediction before fastp,
-    # so fastp channels depend on the upstream host_prediction process.
-    assert "ch_S1_QC_FASTP" in script
-    assert "= S1_QC_FASTP(" in script
-    # The DAG should export without errors
-    assert "workflow {" in script
+    with pytest.raises(ToolError, match="worker-scoped internal handler"):
+        NextflowExporter().export(plan, config, plugin.registry())

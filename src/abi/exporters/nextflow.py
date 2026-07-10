@@ -11,6 +11,7 @@ from typing import Any, Dict, Mapping
 from abi.config import PROJECT_ROOT
 from abi.dag import ABIDAG, StepBinding, infer_dag
 from abi.errors import ToolError
+from abi.internal import internal_handler_spec
 from abi.tools import ToolRegistry, _disk_to_nextflow, _memory_to_nextflow
 
 
@@ -36,6 +37,11 @@ class NextflowExporter:
             project_root=root,
             sequential_fallback=True,
         )
+        # Fail-fast: internal steps with external downstream dependents
+        # cannot be exported — Nextflow cannot execute Python handlers.
+        # 快速失败：有外部下游依赖的内部步骤无法导出 —
+        # Nextflow 无法执行 Python 处理器。
+        self._check_internal_dependencies(abi_dag)
         sections = [
             self._header(plan, smoke=smoke),
             self._params_block(plan, config, project_root=root, mamba_root=mamba),
@@ -64,6 +70,11 @@ class NextflowExporter:
     ) -> Path:
         """Write the generated Nextflow DSL2 script to disk."""
         path = Path(output_path)
+        if path.exists():
+            raise ToolError(
+                f"Nextflow script already exists and would be overwritten: {path}. "
+                f"Remove it manually or specify a different output path."
+            )
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             self.export(
@@ -92,6 +103,63 @@ class NextflowExporter:
             return f"abi-nextflow-smoke --step-id {shlex.quote(str(getattr(step, 'step_id', '')))}"
         root = Path(project_root or PROJECT_ROOT).resolve()
         return _command_text(step, registry, project_root=root)
+
+    @staticmethod
+    def _check_internal_dependencies(dag: ABIDAG) -> None:
+        """Raise :exc:`ToolError` if any **worker**-scoped internal step feeds
+        an external step.
+
+        Driver-scoped internal handlers are OK: they run on the control node
+        before submission and their outputs are already on disk when Nextflow
+        starts.  Worker-scoped handlers would need a Nextflow process, but
+        internal steps have none — so downstream external processes would wait
+        on channels that are never emitted.
+
+        This check runs before generating any output so the user sees a clear
+        error instead of a Nextflow script that silently drops steps.
+        """
+        # Build reverse dependency map: step_id → list of consumer step_ids
+        reverse_deps: dict[str, list[str]] = {}
+        for step_id, deps in dag.edges.items():
+            for dep in deps:
+                reverse_deps.setdefault(dep, []).append(step_id)
+
+        affected: list[str] = []
+        for binding in dag.bindings:
+            tool_id = str(getattr(binding.step, "tool_id", ""))
+            if tool_id != "internal":
+                continue
+            # Only worker-scoped handlers need a Nextflow process — driver
+            # handlers complete before submission and write results to disk.
+            _handler_id, scope = internal_handler_spec(binding.step)
+            if scope == "driver":
+                continue
+
+            consumers = reverse_deps.get(binding.step.step_id, [])
+            if not consumers:
+                continue
+            external_consumers = [
+                cid
+                for cid in consumers
+                if str(getattr(dag.binding_for(cid).step, "tool_id", "")) != "internal"
+            ]
+            if external_consumers:
+                step_id = str(getattr(binding.step, "step_id", "?"))
+                handler_id = _handler_id or "?"
+                affected.append(
+                    f"  Worker-scoped internal handler {step_id} "
+                    f"({handler_id!r}) is required by external "
+                    f"step(s): {', '.join(external_consumers)}"
+                )
+
+        if affected:
+            raise ToolError(
+                "Nextflow export blocked: worker-scoped internal handler steps "
+                "have external consumers that Nextflow cannot execute.\n"
+                + "\n".join(affected)
+                + "\n\nRun the workflow with the local (LSF/HPC) runtime "
+                "or refactor the DAG to avoid internal→external edges."
+            )
 
     def _header(self, plan: Any, *, smoke: bool) -> str:
         analysis_type = getattr(plan, "analysis_type", "")
