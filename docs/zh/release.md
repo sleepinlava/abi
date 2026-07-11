@@ -58,8 +58,8 @@ abi-mcp --help 2>/dev/null || python -m abi.mcp.server --help 2>/dev/null || tru
 ## GitHub Actions
 
 - `ci.yml` 运行 lint、格式检查、mypy、测试和构建检查。
-- `docker.yml` 在相关 PR 上构建并冒烟测试插件镜像；仅 tag 或获准的手动发布推送生成带 provenance、SBOM 的多平台镜像，PR 本地 load 明确关闭 attestation。
-- `release.yml` 构建分发包、为 `v*` tag 创建 GitHub Release，并调用受信 publisher。
+- `docker.yml` 在相关 PR 上构建并冒烟测试插件镜像；仅 tag 或获准的手动发布推送生成带 provenance、SBOM 的镜像，PR 本地 load 明确关闭 attestation。发布镜像默认多架构，但 RNA-seq 在其 R/DESeq2 环境通过原生 arm64 构建与冒烟测试前仅发布 `linux/amd64`。
+- `release.yml` 构建分发包、为 `v*` tag 创建 GitHub Release，并发出 published event。
 - `publish-pypi.yml` 下载 Release 原始产物，并通过 PyPI Trusted Publishing 发布。PyPI OIDC 身份绑定该文件名，因此它是必需 workflow。
 
 `.github/workflows/` 不保留可选 bot 或重复发布 workflow；必需集合严格为 `ci.yml`、`docker.yml`、`release.yml` 和 `publish-pypi.yml`。
@@ -69,10 +69,11 @@ abi-mcp --help 2>/dev/null || python -m abi.mcp.server --help 2>/dev/null || tru
 ```text
 已验证 master 提交 → v<version> tag → 可复用 CI 质量门
 → 构建并冒烟测试 wheel/sdist → 携带原始产物的 GitHub Release
-→ publish-pypi.yml 下载 Release 产物 → PyPI Trusted Publishing
+→ 顶层 release.published event 启动 publish-pypi.yml
+→ 下载 Release 产物 → PyPI Trusted Publishing
 ```
 
-不要增加 `release.published` 或第二条自动发布路径，否则可能与 release call 竞态并重复上传同一版本。恢复操作应针对已有 GitHub Release 产物重跑失败的 `publish-pypi` job，不能本地重新构建。重命名 publisher 前必须先更新 PyPI Trusted Publisher 配置。
+不能把 `publish-pypi.yml` 作为 reusable workflow 调用：PyPI 不支持父 workflow 的 OIDC Build Config URI。`release.published` 是唯一自动发布触发器。恢复操作使用 `workflow_dispatch` 并输入已有 GitHub Release tag，不能本地重新构建。重命名 publisher 前必须先更新 PyPI Trusted Publisher 配置。
 
 合并 packaging 或容器变更前，必须看到默认 sdist→wheel 构建和所有适用 Docker 矩阵 job 成功。PR Docker 门禁必须覆盖构建、本地 load 和容器内 `abi list-types`，仅 BuildKit 初始化或 Conda 求解成功不算完成。plasmid 镜像因体积原因不进入自动 PR 构建；影响它的容器发布必须先通过手动 workflow dispatch 验证。
 

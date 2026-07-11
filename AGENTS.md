@@ -65,7 +65,9 @@ Docker exporter cannot load their manifest lists. Non-push builds must use the s
 belongs under `default_channels` (`pkgs/main` and `pkgs/r`), while `conda-forge` and `bioconda` belong
 under `custom_channels`. Verify changed URLs return repository metadata before pushing. Automatic PR
 CI builds amplicon, RNA-seq, WGS, and metatranscriptomics, then runs `abi list-types`; the large plasmid
-image remains manual-only. A PR is complete only when all Python matrix jobs, Migration Gate, and all
+image remains manual-only. Registry pushes are multi-platform except RNA-seq, which is `linux/amd64`
+only until its R/DESeq2 environment passes a native arm64 build and smoke test. A PR is complete only
+when all Python matrix jobs, Migration Gate, and all
 applicable Docker matrix jobs pass; Pages deployment being skipped on a PR is expected.
 
 ## Release and PyPI Publishing Invariants
@@ -82,10 +84,12 @@ The repository keeps exactly four GitHub Actions workflows: `ci.yml` for code/pa
 `publish-pypi.yml` for PyPI Trusted Publishing. The separate publisher is required because PyPI binds
 the trusted OIDC identity to that workflow filename. The normal chain is: push `v<version>` from the
 verified `master` commit → reusable CI quality gate → build and smoke-test distributions → create the
-GitHub Release with those exact artifacts → call `publish-pypi.yml` → download Release artifacts →
-Trusted Publishing. Do not publish a locally rebuilt artifact, add a second automatic publication
-trigger, restore optional bot workflows, rename the trusted publisher without first updating PyPI, or
-upload with a long-lived token. After publishing, verify the PyPI version, hashes/provenance,
+GitHub Release with those exact artifacts → the top-level `release.published` event starts
+`publish-pypi.yml` → download Release artifacts → Trusted Publishing. Never invoke the publisher as a
+reusable workflow: PyPI does not support that OIDC identity. Do not publish a locally rebuilt artifact,
+add another automatic publication trigger, restore optional bot workflows, rename the trusted
+publisher without first updating PyPI, or upload with a long-lived token. After publishing, verify the
+PyPI version, hashes/provenance,
 clean-environment installation, CLI entry points, GitHub Release, and container tag results.
 
 ## Local Codex Cloud Access

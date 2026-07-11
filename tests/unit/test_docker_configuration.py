@@ -43,6 +43,13 @@ def test_local_docker_export_disables_registry_attestations():
     assert f"sbom: ${{{{ {push_condition} }}}}" in workflow
 
 
+def test_rnaseq_registry_build_is_amd64_only_until_arm64_is_validated():
+    workflow = (ROOT / ".github" / "workflows" / "docker.yml").read_text(encoding="utf-8")
+
+    assert "steps.flags.outputs.push == 'true' && matrix.plugin != 'rnaseq'" in workflow
+    assert "'linux/amd64,linux/arm64' || 'linux/amd64'" in workflow
+
+
 def test_sdist_contains_files_forced_into_the_wheel():
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     sdist_section = pyproject.split("[tool.hatch.build.targets.sdist]", maxsplit=1)[1]

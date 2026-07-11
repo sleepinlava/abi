@@ -60,10 +60,12 @@ abi-mcp --help 2>/dev/null || python -m abi.mcp.server --help 2>/dev/null || tru
 
 - `ci.yml` runs lint, format check, mypy, tests, and a build check.
 - `docker.yml` builds and smoke-tests plugin images on relevant PRs. It pushes
-  multi-platform images with provenance and SBOM only for tags or approved
-  manual dispatches; local PR image loads intentionally disable attestations.
+  images with provenance and SBOM only for tags or approved manual dispatches;
+  local PR image loads intentionally disable attestations. Published images are
+  multi-platform except RNA-seq, which remains `linux/amd64`-only until its
+  R/DESeq2 environment passes a native arm64 build and smoke test.
 - `release.yml` builds distributions, creates a GitHub Release for `v*` tags,
-  and calls the trusted publisher.
+  and emits the published event.
 - `publish-pypi.yml` downloads those exact Release artifacts and publishes
   them through PyPI Trusted Publishing. PyPI binds the OIDC identity to this
   filename, so it remains required.
@@ -77,14 +79,15 @@ The canonical automatic chain is:
 ```text
 verified master commit → v<version> tag → reusable CI quality gate
 → build and smoke-test wheel/sdist → GitHub Release with exact artifacts
-→ publish-pypi.yml downloads Release artifacts → PyPI Trusted Publishing
+→ top-level release.published event starts publish-pypi.yml
+→ download Release artifacts → PyPI Trusted Publishing
 ```
 
-Do not add a `release.published` or second automatic publication path: it can
-race the release call and upload the same version twice. Recovery should rerun
-the failed `publish-pypi` job against the existing GitHub Release artifacts,
-never rebuild locally. Renaming the publisher requires updating the trusted
-publisher configuration on PyPI first.
+Do not call `publish-pypi.yml` as a reusable workflow: PyPI does not support the
+parent workflow's OIDC Build Config URI. `release.published` is the single
+automatic publication trigger. Recovery uses `workflow_dispatch` with the
+existing GitHub Release tag and never rebuilds locally. Renaming the publisher
+requires updating the trusted publisher configuration on PyPI first.
 
 Before merging packaging or container changes, require a successful default
 sdist-to-wheel build and all applicable Docker matrix jobs. The PR Docker gate

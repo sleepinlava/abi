@@ -5,8 +5,8 @@
 ### Changed
 
 - Consolidated GitHub Actions to the required CI, Docker, Release, and trusted
-  PyPI publisher workflows. The Release chain is the single automatic owner of
-  publication, preventing duplicate publish runs for the same artifacts.
+  PyPI publisher workflows. A top-level `release.published` event starts the
+  trusted publisher, avoiding unsupported reusable-workflow OIDC identities.
 - Documented the release, CI/CD, Docker build, and Trusted Publishing
   invariants in the repository agent guidance and bilingual developer docs.
 
