@@ -299,6 +299,9 @@ included in the sdist. This specifically includes the root
   traces. None may be excluded by `.dockerignore`.
 - Automatic PR CI builds amplicon, RNA-seq, WGS, and metatranscriptomics. The
   large plasmid image is manual-only.
+- Registry pushes are multi-platform except RNA-seq, which remains
+  `linux/amd64`-only until its R/DESeq2 environment passes native arm64 build
+  and smoke validation.
 - Run `pytest tests/unit/test_docker_configuration.py -q` for every packaging,
   environment, Dockerfile, ignore-file, or Docker workflow change.
 
@@ -306,10 +309,10 @@ included in the sdist. This specifically includes the root
 
 ### `release.yml` and `publish-pypi.yml` — Release and publish
 
-The release workflow creates the verified GitHub Release, then calls the
-publisher to download and publish those exact artifacts. The publisher remains
-a separate required file because PyPI Trusted Publishing binds its OIDC policy
-to `publish-pypi.yml`. It must not also listen to `release.published`.
+The release workflow creates the verified GitHub Release. Its published event
+starts `publish-pypi.yml` as a top-level workflow, which downloads and publishes
+those exact artifacts. PyPI Trusted Publishing binds its OIDC policy to that
+filename and does not support a reusable-workflow caller identity.
 
 ## Test Writing Conventions
 

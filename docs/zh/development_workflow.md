@@ -63,6 +63,8 @@ docker run --rm abi-amplicon:latest list-types
 
 PR 的非推送构建使用单平台、`load: true` 和稳定的 `abi-<plugin>:latest` 标签，以便随后执行 `abi list-types`。provenance 与 SBOM 会产生 manifest list，不能与本地 Docker exporter 的 load 模式同时启用，因此只允许在 registry push 时生成。`docker/.condarc` 中 `conda-forge`、`bioconda` 使用 `custom_channels`；`defaults` 必须使用指向 `pkgs/main`、`pkgs/r` 的 `default_channels`。修改镜像地址时先验证 repodata 端点返回成功。
 
+registry 推送默认生成 `linux/amd64,linux/arm64` 多架构镜像；RNA-seq 暂时仅生成 `linux/amd64`，因为 R/DESeq2 环境在 QEMU arm64 下会出现 `Exec format error`。只有原生 arm64 构建及容器内 `abi list-types` 冒烟测试均成功后，才可恢复该架构。
+
 ### 文档与包
 
 ```bash

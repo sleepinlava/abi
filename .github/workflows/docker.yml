@@ -186,7 +186,8 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          platforms: ${{ steps.flags.outputs.push == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          # RNA-seq's R/DESeq2 environment is not yet arm64-ready under QEMU.
+          platforms: ${{ steps.flags.outputs.push == 'true' && matrix.plugin != 'rnaseq' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           push: ${{ steps.flags.outputs.push }}
