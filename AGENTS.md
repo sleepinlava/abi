@@ -49,6 +49,45 @@ changes additionally require package build, `twine check`, wheel smoke tests, an
 validation. Record every command and result in the pull request; explicitly identify checks that could
 not be run and their residual risk. See `docs/zh/development_workflow.md` for the full developer guide.
 
+## CI/CD and Docker Build Invariants
+
+Treat `.github/workflows/ci.yml`, `.github/workflows/docker.yml`, `pyproject.toml`, `.dockerignore`,
+`docker/.condarc`, all `docker/Dockerfile.*`, `environments.yaml`, and `envs/*.yml` as one release
+surface. A change to any of them requires `pytest tests/unit/test_docker_configuration.py -q`,
+`docker compose -f docker/docker-compose.yml config --quiet`, and `python -m build`. The package build
+must exercise the default sdist-to-wheel path, not only a direct wheel build; every file forced into
+the wheel must also be present in the sdist and in each Docker `/app` build context.
+
+For pull requests, Docker builds load a single-platform image into the local daemon and must disable
+provenance and SBOM attestations; attestations are enabled only for registry pushes because the local
+Docker exporter cannot load their manifest lists. Non-push builds must use the stable
+`abi-<plugin>:latest` tag consumed by the smoke test. Keep TUNA channel mappings valid: `defaults`
+belongs under `default_channels` (`pkgs/main` and `pkgs/r`), while `conda-forge` and `bioconda` belong
+under `custom_channels`. Verify changed URLs return repository metadata before pushing. Automatic PR
+CI builds amplicon, RNA-seq, WGS, and metatranscriptomics, then runs `abi list-types`; the large plasmid
+image remains manual-only. A PR is complete only when all Python matrix jobs, Migration Gate, and all
+applicable Docker matrix jobs pass; Pages deployment being skipped on a PR is expected.
+
+## Release and PyPI Publishing Invariants
+
+PyPI versions and Git tags are immutable release identities. Never reuse, move, or force-update a
+published or remotely visible release tag. Before tagging, update `project.version` and add the exact
+version heading to `CHANGELOG.md`, then run `python scripts/check_release_identity.py`, the complete CI
+gate, `python -m build`, `python -m twine check dist/*`, and a clean-wheel smoke test. Confirm the
+version does not already exist on PyPI and that neither `v<version>` nor `pypi-v<version>` exists
+remotely. If a tag was created with mismatched metadata, abandon that version and increment again.
+
+The repository keeps exactly four GitHub Actions workflows: `ci.yml` for code/package/docs gates,
+`docker.yml` for container build and publication, `release.yml` for the GitHub Release, and
+`publish-pypi.yml` for PyPI Trusted Publishing. The separate publisher is required because PyPI binds
+the trusted OIDC identity to that workflow filename. The normal chain is: push `v<version>` from the
+verified `master` commit → reusable CI quality gate → build and smoke-test distributions → create the
+GitHub Release with those exact artifacts → call `publish-pypi.yml` → download Release artifacts →
+Trusted Publishing. Do not publish a locally rebuilt artifact, add a second automatic publication
+trigger, restore optional bot workflows, rename the trusted publisher without first updating PyPI, or
+upload with a long-lived token. After publishing, verify the PyPI version, hashes/provenance,
+clean-environment installation, CLI entry points, GitHub Release, and container tag results.
+
 ## Local Codex Cloud Access
 
 This workspace may include a local, git-ignored `.key` file for the cloud

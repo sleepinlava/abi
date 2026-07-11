@@ -267,7 +267,8 @@ pytest tests/ -v -m "not requires_tools"
 
 ## CI/CD Pipeline
 
-ABI uses GitHub Actions with two workflows:
+ABI keeps exactly four GitHub Actions workflows: CI, Docker, Release, and the
+trusted PyPI publisher.
 
 ### `ci.yml` — Runs on every push and PR
 
@@ -281,9 +282,34 @@ ABI uses GitHub Actions with two workflows:
 | Sphinx docs build | 3.12 only |
 | Wheel build + smoke test | 3.12 only |
 
+The 3.12 build uses the default `python -m build` path: source tree → sdist →
+wheel. Files configured as wheel `force-include` inputs must therefore also be
+included in the sdist. This specifically includes the root
+`environments.yaml` manifest.
+
+### `docker.yml` — Builds plugin images on relevant PRs and release tags
+
+- PR builds load one `linux/amd64` image under `abi-<plugin>:latest` and run
+  `abi list-types` in the resulting container.
+- Local `load: true` builds disable provenance and SBOM attestations. Registry
+  pushes enable both; combining attestations with the local Docker exporter
+  produces an unsupported manifest list.
+- Docker build inputs include `docker/.condarc`, `environments.yaml`, generated
+  `envs/*.yml`, plugins, configuration, scripts, data, examples, and golden
+  traces. None may be excluded by `.dockerignore`.
+- Automatic PR CI builds amplicon, RNA-seq, WGS, and metatranscriptomics. The
+  large plasmid image is manual-only.
+- Run `pytest tests/unit/test_docker_configuration.py -q` for every packaging,
+  environment, Dockerfile, ignore-file, or Docker workflow change.
+
 ### `release.yml` — Builds and creates GitHub Release for `v*` tags
 
-### `publish-pypi.yml` — Publishes to PyPI via Trusted Publishing
+### `release.yml` and `publish-pypi.yml` — Release and publish
+
+The release workflow creates the verified GitHub Release, then calls the
+publisher to download and publish those exact artifacts. The publisher remains
+a separate required file because PyPI Trusted Publishing binds its OIDC policy
+to `publish-pypi.yml`. It must not also listen to `release.published`.
 
 ## Test Writing Conventions
 

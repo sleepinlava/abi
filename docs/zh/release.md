@@ -14,6 +14,8 @@ scripts/release_check.sh
 `project.version` 完全一致的版本小节；CI 会通过
 `scripts/check_release_identity.py` 强制检查这一点。
 
+版本必须同时不存在于 PyPI 和远端 Git tag。tag 与 PyPI 版本都是不可变发布身份，推送后不能移动或复用。如果 tag 指向与包元数据不一致的提交，应放弃该版本并继续递增。`1.5.4` 因 tag 对应 `1.5.3` 元数据而未发布，下一有效版本为 `1.5.5`。
+
 脚本默认会在 `/tmp` 下创建 POSIX 临时目录，并在测试前导出
 `TMPDIR`、`TMP` 和 `TEMP`。这样可以避免 WSL/Windows 挂载的临时目录破坏
 权限敏感测试的 `chmod` 语义。可通过 `ABI_RELEASE_TMPDIR` 或
@@ -56,9 +58,24 @@ abi-mcp --help 2>/dev/null || python -m abi.mcp.server --help 2>/dev/null || tru
 ## GitHub Actions
 
 - `ci.yml` 运行 lint、格式检查、mypy、测试和构建检查。
-- `release.yml` 构建分发包并为 `v*` 标签创建 GitHub Release。
-- `publish-pypi.yml` 通过 PyPI Trusted Publishing 发布 release 产物。
-- `opencode.yml` 要求在 GitHub Actions Secrets 中配置
-  `DEEPSEEK_API_KEY`；不要把服务商 API key 直接写入 workflow YAML。
+- `docker.yml` 在相关 PR 上构建并冒烟测试插件镜像；仅 tag 或获准的手动发布推送生成带 provenance、SBOM 的多平台镜像，PR 本地 load 明确关闭 attestation。
+- `release.yml` 构建分发包、为 `v*` tag 创建 GitHub Release，并调用受信 publisher。
+- `publish-pypi.yml` 下载 Release 原始产物，并通过 PyPI Trusted Publishing 发布。PyPI OIDC 身份绑定该文件名，因此它是必需 workflow。
 
-发布工作流不应直接上传到 PyPI；发布操作由专用的 PyPI 工作流在 GitHub Release 发布后处理。
+`.github/workflows/` 不保留可选 bot 或重复发布 workflow；必需集合严格为 `ci.yml`、`docker.yml`、`release.yml` 和 `publish-pypi.yml`。
+
+唯一正常的自动发布链为：
+
+```text
+已验证 master 提交 → v<version> tag → 可复用 CI 质量门
+→ 构建并冒烟测试 wheel/sdist → 携带原始产物的 GitHub Release
+→ publish-pypi.yml 下载 Release 产物 → PyPI Trusted Publishing
+```
+
+不要增加 `release.published` 或第二条自动发布路径，否则可能与 release call 竞态并重复上传同一版本。恢复操作应针对已有 GitHub Release 产物重跑失败的 `publish-pypi` job，不能本地重新构建。重命名 publisher 前必须先更新 PyPI Trusted Publisher 配置。
+
+合并 packaging 或容器变更前，必须看到默认 sdist→wheel 构建和所有适用 Docker 矩阵 job 成功。PR Docker 门禁必须覆盖构建、本地 load 和容器内 `abi list-types`，仅 BuildKit 初始化或 Conda 求解成功不算完成。plasmid 镜像因体积原因不进入自动 PR 构建；影响它的容器发布必须先通过手动 workflow dispatch 验证。
+
+## 发布后验证
+
+发布完成后，核对 GitHub Release 与 PyPI 版本、Trusted Publishing provenance 和文件哈希；在干净环境安装 wheel，并运行 `abi list-types`、`autoplasm --help` 和代表性插件 dry-run。容器 tag 需要从 GHCR 拉取并执行 `abi list-types`。发布交接中记录 Release、PyPI、release workflow、publish job 和 container workflow 链接。

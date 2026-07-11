@@ -14,6 +14,12 @@ Before pushing a release candidate, confirm `CHANGELOG.md` has a section for
 the exact `project.version` in `pyproject.toml`; CI enforces this with
 `scripts/check_release_identity.py`.
 
+Choose a version that is absent from both PyPI and remote Git tags. Tags and
+PyPI versions are immutable identities: never move or reuse a tag after it has
+been pushed. If a tag points to mismatched package metadata, abandon that
+version and increment again. Version `1.5.4` was not published because its tag
+was created against `1.5.3` metadata; the next valid release is `1.5.5`.
+
 The script creates a POSIX temporary directory under `/tmp` by default and
 exports `TMPDIR`, `TMP`, and `TEMP` before running tests. This keeps
 permission-sensitive checks off WSL/Windows-mounted temporary directories. Use
@@ -53,10 +59,45 @@ abi-mcp --help 2>/dev/null || python -m abi.mcp.server --help 2>/dev/null || tru
 ## GitHub Actions
 
 - `ci.yml` runs lint, format check, mypy, tests, and a build check.
-- `release.yml` builds distributions and creates a GitHub Release for `v*` tags.
-- `publish-pypi.yml` publishes the release artifact through PyPI Trusted Publishing.
-- `opencode.yml` expects `DEEPSEEK_API_KEY` to be configured as a GitHub Actions
-  secret; never place provider API keys directly in workflow YAML.
+- `docker.yml` builds and smoke-tests plugin images on relevant PRs. It pushes
+  multi-platform images with provenance and SBOM only for tags or approved
+  manual dispatches; local PR image loads intentionally disable attestations.
+- `release.yml` builds distributions, creates a GitHub Release for `v*` tags,
+  and calls the trusted publisher.
+- `publish-pypi.yml` downloads those exact Release artifacts and publishes
+  them through PyPI Trusted Publishing. PyPI binds the OIDC identity to this
+  filename, so it remains required.
 
-The release workflow should not upload to PyPI directly; publishing is handled
-by the dedicated PyPI workflow after a GitHub Release is published.
+No optional bot or duplicate publishing workflow belongs in `.github/workflows/`.
+The required workflow set is exactly `ci.yml`, `docker.yml`, `release.yml`, and
+`publish-pypi.yml`.
+
+The canonical automatic chain is:
+
+```text
+verified master commit → v<version> tag → reusable CI quality gate
+→ build and smoke-test wheel/sdist → GitHub Release with exact artifacts
+→ publish-pypi.yml downloads Release artifacts → PyPI Trusted Publishing
+```
+
+Do not add a `release.published` or second automatic publication path: it can
+race the release call and upload the same version twice. Recovery should rerun
+the failed `publish-pypi` job against the existing GitHub Release artifacts,
+never rebuild locally. Renaming the publisher requires updating the trusted
+publisher configuration on PyPI first.
+
+Before merging packaging or container changes, require a successful default
+sdist-to-wheel build and all applicable Docker matrix jobs. The PR Docker gate
+must cover build, local load, and `abi list-types`; a successful BuildKit setup
+or Conda solve alone is not sufficient. The plasmid image is intentionally
+excluded from automatic PR builds because of its size and must be validated by
+manual workflow dispatch before a container release that affects it.
+
+## Post-Release Verification
+
+After publication, verify the GitHub Release and PyPI version, confirm Trusted
+Publishing provenance and file hashes, install the wheel in a clean environment,
+and run `abi list-types`, `autoplasm --help`, and representative plugin dry-runs.
+For container tags, verify the GHCR image can be pulled and runs
+`abi list-types`. Record links to the Release, PyPI project, release workflow,
+publish job, and container workflow in the release handoff.

@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "abi-agent"
-version = "1.5.3"
+version = "1.5.5"
 description = "Agent-Bioinformatics Interface: plugin-based abstraction for AI-driven bioinformatics analysis"
 readme = "README.md"
 license = { text = "MIT" }

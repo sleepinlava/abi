@@ -46,8 +46,5 @@ def test_changelog_has_current_release_section() -> None:
     assert f"## [{version_match.group(1)}]" in changelog
 
 
-def test_opencode_workflow_reads_api_key_from_github_secret() -> None:
-    workflow = Path(".github/workflows/opencode.yml").read_text(encoding="utf-8")
-
-    assert "DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}" in workflow
-    assert "DEEPSEEK_API_KEY: ${{sk-" not in workflow
+def test_optional_opencode_workflow_is_not_part_of_release_automation() -> None:
+    assert not Path(".github/workflows/opencode.yml").exists()

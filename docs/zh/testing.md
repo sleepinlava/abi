@@ -275,7 +275,7 @@ pytest tests/ -v -m "not requires_tools"
 
 ## CI/CD 管线
 
-ABI 使用 GitHub Actions 并包含两个工作流：
+ABI 只保留四个 GitHub Actions workflow：CI、Docker、Release 和受信 PyPI publisher。
 
 ### `ci.yml` — 每次推送和 PR 时运行
 
@@ -289,9 +289,21 @@ ABI 使用 GitHub Actions 并包含两个工作流：
 | Sphinx 文档构建 | 仅 3.12 |
 | Wheel 构建 + 冒烟测试 | 仅 3.12 |
 
+3.12 构建使用默认的 `python -m build` 路径：源码树 → sdist → wheel。因此，wheel 中配置为 `force-include` 的文件也必须进入 sdist，尤其是根目录 `environments.yaml`。
+
+### `docker.yml` — 在相关 PR 和 release tag 上构建插件镜像
+
+- PR 构建加载单个 `linux/amd64` 镜像，标签为 `abi-<plugin>:latest`，随后在容器中运行 `abi list-types`。
+- 本地 `load: true` 构建关闭 provenance 和 SBOM；registry push 才启用二者。attestation 产生的 manifest list 无法由本地 Docker exporter 加载。
+- 构建输入包含 `docker/.condarc`、`environments.yaml`、生成的 `envs/*.yml`、插件、配置、脚本、数据、示例和 golden traces，不能被 `.dockerignore` 排除。
+- PR 自动构建 amplicon、RNA-seq、WGS 和 metatranscriptomics；大型 plasmid 镜像仅手动构建。
+- packaging、环境、Dockerfile、ignore 文件或 Docker workflow 变更必须运行 `pytest tests/unit/test_docker_configuration.py -q`。
+
 ### `release.yml` — 为 `v*` 标签构建并创建 GitHub Release
 
-### `publish-pypi.yml` — 通过 PyPI Trusted Publishing 发布
+### `release.yml` 与 `publish-pypi.yml` — Release 与发布
+
+Release workflow 创建已验证的 GitHub Release，随后调用 publisher 下载并发布这些原始产物。PyPI Trusted Publishing 的 OIDC 策略绑定 `publish-pypi.yml` 文件名，因此该文件是必需的，但不能再监听 `release.published`。
 
 ## 测试编写规范
 

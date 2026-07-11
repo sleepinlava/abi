@@ -116,10 +116,18 @@ def test_pypi_publishes_the_github_release_artifacts_without_rebuilding() -> Non
     assert "python -m twine check dist/*" in workflow
     assert "python -m build" not in workflow
     assert "workflow_call:" in workflow
-    assert "repository_dispatch:" in workflow
-    assert "github.event.client_payload.tag" in workflow
-    assert '"pypi-v*"' in workflow
-    assert 'RELEASE_TAG="${REQUESTED_TAG#pypi-}"' in workflow
+    assert "workflow_dispatch:" in workflow
+    assert "repository_dispatch:" not in workflow
+    assert "release:\n" not in workflow
+    assert '"pypi-v*"' not in workflow
+    assert "REQUESTED_TAG: ${{ inputs.tag }}" in workflow
+
+
+def test_repository_keeps_only_required_github_workflows() -> None:
+    root = Path(__file__).resolve().parents[1]
+    workflows = {path.name for path in (root / ".github" / "workflows").glob("*.yml")}
+
+    assert workflows == {"ci.yml", "docker.yml", "publish-pypi.yml", "release.yml"}
 
 
 def test_ci_includes_github_pages_deployment() -> None:
