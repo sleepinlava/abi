@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.5.5] - 2026-07-11
+
+### Changed
+
+- Consolidated GitHub Actions to the required CI, Docker, Release, and trusted
+  PyPI publisher workflows. The Release chain is the single automatic owner of
+  publication, preventing duplicate publish runs for the same artifacts.
+- Documented the release, CI/CD, Docker build, and Trusted Publishing
+  invariants in the repository agent guidance and bilingual developer docs.
+
+### Fixed
+
+- Fixed sdist-to-wheel builds by packaging the root environment manifest in
+  both artifacts and every Docker build context.
+- Fixed pull-request Docker exports by disabling provenance and SBOM when
+  loading local images, while retaining attestations for registry pushes.
+- Fixed TUNA channel mappings, deterministic local image tags, Docker build
+  inputs, and container smoke-test commands across the plugin image matrix.
+
+### Release note
+
+- `1.5.4` was not published to PyPI. Its remote tag was created against
+  mismatched `1.5.3` package metadata and must not be reused or moved.
+
 ## [1.5.3] - 2026-07-07
 
 ### Added

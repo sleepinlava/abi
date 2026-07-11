@@ -59,7 +59,9 @@ docker build -f docker/Dockerfile.amplicon -t abi-amplicon:latest .
 docker run --rm abi-amplicon:latest list-types
 ```
 
-至少构建一个受影响的代表镜像；环境定义变化时构建所有受影响镜像。自动 CI 不构建约 15 GB 的 plasmid 镜像，须通过手动 workflow 验证。Dockerfile 中每个 `COPY` 源都应存在且不能被 `.dockerignore` 排除；非推送构建必须生成与 smoke test 一致的本地标签。
+至少构建一个受影响的代表镜像；环境定义变化时构建所有受影响镜像。自动 CI 不构建约 15 GB 的 plasmid 镜像，须通过手动 workflow 验证。Dockerfile 中每个 `COPY` 源都应存在且不能被 `.dockerignore` 排除；`pyproject.toml` 强制纳入 wheel 的文件（尤其是 `environments.yaml`）必须同时进入 sdist 和每个 Docker `/app` 构建上下文。
+
+PR 的非推送构建使用单平台、`load: true` 和稳定的 `abi-<plugin>:latest` 标签，以便随后执行 `abi list-types`。provenance 与 SBOM 会产生 manifest list，不能与本地 Docker exporter 的 load 模式同时启用，因此只允许在 registry push 时生成。`docker/.condarc` 中 `conda-forge`、`bioconda` 使用 `custom_channels`；`defaults` 必须使用指向 `pkgs/main`、`pkgs/r` 的 `default_channels`。修改镜像地址时先验证 repodata 端点返回成功。
 
 ### 文档与包
 
@@ -68,6 +70,7 @@ bash docs/build_docs.sh
 python scripts/check_release_identity.py
 python -m build
 python -m twine check dist/*
+tar -tf dist/abi_agent-*.tar.gz | grep environments.yaml
 ```
 
 发布变更还要在干净虚拟环境安装 wheel，运行 `abi list-types`、`autoplasm --help` 和所有内置插件的 dry-run。
@@ -87,6 +90,7 @@ python -m twine check dist/*
 3. 添加能捕获根因的回归测试，再实施聚焦修复；禁止只重跑来掩盖确定性失败。
 4. 按“聚焦检查 → 完整质量门”复验，再查看远端 check。
 5. 对网络、平台、缓存或第三方服务偶发失败，记录证据、重试策略和残余风险。
+6. Docker 矩阵应逐层排查：工作流 exporter、镜像源/环境求解、包安装、镜像导出、容器 smoke test；修复前一层后必须继续等待真实构建完成，不能把“不再快速失败”视为通过。
 
 ## 7. 发布与回滚
 
