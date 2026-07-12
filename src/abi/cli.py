@@ -1566,6 +1566,8 @@ def lock_runtime_command(
     try:
         if strict and skip_conda_packages:
             raise ValueError("--strict cannot be combined with --skip-conda-packages")
+        if require_all_tools and not strict:
+            raise ValueError("--require-all-tools requires --strict")
         paths = generate_runtime_locks(
             output_dir=output_dir,
             prefix=prefix,
@@ -1575,9 +1577,8 @@ def lock_runtime_command(
             include_conda_packages=not skip_conda_packages,
             analysis_types=tuple(analysis_type or DEFAULT_ANALYSIS_TYPES),
             db_profile=db_profile,
+            require_all_tools=require_all_tools,
         )
-        if require_all_tools and not strict:
-            raise ValueError("--require-all-tools requires --strict")
         if strict:
             issues = validate_runtime_locks(paths, require_all_tools=require_all_tools)
             if issues:

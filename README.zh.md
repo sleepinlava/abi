@@ -19,7 +19,7 @@ Nextflow 导出/运行支持、DAG/合约静态分析、资源自动发现 + 安
 [![License](https://img.shields.io/pypi/l/abi-agent?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
 
 > **工程状态（v1.5.5 源码，2026-07-12）：本地冻结候选。**
-> 2294 项测试通过（83% 语句覆盖率），高风险模块覆盖率门禁全部通过，
+> 2296 项测试通过（83% 语句覆盖率），高风险模块覆盖率门禁全部通过，
 > 全新环境安装 wheel 后 7 个内置插件 dry-run 全部通过。正式硬冻结仍需：
 > 远程 Python 3.10-3.13 矩阵全绿、带生物学判定标准的固定真实工具 benchmark、
 > 连续两个仅修缺陷的候选版本，以及连续一周无新增 P0/P1 缺陷。

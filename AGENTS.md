@@ -4,7 +4,7 @@
 
 Core Python code lives in `src/abi/`. Keep transport-neutral behavior in the core; CLI, MCP, HTTP, and provider integrations should remain thin adapters. Built-in workflow implementations are split between Python entry points in `src/abi/plugins/` and declarative definitions in `plugins/<analysis_type>/` (`pipeline_dag.yaml`, tool registries, schemas, and report metadata). Tests are organized under `tests/unit/`, `tests/integration/`, and `tests/smoke/`; SciPlot also has focused tests in `src/abi/sciplot/tests/`. Use `examples/` for runnable configuration samples, `docs/en/` and `docs/zh/` for documentation, `envs/` for Conda environments, `environments.yaml` for tool→env assignments (18 envs, 98 tools), and `scripts/` for maintenance utilities.
 
-Current codebase (2026-07-12): 215 Python source files (~53.5k lines), plasmid engine (11,823 lines), 44-file sciplot module (3,912 lines), 153 test files (2,294 passed), 83% coverage.
+Current codebase (2026-07-12): 215 Python source files (~53.5k lines), plasmid engine (11,823 lines), 44-file sciplot module (3,912 lines), 153 test files (2,296 passed), 83% coverage.
 
 ## Build, Test, and Development Commands
 
@@ -101,6 +101,9 @@ to a non-empty ABI version plus a clean Git commit. Strict validation must fail 
 declared environments, package export errors, unresolved required/default-enabled tools, and
 non-ready workflow-level or release-required resources. `--require-all-tools` additionally promotes
 all optional registered tools and their resources into the release scope.
+The runtime lock's `release.blocking_missing_tools` and `release.not_ready_resources` fields are the
+authoritative certification summary; global tool/resource counts intentionally retain out-of-scope
+optional gaps for audit visibility.
 
 Use one canonical top-level runtime resource root. On the managed cloud host it is
 `/root/autodl-tmp/resources`: plasmid, metagenome, Amplicon, EasyMeta, and WGS databases live below

@@ -35,6 +35,11 @@ written with `release_required: false`. Add `--require-all-tools` when the relea
 claims every optional registered capability; it promotes those tools and their
 resources into the release scope. It is invalid without `--strict`.
 
+The runtime lock contains both global audit counts and an explicit `release`
+block. Use `release.blocking_missing_tools` and `release.not_ready_resources` as
+the authoritative certification summary; global missing counts can include
+optional tools and resources outside the selected analysis scope.
+
 On the ABI cloud development machine, use the idempotent release helper:
 
 ```bash

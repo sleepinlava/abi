@@ -103,6 +103,65 @@ def test_generate_runtime_locks_resolves_extra_path_dirs(tmp_path: Path) -> None
     assert tools_lock["summary"]["blocking_missing_tools"] == 0
 
 
+def test_release_summary_honors_require_all_tools_and_resource_audit_errors(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "abi"
+    plugin_dir = project / "plugins" / "demo"
+    plugin_dir.mkdir(parents=True)
+    (project / "environments.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "environments": {"demo-env": {"dependencies": ["python=3.10"]}},
+                "tool_assignments": {"demo": {"optional_tool": "demo-env"}},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (plugin_dir / "tool_registry.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "tools": [
+                    {
+                        "id": "optional_tool",
+                        "executable": "missing-tool",
+                        "required": False,
+                        "default_enabled": False,
+                    }
+                ]
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    paths = generate_runtime_locks(
+        output_dir=project / "locks",
+        prefix="test",
+        project_root=project,
+        mamba_root=tmp_path / ".mamba",
+        resource_root=project / "resources",
+        include_conda_packages=False,
+        analysis_types=("demo",),
+        require_all_tools=True,
+    )
+
+    tools_lock = yaml.safe_load(Path(paths["tools"]).read_text(encoding="utf-8"))
+    resources_lock = yaml.safe_load(Path(paths["resources"]).read_text(encoding="utf-8"))
+    runtime_lock = yaml.safe_load(Path(paths["runtime"]).read_text(encoding="utf-8"))
+    assert tools_lock["summary"]["release_blocking_missing_tools"] == 1
+    assert tools_lock["summary"]["release_requires_all_tools"] is True
+    assert resources_lock["summary"]["release_resource_audit_errors"] == 1
+    assert resources_lock["summary"]["release_not_ready_resources"] == 1
+    assert runtime_lock["release"] == {
+        "analysis_types": ["demo"],
+        "require_all_tools": True,
+        "blocking_missing_tools": 1,
+        "not_ready_resources": 1,
+    }
+
+
 def test_generate_runtime_locks_resolves_mixed_resource_layout(tmp_path: Path) -> None:
     project = tmp_path / "abi"
     project.mkdir()
@@ -151,6 +210,14 @@ def test_generate_runtime_locks_resolves_mixed_resource_layout(tmp_path: Path) -
     assert resources_lock["db_profile"] == "full"
     runtime_lock = yaml.safe_load(Path(paths["runtime"]).read_text(encoding="utf-8"))
     assert runtime_lock["project"]["version"]
+    assert runtime_lock["release"]["analysis_types"] == [
+        "amplicon_16s",
+        "easymetagenome",
+        "rnaseq_expression",
+        "wgs_bacteria",
+    ]
+    assert runtime_lock["release"]["blocking_missing_tools"] == 0
+    assert "not_ready_resources" in runtime_lock["release"]
     amplicon_rows = resources_lock["analyses"]["amplicon_16s"]["resources"]
     taxonomy_row = next(row for row in amplicon_rows if row["resource_id"] == "taxonomy_db")
     assert taxonomy_row["path"] == str(taxonomy_db)

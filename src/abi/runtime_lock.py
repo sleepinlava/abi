@@ -70,6 +70,7 @@ def generate_runtime_locks(
     include_conda_packages: bool = True,
     analysis_types: Sequence[str] = DEFAULT_ANALYSIS_TYPES,
     db_profile: str = "light",
+    require_all_tools: bool = False,
 ) -> dict[str, str]:
     """Generate Conda/tool/resource/runtime lock YAML files.
 
@@ -98,6 +99,7 @@ def generate_runtime_locks(
         resource_root=resources,
         analysis_types=analysis_types,
         db_profile=db_profile,
+        require_all_tools=require_all_tools,
         generated_at=generated_at,
     )
     tool_lock = build_tool_lock(
@@ -107,6 +109,8 @@ def generate_runtime_locks(
         environment_spec=environment_spec,
         conda_lock=conda_lock,
         resource_lock=resource_lock,
+        analysis_types=analysis_types,
+        require_all_tools=require_all_tools,
         generated_at=generated_at,
     )
     runtime_lock = build_runtime_summary(
@@ -303,6 +307,8 @@ def build_tool_lock(
     environment_spec: Mapping[str, Any],
     conda_lock: Mapping[str, Any],
     resource_lock: Mapping[str, Any],
+    analysis_types: Sequence[str],
+    require_all_tools: bool,
     generated_at: str,
 ) -> dict[str, Any]:
     assignments = environment_spec.get("tool_assignments", {})
@@ -377,6 +383,12 @@ def build_tool_lock(
 
     missing = [tool for tool in tools if tool["status"] != "ok"]
     blocking = [tool for tool in tools if tool["blocking"]]
+    release_plugins = set(analysis_types)
+    release_blocking = [
+        tool
+        for tool in missing
+        if tool["plugin"] in release_plugins and (require_all_tools or tool["blocking"])
+    ]
     return {
         "lockfile_version": 1,
         "kind": "abi-tools-lock",
@@ -389,6 +401,8 @@ def build_tool_lock(
             "present_tools": len(tools) - len(missing),
             "missing_tools": len(missing),
             "blocking_missing_tools": len(blocking),
+            "release_blocking_missing_tools": len(release_blocking),
+            "release_requires_all_tools": require_all_tools,
         },
         "tools": tools,
     }
@@ -401,6 +415,7 @@ def build_resource_lock(
     resource_root: Path,
     analysis_types: Sequence[str],
     db_profile: str,
+    require_all_tools: bool,
     generated_at: str,
 ) -> dict[str, Any]:
     analyses: dict[str, Any] = {}
@@ -421,8 +436,10 @@ def build_resource_lock(
             for row in rows:
                 item = dict(row)
                 tool_id = str(item.get("tool_id", ""))
-                item["release_required"] = not tool_id or tool_id in required_tools.get(
-                    analysis_type, set()
+                item["release_required"] = (
+                    require_all_tools
+                    or not tool_id
+                    or tool_id in required_tools.get(analysis_type, set())
                 )
                 normalized_rows.append(item)
             counts = _status_counts(normalized_rows)
@@ -437,6 +454,13 @@ def build_resource_lock(
                 "resources": [],
                 "error": f"{type(exc).__name__}: {exc}",
             }
+    release_resources = [
+        resource
+        for analysis in analyses.values()
+        for resource in analysis.get("resources", [])
+        if resource.get("release_required") is True
+    ]
+    release_audit_errors = sum(bool(analysis.get("error")) for analysis in analyses.values())
     return {
         "lockfile_version": 1,
         "kind": "abi-resources-lock",
@@ -445,6 +469,15 @@ def build_resource_lock(
         "mamba_root": str(mamba_root),
         "resource_root": str(resource_root),
         "db_profile": db_profile,
+        "summary": {
+            "release_required_resources": len(release_resources),
+            "release_not_ready_resources": sum(
+                resource.get("status") != "ok" for resource in release_resources
+            )
+            + release_audit_errors,
+            "release_resource_audit_errors": release_audit_errors,
+            "release_requires_all_tools": require_all_tools,
+        },
         "analyses": analyses,
     }
 
@@ -489,6 +522,18 @@ def build_runtime_summary(
             "python": platform.python_version(),
         },
         "project": _project_identity(project_root),
+        "release": {
+            "analysis_types": sorted(resource_lock.get("analyses", {})),
+            "require_all_tools": bool(
+                tool_lock.get("summary", {}).get("release_requires_all_tools", False)
+            ),
+            "blocking_missing_tools": int(
+                tool_lock.get("summary", {}).get("release_blocking_missing_tools", 0)
+            ),
+            "not_ready_resources": int(
+                resource_lock.get("summary", {}).get("release_not_ready_resources", 0)
+            ),
+        },
         "summary": {
             "conda": conda_lock.get("summary", {}),
             "tools": tool_lock.get("summary", {}),
