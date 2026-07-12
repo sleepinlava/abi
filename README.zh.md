@@ -18,8 +18,8 @@ Nextflow 导出/运行支持、DAG/合约静态分析、资源自动发现 + 安
 [![Status](https://img.shields.io/badge/status-alpha-orange?style=flat-square)](https://github.com/sleepinlava/abi)
 [![License](https://img.shields.io/pypi/l/abi-agent?style=flat-square)](https://github.com/sleepinlava/abi/blob/master/LICENSE)
 
-> **工程状态（v1.5.3 源码，2026-07-09）：本地冻结候选。**
-> 约 2252 项测试通过（83% 语句覆盖率），高风险模块覆盖率门禁全部通过，
+> **工程状态（v1.5.5 源码，2026-07-12）：本地冻结候选。**
+> 2294 项测试通过（83% 语句覆盖率），高风险模块覆盖率门禁全部通过，
 > 全新环境安装 wheel 后 7 个内置插件 dry-run 全部通过。正式硬冻结仍需：
 > 远程 Python 3.10-3.13 矩阵全绿、带生物学判定标准的固定真实工具 benchmark、
 > 连续两个仅修缺陷的候选版本，以及连续一周无新增 P0/P1 缺陷。
@@ -106,6 +106,31 @@ abi job-service --workers 2 --store jobs.json --subprocess-workers
 ```
 
 所有面向 Agent 的命令均支持 `--output-json`。
+
+## 可发布的运行时锁
+
+ABI 可以固定生产工作流使用的 Conda 包、已注册工具、数据库、主机运行时、ABI
+版本和 Git commit。普通 `lock-runtime` 是审计快照；`--strict` 才是发布门禁。
+
+```bash
+abi lock-runtime \
+  --output-dir locks/candidate \
+  --prefix abi-production \
+  --mamba-root /root/autodl-tmp/.mamba \
+  --resource-root /root/autodl-tmp/resources \
+  --db-profile full \
+  --strict
+```
+
+严格模式会 fail-closed：缺失或多余的 Conda 环境、未包含或失败的包快照、发布
+范围内未解析的工具、未就绪资源、缺失的代码身份以及 dirty Git 工作树都会使
+候选失败。只有在认证全部可选注册能力时才增加 `--require-all-tools`。
+
+云端统一布局将质粒/宏基因组数据库放在 `resources/autoplasm/`，RNA 参考资源
+放在顶层。托管云主机使用 `scripts/cloud/prepare_release_lock.sh` 原子生成带版本
+和 commit、只读且经过 SHA-256 验证的正式锁。当前助手认证已经部署的六类流程；
+`viral_viwrap` 在独立多环境和数据库包完成安装前不进入该发布范围。详见
+[可发布的运行时锁](docs/zh/runtime_locks.md)。
 
 ## 内置分析类型
 

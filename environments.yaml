@@ -88,7 +88,6 @@ environments:
     - mob_suite
     - plasmidfinder
     - isescan
-    - mummer
     - eggnog-mapper
     - rgi
   autoplasm-abundance:
@@ -116,6 +115,7 @@ environments:
     - blast
     - hmmer
     - mmseqs2
+    - mummer
   autoplasm-plasmid-binning:
     channels:
     - conda-forge
@@ -312,7 +312,7 @@ tool_assignments:
     plasmidfinder: autoplasm-annotation
     blast: autoplasm-annotation
     mmseqs2: autoplasm-annotation
-    mummer: autoplasm-annotation
+    mummer: autoplasm-plasmid-detect
     minced: autoplasm-annotation
     eggnog_mapper: autoplasm-annotation
     rgi: autoplasm-annotation

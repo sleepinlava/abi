@@ -59,6 +59,18 @@ def test_sdist_contains_files_forced_into_the_wheel():
     assert '"environments.yaml"' in sdist_section
 
 
+def test_plasmidfinder_adapter_is_in_packaged_plugin_tree():
+    registry = yaml.safe_load(
+        (ROOT / "plugins" / "metagenomic_plasmid" / "tool_registry.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    tool = next(item for item in registry["tools"] if item["id"] == "plasmidfinder")
+
+    assert tool["extra_path_dirs"] == ["{project_root}/plugins/metagenomic_plasmid/scripts"]
+    assert (ROOT / "plugins" / "metagenomic_plasmid" / "scripts" / "plasmidfinder.py").is_file()
+
+
 def test_every_dockerfile_copy_source_exists():
     required_sources = (
         "docker/.condarc",

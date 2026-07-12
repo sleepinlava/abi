@@ -93,7 +93,11 @@ from abi.openai_contracts import export_openai_tools  # backward compat
 from abi.plugins import get_plugin, list_plugins
 from abi.resources import setup_resources
 from abi.results import validate_abi_result_dir
-from abi.runtime_lock import DEFAULT_ANALYSIS_TYPES, generate_runtime_locks
+from abi.runtime_lock import (
+    DEFAULT_ANALYSIS_TYPES,
+    generate_runtime_locks,
+    validate_runtime_locks,
+)
 from abi.schemas import ABIError
 from abi.skill_installer import install_bundled_skills
 from abi.tool_descriptors import (
@@ -1518,8 +1522,13 @@ def lock_runtime_command(
     resource_root: Optional[Path] = typer.Option(
         None,
         "--resource-root",
-        envvar="ABI_RESOURCE_ROOT",
+        envvar="ABI_RUNTIME_RESOURCE_ROOT",
         help="Top-level ABI resource directory to snapshot.",
+    ),
+    db_profile: str = typer.Option(
+        "light",
+        "--db-profile",
+        help="Database profile used to resolve plugin resource registrations.",
     ),
     conda_executable: Optional[Path] = typer.Option(
         None,
@@ -1537,6 +1546,16 @@ def lock_runtime_command(
         "--type",
         help="Analysis type to include in the resource lock. Repeatable.",
     ),
+    strict: bool = typer.Option(
+        False,
+        "--strict",
+        help="Fail when the generated locks contain any reproducibility gap.",
+    ),
+    require_all_tools: bool = typer.Option(
+        False,
+        "--require-all-tools",
+        help="With --strict, also fail for unavailable optional registered tools.",
+    ),
 ) -> None:
     """Snapshot current Conda envs, registered tools, and resources into lock files.
 
@@ -1545,6 +1564,8 @@ def lock_runtime_command(
     preserved in the lock files as reproducibility gaps.
     """
     try:
+        if strict and skip_conda_packages:
+            raise ValueError("--strict cannot be combined with --skip-conda-packages")
         paths = generate_runtime_locks(
             output_dir=output_dir,
             prefix=prefix,
@@ -1553,7 +1574,15 @@ def lock_runtime_command(
             conda_executable=conda_executable,
             include_conda_packages=not skip_conda_packages,
             analysis_types=tuple(analysis_type or DEFAULT_ANALYSIS_TYPES),
+            db_profile=db_profile,
         )
+        if require_all_tools and not strict:
+            raise ValueError("--require-all-tools requires --strict")
+        if strict:
+            issues = validate_runtime_locks(paths, require_all_tools=require_all_tools)
+            if issues:
+                details = "\n".join(f"- {issue}" for issue in issues)
+                raise ValueError(f"Runtime lock is not release-ready:\n{details}")
         _emit_json_payload(paths)
     except Exception as exc:
         _fail(exc)

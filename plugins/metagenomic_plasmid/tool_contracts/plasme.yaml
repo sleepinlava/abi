@@ -22,9 +22,9 @@ outputs:
   output_dir:
     type: path
 execution:
-  executable: PLASMe.py
-  command_template: PLASMe.py {assembly} {output_dir}/{sample_id}.plasme -d {database}
-    -t {threads}
+  executable: python
+  command_template: python {resource_root}/PLASMe/PLASMe.py {assembly} {output_dir}/{sample_id}.plasme
+    -d {database} -t {threads}
   network: false
   writes_output: true
 normalization:

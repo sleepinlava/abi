@@ -192,6 +192,7 @@ All agent-facing commands support ``--output-json``.
 
    agent_usage
    job_service
+   runtime_locks
    release
    devlog
    paper_execution_plan
@@ -203,6 +204,7 @@ Quick Links
 - :doc:`abi_sciplot_design` — Scientific figure compiler design
 - :doc:`development` — Local setup, source tree, SDK reference
 - :doc:`plugin_development_guide` — How to add a new analysis type
+- :doc:`runtime_locks` — Release-ready runtime lock generation and validation
 - :doc:`workflow_validation` — Biological validation methodology
 - :doc:`openai_interface_standard` — Multi-LLM tool descriptor export
 - :doc:`agent_usage` — Agent integration guide (MCP, Skills, dispatch)

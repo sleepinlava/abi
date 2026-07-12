@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 from datetime import datetime, timezone
+from importlib import metadata
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -68,6 +69,7 @@ def generate_runtime_locks(
     conda_executable: str | Path | None = None,
     include_conda_packages: bool = True,
     analysis_types: Sequence[str] = DEFAULT_ANALYSIS_TYPES,
+    db_profile: str = "light",
 ) -> dict[str, str]:
     """Generate Conda/tool/resource/runtime lock YAML files.
 
@@ -95,6 +97,7 @@ def generate_runtime_locks(
         mamba_root=mamba,
         resource_root=resources,
         analysis_types=analysis_types,
+        db_profile=db_profile,
         generated_at=generated_at,
     )
     tool_lock = build_tool_lock(
@@ -107,6 +110,7 @@ def generate_runtime_locks(
         generated_at=generated_at,
     )
     runtime_lock = build_runtime_summary(
+        project_root=project,
         conda_lock=conda_lock,
         tool_lock=tool_lock,
         resource_lock=resource_lock,
@@ -125,6 +129,115 @@ def generate_runtime_locks(
         _write_yaml(path, payload)
         paths[name] = str(path)
     return paths
+
+
+def validate_runtime_locks(
+    paths: Mapping[str, str | Path], *, require_all_tools: bool = False
+) -> list[str]:
+    """Return reproducibility gaps that prevent treating lock files as release-ready.
+
+    By default, unresolved tools fail validation only when their registry entry
+    marks them as required or default-enabled. ``require_all_tools`` upgrades
+    every registered optional capability into a release requirement.
+    """
+    expected_kinds = {
+        "conda": "abi-conda-lock",
+        "tools": "abi-tools-lock",
+        "resources": "abi-resources-lock",
+        "runtime": "abi-runtime-lock",
+    }
+    locks: dict[str, Mapping[str, Any]] = {}
+    issues: list[str] = []
+    for name, expected_kind in expected_kinds.items():
+        path_value = paths.get(name)
+        if not path_value:
+            issues.append(f"Required lock file is missing: {name}")
+            continue
+        path = Path(path_value)
+        if not path.is_file():
+            issues.append(f"Required lock file does not exist: {path}")
+            continue
+        payload = _load_yaml(path)
+        if payload.get("kind") != expected_kind:
+            issues.append(
+                f"Lock kind mismatch for {name}: expected {expected_kind}, "
+                f"found {payload.get('kind', '')}"
+            )
+            continue
+        locks[name] = payload
+
+    conda_lock = locks.get("conda", {})
+    if conda_lock and conda_lock.get("packages_included") is not True:
+        issues.append("Conda package snapshots were not included")
+    conda_summary = conda_lock.get("summary", {})
+    if isinstance(conda_summary, Mapping):
+        missing_envs = [str(value) for value in conda_summary.get("missing_envs", [])]
+        extra_envs = [str(value) for value in conda_summary.get("extra_envs", [])]
+        if missing_envs:
+            issues.append(f"Conda environments missing from runtime: {', '.join(missing_envs)}")
+        if extra_envs:
+            issues.append(f"Undeclared Conda environments present: {', '.join(extra_envs)}")
+    environments = conda_lock.get("environments", {})
+    if isinstance(environments, Mapping):
+        for env_name, environment in environments.items():
+            if not isinstance(environment, Mapping):
+                continue
+            package_error = str(environment.get("package_error", ""))
+            if package_error:
+                issues.append(f"Conda package snapshot failed for {env_name}: {package_error}")
+
+    resources_lock = locks.get("resources", {})
+    analyses = resources_lock.get("analyses", {})
+    selected_analyses = set(analyses) if isinstance(analyses, Mapping) else set()
+
+    tools_lock = locks.get("tools", {})
+    required_tools: set[tuple[str, str]] = set()
+    for tool in tools_lock.get("tools", []):
+        if not isinstance(tool, Mapping):
+            continue
+        tool_key = (str(tool.get("plugin", "")), str(tool.get("tool_id", "")))
+        if tool_key[0] in selected_analyses and (require_all_tools or tool.get("blocking", False)):
+            required_tools.add(tool_key)
+        if tool.get("status") == "ok" or tool_key not in required_tools:
+            continue
+        issues.append(
+            f"Registered tool is unresolved: {tool.get('plugin', '')}/{tool.get('tool_id', '')}"
+        )
+
+    if isinstance(analyses, Mapping):
+        for analysis_type, analysis in analyses.items():
+            if not isinstance(analysis, Mapping):
+                continue
+            analysis_error = str(analysis.get("error", ""))
+            if analysis_error:
+                issues.append(f"Resource audit failed for {analysis_type}: {analysis_error}")
+            for resource in analysis.get("resources", []):
+                if not isinstance(resource, Mapping) or resource.get("status") == "ok":
+                    continue
+                if not require_all_tools and resource.get("release_required") is False:
+                    continue
+                resource_id = resource.get("resource_id") or resource.get("field") or "unknown"
+                issues.append(
+                    f"Resource is not ready: {analysis_type}/{resource_id} "
+                    f"({resource.get('status', 'unknown')}): {resource.get('path', '')}"
+                )
+    runtime_lock = locks.get("runtime", {})
+    project = runtime_lock.get("project", {})
+    if isinstance(project, Mapping):
+        if not project.get("version"):
+            issues.append("ABI package version is missing from runtime lock")
+        git_error = str(project.get("git_error", ""))
+        if git_error:
+            issues.append(f"Git identity audit failed: {git_error}")
+        commit = str(project.get("git_commit", ""))
+        if not commit:
+            issues.append("Git commit is missing from runtime lock")
+        if project.get("git_dirty") is True:
+            issues.append(
+                f"Project worktree is dirty at {commit or 'unknown'}; "
+                "release locks require a clean commit"
+            )
+    return issues
 
 
 def build_conda_lock(
@@ -152,6 +265,8 @@ def build_conda_lock(
         package_error = ""
         if include_packages and prefix.is_dir() and conda:
             packages, package_error = _conda_list(conda, prefix)
+        elif include_packages and prefix.is_dir():
+            package_error = "Conda executable not found"
         environments[env_name] = {
             "declared": env_name in declared_envs,
             "present": prefix.is_dir(),
@@ -169,6 +284,7 @@ def build_conda_lock(
         "project_root": str(project_root),
         "mamba_root": str(mamba_root),
         "conda_executable": str(conda) if conda else "",
+        "packages_included": include_packages,
         "summary": {
             "declared_envs": len(declared_envs),
             "present_envs": len(present_envs),
@@ -213,6 +329,20 @@ def build_tool_lock(
                 executable=executable,
             )
             resolved = _resolve_executable(executable, env_prefix=env_prefix, extra_dirs=extra_dirs)
+            script_path_text = str(tool.get("script_path", "")).format_map(
+                _SafeFormat(
+                    {
+                        "project_root": str(project_root),
+                        "resource_root": str(resource_root),
+                        "autoplasm_root": str(
+                            _first_existing_dir(resource_root / "autoplasm", resource_root)
+                        ),
+                        "env_prefix": str(env_prefix),
+                    }
+                )
+            )
+            script_path = Path(script_path_text) if script_path_text else None
+            script_present = script_path is None or script_path.is_file()
             matching_packages = _matching_packages(
                 tool_id=tool_id,
                 executable=executable,
@@ -233,8 +363,12 @@ def build_tool_lock(
                     "env_present": env_prefix.is_dir(),
                     "executable": executable,
                     "resolved_path": str(resolved) if resolved else "",
-                    "status": "ok" if resolved else "missing",
-                    "blocking": bool((required or default_enabled) and not resolved),
+                    "script_path": str(script_path) if script_path else "",
+                    "script_present": script_present,
+                    "status": "ok" if resolved and script_present else "missing",
+                    "blocking": bool(
+                        (required or default_enabled) and not (resolved and script_present)
+                    ),
                     "extra_path_dirs": [str(path) for path in extra_dirs],
                     "matching_packages": matching_packages,
                     "version_command": str(tool.get("version_command", "")),
@@ -266,9 +400,11 @@ def build_resource_lock(
     mamba_root: Path,
     resource_root: Path,
     analysis_types: Sequence[str],
+    db_profile: str,
     generated_at: str,
 ) -> dict[str, Any]:
     analyses: dict[str, Any] = {}
+    required_tools = _release_required_tools(project_root, analysis_types)
     for analysis_type in analysis_types:
         try:
             plugin = get_plugin(analysis_type)
@@ -278,12 +414,21 @@ def build_resource_lock(
                 project_root=project_root,
                 mamba_root=mamba_root,
                 resource_root=resource_root,
+                db_profile=db_profile,
             )
             rows = check_resources(analysis_type=analysis_type, config=config)
-            counts = _status_counts(rows)
+            normalized_rows = []
+            for row in rows:
+                item = dict(row)
+                tool_id = str(item.get("tool_id", ""))
+                item["release_required"] = not tool_id or tool_id in required_tools.get(
+                    analysis_type, set()
+                )
+                normalized_rows.append(item)
+            counts = _status_counts(normalized_rows)
             analyses[analysis_type] = {
                 "status_counts": counts,
-                "resources": rows,
+                "resources": normalized_rows,
                 "error": "",
             }
         except Exception as exc:  # pragma: no cover - defensive lock reporting
@@ -299,12 +444,29 @@ def build_resource_lock(
         "project_root": str(project_root),
         "mamba_root": str(mamba_root),
         "resource_root": str(resource_root),
+        "db_profile": db_profile,
         "analyses": analyses,
     }
 
 
+def _release_required_tools(
+    project_root: Path, analysis_types: Sequence[str]
+) -> dict[str, set[str]]:
+    required: dict[str, set[str]] = {}
+    for analysis_type in analysis_types:
+        registry = _load_yaml(project_root / "plugins" / analysis_type / "tool_registry.yaml")
+        required[analysis_type] = {
+            str(tool.get("id", ""))
+            for tool in registry.get("tools", [])
+            if isinstance(tool, Mapping)
+            and (tool.get("required", False) or tool.get("default_enabled", False))
+        }
+    return required
+
+
 def build_runtime_summary(
     *,
+    project_root: Path,
     conda_lock: Mapping[str, Any],
     tool_lock: Mapping[str, Any],
     resource_lock: Mapping[str, Any],
@@ -326,6 +488,7 @@ def build_runtime_summary(
             "machine": platform.machine(),
             "python": platform.python_version(),
         },
+        "project": _project_identity(project_root),
         "summary": {
             "conda": conda_lock.get("summary", {}),
             "tools": tool_lock.get("summary", {}),
@@ -341,15 +504,16 @@ def _cloud_resource_config(
     project_root: Path,
     mamba_root: Path,
     resource_root: Path,
+    db_profile: str,
 ) -> Mapping[str, Any]:
     autoplasm_root = _first_existing_dir(resource_root / "autoplasm", resource_root)
     if analysis_type == "metagenomic_plasmid":
         return plugin.load_config(
-            db_profile="light",
+            db_profile=db_profile,
             overrides={"resources": {"root": str(autoplasm_root)}},
         )
     if analysis_type == "amplicon_16s":
-        taxonomy_dir = resource_root / "amplicon_taxonomy"
+        taxonomy_dir = autoplasm_root / "amplicon_taxonomy"
         taxonomy_db = _first_existing_file(
             taxonomy_dir / "rdp_sintax.fa",
             taxonomy_dir / "rdp_16s_v16.fa",
@@ -364,19 +528,19 @@ def _cloud_resource_config(
             }
         )
     if analysis_type == "easymetagenome":
-        humann_root = _first_existing_dir(resource_root / "humann", autoplasm_root / "humann")
+        humann_root = autoplasm_root / "humann"
         return plugin.load_config(
             overrides={
                 "resources": {
-                    "host_db": str(resource_root / "kneaddata_host"),
-                    "kraken2_db": str(resource_root / "kraken2"),
+                    "host_db": str(autoplasm_root / "kneaddata_host"),
+                    "kraken2_db": str(autoplasm_root / "kraken2"),
                     "humann_nucleotide_db": str(
                         _first_existing_dir(humann_root / "nucleotide", humann_root / "chocophlan")
                     ),
                     "humann_protein_db": str(
                         _first_existing_dir(humann_root / "protein", humann_root / "uniref")
                     ),
-                    "metaphlan_db": str(resource_root / "metaphlan"),
+                    "metaphlan_db": str(autoplasm_root / "metaphlan"),
                 }
             }
         )
@@ -400,7 +564,10 @@ def _cloud_resource_config(
         )
     if analysis_type == "wgs_bacteria":
         amr_db = _first_existing_dir(
-            resource_root / "amrfinder_db", resource_root / "amrfinderplus"
+            resource_root / "amrfinder_db",
+            resource_root / "amrfinderplus",
+            autoplasm_root / "amrfinder_db",
+            autoplasm_root / "amrfinderplus",
         )
         return plugin.load_config(overrides={"resources": {"amrfinder_db": str(amr_db)}})
     return plugin.load_config()
@@ -492,6 +659,7 @@ def _extra_path_dirs(
     values = {
         "project_root": str(project_root),
         "resource_root": str(resource_root),
+        "autoplasm_root": str(_first_existing_dir(resource_root / "autoplasm", resource_root)),
         "env_prefix": str(env_prefix),
     }
     dirs: list[Path] = []
@@ -647,6 +815,38 @@ def _unique_existing_dirs(paths: Sequence[Path]) -> list[Path]:
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _project_identity(project_root: Path) -> dict[str, Any]:
+    try:
+        version = metadata.version("abi-agent")
+    except metadata.PackageNotFoundError:
+        version = ""
+    commit, commit_error = _git_command(project_root, "rev-parse", "HEAD")
+    dirty_output, status_error = _git_command(project_root, "status", "--porcelain")
+    return {
+        "version": version,
+        "git_commit": commit,
+        "git_dirty": bool(dirty_output) if not status_error else None,
+        "git_error": "; ".join(error for error in (commit_error, status_error) if error),
+    }
+
+
+def _git_command(project_root: Path, *args: str) -> tuple[str, str]:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(project_root), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return "", f"{type(exc).__name__}: {exc}"
+    if result.returncode != 0:
+        message = result.stderr.strip() or f"git exited with status {result.returncode}"
+        return "", message
+    return result.stdout.strip(), ""
 
 
 class _SafeFormat(dict[str, str]):
