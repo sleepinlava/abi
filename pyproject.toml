@@ -97,6 +97,7 @@ exclude = ["src/abi/sciplot/tests/"]
 "envs" = "envs"
 "examples" = "examples"
 "golden_traces" = "golden_traces"
+"integrations" = "abi/integrations"
 "plugins" = "plugins"
 "scripts/download_databases.sh" = "scripts/download_databases.sh"
 "scripts/hifiasm_gfa_to_fasta.sh" = "scripts/hifiasm_gfa_to_fasta.sh"
@@ -113,6 +114,7 @@ include = [
     "envs",
     "environments.yaml",
     "golden_traces",
+    "integrations",
     "src/abi",
     "plugins",
     "scripts",

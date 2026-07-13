@@ -18,18 +18,50 @@ use the `abi` CLI and its bioinformatics tools.
 Use `--force` to overwrite existing files, or `--target` to customize
 the destination directory.
 
-### MCP Server (Claude Desktop / Claude Code)
+### Claude Code and OpenCode integrations
+
+The repository ships a Claude Code plugin under `integrations/claude-code/abi/`
+and an OpenCode configuration plus Agent Skill under `integrations/opencode/`.
+Both use the same transport-neutral ABI interface and start the MCP server with
+the default `safe` profile.
+
+Install ABI with MCP support before loading either integration:
 
 ```bash
-abi-mcp
+pip install "abi-agent[mcp]"
 ```
 
-Configure in `claude_desktop_config.json`:
+For Claude Code development:
+
+```bash
+claude plugin validate integrations/claude-code/abi --strict
+claude --plugin-dir integrations/claude-code/abi
+```
+
+For OpenCode, copy `integrations/opencode/opencode.example.json` into the
+desired OpenCode configuration and place the bundled skill at
+`.opencode/skills/abi/SKILL.md` or `~/.config/opencode/skills/abi/SKILL.md`.
+
+### MCP Server
+
+```bash
+abi-mcp                         # safe: discovery, planning, and result tools
+abi-mcp --profile discovery     # read-only discovery and inspection
+abi-mcp --profile full          # adds confirmation-gated abi_run
+```
+
+The `management` profile preserves the complete compatibility surface and is
+intended for administrative use, not ordinary agent sessions.
+
+Manual MCP configuration uses:
 
 ```json
 {
   "mcpServers": {
-    "abi": { "command": "abi-mcp" }
+    "abi": {
+      "command": "abi-mcp",
+      "args": ["--profile", "safe"]
+    }
   }
 }
 ```
@@ -106,7 +138,8 @@ abi export-openai-tools --type metagenomic_plasmid --format responses
 ### MCP
 
 ```bash
-abi-mcp  # start stdio server, registers all ABI tools as MCP tools
+abi-mcp                  # safe profile (default)
+abi-mcp --profile full   # includes abi_run
 ```
 
 ### Python

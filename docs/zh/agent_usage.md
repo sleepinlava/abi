@@ -14,18 +14,48 @@ abi install-skills
 
 使用 `--force` 覆盖已有文件，或使用 `--target` 自定义目标目录。
 
-### MCP 服务器 (Claude Desktop / Claude Code)
+### Claude Code 与 OpenCode 集成
+
+仓库在 `integrations/claude-code/abi/` 提供 Claude Code 插件，在
+`integrations/opencode/` 提供 OpenCode 配置和 Agent Skill。两者调用同一个
+传输无关 ABI interface，并默认使用 MCP 的 `safe` profile。
+
+加载任一集成前先安装带 MCP 支持的 ABI：
 
 ```bash
-abi-mcp
+pip install "abi-agent[mcp]"
 ```
 
-在 `claude_desktop_config.json` 中配置：
+Claude Code 开发验证：
+
+```bash
+claude plugin validate integrations/claude-code/abi --strict
+claude --plugin-dir integrations/claude-code/abi
+```
+
+OpenCode 使用时，将 `integrations/opencode/opencode.example.json` 合并到目标
+配置，并将 Skill 放到 `.opencode/skills/abi/SKILL.md` 或
+`~/.config/opencode/skills/abi/SKILL.md`。
+
+### MCP 服务器
+
+```bash
+abi-mcp                         # safe：发现、规划和结果工具
+abi-mcp --profile discovery     # 只读发现与检查
+abi-mcp --profile full          # 加入受确认门控的 abi_run
+```
+
+`management` profile 保留完整兼容表面，只用于管理，不建议普通 Agent 会话使用。
+
+手工 MCP 配置：
 
 ```json
 {
   "mcpServers": {
-    "abi": { "command": "abi-mcp" }
+    "abi": {
+      "command": "abi-mcp",
+      "args": ["--profile", "safe"]
+    }
   }
 }
 ```
@@ -101,7 +131,8 @@ abi export-openai-tools --type metagenomic_plasmid --format responses
 ### MCP
 
 ```bash
-abi-mcp  # 启动 stdio 服务器，将所有 ABI 工具注册为 MCP 工具
+abi-mcp                  # safe profile（默认）
+abi-mcp --profile full   # 包含 abi_run
 ```
 
 ### Python

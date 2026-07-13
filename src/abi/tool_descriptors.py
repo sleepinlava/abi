@@ -45,6 +45,7 @@ import re
 from typing import Any, Dict, Iterable, List, Mapping, TypedDict
 
 __all__ = [
+    "AGENT_TOOL_PROFILES",
     "ABI_AGENT_TOOLS",
     "COMMON_PLAN_PROPERTIES",
     "PROVIDER_PROFILES",
@@ -57,6 +58,7 @@ __all__ = [
     "export_json",
     "export_openai_compatible",
     "export_openai_tools",
+    "select_agent_tools",
 ]
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -358,6 +360,43 @@ READ_ONLY_TOOLS: Dict[str, ToolMetadata] = {
     for name, metadata in ABI_AGENT_TOOLS.items()
     if metadata["permission"] == "read_only"
 }
+
+
+# Tool visibility profiles for agent transports. Management-only tools stay
+# callable through the CLI/dispatch compatibility surface but are not advertised
+# to ordinary agents. Execution is opt-in even though ``abi_run`` retains its
+# independent confirmation gate.
+_MANAGEMENT_ONLY_TOOLS = {
+    "abi_install_skills",
+    "abi_autoplasm_validate_result",
+}
+
+AGENT_TOOL_PROFILES: Dict[str, tuple[str, ...]] = {
+    "discovery": tuple(
+        name
+        for name, metadata in ABI_AGENT_TOOLS.items()
+        if metadata["permission"] == "read_only" and name not in _MANAGEMENT_ONLY_TOOLS
+    ),
+    "safe": tuple(
+        name
+        for name, metadata in ABI_AGENT_TOOLS.items()
+        if metadata["permission"] != "execution" and name not in _MANAGEMENT_ONLY_TOOLS
+    ),
+    "full": tuple(name for name in ABI_AGENT_TOOLS if name not in _MANAGEMENT_ONLY_TOOLS),
+    "management": tuple(ABI_AGENT_TOOLS),
+}
+
+
+def select_agent_tools(profile: str = "safe") -> Dict[str, ToolMetadata]:
+    """Return the canonical ABI tool metadata advertised by an agent profile."""
+    try:
+        names = AGENT_TOOL_PROFILES[profile]
+    except KeyError as exc:
+        available = ", ".join(sorted(AGENT_TOOL_PROFILES))
+        raise ValueError(
+            f"Unknown agent tool profile {profile!r}. Expected one of: {available}."
+        ) from exc
+    return {name: ABI_AGENT_TOOLS[name] for name in names}
 
 
 # ═══════════════════════════════════════════════════════════════════════════

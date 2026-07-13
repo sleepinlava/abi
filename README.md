@@ -221,9 +221,12 @@ Runtimes            local  │  Docker  │  Nextflow  │  HPC (SLURM/PBS)  │
   platforms, and step-level I/O directly from DAG + tool registry, no plan required
 - **Multi-LLM descriptors** from `abi export-tools --format openai|anthropic|gemini [--provider ...]` covering 7+ providers
 - OpenAI-compatible descriptors from `abi export-openai-tools` (backward compat)
-- MCP stdio server via `abi-mcp` (or `python -m abi.mcp.server`) — auto-generated from SSOT
+- MCP stdio server via `abi-mcp` (or `python -m abi.mcp.server`) — auto-generated from SSOT;
+  the default `safe` profile omits execution and management tools, while
+  `abi-mcp --profile full` adds the confirmation-gated `abi_run`
 - HTTP Job Service via `abi job-service` and `abi job submit/list/status/artifacts/cancel`
 - Skills via `abi install-skills` (copies bundled SKILL.md files to `~/.claude/skills/abi/`)
+- Ready-to-load Claude Code and OpenCode assets under `integrations/`
 
 **Plan summarization**: `abi plan` envelopes now include a `summary` field (pipeline stages,
 key tools, platforms) so agents understand the workflow structure without reading the full

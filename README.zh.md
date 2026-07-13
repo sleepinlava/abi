@@ -214,9 +214,12 @@ ABI 核心层          schemas  │  provenance  │  permissions  │  diagnost
   平台和步骤级 I/O，无需完整 plan
 - **多 LLM 描述符** `abi export-tools --format openai|anthropic|gemini [--provider ...]` 覆盖 7+ 厂商
 - `abi export-openai-tools` 生成的 OpenAI 兼容工具描述符（向后兼容）
-- MCP stdio 服务 `abi-mcp`（或 `python -m abi.mcp.server`）— 从 SSOT 自动生成
+- MCP stdio 服务 `abi-mcp`（或 `python -m abi.mcp.server`）— 从 SSOT 自动生成；
+  默认 `safe` profile 不暴露执行和管理工具，`abi-mcp --profile full` 才加入
+  仍受确认门控的 `abi_run`
 - HTTP Job Service：`abi job-service` 和 `abi job submit/list/status/artifacts/cancel`
 - Skills 安装 `abi install-skills`（将内置 SKILL.md 文件复制到 `~/.claude/skills/abi/`）
+- `integrations/` 下提供可直接加载的 Claude Code 与 OpenCode 资产
 
 **Plan 摘要化**：`abi plan` 信封现在包含 `summary` 字段（流水线阶段、关键工具、平台），
 Agent 无需读取完整 `execution_plan.json` 即可理解工作流结构。复杂流水线 plan 输出可节省 78-95% token。

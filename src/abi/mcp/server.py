@@ -10,8 +10,9 @@ Uses ``abi.mcp._tool_factory`` to create tool functions safely with
 
 from __future__ import annotations
 
+import argparse
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from abi.agent import ABIAgentInterface
 
@@ -26,20 +27,25 @@ else:
 _logger = logging.getLogger("abi.mcp.server")
 
 
-def _register_mcp_tools(mcp: Any, agent: ABIAgentInterface) -> None:
+def _register_mcp_tools(
+    mcp: Any,
+    agent: ABIAgentInterface,
+    *,
+    profile: str = "safe",
+) -> None:
     """Auto-register MCP tool functions from the unified SSOT metadata.
 
-    Reads ``ABI_AGENT_TOOLS`` and ``TOOL_ALIASES`` from
-    ``abi.tool_descriptors`` and creates properly-annotated Python functions
-    for each tool via ``ToolDescriptor`` + ``make_tool_func`` — no ``exec()``.
+    Selects an advertised profile from ``abi.tool_descriptors`` and creates
+    properly-annotated Python functions for each tool via ``ToolDescriptor`` +
+    ``make_tool_func`` — no ``exec()``.
 
     Legacy public aliases are included in ``ABI_AGENT_TOOLS`` so every
     transport and provider exporter exposes the same tool set.
     """
     from abi.mcp._tool_factory import ToolDescriptor, make_tool_func
-    from abi.tool_descriptors import ABI_AGENT_TOOLS, TOOL_ALIASES
+    from abi.tool_descriptors import TOOL_ALIASES, select_agent_tools
 
-    for tool_name, metadata in ABI_AGENT_TOOLS.items():
+    for tool_name, metadata in select_agent_tools(profile).items():
         method_name = TOOL_ALIASES.get(tool_name)
         if method_name is None:
             continue
@@ -57,8 +63,10 @@ def _register_mcp_tools(mcp: Any, agent: ABIAgentInterface) -> None:
 
         mcp.tool()(tool_func)
 
-    # Preserve the pre-ABI MCP name for clients that already persisted it.
-    # Provider exports advertise the canonical abi_* name above.
+    if profile != "management":
+        return
+
+    # Preserve the pre-ABI MCP name only on the compatibility/management surface.
     def autoplasm_validate_result(
         result_dir: str,
         allow_empty_tables: Optional[bool] = None,
@@ -72,7 +80,7 @@ def _register_mcp_tools(mcp: Any, agent: ABIAgentInterface) -> None:
     mcp.tool()(autoplasm_validate_result)
 
 
-def create_server() -> object:
+def create_server(*, profile: str = "safe") -> object:
     """Create the ABI MCP server.
 
     The MCP SDK is optional so the main Python 3.10 ABI environment remains
@@ -87,12 +95,22 @@ def create_server() -> object:
 
     mcp = FastMCP("abi")
     agent = ABIAgentInterface()
-    _register_mcp_tools(mcp, agent)
+    _register_mcp_tools(mcp, agent, profile=profile)
     return mcp
 
 
-def main() -> None:
-    server = create_server()
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    from abi.tool_descriptors import AGENT_TOOL_PROFILES
+
+    parser = argparse.ArgumentParser(description="Run the ABI MCP stdio server.")
+    parser.add_argument(
+        "--profile",
+        choices=tuple(AGENT_TOOL_PROFILES),
+        default="safe",
+        help="Tool visibility profile (default: safe).",
+    )
+    args = parser.parse_args(argv)
+    server = create_server(profile=args.profile)
     server.run(transport="stdio")  # type: ignore[attr-defined]
 
 
