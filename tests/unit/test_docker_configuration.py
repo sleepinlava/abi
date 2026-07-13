@@ -115,6 +115,16 @@ def test_python_script_tools_use_the_canonical_autoplasm_root():
         assert expected_command_path in contract["execution"]["command_template"]
 
 
+def test_sciplot_tests_are_excluded_from_wheel():
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    wheel_section = pyproject.split("[tool.hatch.build.targets.wheel]", maxsplit=1)[1]
+    wheel_section = wheel_section.split(
+        "[tool.hatch.build.targets.wheel.force-include]", maxsplit=1
+    )[0]
+
+    assert 'exclude = ["src/abi/sciplot/tests/"]' in wheel_section
+
+
 def test_every_dockerfile_copy_source_exists():
     required_sources = (
         "docker/.condarc",
@@ -143,3 +153,16 @@ def test_every_dockerfile_copies_the_root_environment_manifest():
         contents = dockerfile.read_text(encoding="utf-8")
         assert "COPY environments.yaml /app/" in contents, dockerfile.name
         assert "/app/environments.yaml" in contents.split("rm -rf", maxsplit=1)[1], dockerfile.name
+
+
+def test_ci_and_docker_images_install_cjk_font_for_sciplot():
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "apt-get install -y --no-install-recommends fonts-wqy-zenhei" in workflow
+
+    dockerfiles = sorted((ROOT / "docker").glob("Dockerfile.*"))
+    assert dockerfiles
+    for dockerfile in dockerfiles:
+        contents = dockerfile.read_text(encoding="utf-8")
+        assert "apt-get install -y --no-install-recommends fonts-wqy-zenhei" in contents, (
+            dockerfile.name
+        )

@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 
+from abi.sciplot.renderers.annotation_layout import reserve_top_annotation_band
 from abi.sciplot.schema.figure_spec import FigureSpec
 from abi.sciplot.schema.palette_spec import PaletteRegistry
 from abi.sciplot.schema.theme_spec import ThemeSpec
@@ -96,12 +97,14 @@ def plot_alpha_stats_boxplot(
         try:
             stat, pval = kw_test(*group_data)
             sig_str = _format_pvalue(pval)
+            reserve_top_annotation_band(ax)
             ax.text(
                 0.5,
-                0.92,
+                0.97,
                 f"Kruskal-Wallis H-test: p = {sig_str}",
                 transform=ax.transAxes,
                 ha="center",
+                va="top",
                 fontsize=8,
                 fontstyle="italic",
             )

@@ -126,7 +126,8 @@ def test_to_matplotlib_rcparams_full_dict():
     rc = theme.to_matplotlib_rcparams()
 
     # Font
-    assert rc["font.family"] == "Arial"
+    assert rc["font.family"][0] == "Arial"
+    assert "sans-serif" in rc["font.family"]
     assert rc["font.size"] == 10.0
     assert rc["axes.titlesize"] == 12.0
     assert rc["axes.labelsize"] == 10.0
@@ -158,7 +159,8 @@ def test_to_matplotlib_rcparams_defaults():
     """Default ThemeSpec produces reasonable rcParams."""
     theme = ThemeSpec(theme_name="default_test")
     rc = theme.to_matplotlib_rcparams()
-    assert rc["font.family"] == "DejaVu Sans"
+    assert rc["font.family"][0] == "DejaVu Sans"
+    assert "sans-serif" in rc["font.family"]
     assert rc["font.size"] == 7.0
     assert rc["axes.spines.top"] is False
     assert rc["axes.spines.right"] is False
