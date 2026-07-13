@@ -199,6 +199,7 @@ docs/*/full-engineering-gap-audit.md
 docs/*/tool-engineering-gap-audit.md
 docs/*/plugin_report_figure_spec.md
 paper-evaluation/
+docs/diagrams
 
 # Work report archives (generated, tracked via git)
 # (work_report_*.md files are intentional docs — NOT ignored)
