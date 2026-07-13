@@ -151,6 +151,16 @@ def test_plasmid_skill_uses_canonical_metaphlan_derivation():
     assert selected["metaphlan_long_reads_flag"] == expected["metaphlan_long_reads_flag"]
 
 
+def test_generic_command_skill_injects_execution_resource_root(monkeypatch, tmp_path: Path):
+    resource_root = tmp_path / "resources" / "autoplasm"
+    monkeypatch.setenv("ABI_RESOURCE_ROOT", str(resource_root))
+    skill = _make_skill({"command_template": "python {resource_root}/PLASMe/PLASMe.py {assembly}"})
+
+    command = skill.build_command({"assembly": "assembly.fa"})
+
+    assert command == ["python", str(resource_root / "PLASMe" / "PLASMe.py"), "assembly.fa"]
+
+
 # ── GenericCommandSkill._check_dotted_fields ────────────────────────────────
 
 

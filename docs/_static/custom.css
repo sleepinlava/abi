@@ -109,7 +109,8 @@ table.docutils td {
 h1:hover > a.headerlink,
 h2:hover > a.headerlink,
 h3:hover > a.headerlink,
-h4:hover > a.headerlink {
+h4:hover > a.headerlink,
+a.headerlink:focus-visible {
   opacity: 0.6;
 }
 

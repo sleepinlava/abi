@@ -35,6 +35,30 @@ def test_non_push_docker_build_has_the_local_smoke_test_tag():
     assert "docker run --rm ${{ matrix.image-name }}:latest list-types" in workflow
 
 
+def test_docker_workflow_watches_the_complete_release_surface():
+    workflow = (ROOT / ".github" / "workflows" / "docker.yml").read_text(encoding="utf-8")
+
+    for path in (
+        '".github/workflows/ci.yml"',
+        '".github/workflows/docker.yml"',
+        '".dockerignore"',
+        '"docker/**"',
+        '"environments.yaml"',
+        '"envs/**"',
+        '"pyproject.toml"',
+        '"plugins/**"',
+        '"scripts/**"',
+        '"src/**"',
+    ):
+        assert path in workflow
+
+
+def test_python_ci_validates_docker_compose_configuration():
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "docker compose -f docker/docker-compose.yml config --quiet" in workflow
+
+
 def test_local_docker_export_disables_registry_attestations():
     workflow = (ROOT / ".github" / "workflows" / "docker.yml").read_text(encoding="utf-8")
 
@@ -57,6 +81,38 @@ def test_sdist_contains_files_forced_into_the_wheel():
     sdist_section = sdist_section.split(force_include_header, maxsplit=1)[0]
 
     assert '"environments.yaml"' in sdist_section
+
+
+def test_plasmidfinder_adapter_is_in_packaged_plugin_tree():
+    registry = yaml.safe_load(
+        (ROOT / "plugins" / "metagenomic_plasmid" / "tool_registry.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    tool = next(item for item in registry["tools"] if item["id"] == "plasmidfinder")
+
+    assert tool["extra_path_dirs"] == ["{project_root}/plugins/metagenomic_plasmid/scripts"]
+    assert (ROOT / "plugins" / "metagenomic_plasmid" / "scripts" / "plasmidfinder.py").is_file()
+
+
+def test_python_script_tools_use_the_canonical_autoplasm_root():
+    plugin_root = ROOT / "plugins" / "metagenomic_plasmid"
+    registry = yaml.safe_load((plugin_root / "tool_registry.yaml").read_text(encoding="utf-8"))
+
+    for tool_id, relative_path in (
+        ("plasme", "PLASMe/PLASMe.py"),
+        ("recycler", "Recycler/bin/recycle.py"),
+    ):
+        tool = next(item for item in registry["tools"] if item["id"] == tool_id)
+        expected_script = f"{{autoplasm_root}}/{relative_path}"
+        contract = yaml.safe_load(
+            (plugin_root / "tool_contracts" / f"{tool_id}.yaml").read_text(encoding="utf-8")
+        )
+
+        assert tool["script_path"] == expected_script
+        expected_command_path = f"{{resource_root}}/{relative_path}"
+        assert expected_command_path in tool["command_template"]
+        assert expected_command_path in contract["execution"]["command_template"]
 
 
 def test_every_dockerfile_copy_source_exists():

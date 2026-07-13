@@ -18,7 +18,7 @@ outputs:
   output_dir:
     type: directory
 execution:
-  executable: conjscan
+  executable: macsyfinder
   command_template: macsyfinder conjscan --db-type ordered_replicon --sequence-db
     {plasmid_contigs} --output-dir {output_dir} --threads {threads}
   network: false

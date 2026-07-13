@@ -71,6 +71,10 @@ jobs:
           pip install -e ".[docs,report]"
           bash docs/build_docs.sh
 
+      - name: Validate Docker Compose configuration
+        if: matrix.python-version == '3.12'
+        run: docker compose -f docker/docker-compose.yml config --quiet
+
       - name: Verify package builds
         if: matrix.python-version == '3.12'
         run: |

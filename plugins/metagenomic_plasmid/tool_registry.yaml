@@ -168,13 +168,12 @@ tools:
 - id: plasme
   name: PLASMe
   category: plasmid_detection
-  executable: PLASMe.py
-  extra_path_dirs:
-  - "{resource_root}/PLASMe"
+  executable: python
+  script_path: "{autoplasm_root}/PLASMe/PLASMe.py"
   default_enabled: false
   required: false
-  command_template: PLASMe.py {assembly} {output_dir}/{sample_id}.plasme -d {database}
-    -t {threads}
+  command_template: python {resource_root}/PLASMe/PLASMe.py {assembly} {output_dir}/{sample_id}.plasme
+    -d {database} -t {threads}
 - id: plasx
   name: PlasX
   category: plasmid_detection
@@ -189,6 +188,8 @@ tools:
   name: PlasmidFinder
   category: typing
   executable: plasmidfinder.py
+  extra_path_dirs:
+  - "{project_root}/plugins/metagenomic_plasmid/scripts"
   default_enabled: false
   required: false
   command_template: plasmidfinder.py -i {plasmid_contigs} -o {output_dir} -p {database}
@@ -531,11 +532,12 @@ tools:
 - id: recycler
   name: Recycler
   category: plasmid_binning
-  executable: recycle.py
+  executable: python
+  script_path: "{autoplasm_root}/Recycler/bin/recycle.py"
   default_enabled: false
   required: false
-  command_template: recycle.py -g {assembly_graph} -k {plasmid_contigs} -b {bam} -o
-    {output_dir}
+  command_template: python {resource_root}/Recycler/bin/recycle.py -g {assembly_graph}
+    -k {plasmid_contigs} -b {bam} -o {output_dir}
   inputs:
   - assembly_graph
   - plasmid_contigs
@@ -544,7 +546,7 @@ tools:
 - id: conjscan
   name: CONJscan
   category: typing
-  executable: conjscan
+  executable: macsyfinder
   extra_path_dirs:
   - "{resource_root}/macsyfinder/bin"
   - "{resource_root}/macsyfinder"

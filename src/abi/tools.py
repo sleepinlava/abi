@@ -1103,6 +1103,13 @@ class GenericCommandSkill(ToolSkill):
         selected.setdefault("mode", mode)
         selected.setdefault("minimap2_preset", "map-ont")
         selected.setdefault("project_root", str(PROJECT_ROOT))
+        execution_resource_root = (
+            os.environ.get("ABI_RESOURCE_ROOT")
+            or os.environ.get("AUTOPLASM_RESOURCE_ROOT")
+            or str(PROJECT_ROOT / "resources" / "autoplasm")
+        )
+        selected.setdefault("resource_root", execution_resource_root)
+        selected.setdefault("autoplasm_root", execution_resource_root)
         selected.setdefault("abundance_label", "")
         # ── Derived output paths / 推导输出路径 ──
         # When both output_dir and sample_id are known, we can derive standard

@@ -23,9 +23,9 @@ outputs:
   output_dir:
     type: directory
 execution:
-  executable: recycle.py
-  command_template: recycle.py -g {assembly_graph} -k {plasmid_contigs} -b {bam} -o
-    {output_dir}
+  executable: python
+  command_template: python {resource_root}/Recycler/bin/recycle.py -g {assembly_graph}
+    -k {plasmid_contigs} -b {bam} -o {output_dir}
   network: false
   writes_output: true
 failure_handling:

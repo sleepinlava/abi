@@ -31,11 +31,16 @@ on:
   pull_request:
     branches: [main, master]
     paths:
-      - "docker/**"
-      - "envs/**"
-      - "src/**"
-      - "pyproject.toml"
+      - ".dockerignore"
+      - ".github/workflows/ci.yml"
       - ".github/workflows/docker.yml"
+      - "docker/**"
+      - "environments.yaml"
+      - "envs/**"
+      - "plugins/**"
+      - "src/**"
+      - "scripts/**"
+      - "pyproject.toml"
 
 jobs:
   build:

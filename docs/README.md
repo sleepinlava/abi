@@ -52,14 +52,9 @@ ABI (Automatic Bioinformatics Infrastructure) 通过声明式 DAG、可插拔分
 
 ## 📊 项目状态 / Status
 
-| 指标 | 值 |
-|:---|:---|
-| 源文件 | 211 Python files |
-| 测试 | 2039 tests (2006 passed, 0 failed) |
-| 覆盖率 | 74% |
-| 插件 | 7 (metagenomic_plasmid, rnaseq_expression, wgs_bacteria, amplicon_16s, viral_viwrap, easymetagenome, custom) |
-| 工具环境 | 20 envs, 93 tools |
-| Python | 3.10+ |
+易变化的测试数、覆盖率、插件和运行时环境状态不在此处手工复制。请以
+[CI](https://github.com/sleepinlava/abi/actions/workflows/ci.yml)、`pyproject.toml`、
+`environments.yaml` 和 `abi list-types` 的当前输出为准。ABI 支持 Python 3.10–3.13。
 
 ---
 
