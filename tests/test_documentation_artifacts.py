@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 
@@ -137,3 +138,61 @@ def test_ci_includes_github_pages_deployment() -> None:
     assert "actions/deploy-pages@v4" in ci_workflow
     assert "actions/upload-pages-artifact@v3" in ci_workflow
     assert ".nojekyll" in ci_workflow
+
+
+def test_docs_build_rejects_unknown_language() -> None:
+    root = Path(__file__).resolve().parents[1]
+
+    result = subprocess.run(
+        ["bash", "docs/build_docs.sh", "eng"],
+        cwd=root,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Usage:" in result.stderr
+
+
+def test_docs_build_preserves_diagnostics_and_enforces_a_budget() -> None:
+    root = Path(__file__).resolve().parents[1]
+    build_script = (root / "docs/build_docs.sh").read_text(encoding="utf-8")
+
+    assert "tail -" not in build_script
+    assert "--keep-going" in build_script
+    assert "diagnostic_count" in build_script
+    assert "must not increase" in build_script
+
+
+def test_docs_build_renders_current_version_and_pages_safe_links() -> None:
+    root = Path(__file__).resolve().parents[1]
+    pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
+    version = next(
+        line.split('"')[1] for line in pyproject.splitlines() if line.startswith("version = ")
+    )
+    result = subprocess.run(
+        ["bash", "docs/build_docs.sh", "en"],
+        cwd=root,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    rendered = (root / "docs/_build/en/index.html").read_text(encoding="utf-8")
+    language_sources = "\n".join(
+        (root / path).read_text(encoding="utf-8")
+        for path in (
+            "docs/en/conf.py",
+            "docs/zh/conf.py",
+            "docs/zh/index.rst",
+            "docs/_static/lang-toggle.js",
+        )
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"ABI v{version}" in rendered
+    assert "v1.4.0" not in language_sources
+    assert 'href="/en/' not in language_sources
+    assert 'href="/zh/' not in language_sources
+    for plugin in ("metagenomic_plasmid", "easymetagenome", "viral_viwrap"):
+        assert f'<span class="pre">{plugin}</span>' in rendered

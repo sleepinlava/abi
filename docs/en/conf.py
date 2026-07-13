@@ -20,9 +20,9 @@ language = "en"
 html_title = "ABI Documentation"
 
 # Build language-aware announcement
-html_theme_options = copy.deepcopy(shared_html_theme_options)  # noqa: F821
+html_theme_options = copy.deepcopy(shared_html_theme_options)  # noqa: F405
 html_theme_options["announcement"] = (
-    "<strong>ABI v1.4.0</strong> &middot; "
-    "<a href='/zh/'>中文</a> &middot; "
+    f"<strong>ABI v{release}</strong> &middot; "  # noqa: F405
+    "<a href='../zh/'>中文</a> &middot; "
     "<a href='https://github.com/sleepinlava/abi/releases'>changelog</a>"
 )

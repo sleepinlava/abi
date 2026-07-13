@@ -1,223 +1,70 @@
-API Reference
-=============
+Stable API Reference
+====================
 
-.. automodule:: abi
-   :members: get_agent_guide, list_plugins_summary
-   :undoc-members:
-   :exclude-members: __version__
+ABI exposes one transport-neutral lifecycle through the CLI, MCP server, HTTP
+jobs, and Python. Agent integrations should prefer JSON envelopes and must not
+parse human-readable terminal output.
 
-Core Modules
-------------
+Agent Boundary
+--------------
 
-Agent Interface
-~~~~~~~~~~~~~~~
+Every agent-facing operation returns one of three statuses:
 
-.. automodule:: abi.agent
-   :members:
-   :undoc-members:
+``success``
+   The ``result`` field contains the structured payload.
+``confirmation_required``
+   Execution is waiting for explicit user approval.
+``error``
+   Inspect ``error_code`` and ``diagnostic_hints`` before retrying.
 
-Plugins
-~~~~~~~
+The safe lifecycle is ``list-types`` → ``plan`` → ``dry-run`` → ``inspect`` →
+``run`` → ``report``. All CLI lifecycle commands accept ``--output-json``.
+See :doc:`agent_usage` for MCP configuration, exported tool descriptors,
+permissions, examples, and recovery rules.
 
-.. automodule:: abi.plugins
-   :members: list_plugins, get_plugin
+Python Entry Points
+-------------------
 
-.. automodule:: abi.interfaces
-   :members:
-   :undoc-members:
+The supported Python package entry points are:
 
-Schemas
-~~~~~~~
+``abi.get_agent_guide()``
+   Return a compact operating guide suitable for an Agent system prompt.
+``abi.list_plugins_summary()``
+   Return installed plugin metadata without starting a workflow.
+``abi.agent.ABIAgentInterface``
+   Transport-neutral implementation behind CLI JSON, MCP, and HTTP adapters.
+``abi.plugins.list_plugins()`` and ``abi.plugins.get_plugin()``
+   Discover or load registered analysis plugins.
 
-.. automodule:: abi.schemas
-   :members:
-   :undoc-members:
-   :exclude-members: model_computed_fields, model_config, model_fields
+Example:
 
-Tools & Registry
-~~~~~~~~~~~~~~~~
+.. code-block:: python
 
-.. automodule:: abi.tools
-   :members: ToolRegistry, ToolSkill, GenericCommandSkill, RunResult
-   :undoc-members:
+   import json
 
-Provenance
-~~~~~~~~~~
+   from abi.agent import ABIAgentInterface
 
-.. automodule:: abi.provenance
-   :members: RunLogger, PipelineProgressRecorder
-   :undoc-members:
+   interface = ABIAgentInterface()
+   envelope = json.loads(interface.list_types())
+   if envelope["status"] == "success":
+       print(envelope["result"])
 
-.. automodule:: abi.json_utils
-   :members:
-   :undoc-members:
+Execution methods require the same explicit confirmation as the CLI. Do not
+bypass the lifecycle or call plugin internals from an Agent integration.
 
-Contracts & DAG
-~~~~~~~~~~~~~~~
-
-.. automodule:: abi.contracts
-   :members:
-   :undoc-members:
-
-.. automodule:: abi.dag
-   :members: infer_dag, ABIDAG, StepBinding
-   :undoc-members:
-
-Diagnostics & Permissions
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. automodule:: abi.diagnostics
-   :members:
-   :undoc-members:
-
-.. automodule:: abi.permissions
-   :members:
-   :undoc-members:
-
-DAG Planner & TSV Mapping
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. automodule:: abi.dag_planner
-   :members:
-   :undoc-members:
-
-.. automodule:: abi.tsv_mapping
-   :members:
-   :undoc-members:
-
-Tool Descriptors
-~~~~~~~~~~~~~~~
-
-.. automodule:: abi.tool_descriptors
-   :members:
-   :undoc-members:
-
-Execution & Workflow
-~~~~~~~~~~~~~~~~~~~~
-
-.. automodule:: abi.executor
-   :members:
-   :undoc-members:
-
-.. automodule:: abi.workflow.validation
-   :members:
-   :undoc-members:
-
-Runtimes
-~~~~~~~~
-
-.. automodule:: abi.runtimes.base
-   :members:
-   :undoc-members:
-
-.. automodule:: abi.runtimes.local
-   :members:
-   :undoc-members:
-
-.. automodule:: abi.runtimes.hpc
-   :members:
-   :undoc-members:
-
-Internal Handlers
-~~~~~~~~~~~~~~~~
-
-.. automodule:: abi.internal
-   :members:
-   :undoc-members:
-
-Resource Management
-~~~~~~~~~~~~~~~~~~
-
-.. automodule:: abi.resources
-   :members:
-   :undoc-members:
-
-Tables
-~~~~~~
-
-.. automodule:: abi.tables
-   :members:
-   :undoc-members:
-
-Results
-~~~~~~~
-
-.. automodule:: abi.results
-   :members:
-   :undoc-members:
-
-Report & Figures
-~~~~~~~~~~~~~~~~
-
-.. automodule:: abi.report
-   :members:
-   :undoc-members:
-
-.. automodule:: abi.figures
-   :members:
-   :undoc-members:
-
-.. automodule:: abi.sciplot
-   :members:
-   :undoc-members:
-
-Shared Utilities
-~~~~~~~~~~~~~~~~
-
-.. automodule:: abi._shared
-   :members:
-   :undoc-members:
-
-Timeouts
-~~~~~~~~
-
-.. automodule:: abi.timeouts
-   :members:
-   :undoc-members:
-
-MCP Server
-~~~~~~~~~~
-
-.. automodule:: abi.mcp.server
-   :members:
-   :undoc-members:
-
-Testing Utilities
-~~~~~~~~~~~~~~~~~
-
-.. automodule:: abi.testing
-   :members:
-   :undoc-members:
-
-Plugin API Reference
+Developer Interfaces
 --------------------
 
-Each plugin implements the :class:`abi.interfaces.ABIPlugin` protocol.
+Plugin authors implement the protocols in ``abi.interfaces`` and declare tools,
+DAGs, schemas, and report metadata in their plugin directory. The maintained
+contracts and examples live in:
 
-.. automodule:: abi.plugins.metagenomic_plasmid
-   :members:
-   :undoc-members:
+- :doc:`plugin_development_guide` — plugin protocols, manifests, and tests.
+- :doc:`workflow_validation` — biological and software validation boundaries.
+- :doc:`runtime_locks` — release-ready tools and resource certification.
+- :doc:`abi_sciplot_design` — validated scientific figure specifications.
+- :doc:`openai_interface_standard` — provider descriptor export formats.
 
-.. automodule:: abi.plugins.easymetagenome
-   :members:
-   :undoc-members:
-
-.. automodule:: abi.plugins.viral_viwrap
-   :members:
-   :undoc-members:
-
-.. automodule:: abi.plugins.rnaseq_expression
-   :members:
-   :undoc-members:
-
-.. automodule:: abi.plugins.wgs_bacteria
-   :members:
-   :undoc-members:
-
-.. automodule:: abi.plugins.amplicon_16s
-   :members:
-   :undoc-members:
-
-.. automodule:: abi.plugins.metatranscriptomics
-   :members:
-   :undoc-members:
+The source repository remains authoritative for concrete Python signatures.
+Use the version shown in the documentation announcement when selecting source
+for a deployed documentation build.

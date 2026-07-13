@@ -1,6 +1,7 @@
 # ABI Testing Guide
 
-> **Current state (2026-07-06)**: 1364 tests passed, 11 skipped, 3 pre-existing failures, 83% statement coverage, 0 ruff errors, 0 mypy errors.
+> Test counts and coverage change frequently. Use the latest CI run as the current
+> status; the commands and enforced thresholds below are the maintained contract.
 
 This guide covers the ABI testing infrastructure: test taxonomy, shared fixtures, the benchmark framework, contract validation, golden traces, smoke tests, CI/CD, and conventions for plugin authors.
 
@@ -119,7 +120,7 @@ def test_plugin_contract():
 
 3. If the plugin implements `ABIInitializablePlugin` (optional) — checks for `root`
 
-All 5 built-in plugins have contract tests. Run with:
+All built-in plugins have contract tests. Run with:
 
 ```bash
 pytest tests/ -k "contract" -v
@@ -380,7 +381,7 @@ Benchmark tests should target:
 
 ## Coverage
 
-CI enforces a minimum 60% line coverage floor (current: 83%). The coverage baseline is maintained through:
+CI enforces a minimum 75% line coverage floor plus risk-based module gates. The coverage baseline is maintained through:
 
 - Unit tests for all parser functions
 - Integration tests for CLI and dry-run paths
