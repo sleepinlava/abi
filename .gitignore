@@ -181,12 +181,19 @@ environment.lock.yml
 conda.lock
 .key
 
-# Claude Code / Codex project files
-.claude/
-.codex/
+# Agent platform local state (allow ABI project integration assets)
+.claude/*
+!.claude/skills/
+!.claude/skills/abi/
+!.claude/skills/abi/**
+.codex/*
+!.codex/config.toml
 docs/_build/
 .readthedocs-cache/
-.opencode/
+.opencode/*
+!.opencode/skills/
+!.opencode/skills/abi/
+!.opencode/skills/abi/**
 
 # Superpowers auto-generated plans
 docs/superpowers/

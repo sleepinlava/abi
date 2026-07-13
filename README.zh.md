@@ -89,11 +89,12 @@ abi contract-lint --type metagenomic_plasmid --strict
 # 无头 Agent 调度（Job Service worker 使用）
 abi dispatch --command list-types --arguments '{}'
 
-# 启动 MCP stdio 服务（用于 Claude Desktop / Claude Code）
+# 启动 Agent 平台使用的安全 MCP stdio 服务
 abi-mcp
 
-# 将 ABI agent skills 安装到 Claude Code（~/.claude/skills/abi/）
-abi install-skills
+# 安装并诊断 Agent 集成（claude-code、opencode、codex）
+abi agent install codex --scope project
+abi agent doctor codex --scope project
 
 # 科研图形编译器（验证、渲染、质检、导出）
 abi-sciplot validate --spec figure.yaml
@@ -218,8 +219,8 @@ ABI 核心层          schemas  │  provenance  │  permissions  │  diagnost
   默认 `safe` profile 不暴露执行和管理工具，`abi-mcp --profile full` 才加入
   仍受确认门控的 `abi_run`
 - HTTP Job Service：`abi job-service` 和 `abi job submit/list/status/artifacts/cancel`
-- Skills 安装 `abi install-skills`（将内置 SKILL.md 文件复制到 `~/.claude/skills/abi/`）
-- `integrations/` 下提供可直接加载的 Claude Code 与 OpenCode 资产
+- 通过 `abi agent install|doctor` 安装和诊断 Agent 集成
+- `integrations/` 下提供可直接加载的 Claude Code、OpenCode 与 Codex 资产
 
 **Plan 摘要化**：`abi plan` 信封现在包含 `summary` 字段（流水线阶段、关键工具、平台），
 Agent 无需读取完整 `execution_plan.json` 即可理解工作流结构。复杂流水线 plan 输出可节省 78-95% token。

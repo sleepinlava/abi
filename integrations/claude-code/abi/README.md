@@ -6,6 +6,13 @@ Install ABI with MCP support first:
 pip install "abi-agent[mcp]"
 ```
 
+Install and verify the integration with:
+
+```bash
+abi agent install claude-code --scope project
+abi agent doctor claude-code --scope project
+```
+
 Validate and load this plugin during development:
 
 ```bash

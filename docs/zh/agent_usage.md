@@ -14,28 +14,43 @@ abi install-skills
 
 使用 `--force` 覆盖已有文件，或使用 `--target` 自定义目标目录。
 
-### Claude Code 与 OpenCode 集成
+### Claude Code、OpenCode 与 Codex 集成
 
 仓库在 `integrations/claude-code/abi/` 提供 Claude Code 插件，在
-`integrations/opencode/` 提供 OpenCode 配置和 Agent Skill。两者调用同一个
-传输无关 ABI interface，并默认使用 MCP 的 `safe` profile。
+`integrations/opencode/` 提供 OpenCode 配置和 Agent Skill，并在
+`integrations/codex/abi/` 提供 Codex 插件。三者调用同一个传输无关 ABI
+interface，并默认使用 MCP 的 `safe` profile。
 
-加载任一集成前先安装带 MCP 支持的 ABI：
+加载集成前先安装带 MCP 支持的 ABI：
 
 ```bash
 pip install "abi-agent[mcp]"
 ```
 
-Claude Code 开发验证：
+使用统一命令安装用户级或项目级集成：
+
+```bash
+abi agent install claude-code --scope project
+abi agent install opencode --scope project
+abi agent install codex --scope project
+abi agent doctor codex --scope project
+```
+
+安装器会保留 OpenCode JSON 和 Codex TOML 中无关的配置；如果已有不同的
+`abi` MCP 项，默认拒绝覆盖，只有显式传入 `--force` 才会替换。自动化场景可
+使用 `--output-json`。
+
+Claude Code 插件开发验证：
 
 ```bash
 claude plugin validate integrations/claude-code/abi --strict
 claude --plugin-dir integrations/claude-code/abi
 ```
 
-OpenCode 使用时，将 `integrations/opencode/opencode.example.json` 合并到目标
-配置，并将 Skill 放到 `.opencode/skills/abi/SKILL.md` 或
-`~/.config/opencode/skills/abi/SKILL.md`。
+Codex 插件开发时，可使用 plugin-creator 提供的校验器验证
+`integrations/codex/abi/`。直接安装时，项目级技能位于
+`.agents/skills/abi`，用户级技能位于 `~/.agents/skills/abi`，MCP 配置写入
+对应范围的 `.codex/config.toml`。
 
 ### MCP 服务器
 

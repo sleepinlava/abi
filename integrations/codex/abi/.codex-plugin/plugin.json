@@ -1,0 +1,30 @@
+{
+  "name": "abi",
+  "version": "1.5.5",
+  "description": "Discover, plan, validate, execute, inspect, and report ABI bioinformatics workflows.",
+  "author": {
+    "name": "BingkangGuo",
+    "email": "bingkangguo@gmail.com",
+    "url": "https://github.com/sleepinlava"
+  },
+  "homepage": "https://github.com/sleepinlava/abi",
+  "repository": "https://github.com/sleepinlava/abi",
+  "license": "MIT",
+  "keywords": ["bioinformatics", "mcp", "agent", "workflow"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ABI Bioinformatics",
+    "shortDescription": "Run reproducible bioinformatics workflows with ABI.",
+    "longDescription": "Use ABI to discover, plan, validate, execute, inspect, and report versioned bioinformatics workflows.",
+    "developerName": "BingkangGuo",
+    "category": "Developer Tools",
+    "capabilities": ["Bioinformatics", "Workflow orchestration", "MCP tools"],
+    "websiteURL": "https://github.com/sleepinlava/abi",
+    "defaultPrompt": [
+      "Discover the ABI workflows available in this environment.",
+      "Plan and dry-run an ABI bioinformatics analysis.",
+      "Inspect and validate an existing ABI result directory."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

@@ -18,29 +18,48 @@ use the `abi` CLI and its bioinformatics tools.
 Use `--force` to overwrite existing files, or `--target` to customize
 the destination directory.
 
-### Claude Code and OpenCode integrations
+### Claude Code, OpenCode, and Codex integrations
 
 The repository ships a Claude Code plugin under `integrations/claude-code/abi/`
-and an OpenCode configuration plus Agent Skill under `integrations/opencode/`.
-Both use the same transport-neutral ABI interface and start the MCP server with
-the default `safe` profile.
+an OpenCode configuration plus Agent Skill under `integrations/opencode/`, and
+a Codex plugin under `integrations/codex/abi/`. All three use the same
+transport-neutral ABI interface and start the MCP server with the default
+`safe` profile.
 
-Install ABI with MCP support before loading either integration:
+Install ABI with MCP support before loading an integration:
 
 ```bash
 pip install "abi-agent[mcp]"
 ```
 
-For Claude Code development:
+Use the unified installer for user or project scope:
+
+```bash
+abi agent install claude-code --scope project
+abi agent install opencode --scope project
+abi agent install codex --scope project
+abi agent doctor codex --scope project
+```
+
+The installer preserves unrelated OpenCode JSON and Codex TOML settings. It
+refuses to replace a different `abi` MCP entry unless `--force` is supplied.
+Use `--output-json` in automation.
+
+For Claude Code plugin development:
 
 ```bash
 claude plugin validate integrations/claude-code/abi --strict
 claude --plugin-dir integrations/claude-code/abi
 ```
 
-For OpenCode, copy `integrations/opencode/opencode.example.json` into the
-desired OpenCode configuration and place the bundled skill at
-`.opencode/skills/abi/SKILL.md` or `~/.config/opencode/skills/abi/SKILL.md`.
+For Codex plugin development, validate the distributable bundle with:
+
+```bash
+python /path/to/plugin-creator/scripts/validate_plugin.py integrations/codex/abi
+```
+
+Direct Codex installation uses `.agents/skills/abi` for project scope or
+`~/.agents/skills/abi` for user scope, plus the matching `.codex/config.toml`.
 
 ### MCP Server
 

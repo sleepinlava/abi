@@ -135,3 +135,92 @@ def test_install_skills_json_uses_agent_envelope_and_installs_readme(tmp_path):
     assert payload["command"] == "install_skills"
     assert (target / "README.md").is_file()
     assert list(target.glob("*/SKILL.md"))
+
+
+def test_agent_install_and_doctor_opencode_project(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "abi.agent_integrations.shutil.which",
+        lambda command: "/venv/bin/abi-mcp" if command == "abi-mcp" else None,
+    )
+
+    installed = runner.invoke(
+        app,
+        [
+            "agent",
+            "install",
+            "opencode",
+            "--scope",
+            "project",
+            "--project-dir",
+            str(tmp_path),
+            "--output-json",
+        ],
+    )
+
+    assert installed.exit_code == 0, installed.output
+    install_payload = json.loads(installed.output)
+    assert install_payload["platform"] == "opencode"
+    assert (tmp_path / ".opencode/skills/abi/SKILL.md").is_file()
+    assert (tmp_path / "opencode.json").is_file()
+
+    diagnosed = runner.invoke(
+        app,
+        [
+            "agent",
+            "doctor",
+            "opencode",
+            "--scope",
+            "project",
+            "--project-dir",
+            str(tmp_path),
+            "--output-json",
+        ],
+    )
+
+    assert diagnosed.exit_code == 0, diagnosed.output
+    doctor_payload = json.loads(diagnosed.output)
+    assert doctor_payload["status"] == "healthy"
+
+
+def test_agent_install_and_doctor_codex_project(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "abi.agent_integrations.shutil.which",
+        lambda command: "/venv/bin/abi-mcp" if command == "abi-mcp" else None,
+    )
+
+    installed = runner.invoke(
+        app,
+        [
+            "agent",
+            "install",
+            "codex",
+            "--scope",
+            "project",
+            "--project-dir",
+            str(tmp_path),
+            "--output-json",
+        ],
+    )
+
+    assert installed.exit_code == 0, installed.output
+    install_payload = json.loads(installed.output)
+    assert install_payload["platform"] == "codex"
+    assert (tmp_path / ".agents/skills/abi/SKILL.md").is_file()
+    assert (tmp_path / ".codex/config.toml").is_file()
+
+    diagnosed = runner.invoke(
+        app,
+        [
+            "agent",
+            "doctor",
+            "codex",
+            "--scope",
+            "project",
+            "--project-dir",
+            str(tmp_path),
+            "--output-json",
+        ],
+    )
+
+    assert diagnosed.exit_code == 0, diagnosed.output
+    assert json.loads(diagnosed.output)["status"] == "healthy"

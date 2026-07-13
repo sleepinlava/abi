@@ -30,6 +30,8 @@ Command                       Purpose
 ``setup-resources``           Download/mock/plan resource setup.
 ``doctor-agent``              Print a safe operating guide for ABI agent callers.
 ``install-skills``            Install ABI agent skills into ~/.claude/skills/.
+``agent install``             Install Claude Code, OpenCode, or Codex integration assets.
+``agent doctor``              Diagnose one installed agent-platform integration.
 ``dispatch``                  Headless subprocess dispatch for Job Service workers.
 ``job-service``               Start the HTTP Job Service for queued operations.
 ``job submit``                Submit a job to the ABI Job Service.
@@ -87,6 +89,7 @@ from abi import __version__
 from abi._shared import _common_overrides
 from abi.agent import ABIAgentInterface
 from abi.agent.context import render_doctor_agent
+from abi.agent_integrations import doctor_agent_integration, install_agent_integration
 from abi.exporters import NextflowExporter
 from abi.json_utils import load_json_object, loads_json
 from abi.openai_contracts import export_openai_tools  # backward compat
@@ -121,6 +124,8 @@ app = typer.Typer(
 # 用于 Job Service 操作的子 Typer，挂载在 ``abi job`` 下。
 job_app = typer.Typer(help="Submit and inspect queued ABI Job Service operations.")
 app.add_typer(job_app, name="job")
+agent_app = typer.Typer(help="Install and diagnose ABI integrations for agent platforms.")
+app.add_typer(agent_app, name="agent")
 
 
 @app.callback(invoke_without_command=True)
@@ -1678,6 +1683,98 @@ def install_skills_command(
             fg=typer.colors.GREEN,
             err=True,
         )
+    except Exception as exc:
+        _fail(exc)
+
+
+@agent_app.command("install")
+def agent_install_command(
+    platform: str = typer.Argument(
+        ...,
+        help="Agent platform: claude-code, opencode, or codex.",
+    ),
+    scope: str = typer.Option(
+        "user",
+        "--scope",
+        help="Installation scope: user or project.",
+    ),
+    project_dir: Optional[Path] = typer.Option(
+        None,
+        "--project-dir",
+        help="Project root for project-scoped installation (default: current directory).",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Replace conflicting ABI integration files or configuration entries.",
+    ),
+    output_json: bool = typer.Option(
+        False,
+        "--output-json",
+        help="Emit machine-readable JSON.",
+    ),
+) -> None:
+    """Install ABI discovery instructions and safe MCP configuration for an agent."""
+    try:
+        result = install_agent_integration(
+            platform=platform,
+            scope=scope,
+            project_dir=project_dir,
+            force=force,
+        )
+        if output_json:
+            _emit_json_payload(result)
+            return
+        typer.secho(
+            f"Installed ABI for {platform} ({scope}) at {result['target']}",
+            fg=typer.colors.GREEN,
+        )
+        typer.echo(f"MCP configuration: {result['config']}")
+    except Exception as exc:
+        _fail(exc)
+
+
+@agent_app.command("doctor")
+def agent_doctor_command(
+    platform: str = typer.Argument(
+        ...,
+        help="Agent platform: claude-code, opencode, or codex.",
+    ),
+    scope: str = typer.Option(
+        "user",
+        "--scope",
+        help="Installation scope: user or project.",
+    ),
+    project_dir: Optional[Path] = typer.Option(
+        None,
+        "--project-dir",
+        help="Project root for project-scoped diagnosis (default: current directory).",
+    ),
+    output_json: bool = typer.Option(
+        False,
+        "--output-json",
+        help="Emit machine-readable JSON.",
+    ),
+) -> None:
+    """Check ABI executable discovery, skill installation, and MCP configuration."""
+    try:
+        result = doctor_agent_integration(
+            platform=platform,
+            scope=scope,
+            project_dir=project_dir,
+        )
+        if output_json:
+            _emit_json_payload(result)
+        else:
+            color = typer.colors.GREEN if result["passed"] else typer.colors.RED
+            typer.secho(f"ABI {platform} integration: {result['status']}", fg=color)
+            for check in result["checks"]:
+                marker = "OK" if check["status"] == "passed" else "FAIL"
+                typer.echo(f"[{marker}] {check['name']}: {check['message']}")
+        if not result["passed"]:
+            raise typer.Exit(code=1)
+    except typer.Exit:
+        raise
     except Exception as exc:
         _fail(exc)
 

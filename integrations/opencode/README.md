@@ -6,9 +6,15 @@ Install ABI with MCP support first:
 pip install "abi-agent[mcp]"
 ```
 
-Copy `opencode.example.json` to the appropriate OpenCode configuration and
-install `skills/abi/SKILL.md` under `.opencode/skills/abi/SKILL.md` for a
-project or `~/.config/opencode/skills/abi/SKILL.md` for the current user.
+Install and verify the integration with:
+
+```bash
+abi agent install opencode --scope project
+abi agent doctor opencode --scope project
+```
+
+Use `--scope user` for `~/.config/opencode`. The installer preserves unrelated
+JSON settings; `opencode.example.json` remains available for manual setup.
 
 The example starts `abi-mcp --profile safe`. Use the `full` profile only
 when real workflow execution is required; ABI still requires explicit confirmation.

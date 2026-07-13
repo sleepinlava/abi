@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SHARED_SKILL = ROOT / "integrations/shared/skills/abi/SKILL.md"
 CLAUDE_ROOT = ROOT / "integrations/claude-code/abi"
 OPENCODE_ROOT = ROOT / "integrations/opencode"
+CODEX_ROOT = ROOT / "integrations/codex/abi"
 
 
 def _frontmatter(path: Path) -> dict[str, object]:
@@ -40,6 +41,7 @@ def test_platform_skills_match_the_shared_source() -> None:
 
     assert (CLAUDE_ROOT / "skills/abi/SKILL.md").read_text(encoding="utf-8") == expected
     assert (OPENCODE_ROOT / "skills/abi/SKILL.md").read_text(encoding="utf-8") == expected
+    assert (CODEX_ROOT / "skills/abi/SKILL.md").read_text(encoding="utf-8") == expected
 
 
 def test_claude_plugin_declares_safe_abi_mcp_server() -> None:
@@ -63,6 +65,20 @@ def test_opencode_example_declares_safe_abi_mcp_server() -> None:
         "command": ["abi-mcp", "--profile", "safe"],
         "enabled": True,
         "timeout": 10000,
+    }
+
+
+def test_codex_plugin_declares_safe_abi_mcp_server() -> None:
+    manifest = json.loads((CODEX_ROOT / ".codex-plugin/plugin.json").read_text())
+    mcp = json.loads((CODEX_ROOT / ".mcp.json").read_text())
+
+    assert manifest["name"] == "abi"
+    assert manifest["version"] == _project_version()
+    assert manifest["skills"] == "./skills/"
+    assert manifest["mcpServers"] == "./.mcp.json"
+    assert mcp["mcpServers"]["abi"] == {
+        "command": "abi-mcp",
+        "args": ["--profile", "safe"],
     }
 
 
