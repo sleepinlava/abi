@@ -9,6 +9,10 @@ COPY docker/.condarc /root/.condarc
 ARG PIP_INDEX_URL=
 ENV PIP_INDEX_URL=${PIP_INDEX_URL}
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends fonts-wqy-zenhei && \
+    rm -rf /var/lib/apt/lists/*
+
 # Install mamba for faster solves
 RUN conda install -y -n base -c conda-forge mamba && \
     mamba clean -afy

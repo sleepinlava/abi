@@ -24,7 +24,15 @@ class FontSpec(BaseModel):
         description="Primary font family (universally available open-source sans-serif).",
     )
     fallback: list[str] = Field(
-        default_factory=lambda: ["Helvetica", "DejaVu Sans"],
+        default_factory=lambda: [
+            "Noto Sans CJK SC",
+            "Source Han Sans SC",
+            "Microsoft YaHei",
+            "PingFang SC",
+            "WenQuanYi Zen Hei",
+            "Droid Sans Fallback",
+            "sans-serif",
+        ],
         description="Fallback font families in priority order.",
     )
     base_size_pt: float = Field(7.0, ge=4.0, le=24.0, description="Base font size in points.")
@@ -112,9 +120,20 @@ class ThemeSpec(BaseModel):
         Used by MatplotlibRenderer before creating figures so all plot
         functions inherit the theme automatically via plt.style.context().
         """
+        from matplotlib import font_manager
+
+        installed_fonts = {font.name.casefold() for font in font_manager.fontManager.ttflist}
+        generic_families = {"serif", "sans-serif", "cursive", "fantasy", "monospace"}
+        available_fallbacks = [
+            family
+            for family in dict.fromkeys(self.font.fallback)
+            if family.casefold() in installed_fonts or family.casefold() in generic_families
+        ]
+        font_families = list(dict.fromkeys([self.font.family, *available_fallbacks]))
+
         return {
             # Font
-            "font.family": self.font.family,
+            "font.family": font_families,
             "font.size": self.font.base_size_pt,
             "axes.titlesize": self.font.title_size_pt,
             "axes.labelsize": self.font.label_size_pt,

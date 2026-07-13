@@ -6,9 +6,11 @@ Supports colour grouping via mapping.hue and point labels via mapping.label.
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 
+from abi.sciplot.renderers.annotation_layout import annotate_points_without_overlap
 from abi.sciplot.schema.figure_spec import FigureSpec
 from abi.sciplot.schema.palette_spec import PaletteRegistry
 from abi.sciplot.schema.theme_spec import ThemeSpec
@@ -90,15 +92,15 @@ def plot_ordination(
             linewidth=0.5,
         )
         # Label points if label column
-        for j in range(min(len(labels), 50)):
-            ax.annotate(
-                str(labels[j]),
-                (x_vals[j], y_vals[j]),
-                fontsize=5,
-                alpha=0.7,
-                xytext=(3, 3),
-                textcoords="offset points",
-            )
+        annotations = [
+            (float(x_vals[j]), float(y_vals[j]), str(labels[j]))
+            for j in range(min(len(labels), 50))
+        ]
+        annotate_points_without_overlap(
+            ax,
+            annotations,
+            np.column_stack((x_vals, y_vals)),
+        )
 
     ax.set_xlabel(numeric_cols[0])
     ax.set_ylabel(numeric_cols[1])

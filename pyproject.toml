@@ -85,6 +85,7 @@ viral_viwrap = "abi.plugins.viral_viwrap:ViralViWrapPlugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/abi"]
+exclude = ["src/abi/sciplot/tests/"]
 
 # Built-in plugin templates live outside src/ so editable installs and source-tree
 # usage can share the same files. Include them in wheels at the same relative

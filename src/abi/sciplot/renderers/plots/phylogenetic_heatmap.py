@@ -123,18 +123,9 @@ def plot_phylogenetic_heatmap(
 
     # Colour bar
     cbar = ax.figure.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
-    cbar.set_label("log10(abundance + 1)", fontsize=theme.font.label_size_pt)
-
-    # Annotation
-    ax.text(
-        0.98,
-        0.02,
-        f"Top {len(pivot)} features (phylogenetic order)",
-        transform=ax.transAxes,
-        ha="right",
-        va="bottom",
-        fontsize=6,
-        alpha=0.6,
+    cbar.set_label(
+        f"log10(abundance + 1)\nTop {len(pivot)} features (phylogenetic order)",
+        fontsize=theme.font.label_size_pt,
     )
 
 
