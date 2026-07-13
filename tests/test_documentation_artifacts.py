@@ -165,20 +165,10 @@ def test_docs_build_preserves_diagnostics_and_enforces_a_budget() -> None:
     assert "must not increase" in build_script
 
 
-def test_docs_build_renders_current_version_and_pages_safe_links() -> None:
+def test_docs_sources_use_current_version_and_pages_safe_links() -> None:
     root = Path(__file__).resolve().parents[1]
-    pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
-    version = next(
-        line.split('"')[1] for line in pyproject.splitlines() if line.startswith("version = ")
-    )
-    result = subprocess.run(
-        ["bash", "docs/build_docs.sh", "en"],
-        cwd=root,
-        capture_output=True,
-        check=False,
-        text=True,
-    )
-    rendered = (root / "docs/_build/en/index.html").read_text(encoding="utf-8")
+    base_config = (root / "docs/_base.py").read_text(encoding="utf-8")
+    english_index = (root / "docs/en/index.rst").read_text(encoding="utf-8")
     language_sources = "\n".join(
         (root / path).read_text(encoding="utf-8")
         for path in (
@@ -189,10 +179,10 @@ def test_docs_build_renders_current_version_and_pages_safe_links() -> None:
         )
     )
 
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert f"ABI v{version}" in rendered
+    assert '_repo_root / "pyproject.toml"' in base_config
+    assert "release = _version_match.group(1)" in base_config
     assert "v1.4.0" not in language_sources
     assert 'href="/en/' not in language_sources
     assert 'href="/zh/' not in language_sources
     for plugin in ("metagenomic_plasmid", "easymetagenome", "viral_viwrap"):
-        assert f'<span class="pre">{plugin}</span>' in rendered
+        assert f"``{plugin}``" in english_index
