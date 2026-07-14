@@ -7,6 +7,32 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_docker_workflow_watches_every_build_input_on_pull_requests():
+    workflow = (ROOT / ".github" / "workflows" / "docker.yml").read_text(encoding="utf-8")
+    pull_request_paths = workflow.split("pull_request:", maxsplit=1)[1].split("jobs:", maxsplit=1)[
+        0
+    ]
+
+    expected_paths = {
+        ".dockerignore",
+        ".github/workflows/docker.yml",
+        "README.md",
+        "config/**",
+        "data/**",
+        "docker/**",
+        "environments.yaml",
+        "envs/**",
+        "examples/**",
+        "golden_traces/**",
+        "plugins/**",
+        "pyproject.toml",
+        "scripts/**",
+        "src/**",
+    }
+    for path in expected_paths:
+        assert f'- "{path}"' in pull_request_paths
+
+
 def test_docker_build_inputs_are_not_excluded_from_context():
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     active_patterns = {
