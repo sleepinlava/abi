@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.5.6] - 2026-07-15
+
+### Added
+
+- Agent integrations for Claude Code, OpenCode (Codex), and OpenCode CLI with
+  MCP tool registration, shared skill definitions, and auto-install plumbing.
+- Workflow catalog and execution modules for centralized pipeline orchestration.
+- EasyMeta report manifest publishing and schema.
+- ViWrap compatibility routing through ABI artifact manifests and plan outputs.
+- Runtime lock hardening with strict validation, blocking-missing-tools
+  certification, and cloud release-lock preparation script.
+- Architecture diagram and documentation for bilingual docs site.
+
+### Changed
+
+- Refactored MCP server to auto-generate tool registrations from unified
+  `tool_descriptors` SSOT with profile-based visibility (discovery/safe/full/management).
+- Deepened metagenomics ABI integration: centralized workflow orchestration,
+  easymeta report manifests, viwrap artifact manifests.
+- Hardened SciPlot rendering: annotation layout engine, Unicode cohort tests,
+  CI font configuration, theme font fallback chains.
+- Expanded Docker build input watch set to cover all release-surface files.
+
+### Fixed
+
+- Fixed release publishing identity verification and RNA-seq Docker image build.
+- Fixed TUNA channel mappings, deterministic local image tags, and container
+  smoke-test commands across the plugin image matrix.
+- Fixed MCP server tests after `select_agent_tools` profile-based refactor.
+
 ## [1.5.5] - 2026-07-11
 
 ### Changed

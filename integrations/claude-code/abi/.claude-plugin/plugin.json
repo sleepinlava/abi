@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "abi",
   "displayName": "ABI Bioinformatics",
-  "version": "1.5.5",
+  "version": "1.5.6",
   "description": "Discover, plan, validate, execute, inspect, and report ABI bioinformatics workflows.",
   "author": {
     "name": "BingkangGuo",
