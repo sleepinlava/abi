@@ -163,9 +163,27 @@ def test_mcp_server_skips_invalid_descriptors_with_warning(caplog, monkeypatch):
     monkeypatch.setattr(
         tool_descriptors,
         "ABI_AGENT_TOOLS",
-        {"invalid-tool-name": {"properties": {}, "required": []}},
+        {
+            "invalid-tool-name": {"properties": {}, "required": []},
+            "autoplasm_validate_result": {"properties": {}, "required": []},
+        },
     )
-    monkeypatch.setattr(tool_descriptors, "TOOL_ALIASES", {"invalid-tool-name": "query"})
+    monkeypatch.setattr(
+        tool_descriptors,
+        "TOOL_ALIASES",
+        {
+            "invalid-tool-name": "query",
+            "autoplasm_validate_result": "autoplasm_validate_result",
+        },
+    )
+    monkeypatch.setattr(
+        tool_descriptors,
+        "select_agent_tools",
+        lambda profile: {
+            "invalid-tool-name": {"properties": {}, "required": []},
+            "autoplasm_validate_result": {"properties": {}, "required": []},
+        },
+    )
 
     mcp = FakeMCP("abi")
     with caplog.at_level("WARNING", logger="abi.mcp.server"):
@@ -182,11 +200,14 @@ def test_mcp_main_runs_stdio_transport(monkeypatch):
     calls = []
 
     class FakeServer:
+        def __init__(self, *, profile: str = "safe"):
+            pass
+
         def run(self, *, transport):
             calls.append(transport)
 
     monkeypatch.setattr(server, "create_server", FakeServer)
 
-    server.main()
+    server.main(argv=[])
 
     assert calls == ["stdio"]
