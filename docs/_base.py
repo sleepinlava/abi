@@ -4,6 +4,7 @@ This is the shared base config — language-specific overrides live in
 ``en/conf.py`` and ``zh/conf.py``.  Do not build from this file directly.
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -11,12 +12,17 @@ from pathlib import Path
 project = "ABI"
 copyright = "2026, BingkangGuo"
 author = "BingkangGuo"
-release = "1.3.3"
 
 # -- Path setup -------------------------------------------------------------
 # _base.py lives in docs/; repo root is one level up
 _repo_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_repo_root / "src"))
+
+_pyproject = (_repo_root / "pyproject.toml").read_text(encoding="utf-8")
+_version_match = re.search(r'^version = "([^"]+)"$', _pyproject, flags=re.MULTILINE)
+if _version_match is None:
+    raise RuntimeError("project.version is missing from pyproject.toml")
+release = _version_match.group(1)
 
 # -- General configuration --------------------------------------------------
 extensions = [

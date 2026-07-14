@@ -4,7 +4,7 @@ ABI Documentation
 **Agent-Bioinformatics Interface** — a Python control plane between AI agents
 and bioinformatics tools.  Not a workflow engine, but a structured interface
 layer that provides standardized JSON envelopes, provenance tracking, tool
-contracts, and execution gating across seven bioinformatics analysis types. (v1.4.0, 2026-07-06 — 1364 tests, 83% coverage, 0 ruff/mypy errors, 7/7 plugins verified)
+contracts, and execution gating across seven bioinformatics analysis types.
 
 .. image:: https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=1e6fba
    :target: https://pypi.org/project/abi-agent/
@@ -76,44 +76,34 @@ Built-In Analysis Types
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 8 72
+   :widths: 25 75
 
    * - Plugin
-     - Tools
      - Description
    * - ``amplicon_16s``
-     - 8
      - 16S rRNA microbiome: cutadapt → vsearch merge/derep/denoise → SINTAX
        taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta)
    * - ``rnaseq_expression``
-     - 6
      - Bulk RNA-seq: fastp → STAR → featureCounts → build_count_matrix →
        DESeq2 → clusterProfiler
    * - ``wgs_bacteria``
-     - 5
      - Bacterial isolate WGS: fastp → SPAdes → Prokka → MLST → AMRFinderPlus
    * - ``metatranscriptomics``
-     - 3
      - Metatranscriptomics: fastp → STAR/HISAT2 → featureCounts
    * - ``metagenomic_plasmid``
-     - 67
-       Flagship plasmid analysis: QC → assembly → plasmid detection →
+     - Flagship plasmid analysis: QC → assembly → plasmid detection →
        annotation → abundance → statistics. DAG-driven planning (UniversalDAG),
-       parallel execution, 8 sciplot figures (barplot×3, scatterplot,
-       stacked_barplot, heatmap×5). 10 conda envs, 84-node DAG (3054 lines),
-       10 databases.
+       parallel execution, standardized tables, and SciPlot figures.
    * - ``easymetagenome``
-     - 12
-       P0 shotgun metagenomics: fastp → kneaddata → kraken2 → bracken →
-       humann4 + 6 HUMAnN utilities → seqkit. 3 workflow presets
-       (p0_taxonomy, p1_humann4, full_read_based). DAG-driven planner
-       with 34-node DAG, internal handlers, manifest validation, schema-driven
-       reports.
+     - P0 shotgun metagenomics: fastp → kneaddata → kraken2 → bracken →
+       HUMAnN utilities → seqkit. Includes taxonomy, functional profiling,
+       manifest validation, and schema-driven reports.
    * - ``viral_viwrap``
-     - 1
-       Viral metagenomics via ViWrap 1.3.1: binning → taxonomy → host
+     - Viral metagenomics via ViWrap 1.3.1: binning → taxonomy → host
        prediction → quality filtering. Managed external CLI plugin with
        custom ToolSkill, environment checker, and artifact mapper.
+
+Run ``abi list-types --output-json`` for the authoritative installed plugin list.
 
 Quick Start
 -----------
@@ -192,6 +182,7 @@ All agent-facing commands support ``--output-json``.
 
    agent_usage
    job_service
+   runtime_locks
    release
    devlog
    paper_execution_plan
@@ -203,6 +194,7 @@ Quick Links
 - :doc:`abi_sciplot_design` — Scientific figure compiler design
 - :doc:`development` — Local setup, source tree, SDK reference
 - :doc:`plugin_development_guide` — How to add a new analysis type
+- :doc:`runtime_locks` — Release-ready runtime lock generation and validation
 - :doc:`workflow_validation` — Biological validation methodology
 - :doc:`openai_interface_standard` — Multi-LLM tool descriptor export
 - :doc:`agent_usage` — Agent integration guide (MCP, Skills, dispatch)

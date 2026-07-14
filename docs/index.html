@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=en/">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ABI Documentation</title>
 <style>
@@ -25,28 +24,41 @@
   .card img { width: 64px; height: 64px; margin-bottom: 0.5rem; }
   .card h1 { font-size: 1.8rem; font-weight: 700; margin: 0.5rem 0 0.2rem; letter-spacing: -0.02em; }
   .card p.sub { color: #5a6a7e; font-size: 1rem; margin-bottom: 2rem; }
-  .links { margin-top: 2.5rem; font-size: 0.88rem; color: #8a9aa8; }
+  .language-options { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1.5rem; }
+  .language-options a { display: block; padding: 0.85rem 1rem; border-radius: 10px; background: #1e6fba; color: #fff; font-weight: 650; text-decoration: none; }
+  .language-options a.secondary { background: #e8f4fd; color: #155a8a; }
+  .language-options a:hover, .language-options a:focus-visible { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(30,111,186,0.2); }
+  .task-links { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; margin-top: 1.5rem; text-align: left; }
+  .task-links a { padding: 0.65rem 0.75rem; border: 1px solid #d9e2ec; border-radius: 8px; color: #1a5a96; text-decoration: none; font-size: 0.9rem; }
+  .quick-start { margin-top: 1.5rem; padding: 0.8rem; border-radius: 8px; background: #f0f4f8; color: #334e68; font: 0.78rem/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; text-align: left; }
+  .links { margin-top: 2rem; font-size: 0.88rem; color: #8a9aa8; }
   .links a { color: #1e6fba; text-decoration: none; margin: 0 0.6rem; }
   .links a:hover { text-decoration: underline; }
   .badges { margin-top: 1.5rem; }
   .badges img { margin: 0 0.25rem; }
 </style>
-<script>
-  // Auto-redirect to English docs; fallback in case meta-refresh is disabled
-  window.location.replace("en/");
-</script>
 </head>
 <body>
 <div class="card">
   <img src="_static/logo-light.png" alt="ABI logo" onerror="this.style.display='none'">
   <h1>ABI Documentation</h1>
   <p class="sub">Agent-Bioinformatics Interface</p>
-  <p style="margin: 1.5rem 0; color: #5a6a7e;">
-    Redirecting to <a href="en/">English documentation</a>...
-  </p>
-  <p style="font-size: 0.88rem; color: #8a9aa8;">
-    <a href="zh/">📖 中文文档</a>
-  </p>
+  <p style="margin: 1.5rem 0 0; color: #5a6a7e;">Choose your documentation language</p>
+  <div class="language-options" aria-label="Documentation language">
+    <a href="en/" lang="en">English</a>
+    <a href="zh/" lang="zh-CN" class="secondary">中文</a>
+  </div>
+  <nav class="task-links" aria-label="Documentation tasks">
+    <a href="en/index.html#quick-start">Run an analysis</a>
+    <a href="en/agent_usage.html">Connect an Agent</a>
+    <a href="en/plugin_development_guide.html">Develop a plugin</a>
+    <a href="en/runtime_locks.html">Deploy and operate</a>
+  </nav>
+  <div class="quick-start" aria-label="Three-step quick start">
+    1. pip install abi-agent<br>
+    2. abi list-types<br>
+    3. abi plan --type &lt;analysis_type&gt; --output-json
+  </div>
   <div class="badges">
     <img src="https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=1e6fba" alt="PyPI">
     <img src="https://img.shields.io/pypi/pyversions/abi-agent?style=flat-square" alt="Python">

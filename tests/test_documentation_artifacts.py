@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 
@@ -78,6 +79,7 @@ def test_release_workflow_uses_full_gate_and_clean_wheel_smoke() -> None:
     assert "needs: quality-gate" in release_workflow
     assert "scripts/check_release_identity.py --tag" in release_workflow
     assert "python -m venv /tmp/abi-wheel-smoke" in release_workflow
+    assert 'export PATH="/tmp/abi-wheel-smoke/bin:$PATH"' in release_workflow
     assert "/tmp/abi-wheel-smoke/bin/abi dry-run" in release_workflow
     assert "--type metagenomic_plasmid" in release_workflow
     assert "--config examples/config_minimal.yaml" in release_workflow
@@ -91,6 +93,19 @@ def test_release_workflow_uses_full_gate_and_clean_wheel_smoke() -> None:
         "viral_viwrap",
     ):
         assert plugin in release_workflow
+
+
+def test_ci_and_release_smoke_test_agent_integrations_from_wheel() -> None:
+    root = Path(__file__).resolve().parents[1]
+    ci_workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    release_workflow = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")
+
+    for workflow in (ci_workflow, release_workflow):
+        assert "wheels=(dist/*.whl)" in workflow
+        assert '"${wheels[0]}[mcp]"' in workflow
+        assert "for platform in claude-code opencode codex" in workflow
+        assert 'abi agent install "$platform"' in workflow
+        assert 'abi agent doctor "$platform"' in workflow
 
 
 def test_ci_treats_sciplot_docs_and_dry_runs_as_required_gates() -> None:
@@ -137,3 +152,51 @@ def test_ci_includes_github_pages_deployment() -> None:
     assert "actions/deploy-pages@v4" in ci_workflow
     assert "actions/upload-pages-artifact@v3" in ci_workflow
     assert ".nojekyll" in ci_workflow
+
+
+def test_docs_build_rejects_unknown_language() -> None:
+    root = Path(__file__).resolve().parents[1]
+
+    result = subprocess.run(
+        ["bash", "docs/build_docs.sh", "eng"],
+        cwd=root,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Usage:" in result.stderr
+
+
+def test_docs_build_preserves_diagnostics_and_enforces_a_budget() -> None:
+    root = Path(__file__).resolve().parents[1]
+    build_script = (root / "docs/build_docs.sh").read_text(encoding="utf-8")
+
+    assert "tail -" not in build_script
+    assert "--keep-going" in build_script
+    assert "diagnostic_count" in build_script
+    assert "must not increase" in build_script
+
+
+def test_docs_sources_use_current_version_and_pages_safe_links() -> None:
+    root = Path(__file__).resolve().parents[1]
+    base_config = (root / "docs/_base.py").read_text(encoding="utf-8")
+    english_index = (root / "docs/en/index.rst").read_text(encoding="utf-8")
+    language_sources = "\n".join(
+        (root / path).read_text(encoding="utf-8")
+        for path in (
+            "docs/en/conf.py",
+            "docs/zh/conf.py",
+            "docs/zh/index.rst",
+            "docs/_static/lang-toggle.js",
+        )
+    )
+
+    assert '_repo_root / "pyproject.toml"' in base_config
+    assert "release = _version_match.group(1)" in base_config
+    assert "v1.4.0" not in language_sources
+    assert 'href="/en/' not in language_sources
+    assert 'href="/zh/' not in language_sources
+    for plugin in ("metagenomic_plasmid", "easymetagenome", "viral_viwrap"):
+        assert f"``{plugin}``" in english_index

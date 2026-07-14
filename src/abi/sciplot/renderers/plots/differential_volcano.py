@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 
+from abi.sciplot.renderers.annotation_layout import annotate_points_without_overlap
 from abi.sciplot.schema.figure_spec import FigureSpec
 from abi.sciplot.schema.palette_spec import PaletteRegistry
 from abi.sciplot.schema.theme_spec import ThemeSpec
@@ -109,26 +110,24 @@ def plot_differential_volcano(
         sig_df["_neglogp"] = y_transformed[sig_mask].values
         top_n = min(20, len(sig_df))
         top = sig_df.nlargest(top_n, "_neglogp")
-        for _, row in top.iterrows():
-            ax.annotate(
+        annotations = [
+            (
+                float(row[x_col]),
+                -np.log10(max(float(row[y_col]), 1e-300)),
                 str(row[label_col]),
-                (float(row[x_col]), -np.log10(max(float(row[y_col]), 1e-300))),
-                fontsize=5,
-                alpha=0.8,
-                xytext=(5, 3),
-                textcoords="offset points",
             )
+            for _, row in top.iterrows()
+        ]
+        annotate_points_without_overlap(
+            ax,
+            annotations,
+            np.column_stack((x_vals, y_transformed)),
+        )
 
-    ax.legend(fontsize=theme.font.legend_size_pt, frameon=theme.legend.frame)
-
-    # Annotation of total counts
-    ax.text(
-        0.98,
-        0.95,
-        f"Up: {is_up.sum()}  Down: {is_down.sum()}  NS: {is_ns.sum()}",
-        transform=ax.transAxes,
-        ha="right",
-        va="top",
-        fontsize=7,
-        bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.8},
+    legend = ax.legend(
+        fontsize=theme.font.legend_size_pt,
+        frameon=theme.legend.frame,
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
     )
+    legend.set_title(f"Up: {is_up.sum()}  Down: {is_down.sum()}  NS: {is_ns.sum()}")

@@ -20,8 +20,8 @@ HTTP Job Service with force-kill capability.
 
 > :cn: [中文版](README.zh.md)
 
-> **Engineering status (v1.5.3 source, 2026-07-09): local freeze candidate.**
-> ~2252 tests pass (83% statement coverage), risk-based module coverage gates
+> **Engineering status (v1.5.5 source, 2026-07-12): local freeze candidate.**
+> 2296 tests pass (83% statement coverage), risk-based module coverage gates
 > pass, and a clean wheel runs all 7 built-in plugin dry-runs. Hard freeze still
 > requires a green remote Python 3.10-3.13 matrix, fixed real-tool benchmarks
 > with biological acceptance criteria, two defect-only release candidates, and
@@ -92,11 +92,12 @@ abi contract-lint --type metagenomic_plasmid --strict
 # Headless agent dispatch (used by Job Service workers)
 abi dispatch --command list-types --arguments '{}'
 
-# Start MCP stdio server for Claude Desktop / Claude Code
+# Start the safe MCP stdio server for agent platforms
 abi-mcp
 
-# Install ABI agent skills into Claude Code (~/.claude/skills/abi/)
-abi install-skills
+# Install and diagnose an agent integration (claude-code, opencode, codex)
+abi agent install codex --scope project
+abi agent doctor codex --scope project
 
 # Scientific figure compiler (validate, render, lint, export)
 abi-sciplot validate --spec figure.yaml
@@ -109,6 +110,35 @@ abi job-service --workers 2 --store jobs.json --subprocess-workers
 ```
 
 All agent-facing commands support `--output-json`.
+
+## Release-Ready Runtime Locks
+
+ABI can snapshot the exact Conda packages, registered tools, databases, host
+runtime, ABI version, and Git commit used by a production workflow. A normal
+`lock-runtime` invocation is an audit snapshot; `--strict` is the release gate.
+
+```bash
+abi lock-runtime \
+  --output-dir locks/candidate \
+  --prefix abi-production \
+  --mamba-root /root/autodl-tmp/.mamba \
+  --resource-root /root/autodl-tmp/resources \
+  --db-profile full \
+  --strict
+```
+
+Strict mode fails closed on missing/extra Conda environments, omitted or failed
+package snapshots, unresolved release-scope tools, non-ready release-scope
+resources, missing code identity, or a dirty Git worktree. Add
+`--require-all-tools` only when certifying every optional registered capability.
+
+The canonical cloud layout keeps plasmid/metagenome databases under
+`resources/autoplasm/` and RNA references at the top level. On the managed ABI
+cloud host, `scripts/cloud/prepare_release_lock.sh` creates checksum-verified,
+read-only, version-and-commit-qualified locks atomically. The current helper
+certifies the six provisioned workflows; `viral_viwrap` remains outside that
+release scope until its separate multi-environment and database bundle is
+installed. See [release-ready runtime locks](docs/en/runtime_locks.md).
 
 ## Built-In Analysis Types
 
@@ -192,9 +222,12 @@ Runtimes            local  │  Docker  │  Nextflow  │  HPC (SLURM/PBS)  │
   platforms, and step-level I/O directly from DAG + tool registry, no plan required
 - **Multi-LLM descriptors** from `abi export-tools --format openai|anthropic|gemini [--provider ...]` covering 7+ providers
 - OpenAI-compatible descriptors from `abi export-openai-tools` (backward compat)
-- MCP stdio server via `abi-mcp` (or `python -m abi.mcp.server`) — auto-generated from SSOT
+- MCP stdio server via `abi-mcp` (or `python -m abi.mcp.server`) — auto-generated from SSOT;
+  the default `safe` profile omits execution and management tools, while
+  `abi-mcp --profile full` adds the confirmation-gated `abi_run`
 - HTTP Job Service via `abi job-service` and `abi job submit/list/status/artifacts/cancel`
-- Skills via `abi install-skills` (copies bundled SKILL.md files to `~/.claude/skills/abi/`)
+- Agent integration installer and diagnostics via `abi agent install|doctor`
+- Ready-to-load Claude Code, OpenCode, and Codex assets under `integrations/`
 
 **Plan summarization**: `abi plan` envelopes now include a `summary` field (pipeline stages,
 key tools, platforms) so agents understand the workflow structure without reading the full

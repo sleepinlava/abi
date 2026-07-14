@@ -9,6 +9,10 @@ COPY docker/.condarc /root/.condarc
 ARG PIP_INDEX_URL=
 ENV PIP_INDEX_URL=${PIP_INDEX_URL}
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends fonts-wqy-zenhei && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN conda install -y -n base -c conda-forge mamba && \
     mamba clean -afy
 
@@ -34,10 +38,11 @@ COPY data/ /app/data/
 COPY envs/ /app/envs/
 COPY examples/ /app/examples/
 COPY golden_traces/ /app/golden_traces/
+COPY integrations/ /app/integrations/
 
 RUN /opt/conda/envs/rnaseq/bin/pip install --no-cache-dir /app/ && \
     rm -rf /app/src /app/plugins /app/config /app/pyproject.toml /app/environments.yaml \
-    /app/data /app/envs /app/examples /app/golden_traces
+    /app/data /app/envs /app/examples /app/golden_traces /app/integrations
 
 # ── Runtime ──────────────────────────────────────────────────────────────
 ENV PATH="/opt/conda/envs/rnaseq/bin:$PATH"

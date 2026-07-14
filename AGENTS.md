@@ -4,7 +4,7 @@
 
 Core Python code lives in `src/abi/`. Keep transport-neutral behavior in the core; CLI, MCP, HTTP, and provider integrations should remain thin adapters. Built-in workflow implementations are split between Python entry points in `src/abi/plugins/` and declarative definitions in `plugins/<analysis_type>/` (`pipeline_dag.yaml`, tool registries, schemas, and report metadata). Tests are organized under `tests/unit/`, `tests/integration/`, and `tests/smoke/`; SciPlot also has focused tests in `src/abi/sciplot/tests/`. Use `examples/` for runnable configuration samples, `docs/en/` and `docs/zh/` for documentation, `envs/` for Conda environments, `environments.yaml` for tool→env assignments (18 envs, 98 tools), and `scripts/` for maintenance utilities.
 
-Current codebase (2026-07-09): 209 Python source files (~51.5k lines), plasmid engine (11,823 lines), 44-file sciplot module (3,912 lines), 134 test files (2,121 passed), 79% coverage.
+Current codebase (2026-07-12): 215 Python source files (~53.5k lines), plasmid engine (11,823 lines), 44-file sciplot module (3,912 lines), 153 test files (2,296 passed), 83% coverage.
 
 ## Build, Test, and Development Commands
 
@@ -17,6 +17,7 @@ Current codebase (2026-07-09): 209 Python source files (~51.5k lines), plasmid e
 - `mypy src/abi/ --ignore-missing-imports` performs static type checking.
 - `python -m build` creates wheel and source distributions.
 - `abi query --type metagenomic_plasmid --what stages` lightweight metadata query (~50ms).
+- `abi lock-runtime --db-profile full --strict` builds and validates a release-scope runtime lock.
 - `abi-sciplot validate --spec figure.yaml` validates a FigureSpec before rendering.
 
 ## Coding Style & Naming Conventions
@@ -91,6 +92,34 @@ add another automatic publication trigger, restore optional bot workflows, renam
 publisher without first updating PyPI, or upload with a long-lived token. After publishing, verify the
 PyPI version, hashes/provenance,
 clean-environment installation, CLI entry points, GitHub Release, and container tag results.
+
+## Release-Ready Runtime Lock Invariants
+
+Treat a normal `abi lock-runtime` result as an audit snapshot, not a release artifact. A formal lock
+must use `--strict`, include Conda package snapshots, select the intended database profile, and bind
+to a non-empty ABI version plus a clean Git commit. Strict validation must fail on missing or extra
+declared environments, package export errors, unresolved required/default-enabled tools, and
+non-ready workflow-level or release-required resources. `--require-all-tools` additionally promotes
+all optional registered tools and their resources into the release scope.
+The runtime lock's `release.blocking_missing_tools` and `release.not_ready_resources` fields are the
+authoritative certification summary; global tool/resource counts intentionally retain out-of-scope
+optional gaps for audit visibility.
+
+Use one canonical top-level runtime resource root. On the managed cloud host it is
+`/root/autodl-tmp/resources`: plasmid, metagenome, Amplicon, EasyMeta, and WGS databases live below
+`autoplasm/`, while `star_index/`, the annotation GTF, and future ViWrap resources live at the top
+level. The older `ABI_RESOURCE_ROOT` used by database bootstrap scripts still means the
+`autoplasm/` database directory; the release helper deliberately uses `ABI_RUNTIME_RESOURCE_ROOT`
+for the top-level root. Do not interchange them.
+
+Create cloud release locks only with `scripts/cloud/prepare_release_lock.sh`. It must remain
+idempotent and concurrency-safe, build in a staging directory, validate before publication, write a
+relative SHA-256 manifest, publish with an atomic no-replace operation, and make the result read-only.
+Existing release directories are immutable identities: verify and reuse them; never overwrite them.
+The helper currently certifies the six provisioned workflows and intentionally excludes
+`viral_viwrap` until its official multi-environment installation and database bundle are deployed.
+Keep `docs/en/runtime_locks.md`, `docs/zh/runtime_locks.md`, both READMEs, and the cloud README aligned
+whenever this policy or certified scope changes.
 
 ## Local Codex Cloud Access
 

@@ -10,3 +10,4 @@ dependencies:
 - blast
 - hmmer
 - mmseqs2
+- mummer

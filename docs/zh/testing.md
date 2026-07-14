@@ -1,6 +1,7 @@
 # ABI 测试指南
 
-> **当前状态 (2026-07-06)**: 1364 测试通过, 11 跳过, 3 预存失败, 83% 语句覆盖率, 0 ruff 错误, 0 mypy 错误。
+> 测试数量和覆盖率会频繁变化。当前状态以最新 CI 运行结果为准；下述命令与
+> 强制门槛是持续维护的规范。
 
 本指南涵盖 ABI 测试基础设施：测试分类、共享 fixtures、基准框架、合约验证、黄金轨迹、冒烟测试、CI/CD 以及插件作者的测试规范。
 
@@ -119,7 +120,7 @@ def test_plugin_contract():
 
 3. 如果插件实现了 `ABIInitializablePlugin`（可选）— 检查 `root`
 
-全部 5 个内置插件均有合约测试。运行方式：
+全部内置插件均有合约测试。运行方式：
 
 ```bash
 pytest tests/ -k "contract" -v
@@ -289,13 +290,13 @@ ABI 只保留四个 GitHub Actions workflow：CI、Docker、Release 和受信 Py
 | Sphinx 文档构建 | 仅 3.12 |
 | Wheel 构建 + 冒烟测试 | 仅 3.12 |
 
-3.12 构建使用默认的 `python -m build` 路径：源码树 → sdist → wheel。因此，wheel 中配置为 `force-include` 的文件也必须进入 sdist，尤其是根目录 `environments.yaml`。
+3.12 构建使用默认的 `python -m build` 路径：源码树 → sdist → wheel。因此，wheel 中配置为 `force-include` 的文件也必须进入 sdist，尤其是根目录 `environments.yaml` 和 `integrations/` 下的平台原生资产。干净 wheel 冒烟测试会使用 `[mcp]` extra 安装 wheel，再安装并诊断 Claude Code、OpenCode 和 Codex 集成，避免缺少包资产或 MCP runtime 不可用的问题进入发布。
 
 ### `docker.yml` — 在相关 PR 和 release tag 上构建插件镜像
 
 - PR 构建加载单个 `linux/amd64` 镜像，标签为 `abi-<plugin>:latest`，随后在容器中运行 `abi list-types`。
 - 本地 `load: true` 构建关闭 provenance 和 SBOM；registry push 才启用二者。attestation 产生的 manifest list 无法由本地 Docker exporter 加载。
-- 构建输入包含 `docker/.condarc`、`environments.yaml`、生成的 `envs/*.yml`、插件、配置、脚本、数据、示例和 golden traces，不能被 `.dockerignore` 排除。
+- 构建输入包含 `docker/.condarc`、`environments.yaml`、生成的 `envs/*.yml`、`integrations/`、插件、配置、脚本、数据、示例和 golden traces，不能被 `.dockerignore` 排除。所有插件镜像都将 `integrations/` 复制到 `/app`，且 `integrations/**` 会触发该 workflow。
 - PR 自动构建 amplicon、RNA-seq、WGS 和 metatranscriptomics；大型 plasmid 镜像仅手动构建。
 - registry 推送默认多架构；RNA-seq 在 R/DESeq2 环境通过原生 arm64 构建和冒烟验证前仅发布 `linux/amd64`。
 - packaging、环境、Dockerfile、ignore 文件或 Docker workflow 变更必须运行 `pytest tests/unit/test_docker_configuration.py -q`。
@@ -372,7 +373,7 @@ def test_build_plan():
 
 ## 覆盖率
 
-CI 强制最低 60% 行覆盖率（当前：83%）。覆盖率基线通过以下方式维持：
+CI 强制最低 75% 行覆盖率，并执行按风险分级的模块门禁。覆盖率基线通过以下方式维持：
 
 - 所有解析器函数的单元测试
 - CLI 和 dry-run 路径的集成测试

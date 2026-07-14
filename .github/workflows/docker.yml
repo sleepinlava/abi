@@ -32,6 +32,7 @@ on:
     branches: [main, master]
     paths:
       - ".dockerignore"
+      - ".github/workflows/ci.yml"
       - ".github/workflows/docker.yml"
       - "README.md"
       - "config/**"
@@ -41,6 +42,7 @@ on:
       - "envs/**"
       - "examples/**"
       - "golden_traces/**"
+      - "integrations/**"
       - "plugins/**"
       - "pyproject.toml"
       - "scripts/**"

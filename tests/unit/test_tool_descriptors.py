@@ -536,7 +536,7 @@ def test_mcp_generates_tool_with_many_parameters(monkeypatch):
     fake = FakeMCPTool("abi")
     monkeypatch.setattr(server, "FastMCP", lambda name: fake)
 
-    server.create_server()
+    server.create_server(profile="full")
     assert "abi_run" in fake.tools
     fn = fake.tools["abi_run"]
     sig = __import__("inspect").signature(fn)
@@ -577,7 +577,7 @@ def test_mcp_legacy_autoplasm_alias_registered(monkeypatch):
     fake = FakeMCPTool("abi")
     monkeypatch.setattr(server, "FastMCP", lambda name: fake)
 
-    server.create_server()
+    server.create_server(profile="management")
     assert "autoplasm_validate_result" in fake.tools
     fn = fake.tools["autoplasm_validate_result"]
     sig = __import__("inspect").signature(fn)

@@ -15,9 +15,9 @@ resources:
 
   bakta:
     # Bakta full database (~84GB) — production genome annotation.
-    database: bakta_full/db
+    database: bakta/db
   kraken2:
     # Kraken2 standard plus regex/shadow targets — broader recall.
-    database: kraken2_full
+    database: kraken2
     version: standard_20260226
   # Other databases inherit from default / light profile; only override what differs.

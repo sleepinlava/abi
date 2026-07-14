@@ -68,12 +68,15 @@ each session start.
 ## MCP Server
 
 ```bash
-abi-mcp                    # start MCP stdio server
+abi-mcp                    # safe profile: no execution or management tools
+abi-mcp --profile full     # add confirmation-gated abi_run
 python -m abi.mcp.server   # equivalent (if abi-mcp not available)
 ```
 
-The server registers all ABI agent tools (list_types, plan, dry_run, inspect,
-report, run, etc.) as MCP tools for Claude Desktop and Claude Code.
+The default `safe` profile registers discovery, planning, inspection, and
+reporting tools for Claude Desktop and Claude Code. Use `full` only when the
+session needs `abi_run`; execution still requires `confirm_execution=true`
+after explicit user approval.
 
 ## Python API
 

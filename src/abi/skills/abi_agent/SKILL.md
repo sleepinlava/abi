@@ -128,14 +128,19 @@ Use `abi <command> --output-json`. Works with any agent that can run shell comma
 ### 2. MCP Server (Claude Desktop / Claude Code native)
 ```bash
 abi-mcp
+abi-mcp --profile full  # add abi_run only when real execution is needed
 # or: python -m abi.mcp.server
 ```
-Registers all ABI tools as MCP tools. Configure in Claude Desktop `claude_desktop_config.json`:
+The default `safe` profile registers discovery, planning, inspection, and
+reporting tools. The `full` profile adds `abi_run`, which still requires
+explicit user approval and `confirm_execution=true`. Configure Claude Desktop
+with the safe profile by default:
 ```json
 {
   "mcpServers": {
     "abi": {
-      "command": "abi-mcp"
+      "command": "abi-mcp",
+      "args": ["--profile", "safe"]
     }
   }
 }

@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 
+from abi.sciplot.renderers.annotation_layout import annotate_points_without_overlap
 from abi.sciplot.schema.figure_spec import FigureSpec
 from abi.sciplot.schema.palette_spec import PaletteRegistry
 from abi.sciplot.schema.theme_spec import ThemeSpec
@@ -94,17 +95,20 @@ def plot_volcano(
         # Sort by significance
         order = np.argsort(p_vals[sig_idx])
         top_n = 50
+        annotations = []
         for idx in sig_idx[order[:top_n]]:
             label_text = str(data[label_col].values[idx])
             if label_text and label_text.lower() not in ("nan", "none", ""):
-                ax.annotate(
-                    label_text,
-                    (x_vals[idx], y_vals[idx]),
-                    fontsize=5,
-                    alpha=0.8,
-                    xytext=(5, 3),
-                    textcoords="offset points",
-                    arrowprops={"arrowstyle": "-", "color": "grey", "alpha": 0.3},
-                )
+                annotations.append((float(x_vals[idx]), float(y_vals[idx]), label_text))
+        annotate_points_without_overlap(
+            ax,
+            annotations,
+            np.column_stack((x_vals, y_vals)),
+            arrow=True,
+        )
 
-    ax.legend(fontsize=theme.font.legend_size_pt, loc="upper right")
+    ax.legend(
+        fontsize=theme.font.legend_size_pt,
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
+    )

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -59,6 +60,21 @@ def validate_release_identity(tag: str | None = None) -> list[str]:
 
     if tag is not None and tag != f"v{expected}":
         errors.append(f"release tag is {tag}, expected v{expected}")
+
+    for manifest_path in (
+        ROOT / "integrations/claude-code/abi/.claude-plugin/plugin.json",
+        ROOT / "integrations/codex/abi/.codex-plugin/plugin.json",
+    ):
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            errors.append(f"cannot read plugin manifest {manifest_path.relative_to(ROOT)}: {exc}")
+            continue
+        if manifest.get("version") != expected:
+            errors.append(
+                f"plugin manifest {manifest_path.relative_to(ROOT)} is "
+                f"{manifest.get('version')!r}, expected {expected}"
+            )
 
     return errors
 

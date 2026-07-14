@@ -1,6 +1,7 @@
 # ABI Testing Guide
 
-> **Current state (2026-07-06)**: 1364 tests passed, 11 skipped, 3 pre-existing failures, 83% statement coverage, 0 ruff errors, 0 mypy errors.
+> Test counts and coverage change frequently. Use the latest CI run as the current
+> status; the commands and enforced thresholds below are the maintained contract.
 
 This guide covers the ABI testing infrastructure: test taxonomy, shared fixtures, the benchmark framework, contract validation, golden traces, smoke tests, CI/CD, and conventions for plugin authors.
 
@@ -119,7 +120,7 @@ def test_plugin_contract():
 
 3. If the plugin implements `ABIInitializablePlugin` (optional) — checks for `root`
 
-All 5 built-in plugins have contract tests. Run with:
+All built-in plugins have contract tests. Run with:
 
 ```bash
 pytest tests/ -k "contract" -v
@@ -285,7 +286,10 @@ trusted PyPI publisher.
 The 3.12 build uses the default `python -m build` path: source tree → sdist →
 wheel. Files configured as wheel `force-include` inputs must therefore also be
 included in the sdist. This specifically includes the root
-`environments.yaml` manifest.
+`environments.yaml` manifest and the platform-native assets under `integrations/`.
+The clean-wheel smoke test installs the wheel with `[mcp]`, then installs and
+diagnoses the Claude Code, OpenCode, and Codex integrations so a missing package
+asset or unusable MCP runtime fails before release.
 
 ### `docker.yml` — Builds plugin images on relevant PRs and release tags
 
@@ -295,8 +299,9 @@ included in the sdist. This specifically includes the root
   pushes enable both; combining attestations with the local Docker exporter
   produces an unsupported manifest list.
 - Docker build inputs include `docker/.condarc`, `environments.yaml`, generated
-  `envs/*.yml`, plugins, configuration, scripts, data, examples, and golden
-  traces. None may be excluded by `.dockerignore`.
+  `envs/*.yml`, `integrations/`, plugins, configuration, scripts, data, examples,
+  and golden traces. None may be excluded by `.dockerignore`; all plugin images
+  copy `integrations/` into `/app`, and `integrations/**` triggers this workflow.
 - Automatic PR CI builds amplicon, RNA-seq, WGS, and metatranscriptomics. The
   large plasmid image is manual-only.
 - Registry pushes are multi-platform except RNA-seq, which remains
@@ -380,7 +385,7 @@ Benchmark tests should target:
 
 ## Coverage
 
-CI enforces a minimum 60% line coverage floor (current: 83%). The coverage baseline is maintained through:
+CI enforces a minimum 75% line coverage floor plus risk-based module gates. The coverage baseline is maintained through:
 
 - Unit tests for all parser functions
 - Integration tests for CLI and dry-run paths

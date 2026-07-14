@@ -44,6 +44,12 @@ export ABI_MAMBA_ROOT=/data/.mamba
 | `ABI_RESOURCE_ROOT` | `<repo>/resources/autoplasm` | Database root |
 | `ABI_LOG_DIR` | `<repo>/logs/cloud` | Log + sentinel directory |
 | `ABI_RESOURCE_TIMEOUT_SECONDS` | `86400` (24h) | Per-database download timeout |
+| `ABI_RUNTIME_RESOURCE_ROOT` | `/root/autodl-tmp/resources` | Top-level root used by release locks |
+| `ABI_LOCK_ROOT` | `/root/autodl-tmp/runtime-locks` | Immutable release-lock artifact root |
+
+`ABI_RESOURCE_ROOT` is the database-bootstrap root and corresponds to the
+`autoplasm/` subtree. `ABI_RUNTIME_RESOURCE_ROOT` is one level higher and also
+contains RNA references. Do not use the two variables interchangeably.
 
 ## Stage scripts
 
@@ -85,6 +91,23 @@ bash scripts/cloud/03_verify.sh --json   # emit only JSON to stdout
 Exit codes: `0` = all ok, `2` = partial (manual DBs pending), `1` = fatal
 (environments missing).
 
+### `prepare_release_lock.sh` — Release lock
+
+After environment/database verification and from a clean Git commit, run:
+
+```bash
+bash scripts/cloud/prepare_release_lock.sh
+```
+
+The helper establishes canonical top-level links, exports complete Conda package
+snapshots with the `full` database profile, applies strict release-scope
+validation, writes relative SHA-256 checksums, and atomically publishes a
+read-only version-and-commit-qualified directory under `ABI_LOCK_ROOT`. Repeated
+or concurrent calls verify and reuse the same artifact. `viral_viwrap` remains
+outside this certified six-workflow scope until its separate official
+environments and databases are installed. Pass `--require-all-tools` only after
+every optional registered tool and resource has also been provisioned.
+
 ## Files
 
 ```
@@ -93,6 +116,7 @@ scripts/cloud/
 ├── 01_envs.sh          # stage 1 — conda environments
 ├── 02_databases.sh     # stage 2 — database download
 ├── 03_verify.sh        # stage 3 — verification
+├── prepare_release_lock.sh # strict runtime-lock publication
 └── README.cloud.md     # this file
 ```
 
@@ -138,6 +162,25 @@ export ABI_MAMBA_ROOT=/data/.mamba
 | `ABI_RESOURCE_ROOT` | `<repo>/resources/autoplasm` | 数据库根目录 |
 | `ABI_LOG_DIR` | `<repo>/logs/cloud` | 日志与哨兵目录 |
 | `ABI_RESOURCE_TIMEOUT_SECONDS` | `86400`（24小时） | 单库下载超时 |
+| `ABI_RUNTIME_RESOURCE_ROOT` | `/root/autodl-tmp/resources` | 正式锁使用的顶层资源根 |
+| `ABI_LOCK_ROOT` | `/root/autodl-tmp/runtime-locks` | 不可变正式锁产物根目录 |
+
+`ABI_RESOURCE_ROOT` 是数据库下载根，对应 `autoplasm/` 子树；
+`ABI_RUNTIME_RESOURCE_ROOT` 高一层，还包含 RNA 参考资源。两者不能混用。
+
+## 正式运行时锁
+
+环境和数据库校验通过且 Git 工作树干净后，运行：
+
+```bash
+bash scripts/cloud/prepare_release_lock.sh
+```
+
+助手会建立统一顶层链接、导出完整 Conda 包快照、使用 `full` 数据库 profile、执行
+严格发布范围验收、写入相对 SHA-256，并原子发布带版本和 commit 的只读目录。
+重复或并发调用会验证并复用同一产物。当前认证六类已部署流程；ViWrap 在其独立
+环境和数据库完成安装前不进入正式范围。只有全部可选工具和资源均部署后才使用
+`--require-all-tools`。
 
 ## 断点续跑
 

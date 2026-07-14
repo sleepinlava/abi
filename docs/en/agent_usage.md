@@ -18,18 +18,83 @@ use the `abi` CLI and its bioinformatics tools.
 Use `--force` to overwrite existing files, or `--target` to customize
 the destination directory.
 
-### MCP Server (Claude Desktop / Claude Code)
+### Claude Code, OpenCode, and Codex integrations
+
+The repository ships a Claude Code plugin under `integrations/claude-code/abi/`
+an OpenCode configuration plus Agent Skill under `integrations/opencode/`, and
+a Codex plugin under `integrations/codex/abi/`. All three use the same
+transport-neutral ABI interface and start the MCP server with the default
+`safe` profile.
+
+Install ABI with MCP support before loading an integration:
 
 ```bash
-abi-mcp
+pip install "abi-agent[mcp]"
 ```
 
-Configure in `claude_desktop_config.json`:
+Use the unified installer for user or project scope:
+
+```bash
+abi agent install claude-code --scope project
+abi agent install opencode --scope project
+abi agent install codex --scope project
+abi agent doctor codex --scope project
+```
+
+The installer preserves unrelated OpenCode JSON and Codex TOML settings. It
+refuses to replace a different `abi` MCP entry unless `--force` is supplied.
+Use `--output-json` in automation.
+
+Installation locations are platform-native:
+
+| Platform | Project skill | Project MCP config | User skill / config |
+| --- | --- | --- | --- |
+| Claude Code | `.claude/skills/abi/SKILL.md` | `.mcp.json` | `~/.claude/skills/abi`, `~/.claude.json` |
+| OpenCode | `.opencode/skills/abi/SKILL.md` | `opencode.json` | `~/.config/opencode/skills/abi`, `~/.config/opencode/opencode.json` |
+| Codex | `.agents/skills/abi/SKILL.md` | `.codex/config.toml` | `~/.agents/skills/abi`, `~/.codex/config.toml` |
+
+`doctor` is read-only and exits non-zero when `abi-mcp`, the MCP runtime, the
+skill, or the MCP entry is missing. It initializes the safe server without
+starting stdio, so a missing `mcp` extra is detected before the agent launches.
+Start a new agent session after installing a plugin or when a client does not
+detect newly added skills automatically.
+
+For Claude Code plugin development:
+
+```bash
+claude plugin validate integrations/claude-code/abi --strict
+claude --plugin-dir integrations/claude-code/abi
+```
+
+For Codex plugin development, validate the distributable bundle with:
+
+```bash
+python /path/to/plugin-creator/scripts/validate_plugin.py integrations/codex/abi
+```
+
+Direct Codex installation uses `.agents/skills/abi` for project scope or
+`~/.agents/skills/abi` for user scope, plus the matching `.codex/config.toml`.
+
+### MCP Server
+
+```bash
+abi-mcp                         # safe: discovery, planning, and result tools
+abi-mcp --profile discovery     # read-only discovery and inspection
+abi-mcp --profile full          # adds confirmation-gated abi_run
+```
+
+The `management` profile preserves the complete compatibility surface and is
+intended for administrative use, not ordinary agent sessions.
+
+Manual MCP configuration uses:
 
 ```json
 {
   "mcpServers": {
-    "abi": { "command": "abi-mcp" }
+    "abi": {
+      "command": "abi-mcp",
+      "args": ["--profile", "safe"]
+    }
   }
 }
 ```
@@ -106,7 +171,8 @@ abi export-openai-tools --type metagenomic_plasmid --format responses
 ### MCP
 
 ```bash
-abi-mcp  # start stdio server, registers all ABI tools as MCP tools
+abi-mcp                  # safe profile (default)
+abi-mcp --profile full   # includes abi_run
 ```
 
 ### Python
