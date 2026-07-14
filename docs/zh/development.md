@@ -7,6 +7,7 @@
 ```
 src/abi/
   agent/              ABIAgentInterface、JSON 信封、Agent 上下文导出
+  agent_integrations.py  Claude Code、OpenCode 与 Codex 集成安装和诊断
   figures/            FigureEngine（7 渲染器）、FigureSpec — 通用图表系统
   report/             write_full_report、write_plugin_report、write_methods、
                       citations、limitations、html — 通用报告系统
@@ -93,6 +94,28 @@ pytest tests/ -v --tb=short
 
 `mypy` 有意限定在 `src/abi/` 范围内；捆绑管线首先由运行时测试和 ruff 覆盖，更严格的类型检查留待后续加固。
 
+## Agent 集成开发
+
+以 `integrations/<platform>/abi/` 作为各平台原生资产的单一事实来源。
+`abi agent install` 将这些资产复制到项目或用户配置中，`abi agent doctor`
+只读校验已安装的技能、MCP 配置、命令可用性和 safe server 初始化，不修改文件。
+
+修改集成时：
+
+1. 除非平台有已记录的约束，保持 Claude Code、OpenCode 和 Codex 行为一致。
+2. 对三个平台分别在临时项目目录运行 `abi agent install <platform> --scope project`
+   以及对应的 `abi agent doctor`。
+3. 已安装客户端提供原生校验器时应运行它；Claude Code 当前使用
+   `claude plugin validate`。若 Codex 版本没有本地 `plugin validate` 子命令，
+   则依靠 manifest 与资产回归测试验证。
+4. 运行 `python -m build`，使用 `[mcp]` extra 安装 wheel，并在干净 wheel 环境中
+   重复 install/doctor；仅源码树成功不能证明资产或 MCP runtime 已正确打包。
+5. 保持 `.claude-plugin/plugin.json` 和 `.codex-plugin/plugin.json` 的版本等于
+   `project.version`；`scripts/check_release_identity.py` 会强制检查。
+
+`integrations/` 同时属于包和 Docker 构建输入，必须进入 sdist、wheel 和每个
+Docker `/app` 上下文；该目录的变化也必须触发 Docker workflow。
+
 ## 运行时合约执行
 
 通用执行器强制执行嵌入在每个 `PlanStep.params["_contract"]` 中的步骤级合约。DAG 驱动的规划器从 `pipeline_dag.yaml` 复制此块，因此 DAG 是输出和运行时断言的唯一真相来源。
@@ -124,6 +147,7 @@ pytest tests/ -v --tb=short
 - `envs/` — 由 `environments.yaml` 通过 `scripts/emit_env_yamls.py` 生成
 - `skills/`（位于 ``src/abi/skills/`` — 随包捆绑，通过 ``abi install-skills`` 安装）
 - `plugins/`
+- `integrations/` — Claude Code、OpenCode 和 Codex 的平台原生集成包
 - `examples/`
 - `data/examples/`
 - `scripts/`
@@ -179,6 +203,8 @@ execution:
 | `abi check-resources --type <plugin>` | 检查资源/数据库可用性 |
 | `abi setup-resources --type <plugin> --confirm` | 资源设置（需要确认） |
 | `abi install-skills` | 将 SKILL.md 文件安装到 `~/.claude/skills/abi/` |
+| `abi agent install <platform>` | 安装 Claude Code、OpenCode 或 Codex 集成 |
+| `abi agent doctor <platform>` | 只读校验已安装的 Agent 集成 |
 | `abi export-openai-tools --type <plugin>` | OpenAI 函数调用描述符 |
 | `abi-mcp` | 启动 MCP stdio 服务器 |
 

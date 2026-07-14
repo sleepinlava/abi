@@ -103,6 +103,10 @@ def test_doctor_reports_healthy_claude_code_install(tmp_path, monkeypatch) -> No
         "abi.agent_integrations.shutil.which",
         lambda command: "/venv/bin/abi-mcp" if command == "abi-mcp" else None,
     )
+    monkeypatch.setattr(
+        "abi.agent_integrations._mcp_runtime_status",
+        lambda: (True, "Safe MCP server initialized: FastMCP"),
+    )
     install_agent_integration(platform="claude-code", scope="user")
 
     report = doctor_agent_integration(platform="claude-code", scope="user")
@@ -111,6 +115,7 @@ def test_doctor_reports_healthy_claude_code_install(tmp_path, monkeypatch) -> No
     assert report["passed"] is True
     assert {check["name"] for check in report["checks"]} == {
         "abi_mcp_executable",
+        "abi_mcp_runtime",
         "skill",
         "platform_config",
     }
@@ -147,6 +152,10 @@ def test_doctor_reports_healthy_codex_project_install(tmp_path, monkeypatch) -> 
         "abi.agent_integrations.shutil.which",
         lambda command: "/venv/bin/abi-mcp" if command == "abi-mcp" else None,
     )
+    monkeypatch.setattr(
+        "abi.agent_integrations._mcp_runtime_status",
+        lambda: (True, "Safe MCP server initialized: FastMCP"),
+    )
     install_agent_integration(platform="codex", scope="project", project_dir=tmp_path)
 
     report = doctor_agent_integration(
@@ -157,6 +166,33 @@ def test_doctor_reports_healthy_codex_project_install(tmp_path, monkeypatch) -> 
 
     assert report["status"] == "healthy"
     assert report["passed"] is True
+
+
+def test_doctor_reports_missing_mcp_runtime_as_unhealthy(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "abi.agent_integrations.shutil.which",
+        lambda command: "/venv/bin/abi-mcp" if command == "abi-mcp" else None,
+    )
+    monkeypatch.setattr(
+        "abi.agent_integrations._mcp_runtime_status",
+        lambda: (
+            False,
+            "Safe MCP server initialization failed: RuntimeError: install the MCP extra",
+        ),
+    )
+    install_agent_integration(platform="codex", scope="project", project_dir=tmp_path)
+
+    report = doctor_agent_integration(
+        platform="codex",
+        scope="project",
+        project_dir=tmp_path,
+    )
+
+    runtime_check = next(check for check in report["checks"] if check["name"] == "abi_mcp_runtime")
+    assert report["status"] == "unhealthy"
+    assert report["passed"] is False
+    assert runtime_check["status"] == "failed"
+    assert "install the MCP extra" in runtime_check["message"]
 
 
 def test_codex_install_refuses_conflicting_mcp_entry_without_force(tmp_path) -> None:

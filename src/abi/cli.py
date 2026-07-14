@@ -1756,7 +1756,7 @@ def agent_doctor_command(
         help="Emit machine-readable JSON.",
     ),
 ) -> None:
-    """Check ABI executable discovery, skill installation, and MCP configuration."""
+    """Check ABI executable/runtime discovery, skill installation, and MCP configuration."""
     try:
         result = doctor_agent_integration(
             platform=platform,

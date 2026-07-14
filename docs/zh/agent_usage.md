@@ -40,6 +40,19 @@ abi agent doctor codex --scope project
 `abi` MCP 项，默认拒绝覆盖，只有显式传入 `--force` 才会替换。自动化场景可
 使用 `--output-json`。
 
+各平台使用其原生安装位置：
+
+| 平台 | 项目级 Skill | 项目级 MCP 配置 | 用户级 Skill / 配置 |
+| --- | --- | --- | --- |
+| Claude Code | `.claude/skills/abi/SKILL.md` | `.mcp.json` | `~/.claude/skills/abi`、`~/.claude.json` |
+| OpenCode | `.opencode/skills/abi/SKILL.md` | `opencode.json` | `~/.config/opencode/skills/abi`、`~/.config/opencode/opencode.json` |
+| Codex | `.agents/skills/abi/SKILL.md` | `.codex/config.toml` | `~/.agents/skills/abi`、`~/.codex/config.toml` |
+
+`doctor` 只读检查 `abi-mcp`、MCP runtime、Skill 和 MCP 配置；任一缺失时以
+非零状态退出。它会初始化 safe server 但不启动 stdio，因此能在 Agent 启动前
+发现未安装 `mcp` extra。安装插件后，或客户端没有自动发现新增 Skill 时，
+应开启新的 Agent 会话。
+
 Claude Code 插件开发验证：
 
 ```bash

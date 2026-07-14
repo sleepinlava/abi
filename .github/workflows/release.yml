@@ -44,10 +44,20 @@ jobs:
       - name: Verify wheel contents
         run: |
           python -m venv /tmp/abi-wheel-smoke
-          /tmp/abi-wheel-smoke/bin/pip install dist/*.whl
+          wheels=(dist/*.whl)
+          /tmp/abi-wheel-smoke/bin/pip install "${wheels[0]}[mcp]"
+          export PATH="/tmp/abi-wheel-smoke/bin:$PATH"
           /tmp/abi-wheel-smoke/bin/python -c "import abi; from importlib.metadata import version; assert abi.__version__ == version('abi-agent')"
           /tmp/abi-wheel-smoke/bin/abi list-types
           /tmp/abi-wheel-smoke/bin/autoplasm --help
+          for platform in claude-code opencode codex; do
+            /tmp/abi-wheel-smoke/bin/abi agent install "$platform" \
+              --scope project \
+              --project-dir "/tmp/abi-release-agent-$platform"
+            /tmp/abi-wheel-smoke/bin/abi agent doctor "$platform" \
+              --scope project \
+              --project-dir "/tmp/abi-release-agent-$platform"
+          done
           /tmp/abi-wheel-smoke/bin/abi dry-run \
             --type metagenomic_plasmid \
             --config examples/config_minimal.yaml \

@@ -142,6 +142,10 @@ def test_agent_install_and_doctor_opencode_project(tmp_path, monkeypatch):
         "abi.agent_integrations.shutil.which",
         lambda command: "/venv/bin/abi-mcp" if command == "abi-mcp" else None,
     )
+    monkeypatch.setattr(
+        "abi.agent_integrations._mcp_runtime_status",
+        lambda: (True, "Safe MCP server initialized: FastMCP"),
+    )
 
     installed = runner.invoke(
         app,
@@ -186,6 +190,10 @@ def test_agent_install_and_doctor_codex_project(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "abi.agent_integrations.shutil.which",
         lambda command: "/venv/bin/abi-mcp" if command == "abi-mcp" else None,
+    )
+    monkeypatch.setattr(
+        "abi.agent_integrations._mcp_runtime_status",
+        lambda: (True, "Safe MCP server initialized: FastMCP"),
     )
 
     installed = runner.invoke(

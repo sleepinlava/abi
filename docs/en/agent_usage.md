@@ -45,6 +45,20 @@ The installer preserves unrelated OpenCode JSON and Codex TOML settings. It
 refuses to replace a different `abi` MCP entry unless `--force` is supplied.
 Use `--output-json` in automation.
 
+Installation locations are platform-native:
+
+| Platform | Project skill | Project MCP config | User skill / config |
+| --- | --- | --- | --- |
+| Claude Code | `.claude/skills/abi/SKILL.md` | `.mcp.json` | `~/.claude/skills/abi`, `~/.claude.json` |
+| OpenCode | `.opencode/skills/abi/SKILL.md` | `opencode.json` | `~/.config/opencode/skills/abi`, `~/.config/opencode/opencode.json` |
+| Codex | `.agents/skills/abi/SKILL.md` | `.codex/config.toml` | `~/.agents/skills/abi`, `~/.codex/config.toml` |
+
+`doctor` is read-only and exits non-zero when `abi-mcp`, the MCP runtime, the
+skill, or the MCP entry is missing. It initializes the safe server without
+starting stdio, so a missing `mcp` extra is detected before the agent launches.
+Start a new agent session after installing a plugin or when a client does not
+detect newly added skills automatically.
+
 For Claude Code plugin development:
 
 ```bash

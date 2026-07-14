@@ -6,8 +6,10 @@ server using the default `safe` tool profile.
 Install ABI first:
 
 ```bash
-pip install -e ".[mcp]"
+pip install "abi-agent[mcp]"
 ```
+
+For development from an ABI source checkout, use `pip install -e ".[mcp]"` instead.
 
 For a direct user installation, run:
 

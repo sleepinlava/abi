@@ -4,6 +4,9 @@ from pathlib import Path
 
 import yaml
 
+import abi
+from scripts import check_release_identity
+
 ROOT = Path(__file__).resolve().parents[2]
 SHARED_SKILL = ROOT / "integrations/shared/skills/abi/SKILL.md"
 CLAUDE_ROOT = ROOT / "integrations/claude-code/abi"
@@ -87,3 +90,30 @@ def test_agent_integration_assets_are_in_sdist_and_wheel() -> None:
 
     assert '"integrations" = "abi/integrations"' in pyproject
     assert re.search(r'^\s+"integrations",$', pyproject, flags=re.MULTILINE)
+
+
+def test_release_identity_rejects_agent_plugin_manifest_version_mismatch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    expected = "9.8.7"
+    (tmp_path / "pyproject.toml").write_text(
+        f'[project]\nname = "abi-agent"\nversion = "{expected}"\n', encoding="utf-8"
+    )
+    (tmp_path / "CHANGELOG.md").write_text(f"## [{expected}]\n", encoding="utf-8")
+    for relative_path in (
+        Path("integrations/claude-code/abi/.claude-plugin/plugin.json"),
+        Path("integrations/codex/abi/.codex-plugin/plugin.json"),
+    ):
+        manifest_path = tmp_path / relative_path
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text('{"version": "0.0.0"}\n', encoding="utf-8")
+
+    monkeypatch.setattr(check_release_identity, "ROOT", tmp_path)
+    monkeypatch.setattr(check_release_identity, "distribution_version", lambda _name: expected)
+    monkeypatch.setattr(abi, "__version__", expected)
+
+    errors = check_release_identity.validate_release_identity()
+
+    assert len([error for error in errors if error.startswith("plugin manifest ")]) == 2
+    assert all("expected 9.8.7" in error for error in errors)

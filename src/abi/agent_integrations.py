@@ -178,6 +178,15 @@ def doctor_agent_integration(
         }
     )
 
+    runtime_ok, runtime_message = _mcp_runtime_status()
+    checks.append(
+        {
+            "name": "abi_mcp_runtime",
+            "status": "passed" if runtime_ok else "failed",
+            "message": runtime_message,
+        }
+    )
+
     expected_config = _MCP_ENTRIES[platform]
 
     checks.append(
@@ -235,6 +244,17 @@ def doctor_agent_integration(
         "config": str(paths.config),
         "checks": checks,
     }
+
+
+def _mcp_runtime_status() -> tuple[bool, str]:
+    """Check that this ABI environment can initialize the configured safe MCP server."""
+    try:
+        from abi.mcp.server import create_server
+
+        server = create_server(profile="safe")
+    except Exception as exc:
+        return False, f"Safe MCP server initialization failed: {type(exc).__name__}: {exc}"
+    return True, f"Safe MCP server initialized: {type(server).__name__}"
 
 
 def _validate_target(*, platform: str, scope: str) -> None:
