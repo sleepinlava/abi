@@ -25,6 +25,20 @@ __all__ = [
 ]
 
 
+def _workflow_preset_ids(root: Path) -> frozenset[str]:
+    """Load the workflow catalog used by query and config validation."""
+    catalog = load_yaml(root / "workflows/catalog.yaml")
+    workflows = catalog.get("workflows", [])
+    if not isinstance(workflows, list):
+        raise ValueError("viral_viwrap workflow catalog must contain a workflows list")
+    presets = frozenset(
+        str(item["id"]) for item in workflows if isinstance(item, Mapping) and item.get("id")
+    )
+    if not presets:
+        raise ValueError("viral_viwrap workflow catalog does not define any presets")
+    return presets
+
+
 class _ViWrapToolSkill(GenericCommandSkill):
     """Use the typed builder so optional reads/coverage flags remain correct."""
 
@@ -72,6 +86,23 @@ class ViralViWrapPlugin:
         if config_path:
             config = deep_merge(config, load_yaml(config_path))
         config = deep_merge(config, compact_overrides(overrides))
+        raw_workflow = config.get("workflow", {})
+        if not isinstance(raw_workflow, Mapping):
+            raise ValueError("viral_viwrap workflow must be a mapping")
+        workflow = dict(raw_workflow)
+        unknown_workflow_keys = sorted(set(workflow) - {"preset"})
+        if unknown_workflow_keys:
+            raise ValueError(
+                "Unknown viral_viwrap workflow field(s): " + ", ".join(unknown_workflow_keys)
+            )
+        preset = str(workflow.get("preset", "viwrap_compat"))
+        presets = _workflow_preset_ids(self.root)
+        if preset not in presets:
+            raise ValueError(
+                f"Unknown viral_viwrap workflow preset {preset!r}; choose one of {sorted(presets)}"
+            )
+        workflow["preset"] = preset
+        config["workflow"] = workflow
         nested = config.get("input", {})
         if isinstance(nested, Mapping):
             for key in (

@@ -17,19 +17,53 @@ from abi.provenance import (
 from abi.report import write_generic_report
 from abi.tables import StandardTableManager
 
-__all__ = ["ABIResultWriter", "validate_abi_result_dir"]
+__all__ = ["ABIResultWriter", "completed_abi_result_outputs", "validate_abi_result_dir"]
 
-REQUIRED_RESULT_ARTIFACTS = [
-    "execution_plan.json",
-    "provenance/run_summary.json",
-    "provenance/commands.tsv",
-    "provenance/resolved_inputs.tsv",
-    "provenance/tool_versions.tsv",
-    "provenance/resources.json",
-    "provenance/progress.jsonl",
-    "report/report.md",
-    "report/report.html",
-]
+RESULT_OUTPUT_PATHS = {
+    "plan": "execution_plan.json",
+    "config": "provenance/config.resolved.yaml",
+    "commands": "provenance/commands.tsv",
+    "resolved_inputs": "provenance/resolved_inputs.tsv",
+    "tool_versions": "provenance/tool_versions.tsv",
+    "resources": "provenance/resources.json",
+    "environment": "provenance/environment.yml",
+    "methods": "provenance/methods.md",
+    "summary": "provenance/run_summary.json",
+    "progress": "provenance/progress.json",
+    "progress_events": "provenance/progress.jsonl",
+    "tables": "tables",
+    "report": "report/report.md",
+    "report_html": "report/report.html",
+    "trace": "provenance/nextflow_trace.tsv",
+}
+
+REQUIRED_RESULT_OUTPUT_KEYS = (
+    "plan",
+    "summary",
+    "commands",
+    "resolved_inputs",
+    "tool_versions",
+    "resources",
+    "progress_events",
+    "report",
+    "report_html",
+)
+REQUIRED_RESULT_ARTIFACTS = [RESULT_OUTPUT_PATHS[key] for key in REQUIRED_RESULT_OUTPUT_KEYS]
+
+WRITER_OUTPUT_KEYS = (
+    "plan",
+    "config",
+    "commands",
+    "resolved_inputs",
+    "tool_versions",
+    "resources",
+    "environment",
+    "summary",
+    "progress_events",
+    "tables",
+    "report",
+    "report_html",
+)
 
 
 class ABIResultWriter:
@@ -74,13 +108,13 @@ class ABIResultWriter:
             json.dumps(plan.to_dict(), indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
-        config_path = write_yaml(config, provenance / "config.resolved.yaml")
-        commands_path = write_commands_tsv(command_rows, provenance / "commands.tsv")
-        resolved_inputs_path = write_resolved_inputs_tsv(
+        write_yaml(config, provenance / "config.resolved.yaml")
+        write_commands_tsv(command_rows, provenance / "commands.tsv")
+        write_resolved_inputs_tsv(
             _resolved_input_rows(plan, smoke=smoke),
             provenance / "resolved_inputs.tsv",
         )
-        versions_path = write_tool_versions(
+        write_tool_versions(
             _tool_version_rows(self.registry, smoke=smoke),
             provenance / "tool_versions.tsv",
         )
@@ -94,7 +128,7 @@ class ABIResultWriter:
             + "\n",
             encoding="utf-8",
         )
-        environment_path = write_yaml(
+        write_yaml(
             _environment_snapshot(self.registry, engine, smoke, extra_environment),
             provenance / "environment.yml",
         )
@@ -114,7 +148,7 @@ class ABIResultWriter:
             encoding="utf-8",
         )
         table_summary = self.table_manager.summarize(tables_dir)
-        report_paths = write_generic_report(
+        write_generic_report(
             plan,
             result_dir,
             table_summary=table_summary,
@@ -140,23 +174,22 @@ class ABIResultWriter:
             json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
-        outputs = {
-            "plan": plan_path,
-            "config": config_path,
-            "commands": commands_path,
-            "resolved_inputs": resolved_inputs_path,
-            "tool_versions": versions_path,
-            "resources": resources_path,
-            "environment": environment_path,
-            "summary": summary_path,
-            "progress_events": progress_events_path,
-            "tables": tables_dir,
-            "report": report_paths["report"],
-            "report_html": report_paths["report_html"],
-        }
+        outputs = {key: result_dir / RESULT_OUTPUT_PATHS[key] for key in WRITER_OUTPUT_KEYS}
         if trace_path:
             outputs["trace"] = trace_path
         return outputs
+
+
+def completed_abi_result_outputs(result_dir: str | Path) -> Dict[str, Path] | None:
+    """Load canonical artifacts when ``result_dir`` is a valid successful ABI result."""
+    root = Path(result_dir)
+    if not validate_abi_result_dir(root)["valid"]:
+        return None
+    return {
+        key: root / relative_path
+        for key, relative_path in RESULT_OUTPUT_PATHS.items()
+        if (root / relative_path).exists()
+    }
 
 
 def validate_abi_result_dir(

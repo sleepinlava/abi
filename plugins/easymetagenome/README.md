@@ -6,7 +6,9 @@ profiling, and `full_read_based` for both branches. It does not vendor or invoke
 EasyMetagenome's GPLv3 Shell source.
 
 The standard ABI entry point is the `easymetagenome` analysis type. The
-document-format P0 loader remains available as `P0Workflow` for compatibility.
+document-format `P0Workflow` loader remains available for compatibility, but
+its `run()` method is deprecated and now delegates to the canonical ABI DAG and
+runtime. New callers should use the unified ABI entry points below.
 
 ```bash
 abi query --type easymetagenome --what workflows

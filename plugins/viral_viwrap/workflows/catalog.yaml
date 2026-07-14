@@ -1,0 +1,7 @@
+workflows:
+  - id: viwrap_compat
+    name: Managed ViWrap compatibility workflow
+    description: >-
+      Runs ViWrap as one managed external step with ABI validation, provenance,
+      parsing, and reporting.
+    required_resources: [db_dir, conda_env_dir]

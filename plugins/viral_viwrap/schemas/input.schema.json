@@ -7,6 +7,14 @@
     "input_reads": {"type": "array", "items": {"type": "string"}},
     "input_cov": {"type": "string"},
     "input_sample2read_info": {"type": "string"},
+    "workflow": {
+      "type": "object",
+      "required": ["preset"],
+      "properties": {
+        "preset": {"enum": ["viwrap_compat"]}
+      },
+      "additionalProperties": false
+    },
     "out_dir": {"type": "string", "minLength": 1},
     "db_dir": {"type": "string", "minLength": 1},
     "conda_env_dir": {"type": "string", "minLength": 1},

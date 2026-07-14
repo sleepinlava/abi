@@ -431,7 +431,8 @@ class GenericABIExecutor:
                     # _execute_step 完成后，step.outputs 可能包含
                     # 实际磁盘路径（来自 _resolve_actual_outputs），
                     # 这些路径与抽象合约路径不同。更新剩余步骤的 inputs/params。
-                    _propagate_resolved_paths(step, plan.steps[i + 1 :])
+                    if step.tool_id != "internal":
+                        _propagate_resolved_paths(step, plan.steps[i + 1 :])
         except Exception as exc:
             failed_errors.append(ToolError(f"Unexpected error during {_last_step_id}: {exc}"))
             failed_errors[-1].__cause__ = exc

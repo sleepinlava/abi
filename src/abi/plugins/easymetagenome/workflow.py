@@ -3,27 +3,25 @@
 from __future__ import annotations
 
 import csv
-import gzip
 import itertools
-import shlex
-import subprocess
+import json
+import os
+import shutil
+import warnings
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Iterable, Mapping, Sequence
 
 import yaml
 
+from abi.results import completed_abi_result_outputs
+from abi.runtimes.local import LocalRuntime
+
 from .adapters import (
-    TOOL_ADAPTERS,
     DatabaseChecker,
     ManifestValidator,
-    OutputChecker,
     ReportCollector,
-    ResumeManager,
     SampleRecord,
-    merge_bracken,
-    parse_fastp_json,
-    taxonomy_diversity,
 )
 
 
@@ -253,163 +251,195 @@ class P0Workflow:
         threads: int = 16,
         resume: bool = True,
     ) -> dict[str, Any]:
-        """Execute expanded nodes fail-fast, including ABI internal collectors."""
-        samples = ManifestValidator.validate(manifest)
+        """Execute the documented P0 workflow through ABI's canonical runtime."""
+        warnings.warn(
+            "P0Workflow.run() is deprecated; use `abi run --type easymetagenome` instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if db_registry is None:
             raise ValueError("db_registry is required for P0 execution")
+        samples = ManifestValidator.validate(manifest)
         DatabaseChecker.require(db_registry)
-        planned = self.plan(manifest, workdir, db_registry=db_registry, threads=threads)
-        commands: list[dict[str, Any]] = []
-        versions: list[dict[str, Any]] = []
-        completed_nodes: set[str] = set()
-        for item in planned:
-            node_id = item["node_id"]
-            if ResumeManager.should_skip(item["checks"], resume=resume):
-                commands.append(
-                    {"node": item["node"], "command": item["command"], "status": "resumed"}
-                )
-                completed_nodes.add(node_id)
-                continue
-            if item["tool"].startswith("abi.internal."):
-                self._run_internal(
-                    node_id, Path(workdir), Path(manifest), samples, commands, versions
-                )
-                if item["checks"]:
-                    OutputChecker.require(item["checks"])
-                commands.append(
-                    {"node": item["node"], "command": item["command"], "status": "success"}
-                )
-                completed_nodes.add(node_id)
-                continue
-            adapter = TOOL_ADAPTERS.get(item["tool"])
-            if adapter and not any(row.get("tool") == adapter.tool_id for row in versions):
-                versions.append(adapter.version_check())
-            for output in item["outputs"].values():
-                path = Path(str(output))
-                (path.parent if path.suffix else path).mkdir(parents=True, exist_ok=True)
-            command = shlex.split(item["command"])
-            retries = max(0, int(item.get("on_fail", {}).get("retry", 0)))
-            completed = _run_command(command)
-            for _ in range(retries):
-                if completed.returncode == 0:
-                    break
-                completed = _run_command(command)
-            commands.append(
-                {"node": item["node"], "command": item["command"], "status": completed.returncode}
-            )
-            if completed.returncode:
-                diagnosis = (
-                    adapter.diagnose(completed.stderr, completed.returncode)
-                    if adapter
-                    else completed.stderr[-1000:]
-                )
-                raise RuntimeError(f"Node {item['node']} failed: {diagnosis}")
-            OutputChecker.require(item["checks"])
-            completed_nodes.add(node_id)
-        reports = ReportCollector.collect(workdir, samples, commands=commands, versions=versions)
-        return {"status": "success", "nodes": commands, "reports": reports}
+        registry = yaml.safe_load(Path(db_registry).read_text(encoding="utf-8")) or {}
+        root = Path(workdir).resolve()
+        result_dir = root / "result"
+        log_dir = root / "logs"
 
-    @staticmethod
-    def _run_internal(
-        node_id: str,
-        workdir: Path,
-        manifest: Path,
-        samples: Sequence[SampleRecord],
-        commands: Sequence[Mapping[str, Any]],
-        versions: Sequence[Mapping[str, Any]],
-    ) -> None:
-        result = workdir / "result"
-        if node_id == "validate_manifest":
-            ManifestValidator.write_outputs(manifest, workdir)
-        elif node_id == "fastp_summary":
-            rows = parse_fastp_json((workdir / "temp" / "qc").glob("*_fastp.json"))
-            _write_rows(result / "qc" / "fastp.txt", rows)
-        elif node_id == "kneaddata_summary":
-            rows = []
-            for sample in samples:
-                read_path = (
-                    workdir
-                    / "temp"
-                    / "hr"
-                    / sample.sample_id
-                    / f"{sample.sample_id}_1_kneaddata_paired_1.fastq.gz"
-                )
-                rows.append(
-                    {
-                        "sample_id": sample.sample_id,
-                        "dehost_read_pairs": _fastq_records(read_path),
-                    }
-                )
-            _write_rows(result / "qc" / "sum.txt", rows)
-        elif node_id == "bracken_merge":
-            for level in ("P", "G", "S"):
-                merge_bracken(
-                    sorted((workdir / "temp" / "bracken").glob(f"*.{level}.brk")),
-                    result / "kraken2" / f"bracken.{level}.txt",
-                )
-        elif node_id == "taxonomy_filter":
-            for level in ("P", "G", "S"):
-                source = result / "kraken2" / f"bracken.{level}.txt"
-                destination = result / "kraken2" / f"bracken.{level}.0.2.txt"
-                _filter_prevalence(source, destination, 0.2)
-        elif node_id == "taxonomy_diversity":
-            taxonomy_diversity(
-                result / "kraken2" / "bracken.S.txt",
-                result / "kraken2" / "alpha.txt",
-                result / "kraken2" / "beta.txt",
-            )
-        elif node_id == "collect_report":
-            ReportCollector.collect(workdir, samples, commands=commands, versions=versions)
+        from . import EasyMetagenomePlugin
 
-
-def _write_rows(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fields = list(rows[0]) if rows else ["sample_id", "raw_reads", "clean_reads", "q30_rate"]
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t")
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def _run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
-    """Run argv with the workflow's limited stdout-redirection syntax."""
-    if ">" not in command:
-        return subprocess.run(command, capture_output=True, text=True, check=False)
-    redirect_index = command.index(">")
-    if redirect_index + 1 >= len(command):
-        raise ValueError("Command redirection is missing a destination")
-    destination = Path(command[redirect_index + 1])
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with destination.open("w", encoding="utf-8") as stdout:
-        return subprocess.run(
-            command[:redirect_index],
-            stdout=stdout,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=False,
+        plugin = EasyMetagenomePlugin()
+        config = plugin.load_config(
+            overrides={
+                "input": {"sample_sheet": str(Path(manifest).resolve())},
+                "workflow": {"preset": "p0_taxonomy"},
+                "resources": {
+                    "host_db": _expand_registry_path(registry.get("host_db")),
+                    "kraken2_db": _expand_registry_path(registry.get("path")),
+                },
+                "threads": threads,
+                "outdir": str(result_dir),
+                "log_dir": str(log_dir),
+            }
         )
+        plan = plugin.build_plan(config)
+        outputs = (
+            _matching_completed_outputs(result_dir, plan.to_dict(), config) if resume else None
+        )
+        resumed = outputs is not None
+        if outputs is None:
+            runtime_result = LocalRuntime(plugin).run(plan, config)
+            outputs = runtime_result.outputs
+
+        _write_legacy_output_aliases(result_dir)
+        documented_plan = self.plan(
+            manifest,
+            root,
+            db_registry=db_registry,
+            threads=threads,
+        )
+        commands = _legacy_command_rows(
+            Path(outputs["commands"]),
+            documented_plan=documented_plan,
+            resumed=resumed,
+        )
+        versions = _legacy_version_rows(Path(outputs["tool_versions"]))
+        reports = ReportCollector.collect(root, samples, commands=commands, versions=versions)
+        summary = json.loads(Path(outputs["summary"]).read_text(encoding="utf-8"))
+        return {
+            "status": summary["status"],
+            "nodes": commands,
+            "reports": reports,
+            "abi_outputs": outputs,
+        }
 
 
-def _fastq_records(path: Path) -> int:
-    opener = gzip.open if path.suffix == ".gz" else open
-    with opener(path, "rt", encoding="utf-8", errors="replace") as handle:
-        return sum(1 for _ in handle) // 4
+def _expand_registry_path(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    return str(Path(os.path.expandvars(str(value))).expanduser())
 
 
-def _filter_prevalence(source: Path, destination: Path, threshold: float) -> None:
-    with source.open("r", encoding="utf-8", newline="") as handle:
+def _matching_completed_outputs(
+    result_dir: Path,
+    plan: Mapping[str, Any],
+    config: Mapping[str, Any],
+) -> dict[str, Path] | None:
+    """Reuse a successful ABI result only when its resolved plan and config still match."""
+    outputs = completed_abi_result_outputs(result_dir)
+    if outputs is None:
+        return None
+    plan_path = outputs.get("plan")
+    config_path = outputs.get("config")
+    if plan_path is None or config_path is None:
+        return None
+    try:
+        stored_plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        stored_config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except (OSError, json.JSONDecodeError, yaml.YAMLError):
+        return None
+    if stored_plan != dict(plan) or stored_config != dict(config):
+        return None
+    return outputs
+
+
+def _legacy_command_rows(
+    path: Path,
+    *,
+    documented_plan: Sequence[Mapping[str, Any]],
+    resumed: bool,
+) -> list[dict[str, Any]]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle, delimiter="\t"))
-    fields = list(rows[0]) if rows else ["name", "taxonomy_id"]
-    sample_fields = fields[2:]
-    retained = [
-        row
-        for row in rows
-        if sample_fields
-        and sum(float(row.get(field) or 0) > 0 for field in sample_fields) / len(sample_fields)
-        >= threshold
+    commands = []
+    used_nodes: set[str] = set()
+    for row in rows:
+        command = dict(row)
+        command["node"] = _documented_node_for_command(row, documented_plan, used_nodes)
+        used_nodes.add(str(command["node"]))
+        if resumed:
+            command["status"] = "resumed"
+        elif row.get("tool_id") != "internal":
+            command["status"] = int(row.get("return_code") or 0)
+        commands.append(command)
+    return commands
+
+
+def _documented_node_for_command(
+    command: Mapping[str, str],
+    documented_plan: Sequence[Mapping[str, Any]],
+    used_nodes: set[str],
+) -> str:
+    step_id = str(command.get("step_id", ""))
+    tool_id = str(command.get("tool_id", ""))
+    if tool_id == "internal":
+        for item in documented_plan:
+            if item["node_id"] == step_id:
+                return str(item["node"])
+        return step_id
+
+    candidates = [
+        item
+        for item in documented_plan
+        if item["tool"] == tool_id and str(item["node"]) not in used_nodes
     ]
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with destination.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t")
-        writer.writeheader()
-        writer.writerows(retained)
+    sample_id = str(command.get("sample_id", ""))
+    if sample_id:
+        sample_candidates = [item for item in candidates if f":{sample_id}" in item["node"]]
+        if sample_candidates:
+            candidates = sample_candidates
+    if tool_id == "bracken":
+        rendered = str(command.get("command", ""))
+        for level in ("P", "G", "S"):
+            if f" -l {level} " in f" {rendered} ":
+                level_candidates = [
+                    item for item in candidates if item["node"].endswith(f":{level}")
+                ]
+                if level_candidates:
+                    candidates = level_candidates
+                break
+    return str(candidates[0]["node"]) if candidates else step_id
+
+
+def _legacy_version_rows(path: Path) -> list[dict[str, Any]]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle, delimiter="\t"))
+    for row in rows:
+        row["tool"] = row.get("tool_id", "")
+    return rows
+
+
+def _write_legacy_output_aliases(result_dir: Path) -> dict[str, Path]:
+    """Preserve the documented P0 result paths during the ABI-runtime migration."""
+    aliases = {
+        result_dir / "00_input_validation/metadata.normalized.tsv": (
+            result_dir / "metadata.normalized.tsv"
+        ),
+        result_dir / "00_input_validation/input_validation.json": (
+            result_dir / "input_validation.json"
+        ),
+        result_dir / "04_summary/fastp_summary.tsv": result_dir / "qc/fastp.txt",
+        result_dir / "04_summary/kneaddata_summary.tsv": result_dir / "qc/sum.txt",
+        result_dir / "04_summary/bracken.P.tsv": result_dir / "kraken2/bracken.P.txt",
+        result_dir / "04_summary/bracken.G.tsv": result_dir / "kraken2/bracken.G.txt",
+        result_dir / "04_summary/bracken.S.tsv": result_dir / "kraken2/bracken.S.txt",
+        result_dir / "04_summary/bracken.P.filtered.tsv": (
+            result_dir / "kraken2/bracken.P.0.2.txt"
+        ),
+        result_dir / "04_summary/bracken.G.filtered.tsv": (
+            result_dir / "kraken2/bracken.G.0.2.txt"
+        ),
+        result_dir / "04_summary/bracken.S.filtered.tsv": (
+            result_dir / "kraken2/bracken.S.0.2.txt"
+        ),
+        result_dir / "05_statistics/alpha.tsv": result_dir / "kraken2/alpha.txt",
+        result_dir / "05_statistics/beta.tsv": result_dir / "kraken2/beta.txt",
+    }
+    written: dict[str, Path] = {}
+    for source, destination in aliases.items():
+        if not source.is_file():
+            continue
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+        written[destination.name] = destination
+    return written

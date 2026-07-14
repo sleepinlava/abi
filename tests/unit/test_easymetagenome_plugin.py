@@ -14,11 +14,15 @@ from abi.executor import GenericABIExecutor
 from abi.plugins import get_plugin
 from abi.plugins.easymetagenome.adapters import (
     DatabaseChecker,
+    DatabaseValidationError,
     ManifestValidationError,
     ManifestValidator,
+    OutputChecker,
+    OutputValidationError,
     ReportCollector,
     ResumeManager,
     SampleRecord,
+    ToolAdapter,
     merge_bracken,
     taxonomy_diversity,
 )
@@ -55,6 +59,40 @@ def test_manifest_validator_reports_missing_fastq(tmp_path):
         ManifestValidator.validate(manifest)
 
 
+def test_manifest_validator_accepts_csv_read_aliases(tmp_path):
+    r1 = tmp_path / "R1.fastq.gz"
+    r2 = tmp_path / "R2.fastq.gz"
+    r1.write_bytes(b"reads")
+    r2.write_bytes(b"reads")
+    manifest = tmp_path / "samples.csv"
+    manifest.write_text(
+        "sample_id,read1,read2,group\nS1,R1.fastq.gz,R2.fastq.gz,case\n",
+        encoding="utf-8",
+    )
+
+    records = ManifestValidator.validate(manifest)
+
+    assert records == [SampleRecord("S1", str(r1), str(r2), "case")]
+
+
+def test_output_contract_reports_missing_and_empty_artifacts(tmp_path):
+    empty_file = tmp_path / "empty.txt"
+    empty_file.touch()
+    empty_dir = tmp_path / "empty_dir"
+    empty_dir.mkdir()
+
+    passed, failures = OutputChecker.check([tmp_path / "missing", empty_file, empty_dir])
+
+    assert passed is False
+    assert failures == [
+        f"missing: {tmp_path / 'missing'}",
+        f"empty file: {empty_file}",
+        f"empty directory: {empty_dir}",
+    ]
+    with pytest.raises(OutputValidationError, match="Output checks failed"):
+        OutputChecker.require([empty_file])
+
+
 def test_document_workflow_expands_samples_and_taxonomic_levels(tmp_path):
     plugin = get_plugin("easymetagenome")
     workflow = plugin.documented_workflow()
@@ -83,11 +121,33 @@ def test_database_checker_and_resume_require_nonempty_outputs(tmp_path, monkeypa
     monkeypatch.setenv("TEST_DB", str(database))
 
     assert DatabaseChecker.check(registry)["status"] == "fail"
+    with pytest.raises(DatabaseValidationError, match="Database files missing"):
+        DatabaseChecker.require(registry)
     required.write_text("index\n", encoding="utf-8")
     assert DatabaseChecker.check(registry)["status"] == "pass"
     assert ResumeManager.should_skip([required]) is True
+    assert ResumeManager.should_skip([required], resume=False) is False
+    assert ResumeManager.should_skip([]) is False
     required.write_text("", encoding="utf-8")
     assert ResumeManager.should_skip([required]) is False
+
+
+def test_tool_adapter_surfaces_missing_values_and_known_failures(monkeypatch):
+    import abi.plugins.easymetagenome.adapters as adapters
+
+    adapter = ToolAdapter(
+        "fixture",
+        "fixture-tool",
+        "fixture-tool --input {input}",
+        failure_patterns=(("out of memory", "request more memory"),),
+    )
+    monkeypatch.setattr(adapters.shutil, "which", lambda _name: None)
+
+    assert adapter.version_check()["reason"] == "executable_not_found"
+    with pytest.raises(ValueError, match="command missing value: input"):
+        adapter.build_command({})
+    assert adapter.diagnose("OUT OF MEMORY", 137) == "request more memory"
+    assert "status 2" in adapter.diagnose("unknown", 2)
 
 
 def test_bracken_merge_diversity_and_report(tmp_path):
@@ -241,90 +301,6 @@ def test_easymetagenome_parsers_cover_every_registered_tool(tmp_path):
         any(plugin.parse_outputs(tool_id, tmp_path, "S1").values())
         for tool_id in plugin.registry().ids()
     )
-
-
-def test_p0_runner_executes_chain_and_writes_report(tmp_path, monkeypatch):
-    reads = [tmp_path / "S1_R1.fastq.gz", tmp_path / "S1_R2.fastq.gz"]
-    for read in reads:
-        with gzip.open(read, "wt", encoding="utf-8") as handle:
-            handle.write("@r1\nACGT\n+\nIIII\n")
-    manifest = tmp_path / "samples.tsv"
-    manifest.write_text(
-        f"sample_id\tr1\tr2\tgroup\nS1\t{reads[0]}\t{reads[1]}\tcase\n",
-        encoding="utf-8",
-    )
-    database = tmp_path / "db"
-    host = tmp_path / "host"
-    database.mkdir()
-    host.mkdir()
-    registry = tmp_path / "db.yaml"
-    registry.write_text(
-        f"database_id: fixture\npath: {database}\nhost_db: {host}\nchecks: []\n",
-        encoding="utf-8",
-    )
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    tool_script = bin_dir / "fixture_tool.py"
-    tool_script.write_text(
-        """#!/usr/bin/env python3
-import gzip
-import json
-import pathlib
-import sys
-
-name = pathlib.Path(sys.argv[0]).name
-args = sys.argv[1:]
-if '--version' in args or args == ['version']:
-    print(name + ' 1.0')
-    raise SystemExit(0)
-def value(flag):
-    return pathlib.Path(args[args.index(flag) + 1])
-if name == 'seqkit':
-    print('file\\tnum_seqs')
-    print('fixture\\t1')
-elif name == 'fastp':
-    for flag in ('-o', '-O', '-h'):
-        path = value(flag); path.parent.mkdir(parents=True, exist_ok=True); path.write_text('ok\\n')
-    report = value('-j'); report.parent.mkdir(parents=True, exist_ok=True)
-    data = {'summary': {
-        'before_filtering': {'total_reads': 2},
-        'after_filtering': {'total_reads': 2, 'q30_rate': 1.0},
-    }}
-    report.write_text(json.dumps(data))
-elif name == 'kneaddata':
-    out = value('-o'); out.mkdir(parents=True, exist_ok=True)
-    for suffix in ('paired_1.fastq.gz', 'paired_2.fastq.gz'):
-        with gzip.open(out / ('S1_1_kneaddata_' + suffix), 'wt') as handle:
-            handle.write('@r1\\nACGT\\n+\\nIIII\\n')
-elif name == 'kraken2':
-    for flag in ('--report', '--output'):
-        path = value(flag)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text('classified\\n')
-elif name == 'bracken':
-    table = value('-o'); table.parent.mkdir(parents=True, exist_ok=True)
-    table.write_text('name\\ttaxonomy_id\\tnew_est_reads\\nBacteria\\t2\\t10\\n')
-    value('-w').write_text('report\\n')
-""",
-        encoding="utf-8",
-    )
-    tool_script.chmod(0o755)
-    for name in ("seqkit", "fastp", "kneaddata", "kraken2", "bracken"):
-        link = bin_dir / name
-        link.symlink_to(tool_script)
-    monkeypatch.setenv(
-        "PATH",
-        os.pathsep.join((str(bin_dir), str(Path(sys.executable).parent), os.environ["PATH"])),
-    )
-
-    workflow = get_plugin("easymetagenome").documented_workflow()
-    result = workflow.run(manifest, tmp_path, db_registry=registry)
-
-    assert result["status"] == "success"
-    assert (tmp_path / "result/qc/fastp.txt").stat().st_size > 0
-    assert (tmp_path / "result/qc/sum.txt").stat().st_size > 0
-    assert (tmp_path / "result/kraken2/bracken.S.txt").stat().st_size > 0
-    assert (tmp_path / "result/report.md").stat().st_size > 0
 
 
 def test_humann4_dag_executes_end_to_end_with_fixture_tools(tmp_path, monkeypatch):

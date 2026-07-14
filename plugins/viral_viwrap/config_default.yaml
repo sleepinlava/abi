@@ -9,6 +9,8 @@ identify_method: genomad
 reads_type: illumina
 input_length_limit: 5000
 virome: false
+workflow:
+  preset: viwrap_compat
 input:
   input_metagenome: INPUT_METAGENOME_NOT_CONFIGURED.fasta
   input_reads: []

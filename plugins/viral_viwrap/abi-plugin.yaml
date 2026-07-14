@@ -11,7 +11,9 @@ core_contracts: [viwrap]
 workflow:
   name: Managed ViWrap Viral Metagenomics
   citation: "Zhou et al. 2023, iMeta, doi:10.1002/imt2.118"
-  note: ViWrap remains an upstream black box; ABI owns preflight, execution, parsing, and provenance.
+  note: >-
+    The viwrap_compat preset keeps ViWrap as an upstream black box while ABI
+    owns preflight, execution, parsing, and provenance.
   steps:
     - id: viwrap_run
       tool: viwrap
