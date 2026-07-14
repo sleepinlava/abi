@@ -41,6 +41,7 @@ workflows:
       - humann_renorm_pathabundance
       - humann_split_pathabundance
       - functional_report
+      - publish_functional_report
   - id: full_read_based
     name: Taxonomic and functional profiling
     description: Runs both the P0 taxonomy and P1 HUMAnN4 branches from shared preprocessing.
@@ -71,3 +72,4 @@ workflows:
       - humann_renorm_pathabundance
       - humann_split_pathabundance
       - functional_report
+      - publish_functional_report

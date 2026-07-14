@@ -31,6 +31,7 @@ def test_catalog_resolves_easymetagenome_functional_selection():
         "humann_renorm_pathabundance",
         "humann_split_pathabundance",
         "functional_report",
+        "publish_functional_report",
     )
 
 

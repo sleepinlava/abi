@@ -123,6 +123,11 @@ assertions:
 公共结果键冲突的标签。该钩子适合暴露带版本的产物清单等最终结果；中间文件仍
 通过执行计划发现，不应逐个发布。
 
+如果一个预设会生成多个最终报告，应发布带分支限定的标签；只有在恰好存在一套完整
+报告时才添加通用别名。例如，EasyMetagenome 单分支运行发布 `report_manifest`，组合
+预设则发布 `taxonomy_report_manifest` 和 `functional_report_manifest`。带版本的清单
+应标明工作流，并关联其汇总的标准表和报告。
+
 ## 共享基础设施
 
 插件应从公开 SDK 导入：
@@ -135,7 +140,7 @@ assertions:
 | `abi.errors` | `ABIError`、`ConfigError`、`SampleSheetError`、`ToolError` |
 | `abi.diagnostics` | `DiagnosticHint`、`classify_exception`、`ERROR_CODES` |
 | `abi.json_utils` | `load_json_file`、`load_json_payload` 及其 `ABIJSONError` |
-| `abi.interfaces` | `ABIPlugin`、`ABIDryRunPlugin`、`ABIInitializablePlugin` 协议 |
+| `abi.interfaces` | `ABIPlugin`、`ABIDryRunPlugin`、`ABIInitializablePlugin`、`ABIPublishedOutputsPlugin` 协议 |
 | `abi._shared` | `_read_tsv`、`_display_command`、`_plan_dict`、`_common_overrides` |
 | `abi.dag_planner` | `UniversalDAG`、`build_plan_from_dag`、`PathTemplateContext` — DAG 驱动的 `build_plan()`（2026-06-18 新增） |
 | `abi.tsv_mapping` | `TSVMapper`、`generate_rows` — 声明式 TSV 列映射（2026-06-18 新增） |

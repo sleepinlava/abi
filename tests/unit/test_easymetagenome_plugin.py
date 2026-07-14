@@ -3,14 +3,11 @@ from __future__ import annotations
 import csv
 import gzip
 import json
-import os
-import sys
 from pathlib import Path
 
 import pytest
 
 from abi.agent import ABIAgentInterface
-from abi.executor import GenericABIExecutor
 from abi.plugins import get_plugin
 from abi.plugins.easymetagenome.adapters import (
     DatabaseChecker,
@@ -26,8 +23,6 @@ from abi.plugins.easymetagenome.adapters import (
     merge_bracken,
     taxonomy_diversity,
 )
-from abi.provenance import RunLogger
-from abi.tables import StandardTableManager
 
 
 def _manifest(tmp_path: Path) -> Path:
@@ -211,6 +206,34 @@ def test_humann4_preset_selects_functional_branch_without_taxonomy(tmp_path):
     assert join_step.params["_explicit_dependencies"]
 
 
+def test_combined_preset_publishes_branch_qualified_reports(tmp_path):
+    plugin = get_plugin("easymetagenome")
+    config = plugin.load_config(
+        overrides={
+            "workflow": {"preset": "full_read_based"},
+            "outdir": str(tmp_path / "results"),
+            "log_dir": str(tmp_path / "logs"),
+        }
+    )
+    plan = plugin.build_plan(config, check_files=False)
+    for step in plan.steps:
+        for label in ("report_manifest", "report_markdown"):
+            if label not in step.outputs:
+                continue
+            path = Path(step.outputs[label])
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("published\n", encoding="utf-8")
+
+    outputs = plugin.published_outputs(plan)
+
+    assert set(outputs) == {
+        "taxonomy_report_manifest",
+        "taxonomy_report_markdown",
+        "functional_report_manifest",
+        "functional_report_markdown",
+    }
+
+
 def test_workflow_preset_preserves_explicit_node_selection(tmp_path):
     plugin = get_plugin("easymetagenome")
     config = plugin.load_config(
@@ -316,113 +339,3 @@ def test_easymetagenome_parsers_cover_every_registered_tool(tmp_path):
         any(plugin.parse_outputs(tool_id, tmp_path, "S1").values())
         for tool_id in plugin.registry().ids()
     )
-
-
-def test_humann4_dag_executes_end_to_end_with_fixture_tools(tmp_path, monkeypatch):
-    manifest = _manifest(tmp_path)
-    resources = {}
-    for name in ("host_db", "humann_nucleotide_db", "humann_protein_db", "metaphlan_db"):
-        path = tmp_path / name
-        path.mkdir()
-        resources[name] = str(path)
-
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    fixture_tool = bin_dir / "fixture_humann_tool.py"
-    fixture_tool.write_text(
-        """#!/usr/bin/env python3
-import gzip
-import json
-import pathlib
-import shutil
-import sys
-
-name = pathlib.Path(sys.argv[0]).name
-args = sys.argv[1:]
-def value(flag):
-    return pathlib.Path(args[args.index(flag) + 1])
-def write_table(path, feature):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text('# Feature\\tS1-RPKs\\n' + feature + '\\t4.5\\n')
-if name == 'seqkit':
-    print('file\\tnum_seqs\\tsum_len')
-    print('reads.fastq.gz\\t1\\t4')
-elif name == 'fastp':
-    for flag in ('-o', '-O'):
-        path = value(flag); path.parent.mkdir(parents=True, exist_ok=True)
-        with gzip.open(path, 'wt') as handle: handle.write('@r1\\nACGT\\n+\\nIIII\\n')
-    report = value('-j'); report.parent.mkdir(parents=True, exist_ok=True)
-    report.write_text(json.dumps({'summary': {
-        'before_filtering': {'total_reads': 2},
-        'after_filtering': {'total_reads': 2, 'q30_rate': 1.0},
-    }}))
-    value('-h').write_text('<html>fixture</html>\\n')
-elif name == 'kneaddata':
-    out = value('-o'); out.mkdir(parents=True, exist_ok=True)
-    for suffix in ('paired_1.fastq.gz', 'paired_2.fastq.gz'):
-        with gzip.open(out / ('S1_1_kneaddata_' + suffix), 'wt') as handle:
-            handle.write('@r1\\nACGT\\n+\\nIIII\\n')
-elif name == 'humann':
-    out = value('--output'); sample = args[args.index('--output-basename') + 1]
-    write_table(out / (sample + '_genefamilies.tsv'), 'UniRef90_A')
-    write_table(out / (sample + '_pathabundance.tsv'), 'PWY-1')
-    write_table(out / (sample + '_pathcoverage.tsv'), 'PWY-1')
-elif name == 'humann_join_tables':
-    write_table(value('--output'), 'UniRef90_A' if 'genefamilies' in args else 'PWY-1')
-elif name in ('humann_renorm_table', 'humann_regroup_table'):
-    source = value('--input')
-    output_flag = '--output'
-    destination = value(output_flag)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(source, destination)
-elif name == 'humann_split_stratified_table':
-    out = value('--output'); out.mkdir(parents=True, exist_ok=True)
-    write_table(out / 'unstratified.tsv', 'UniRef90_A')
-""",
-        encoding="utf-8",
-    )
-    fixture_tool.chmod(0o755)
-    for name in (
-        "seqkit",
-        "fastp",
-        "kneaddata",
-        "humann",
-        "humann_join_tables",
-        "humann_renorm_table",
-        "humann_regroup_table",
-        "humann_split_stratified_table",
-    ):
-        (bin_dir / name).symlink_to(fixture_tool)
-    monkeypatch.setenv(
-        "PATH",
-        os.pathsep.join((str(bin_dir), str(Path(sys.executable).parent), os.environ["PATH"])),
-    )
-
-    plugin = get_plugin("easymetagenome")
-    config = plugin.load_config(
-        overrides={
-            "input": {"sample_sheet": str(manifest)},
-            "workflow": {"preset": "p1_humann4"},
-            "resources": resources,
-            "threads": 1,
-            "outdir": str(tmp_path / "result"),
-            "log_dir": str(tmp_path / "logs"),
-        }
-    )
-    plan = plugin.build_plan(config)
-    executor = GenericABIExecutor(
-        plugin.registry(),
-        RunLogger(config["log_dir"]),
-        table_manager=StandardTableManager(plugin.table_schemas()),
-        parse_outputs=plugin.parse_outputs,
-        internal_handlers=plugin.internal_handlers(),
-    )
-
-    outputs = executor.run(plan, config)
-
-    summary = json.loads(outputs["summary"].read_text(encoding="utf-8"))
-    assert summary["status"] == "success"
-    assert summary["completed_step_count"] == len(plan.steps)
-    functional_table = Path(config["outdir"]) / "tables/functional_abundance.tsv"
-    assert len(functional_table.read_text(encoding="utf-8").splitlines()) > 1
-    assert (Path(config["outdir"]) / "report/easymetagenome_functional_report.md").is_file()

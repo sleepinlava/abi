@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, MutableMapping, Sequence
 
 from abi.interfaces import ABIPublishedOutputsPlugin
 from abi.runtimes import HpcRuntime, LocalRuntime, NextflowRuntime, RuntimeOptions, RuntimeResult
@@ -69,19 +69,26 @@ class WorkflowCoordinator:
 
     def run(self, prepared: PreparedWorkflow) -> RuntimeResult:
         result = self._runtime(prepared).run(prepared.plan, prepared.config)
+        self.merge_published_outputs(prepared, result.outputs)
+        return result
+
+    @staticmethod
+    def merge_published_outputs(
+        prepared: PreparedWorkflow, outputs: MutableMapping[str, Path]
+    ) -> None:
+        """Add a plugin's stable final artifacts to a fresh or resumed ABI result."""
         if isinstance(prepared.plugin, ABIPublishedOutputsPlugin):
             published = {
                 str(name): Path(path)
                 for name, path in prepared.plugin.published_outputs(prepared.plan).items()
             }
-            collisions = sorted(set(result.outputs) & set(published))
+            collisions = sorted(set(outputs) & set(published))
             if collisions:
                 raise ABIError(
                     "Plugin published output label(s) collide with ABI outputs: "
                     + ", ".join(collisions)
                 )
-            result.outputs.update(published)
-        return result
+            outputs.update(published)
 
     @staticmethod
     def _runtime(prepared: PreparedWorkflow) -> Any:

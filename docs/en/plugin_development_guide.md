@@ -144,6 +144,13 @@ bundle keys. This hook is for discoverable final artifacts such as a versioned
 artifact manifest; intermediate files remain discoverable through the execution
 plan and should not be published individually.
 
+When one preset can produce multiple final reports, publish branch-qualified
+labels and add generic aliases only when exactly one complete report exists.
+EasyMetagenome, for example, publishes `report_manifest` for a single branch
+and `taxonomy_report_manifest` plus `functional_report_manifest` for its
+combined preset. Versioned manifests should identify their workflow and link
+the standard tables and report they summarize.
+
 ## Shared Infrastructure
 
 Plugins should import from the public SDK:
@@ -156,7 +163,7 @@ Plugins should import from the public SDK:
 | `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError` |
 | `abi.diagnostics` | `DiagnosticHint`, `classify_exception`, `ERROR_CODES` |
 | `abi.json_utils` | `load_json_file`, `load_json_payload` with `ABIJSONError` |
-| `abi.interfaces` | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin` protocols |
+| `abi.interfaces` | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin`, `ABIPublishedOutputsPlugin` protocols |
 | `abi._shared` | `_read_tsv`, `_display_command`, `_plan_dict`, `_common_overrides` |
 | `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — DAG-driven `build_plan()` (added 2026-06-18) |
 | `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — declarative TSV column mapping (added 2026-06-18) |

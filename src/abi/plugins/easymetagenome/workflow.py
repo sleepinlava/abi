@@ -23,6 +23,7 @@ from .adapters import (
     ReportCollector,
     SampleRecord,
 )
+from .report_manifest import validate_report_manifest
 
 
 class WorkflowDefinitionError(ValueError):
@@ -286,10 +287,14 @@ class P0Workflow:
         outputs = (
             _matching_completed_outputs(result_dir, plan.to_dict(), config) if resume else None
         )
+        if outputs is not None and not _valid_canonical_p0_report(result_dir, len(samples)):
+            outputs = None
         resumed = outputs is not None
         if outputs is None:
             runtime_result = coordinator.run(prepared)
             outputs = runtime_result.outputs
+        else:
+            coordinator.merge_published_outputs(prepared, outputs)
 
         _write_legacy_output_aliases(result_dir)
         documented_plan = self.plan(
@@ -341,6 +346,25 @@ def _matching_completed_outputs(
     if stored_plan != dict(plan) or stored_config != dict(config):
         return None
     return outputs
+
+
+def _valid_canonical_p0_report(result_dir: Path, sample_count: int) -> bool:
+    return validate_report_manifest(
+        result_dir / "report/report_manifest.json",
+        workflow="p0_taxonomy",
+        sample_count=sample_count,
+        report=result_dir / "report/easymetagenome_report.md",
+        artifacts_root=result_dir,
+        artifact_names=(
+            "fastp_summary",
+            "kneaddata_summary",
+            "species_table",
+            "alpha_table",
+            "beta_table",
+        ),
+        tables_dir=result_dir / "tables",
+        table_names=("qc_summary", "host_removal_summary", "taxonomy_abundance"),
+    )
 
 
 def _legacy_command_rows(

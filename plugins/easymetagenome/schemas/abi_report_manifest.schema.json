@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "plugin",
+    "workflow",
+    "sample_count",
+    "artifacts",
+    "report",
+    "standard_tables",
+    "consistency"
+  ],
+  "properties": {
+    "schema_version": {"const": "abi.report-manifest.v1"},
+    "plugin": {"const": "easymetagenome"},
+    "workflow": {"enum": ["p0_taxonomy", "p1_humann4"]},
+    "sample_count": {"type": "integer", "minimum": 1},
+    "artifacts": {"type": "object"},
+    "report": {"type": "string", "minLength": 1},
+    "standard_tables": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["path", "rows"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "rows": {"type": "integer", "minimum": 0}
+        },
+        "additionalProperties": false
+      }
+    },
+    "consistency": {
+      "type": "object",
+      "required": ["standard_table_count", "standard_row_count"],
+      "properties": {
+        "standard_table_count": {"type": "integer", "minimum": 1},
+        "standard_row_count": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "feature_observations": {"type": "integer", "minimum": 0}
+  }
+}

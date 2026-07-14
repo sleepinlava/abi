@@ -219,6 +219,33 @@ class EasyMetagenomePlugin:
     def internal_handlers(self):
         return easymeta_handlers()
 
+    def published_outputs(self, plan: Any) -> Dict[str, Path]:
+        report_kinds = {
+            "collect_report": "taxonomy",
+            "functional_report": "functional",
+            "publish_functional_report": "functional",
+        }
+        reports: dict[str, dict[str, Path]] = {}
+        for step in plan.steps:
+            kind = report_kinds.get(step.step_id)
+            if kind is None:
+                continue
+            for label in ("manifest", "markdown"):
+                path = Path(str(step.outputs.get(f"report_{label}", "")))
+                if path.is_file():
+                    reports.setdefault(kind, {})[label] = path
+        outputs = {
+            f"{kind}_report_{label}": path
+            for kind, paths in reports.items()
+            for label, path in paths.items()
+        }
+        complete_reports = [
+            paths for paths in reports.values() if set(paths) == {"manifest", "markdown"}
+        ]
+        if len(complete_reports) == 1:
+            outputs.update({f"report_{label}": path for label, path in complete_reports[0].items()})
+        return outputs
+
     def registry(self) -> ToolRegistry:
         return ToolRegistry.from_path(self.root / "tool_registry.yaml")
 
