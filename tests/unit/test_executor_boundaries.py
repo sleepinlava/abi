@@ -137,6 +137,41 @@ def test_prepare_output_directories_rejects_symlink_escape_before_mkdir(tmp_path
     assert not (outside / "created").exists()
 
 
+def test_managed_output_roots_do_not_allow_unrelated_external_paths(tmp_path: Path) -> None:
+    outdir = tmp_path / "pipeline"
+    managed = tmp_path / "managed"
+    escaped = tmp_path / "escaped" / "result.tsv"
+    step = _step(outputs={"result": str(escaped)})
+
+    with pytest.raises(InputPolicyError, match="result for step step escapes output root"):
+        GenericABIExecutor._ensure_step_output_dirs(
+            [step],
+            outdir=outdir,
+            managed_output_roots=[managed],
+        )
+
+    assert not escaped.parent.exists()
+
+
+def test_managed_output_roots_reject_symlink_escape(tmp_path: Path) -> None:
+    outdir = tmp_path / "pipeline"
+    managed = tmp_path / "managed"
+    outside = tmp_path / "outside"
+    managed.mkdir()
+    outside.mkdir()
+    (managed / "escape").symlink_to(outside, target_is_directory=True)
+    step = _step(outputs={"output_dir": str(managed / "escape" / "created")})
+
+    with pytest.raises(InputPolicyError, match="output_dir for step step escapes output root"):
+        GenericABIExecutor._ensure_step_output_dirs(
+            [step],
+            outdir=outdir,
+            managed_output_roots=[managed],
+        )
+
+    assert not (outside / "created").exists()
+
+
 def test_prepare_output_directories_preserves_must_not_exist(tmp_path: Path) -> None:
     outdir = tmp_path / "pipeline"
     output_dir = outdir / "parent" / "tool-created"

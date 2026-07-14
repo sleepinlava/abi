@@ -536,6 +536,10 @@ class ExecutionPlan:
     # 存储溯源制品（计划快照、工具版本、输出校验和）的目录。
     # 若为 None，执行器使用 ``<outdir>/provenance``。
 
+    managed_output_roots: List[str] = field(default_factory=list)
+    # Explicit external output roots owned by a managed CLI plugin. All other
+    # outputs remain confined to ``outdir``.
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize the full execution plan for JSON round-tripping."""
         return {
@@ -551,6 +555,7 @@ class ExecutionPlan:
             "steps": [step.to_dict() for step in self.steps],
             "skipped_steps": [step.to_dict() for step in self.skipped_steps],
             "provenance_dir": self.provenance_dir,
+            "managed_output_roots": list(self.managed_output_roots),
             "plasmid_strategy": self.plasmid_strategy,
         }
 

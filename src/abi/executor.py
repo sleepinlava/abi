@@ -113,7 +113,7 @@ from abi.internal import (
     InternalHandlerContext,
     internal_handler_spec,
 )
-from abi.path_policy import resolve_within
+from abi.path_policy import InputPolicyError, resolve_within
 from abi.provenance import (
     PipelineProgressRecorder,
     RunLogger,
@@ -252,7 +252,12 @@ class GenericABIExecutor:
         self.table_manager.ensure_tables(tables_dir)
         # Pre-create per-step output directories so tools don't fail on missing dirs.
         # 预先创建每个步骤的输出目录，避免工具因缺少目录而失败。
-        self._ensure_step_output_dirs(plan.steps, registry=self.registry, outdir=outdir)
+        self._ensure_step_output_dirs(
+            plan.steps,
+            registry=self.registry,
+            outdir=outdir,
+            managed_output_roots=getattr(plan, "managed_output_roots", ()),
+        )
 
         # Persist the plan so it can be inspected later (e.g., by `abi inspect`).
         # 持久化计划，以便后续检查（例如通过 `abi inspect`）。
@@ -1206,6 +1211,7 @@ class GenericABIExecutor:
         *,
         registry: ToolRegistry | None = None,
         outdir: Path | None = None,
+        managed_output_roots: Iterable[str | Path] = (),
     ) -> None:
         """Pre-create output directories for all steps.
 
@@ -1226,6 +1232,7 @@ class GenericABIExecutor:
 
         这在任何步骤执行之前调用，因此工具不会因其预期的输出目录尚不存在而失败。
         """
+        external_roots = tuple(Path(root) for root in managed_output_roots)
         for step in steps:
             resolved_outputs: dict[str, Path] = {}
             if outdir is not None:
@@ -1235,11 +1242,23 @@ class GenericABIExecutor:
                 for key, output_path in step.outputs.items():
                     if output_path is None or str(output_path) == "":
                         continue
-                    resolved_outputs[key] = resolve_within(
-                        outdir,
-                        Path(str(output_path)),
-                        label=f"{key} for step {step.step_id}",
-                    )
+                    candidate = Path(str(output_path))
+                    label = f"{key} for step {step.step_id}"
+                    try:
+                        resolved_outputs[key] = resolve_within(outdir, candidate, label=label)
+                    except InputPolicyError as primary_error:
+                        for external_root in external_roots:
+                            try:
+                                resolved_outputs[key] = resolve_within(
+                                    external_root,
+                                    candidate,
+                                    label=label,
+                                )
+                                break
+                            except InputPolicyError:
+                                continue
+                        else:
+                            raise primary_error
             metadata: Mapping[str, Any] = {}
             if registry is not None and registry.has(step.tool_id):
                 metadata = registry.get(step.tool_id)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
@@ -29,12 +30,27 @@ __all__ = [
 class _ViWrapToolSkill(GenericCommandSkill):
     """Use the typed builder so optional reads/coverage flags remain correct."""
 
+    def select_params(self, params: Dict[str, Any], mode: str = "auto") -> Dict[str, Any]:
+        selected = super().select_params(params, mode=mode)
+        conda_env_dir = Path(str(selected.get("conda_env_dir", "")))
+        if selected.get("executable"):
+            self._resolved_executable = str(selected["executable"])
+        elif conda_env_dir:
+            self._resolved_executable = str(conda_env_dir / "ViWrap/bin/ViWrap")
+        else:
+            self._resolved_executable = self.executable
+        return selected
+
+    def check_installation(self) -> bool:
+        executable = getattr(self, "_resolved_executable", self.executable)
+        return Path(executable).is_file() or shutil.which(executable) is not None
+
     def build_command(self, params: Dict[str, Any]) -> list[str]:
         config = dict(params)
         config["out_dir"] = params.get("output_dir")
-        conda_env_dir = Path(str(params.get("conda_env_dir", "")))
-        shared_executable = conda_env_dir / "ViWrap" / "bin" / "ViWrap"
-        config["executable"] = str(shared_executable) if conda_env_dir else self.executable
+        config["executable"] = params.get("executable") or getattr(
+            self, "_resolved_executable", self.executable
+        )
         return build_viwrap_command(config)
 
 
@@ -136,7 +152,9 @@ class ViralViWrapPlugin:
             {"db_dir": config["db_dir"], "conda_env_dir": config["conda_env_dir"]}
         )
         config["resources"] = resolved_resources
-        config["executable"] = str(Path(str(config["conda_env_dir"])) / "ViWrap/bin/ViWrap")
+        config["executable"] = str(
+            config.get("executable") or Path(str(config["conda_env_dir"])) / "ViWrap/bin/ViWrap"
+        )
         build_viwrap_command(config)
         return config
 
@@ -189,6 +207,7 @@ class ViralViWrapPlugin:
             self.build_sample_context(config, check_files=check_files),
         )
         viwrap_output = str(config["out_dir"])
+        plan.managed_output_roots = [viwrap_output]
         for step in plan.steps:
             if step.tool_id == "viwrap":
                 step.outputs["output_dir"] = viwrap_output

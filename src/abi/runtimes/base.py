@@ -11,6 +11,7 @@ from typing import Dict, Mapping, Protocol
 class RuntimeOptions:
     engine: str = "local"
     smoke: bool = False
+    check_runtime: bool = True
     nextflow_bin: Path | None = None
     work_dir: Path | None = None
     workflow: Path | None = None

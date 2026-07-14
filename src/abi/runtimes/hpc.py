@@ -80,7 +80,12 @@ class HpcRuntime:
 
     def run(self, plan: object, config: Mapping[str, Any]) -> RuntimeResult:
         self.check()
-        report = run_plugin_preflight(self.plugin, config, engine="hpc")
+        report = run_plugin_preflight(
+            self.plugin,
+            config,
+            engine="hpc",
+            check_runtime=self.options.check_runtime,
+        )
         if str(report.get("status", "pass")) == "fail":
             raise ABIError(
                 f"{self.plugin.plugin_id} preflight failed: "

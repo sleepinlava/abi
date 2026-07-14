@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 import yaml
 
-import abi.plugins.viral_viwrap.runner as viwrap_runner
 from abi.executor import GenericABIExecutor
 from abi.plugins import get_plugin
 from abi.plugins.viral_viwrap.artifact_mapper import collect_artifacts
@@ -21,8 +19,6 @@ from abi.plugins.viral_viwrap.checker import (
 from abi.plugins.viral_viwrap.command_builder import build_viwrap_command
 from abi.plugins.viral_viwrap.errors import (
     ViWrapConfigError,
-    ViWrapEnvironmentError,
-    ViWrapExecutionError,
 )
 from abi.plugins.viral_viwrap.parser import parse_viwrap_outputs
 from abi.plugins.viral_viwrap.runner import run_viwrap
@@ -104,75 +100,12 @@ def test_viwrap_preflight_can_validate_fixture_without_runtime(tmp_path):
     assert report["summary"]["can_run"] is True
 
 
-def test_viwrap_managed_dry_run_returns_complete_command(tmp_path):
+def test_viwrap_compat_runner_preserves_typed_config_errors(tmp_path):
     config = _config(tmp_path)
-    config.update({"dry_run": True, "skip_runtime_check": True})
+    config.pop("out_dir")
 
-    result = run_viwrap(config)
-
-    assert result["mode"] == "dry_run"
-    assert "--input_reads" in result["command"]
-
-
-def test_viwrap_managed_run_returns_parsed_outputs_and_provenance(tmp_path, monkeypatch):
-    config = _config(tmp_path)
-    summary = Path(config["out_dir"]) / "08_ViWrap_summary_outdir"
-    summary.mkdir(parents=True)
-    (summary / "Virus_summary_info.txt").write_text(
-        "virus_id\tlength\nvirus_1\t5000\n", encoding="utf-8"
-    )
-    monkeypatch.setattr(
-        viwrap_runner,
-        "check_environment",
-        lambda *_args, **_kwargs: {"status": "pass", "checks": []},
-    )
-    monkeypatch.setattr(
-        viwrap_runner.subprocess,
-        "run",
-        lambda command, **_kwargs: subprocess.CompletedProcess(command, 0),
-    )
-
-    result = viwrap_runner.run_viwrap(config)
-
-    assert result["status"] == "success"
-    assert result["returncode"] == 0
-    assert result["tables"]["virus_summary"].endswith("Virus_summary_info.txt")
-    assert Path(result["logs"]["command"]).is_file()
-    assert Path(result["logs"]["env_report"]).is_file()
-    assert Path(result["logs"]["artifact_manifest"]).is_file()
-
-
-def test_viwrap_managed_run_stops_on_failed_preflight(tmp_path, monkeypatch):
-    config = _config(tmp_path)
-    monkeypatch.setattr(
-        viwrap_runner,
-        "check_environment",
-        lambda *_args, **_kwargs: {"status": "fail", "checks": []},
-    )
-
-    with pytest.raises(ViWrapEnvironmentError, match="preflight failed"):
-        viwrap_runner.run_viwrap(config)
-
-
-def test_viwrap_managed_run_reports_external_command_failure(tmp_path, monkeypatch):
-    config = _config(tmp_path)
-    monkeypatch.setattr(
-        viwrap_runner,
-        "check_environment",
-        lambda *_args, **_kwargs: {"status": "pass", "checks": []},
-    )
-    monkeypatch.setattr(
-        viwrap_runner.subprocess,
-        "run",
-        lambda command, **_kwargs: subprocess.CompletedProcess(command, 17),
-    )
-
-    with pytest.raises(ViWrapExecutionError, match="exited with 17"):
-        viwrap_runner.run_viwrap(config)
-
-    log_dir = tmp_path / "viwrap-output.abi_logs"
-    assert (log_dir / "viwrap.command.txt").is_file()
-    assert (log_dir / "viwrap.stderr.log").is_file()
+    with pytest.raises(ViWrapConfigError, match="Missing required ViWrap settings: out_dir"):
+        run_viwrap(config)
 
 
 def test_viwrap_parser_and_artifact_manifest(tmp_path):

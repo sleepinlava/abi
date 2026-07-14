@@ -63,7 +63,12 @@ class LocalRuntime:
     ) -> RuntimeResult:
         mock_tools = dry_run or _coerce_bool(config.get("mock_tools"))
         if not mock_tools and not _skip_preflight_requested():
-            report = run_plugin_preflight(self.plugin, config, engine="local")
+            report = run_plugin_preflight(
+                self.plugin,
+                config,
+                engine="local",
+                check_runtime=self.options.check_runtime,
+            )
             if str(report.get("status", "pass")) == "fail":
                 raise ABIError(
                     f"{self.plugin.plugin_id} preflight failed: "

@@ -18,6 +18,7 @@
     "out_dir": {"type": "string", "minLength": 1},
     "db_dir": {"type": "string", "minLength": 1},
     "conda_env_dir": {"type": "string", "minLength": 1},
+    "executable": {"type": "string", "minLength": 1},
     "identify_method": {"enum": ["genomad", "vb", "vs", "dvf", "vb-vs", "vb-vs-dvf"]},
     "reads_type": {"enum": ["illumina", "pacbio", "pacbio_hifi", "pacbio_asm20", "nanopore"]},
     "threads": {"type": "integer", "minimum": 1},

@@ -76,11 +76,12 @@ nodes:
     depends_on: [viwrap_command_plan]
     inputs:
       input_metagenome: {type: file, format: fasta, source: assembly}
-      input_reads: {type: file}
+      input_reads: {type: files, source: config.input.input_reads}
       input_cov: {type: file}
       input_sample2read_info: {type: file}
       db_dir: {type: directory}
       conda_env_dir: {type: directory}
+      executable: {type: string}
       identify_method: {type: string}
       reads_type: {type: string}
       input_length_limit: {type: integer}

@@ -16,8 +16,16 @@ abi run --type viral_viwrap --config viwrap.yaml --engine hpc \
   --scheduler slurm --partition compute --confirm-execution
 ```
 
-`resources.conda_env_dir` points to the shared ViWrap environment collection;
-ABI launches `<conda_env_dir>/ViWrap/bin/ViWrap`. ViWrap itself remains a single
-black-box external step surrounded by ABI validation, parsing, and reporting.
+`resources.conda_env_dir` points to the shared ViWrap environment collection.
+ABI launches an explicit `executable` when configured, otherwise it uses
+`<conda_env_dir>/ViWrap/bin/ViWrap`. ViWrap itself remains a single black-box
+external step surrounded by ABI validation, parsing, and reporting.
+The compatibility helper `run_viwrap(config)` delegates to the same canonical
+ABI DAG. It preserves the requested `out_dir` and legacy return/log fields while
+adding `abi_result_dir` and `abi_outputs` references to the standard ABI bundle.
+When `outdir` is omitted, that bundle is written to the configured `log_dir` or
+to `<out_dir>.abi_logs`. Legacy `viwrap.*` log aliases always remain in
+`log_dir`, including when the standard ABI bundle uses a separate `outdir`.
+
 The future `viral_native` preset is intentionally rejected until its individual
 tool stages and result-parity gates are implemented.

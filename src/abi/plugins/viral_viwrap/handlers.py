@@ -47,7 +47,7 @@ def environment_handler(
     context: InternalHandlerContext,
 ) -> InternalHandlerResult:
     del context
-    report = check_environment(config)
+    report = check_environment(config, check_runtime=False)
     _write_json(step.outputs["env_report"], report)
     return InternalHandlerResult(
         status="failed" if report["status"] == "fail" else "success",
