@@ -1,0 +1,119 @@
+import json
+import re
+from pathlib import Path
+
+import yaml
+
+import abi
+from scripts import check_release_identity
+
+ROOT = Path(__file__).resolve().parents[2]
+SHARED_SKILL = ROOT / "integrations/shared/skills/abi/SKILL.md"
+CLAUDE_ROOT = ROOT / "integrations/claude-code/abi"
+OPENCODE_ROOT = ROOT / "integrations/opencode"
+CODEX_ROOT = ROOT / "integrations/codex/abi"
+
+
+def _frontmatter(path: Path) -> dict[str, object]:
+    text = path.read_text(encoding="utf-8")
+    assert text.startswith("---\n")
+    block = text.split("---\n", 2)[1]
+    parsed = yaml.safe_load(block)
+    assert isinstance(parsed, dict)
+    return parsed
+
+
+def _project_version() -> str:
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'^version = "([^"]+)"$', pyproject, flags=re.MULTILINE)
+    assert match is not None
+    return match.group(1)
+
+
+def test_shared_abi_skill_is_agent_skills_compatible() -> None:
+    metadata = _frontmatter(SHARED_SKILL)
+
+    assert SHARED_SKILL.parent.name == metadata["name"] == "abi"
+    assert isinstance(metadata["description"], str)
+    assert "bioinformatics" in metadata["description"].lower()
+    assert "abi_list_types" in SHARED_SKILL.read_text(encoding="utf-8")
+
+
+def test_platform_skills_match_the_shared_source() -> None:
+    expected = SHARED_SKILL.read_text(encoding="utf-8")
+
+    assert (CLAUDE_ROOT / "skills/abi/SKILL.md").read_text(encoding="utf-8") == expected
+    assert (OPENCODE_ROOT / "skills/abi/SKILL.md").read_text(encoding="utf-8") == expected
+    assert (CODEX_ROOT / "skills/abi/SKILL.md").read_text(encoding="utf-8") == expected
+
+
+def test_claude_plugin_declares_safe_abi_mcp_server() -> None:
+    manifest = json.loads((CLAUDE_ROOT / ".claude-plugin/plugin.json").read_text())
+    mcp = json.loads((CLAUDE_ROOT / ".mcp.json").read_text())
+
+    assert manifest["name"] == "abi"
+    assert manifest["version"] == _project_version()
+    assert mcp["mcpServers"]["abi"] == {
+        "command": "abi-mcp",
+        "args": ["--profile", "safe"],
+    }
+
+
+def test_opencode_example_declares_safe_abi_mcp_server() -> None:
+    config = json.loads((OPENCODE_ROOT / "opencode.example.json").read_text())
+
+    assert config["$schema"] == "https://opencode.ai/config.json"
+    assert config["mcp"]["abi"] == {
+        "type": "local",
+        "command": ["abi-mcp", "--profile", "safe"],
+        "enabled": True,
+        "timeout": 10000,
+    }
+
+
+def test_codex_plugin_declares_safe_abi_mcp_server() -> None:
+    manifest = json.loads((CODEX_ROOT / ".codex-plugin/plugin.json").read_text())
+    mcp = json.loads((CODEX_ROOT / ".mcp.json").read_text())
+
+    assert manifest["name"] == "abi"
+    assert manifest["version"] == _project_version()
+    assert manifest["skills"] == "./skills/"
+    assert manifest["mcpServers"] == "./.mcp.json"
+    assert mcp["mcpServers"]["abi"] == {
+        "command": "abi-mcp",
+        "args": ["--profile", "safe"],
+    }
+
+
+def test_agent_integration_assets_are_in_sdist_and_wheel() -> None:
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert '"integrations" = "abi/integrations"' in pyproject
+    assert re.search(r'^\s+"integrations",$', pyproject, flags=re.MULTILINE)
+
+
+def test_release_identity_rejects_agent_plugin_manifest_version_mismatch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    expected = "9.8.7"
+    (tmp_path / "pyproject.toml").write_text(
+        f'[project]\nname = "abi-agent"\nversion = "{expected}"\n', encoding="utf-8"
+    )
+    (tmp_path / "CHANGELOG.md").write_text(f"## [{expected}]\n", encoding="utf-8")
+    for relative_path in (
+        Path("integrations/claude-code/abi/.claude-plugin/plugin.json"),
+        Path("integrations/codex/abi/.codex-plugin/plugin.json"),
+    ):
+        manifest_path = tmp_path / relative_path
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text('{"version": "0.0.0"}\n', encoding="utf-8")
+
+    monkeypatch.setattr(check_release_identity, "ROOT", tmp_path)
+    monkeypatch.setattr(check_release_identity, "distribution_version", lambda _name: expected)
+    monkeypatch.setattr(abi, "__version__", expected)
+
+    errors = check_release_identity.validate_release_identity()
+
+    assert len([error for error in errors if error.startswith("plugin manifest ")]) == 2
+    assert all("expected 9.8.7" in error for error in errors)

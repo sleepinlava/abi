@@ -290,13 +290,13 @@ ABI 只保留四个 GitHub Actions workflow：CI、Docker、Release 和受信 Py
 | Sphinx 文档构建 | 仅 3.12 |
 | Wheel 构建 + 冒烟测试 | 仅 3.12 |
 
-3.12 构建使用默认的 `python -m build` 路径：源码树 → sdist → wheel。因此，wheel 中配置为 `force-include` 的文件也必须进入 sdist，尤其是根目录 `environments.yaml`。
+3.12 构建使用默认的 `python -m build` 路径：源码树 → sdist → wheel。因此，wheel 中配置为 `force-include` 的文件也必须进入 sdist，尤其是根目录 `environments.yaml` 和 `integrations/` 下的平台原生资产。干净 wheel 冒烟测试会使用 `[mcp]` extra 安装 wheel，再安装并诊断 Claude Code、OpenCode 和 Codex 集成，避免缺少包资产或 MCP runtime 不可用的问题进入发布。
 
 ### `docker.yml` — 在相关 PR 和 release tag 上构建插件镜像
 
 - PR 构建加载单个 `linux/amd64` 镜像，标签为 `abi-<plugin>:latest`，随后在容器中运行 `abi list-types`。
 - 本地 `load: true` 构建关闭 provenance 和 SBOM；registry push 才启用二者。attestation 产生的 manifest list 无法由本地 Docker exporter 加载。
-- 构建输入包含 `docker/.condarc`、`environments.yaml`、生成的 `envs/*.yml`、插件、配置、脚本、数据、示例和 golden traces，不能被 `.dockerignore` 排除。
+- 构建输入包含 `docker/.condarc`、`environments.yaml`、生成的 `envs/*.yml`、`integrations/`、插件、配置、脚本、数据、示例和 golden traces，不能被 `.dockerignore` 排除。所有插件镜像都将 `integrations/` 复制到 `/app`，且 `integrations/**` 会触发该 workflow。
 - PR 自动构建 amplicon、RNA-seq、WGS 和 metatranscriptomics；大型 plasmid 镜像仅手动构建。
 - registry 推送默认多架构；RNA-seq 在 R/DESeq2 环境通过原生 arm64 构建和冒烟验证前仅发布 `linux/amd64`。
 - packaging、环境、Dockerfile、ignore 文件或 Docker workflow 变更必须运行 `pytest tests/unit/test_docker_configuration.py -q`。

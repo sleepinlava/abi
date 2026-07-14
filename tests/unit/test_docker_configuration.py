@@ -15,6 +15,7 @@ def test_docker_build_inputs_are_not_excluded_from_context():
 
     assert "docker/" not in active_patterns
     assert "envs/*.yml" not in active_patterns
+    assert "integrations/" not in active_patterns
 
 
 def test_conda_mirror_maps_defaults_to_existing_repositories():
@@ -45,6 +46,7 @@ def test_docker_workflow_watches_the_complete_release_surface():
         '"docker/**"',
         '"environments.yaml"',
         '"envs/**"',
+        '"integrations/**"',
         '"pyproject.toml"',
         '"plugins/**"',
         '"scripts/**"',
@@ -81,6 +83,17 @@ def test_sdist_contains_files_forced_into_the_wheel():
     sdist_section = sdist_section.split(force_include_header, maxsplit=1)[0]
 
     assert '"environments.yaml"' in sdist_section
+    assert '"integrations"' in sdist_section
+
+
+def test_sciplot_tests_are_excluded_from_wheel():
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    wheel_section = pyproject.split("[tool.hatch.build.targets.wheel]", maxsplit=1)[1]
+    wheel_section = wheel_section.split(
+        "[tool.hatch.build.targets.wheel.force-include]", maxsplit=1
+    )[0]
+
+    assert 'exclude = ["src/abi/sciplot/tests/"]' in wheel_section
 
 
 def test_plasmidfinder_adapter_is_in_packaged_plugin_tree():
@@ -115,16 +128,6 @@ def test_python_script_tools_use_the_canonical_autoplasm_root():
         assert expected_command_path in contract["execution"]["command_template"]
 
 
-def test_sciplot_tests_are_excluded_from_wheel():
-    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    wheel_section = pyproject.split("[tool.hatch.build.targets.wheel]", maxsplit=1)[1]
-    wheel_section = wheel_section.split(
-        "[tool.hatch.build.targets.wheel.force-include]", maxsplit=1
-    )[0]
-
-    assert 'exclude = ["src/abi/sciplot/tests/"]' in wheel_section
-
-
 def test_every_dockerfile_copy_source_exists():
     required_sources = (
         "docker/.condarc",
@@ -139,6 +142,7 @@ def test_every_dockerfile_copy_source_exists():
         "envs",
         "examples",
         "golden_traces",
+        "integrations",
     )
 
     for source in required_sources:
@@ -153,6 +157,16 @@ def test_every_dockerfile_copies_the_root_environment_manifest():
         contents = dockerfile.read_text(encoding="utf-8")
         assert "COPY environments.yaml /app/" in contents, dockerfile.name
         assert "/app/environments.yaml" in contents.split("rm -rf", maxsplit=1)[1], dockerfile.name
+
+
+def test_every_dockerfile_copies_packaged_agent_integrations():
+    dockerfiles = sorted((ROOT / "docker").glob("Dockerfile.*"))
+
+    assert dockerfiles
+    for dockerfile in dockerfiles:
+        contents = dockerfile.read_text(encoding="utf-8")
+        assert "COPY integrations/ /app/integrations/" in contents, dockerfile.name
+        assert "/app/integrations" in contents.split("rm -rf", maxsplit=1)[1], dockerfile.name
 
 
 def test_ci_and_docker_images_install_cjk_font_for_sciplot():

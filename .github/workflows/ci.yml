@@ -86,9 +86,18 @@ jobs:
       - name: Smoke-test wheel (all plugins)
         if: matrix.python-version == '3.12'
         run: |
-          python -m pip install --force-reinstall dist/*.whl
+          wheels=(dist/*.whl)
+          python -m pip install --force-reinstall "${wheels[0]}[mcp]"
           abi list-types
           autoplasm --help
+          for platform in claude-code opencode codex; do
+            abi agent install "$platform" \
+              --scope project \
+              --project-dir "/tmp/abi-ci-agent-$platform"
+            abi agent doctor "$platform" \
+              --scope project \
+              --project-dir "/tmp/abi-ci-agent-$platform"
+          done
           abi dry-run \
             --type metagenomic_plasmid \
             --config examples/config_minimal.yaml \

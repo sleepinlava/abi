@@ -181,12 +181,19 @@ environment.lock.yml
 conda.lock
 .key
 
-# Claude Code / Codex project files
-.claude/
-.codex/
+# Agent platform local state (allow ABI project integration assets)
+.claude/*
+!.claude/skills/
+!.claude/skills/abi/
+!.claude/skills/abi/**
+.codex/*
+!.codex/config.toml
 docs/_build/
 .readthedocs-cache/
-.opencode/
+.opencode/*
+!.opencode/skills/
+!.opencode/skills/abi/
+!.opencode/skills/abi/**
 
 # Superpowers auto-generated plans
 docs/superpowers/
@@ -199,6 +206,7 @@ docs/*/full-engineering-gap-audit.md
 docs/*/tool-engineering-gap-audit.md
 docs/*/plugin_report_figure_spec.md
 paper-evaluation/
+docs/diagrams
 
 # Work report archives (generated, tracked via git)
 # (work_report_*.md files are intentional docs — NOT ignored)

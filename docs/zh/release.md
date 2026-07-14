@@ -12,7 +12,8 @@ scripts/release_check.sh
 
 推送发布候选前，确认 `CHANGELOG.md` 中存在与 `pyproject.toml` 的
 `project.version` 完全一致的版本小节；CI 会通过
-`scripts/check_release_identity.py` 强制检查这一点。
+`scripts/check_release_identity.py` 强制检查这一点。该脚本也要求 Claude Code
+和 Codex plugin manifest 的版本与 `project.version` 完全一致。
 
 版本必须同时不存在于 PyPI 和远端 Git tag。tag 与 PyPI 版本都是不可变发布身份，推送后不能移动或复用。如果 tag 指向与包元数据不一致的提交，应放弃该版本并继续递增。`1.5.4` 因 tag 对应 `1.5.3` 元数据而未发布，下一有效版本为 `1.5.5`。
 
@@ -37,7 +38,8 @@ python -m build
 abi query --type metagenomic_plasmid --what stages
 ```
 
-构建 wheel 后，在可行的情况下于干净环境中对已安装命令进行冒烟测试：
+构建 wheel 后，使用 `[mcp]` extra 安装，并在可行的情况下于干净环境中对
+已安装命令进行冒烟测试：
 
 ```bash
 abi list-types
@@ -53,7 +55,15 @@ abi query --type wgs_bacteria --what tools
 abi query --type easymetagenome --what stages
 abi dry-run --type viral_viwrap --config examples/config_minimal.yaml --profile dry_run 2>/dev/null || echo "ViWrap smoke skipped (requires external CLI)"
 abi-mcp --help 2>/dev/null || python -m abi.mcp.server --help 2>/dev/null || true
+for platform in claude-code opencode codex; do
+  abi agent install "$platform" --scope project --project-dir "/tmp/abi-release-agent-$platform"
+  abi agent doctor "$platform" --scope project --project-dir "/tmp/abi-release-agent-$platform"
+done
 ```
+
+执行时应将干净 wheel 环境的 `bin` 目录加入 `PATH`，因为 doctor 会校验已安装的
+`abi-mcp` 入口。`integrations/` 属于发布输入，必须同时进入两种分发包和每个
+Docker `/app` 上下文；该目录变化必须经过 Docker workflow。
 
 ## GitHub Actions
 

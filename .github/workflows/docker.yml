@@ -37,6 +37,7 @@ on:
       - "docker/**"
       - "environments.yaml"
       - "envs/**"
+      - "integrations/**"
       - "plugins/**"
       - "src/**"
       - "scripts/**"

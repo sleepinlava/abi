@@ -92,11 +92,12 @@ abi contract-lint --type metagenomic_plasmid --strict
 # Headless agent dispatch (used by Job Service workers)
 abi dispatch --command list-types --arguments '{}'
 
-# Start MCP stdio server for Claude Desktop / Claude Code
+# Start the safe MCP stdio server for agent platforms
 abi-mcp
 
-# Install ABI agent skills into Claude Code (~/.claude/skills/abi/)
-abi install-skills
+# Install and diagnose an agent integration (claude-code, opencode, codex)
+abi agent install codex --scope project
+abi agent doctor codex --scope project
 
 # Scientific figure compiler (validate, render, lint, export)
 abi-sciplot validate --spec figure.yaml
@@ -221,9 +222,12 @@ Runtimes            local  │  Docker  │  Nextflow  │  HPC (SLURM/PBS)  │
   platforms, and step-level I/O directly from DAG + tool registry, no plan required
 - **Multi-LLM descriptors** from `abi export-tools --format openai|anthropic|gemini [--provider ...]` covering 7+ providers
 - OpenAI-compatible descriptors from `abi export-openai-tools` (backward compat)
-- MCP stdio server via `abi-mcp` (or `python -m abi.mcp.server`) — auto-generated from SSOT
+- MCP stdio server via `abi-mcp` (or `python -m abi.mcp.server`) — auto-generated from SSOT;
+  the default `safe` profile omits execution and management tools, while
+  `abi-mcp --profile full` adds the confirmation-gated `abi_run`
 - HTTP Job Service via `abi job-service` and `abi job submit/list/status/artifacts/cancel`
-- Skills via `abi install-skills` (copies bundled SKILL.md files to `~/.claude/skills/abi/`)
+- Agent integration installer and diagnostics via `abi agent install|doctor`
+- Ready-to-load Claude Code, OpenCode, and Codex assets under `integrations/`
 
 **Plan summarization**: `abi plan` envelopes now include a `summary` field (pipeline stages,
 key tools, platforms) so agents understand the workflow structure without reading the full

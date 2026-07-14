@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "abi": {
+      "command": "abi-mcp",
+      "args": ["--profile", "safe"]
+    }
+  }
+}

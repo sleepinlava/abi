@@ -14,18 +14,76 @@ abi install-skills
 
 使用 `--force` 覆盖已有文件，或使用 `--target` 自定义目标目录。
 
-### MCP 服务器 (Claude Desktop / Claude Code)
+### Claude Code、OpenCode 与 Codex 集成
+
+仓库在 `integrations/claude-code/abi/` 提供 Claude Code 插件，在
+`integrations/opencode/` 提供 OpenCode 配置和 Agent Skill，并在
+`integrations/codex/abi/` 提供 Codex 插件。三者调用同一个传输无关 ABI
+interface，并默认使用 MCP 的 `safe` profile。
+
+加载集成前先安装带 MCP 支持的 ABI：
 
 ```bash
-abi-mcp
+pip install "abi-agent[mcp]"
 ```
 
-在 `claude_desktop_config.json` 中配置：
+使用统一命令安装用户级或项目级集成：
+
+```bash
+abi agent install claude-code --scope project
+abi agent install opencode --scope project
+abi agent install codex --scope project
+abi agent doctor codex --scope project
+```
+
+安装器会保留 OpenCode JSON 和 Codex TOML 中无关的配置；如果已有不同的
+`abi` MCP 项，默认拒绝覆盖，只有显式传入 `--force` 才会替换。自动化场景可
+使用 `--output-json`。
+
+各平台使用其原生安装位置：
+
+| 平台 | 项目级 Skill | 项目级 MCP 配置 | 用户级 Skill / 配置 |
+| --- | --- | --- | --- |
+| Claude Code | `.claude/skills/abi/SKILL.md` | `.mcp.json` | `~/.claude/skills/abi`、`~/.claude.json` |
+| OpenCode | `.opencode/skills/abi/SKILL.md` | `opencode.json` | `~/.config/opencode/skills/abi`、`~/.config/opencode/opencode.json` |
+| Codex | `.agents/skills/abi/SKILL.md` | `.codex/config.toml` | `~/.agents/skills/abi`、`~/.codex/config.toml` |
+
+`doctor` 只读检查 `abi-mcp`、MCP runtime、Skill 和 MCP 配置；任一缺失时以
+非零状态退出。它会初始化 safe server 但不启动 stdio，因此能在 Agent 启动前
+发现未安装 `mcp` extra。安装插件后，或客户端没有自动发现新增 Skill 时，
+应开启新的 Agent 会话。
+
+Claude Code 插件开发验证：
+
+```bash
+claude plugin validate integrations/claude-code/abi --strict
+claude --plugin-dir integrations/claude-code/abi
+```
+
+Codex 插件开发时，可使用 plugin-creator 提供的校验器验证
+`integrations/codex/abi/`。直接安装时，项目级技能位于
+`.agents/skills/abi`，用户级技能位于 `~/.agents/skills/abi`，MCP 配置写入
+对应范围的 `.codex/config.toml`。
+
+### MCP 服务器
+
+```bash
+abi-mcp                         # safe：发现、规划和结果工具
+abi-mcp --profile discovery     # 只读发现与检查
+abi-mcp --profile full          # 加入受确认门控的 abi_run
+```
+
+`management` profile 保留完整兼容表面，只用于管理，不建议普通 Agent 会话使用。
+
+手工 MCP 配置：
 
 ```json
 {
   "mcpServers": {
-    "abi": { "command": "abi-mcp" }
+    "abi": {
+      "command": "abi-mcp",
+      "args": ["--profile", "safe"]
+    }
   }
 }
 ```
@@ -101,7 +159,8 @@ abi export-openai-tools --type metagenomic_plasmid --format responses
 ### MCP
 
 ```bash
-abi-mcp  # 启动 stdio 服务器，将所有 ABI 工具注册为 MCP 工具
+abi-mcp                  # safe profile（默认）
+abi-mcp --profile full   # 包含 abi_run
 ```
 
 ### Python

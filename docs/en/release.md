@@ -12,7 +12,8 @@ scripts/release_check.sh
 
 Before pushing a release candidate, confirm `CHANGELOG.md` has a section for
 the exact `project.version` in `pyproject.toml`; CI enforces this with
-`scripts/check_release_identity.py`.
+`scripts/check_release_identity.py`. The same check requires the Claude Code and
+Codex plugin manifest versions to equal `project.version`.
 
 Choose a version that is absent from both PyPI and remote Git tags. Tags and
 PyPI versions are immutable identities: never move or reuse a tag after it has
@@ -41,8 +42,8 @@ python -m build
 abi query --type metagenomic_plasmid --what stages
 ```
 
-After building a wheel, smoke-test the installed commands in a clean
-environment when possible:
+After building a wheel, install it with its `[mcp]` extra and smoke-test the
+installed commands in a clean environment when possible:
 
 ```bash
 abi list-types
@@ -54,7 +55,16 @@ abi doctor-agent --type metatranscriptomics
 abi export-openai-tools --type metatranscriptomics --format json
 abi install-skills --target /tmp/abi-smoke-skills
 abi-mcp --help 2>/dev/null || python -m abi.mcp.server --help 2>/dev/null || true
+for platform in claude-code opencode codex; do
+  abi agent install "$platform" --scope project --project-dir "/tmp/abi-release-agent-$platform"
+  abi agent doctor "$platform" --scope project --project-dir "/tmp/abi-release-agent-$platform"
+done
 ```
+
+Run this with the clean wheel environment's `bin` directory on `PATH`, because
+the doctor verifies the installed `abi-mcp` entry point. `integrations/` is a
+release input: it must be present in both distributions and every Docker `/app`
+context, and a change to it must exercise the Docker workflow.
 
 ## GitHub Actions
 

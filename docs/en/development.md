@@ -7,6 +7,7 @@ This repository publishes one Python distribution: `abi-agent`.
 ```
 src/abi/
   agent/              ABIAgentInterface, JSON envelopes, agent context export
+  agent_integrations.py  Claude Code, OpenCode, and Codex integration installer/doctor
   figures/            FigureEngine (7 renderers), FigureSpec — generic figure system
   report/             write_full_report, write_plugin_report, write_methods,
                       citations, limitations, html — generic report system
@@ -95,6 +96,33 @@ pytest tests/ -v --tb=short
 `mypy` is intentionally scoped to `src/abi/`; the bundled pipeline is covered by
 runtime tests and ruff first, with stricter typing left for later hardening.
 
+## Agent Integration Development
+
+Treat `integrations/<platform>/abi/` as the source of truth for platform-native
+assets. `abi agent install` copies those assets into the target project or user
+configuration, while `abi agent doctor` validates the installed skill, MCP
+configuration, command availability, and safe-server initialization without
+changing files.
+
+When changing an integration:
+
+1. Keep Claude Code, OpenCode, and Codex behavior aligned unless a platform has a
+   documented constraint.
+2. Run `abi agent install <platform> --scope project --project-dir <tmp-dir>` and
+   the matching `abi agent doctor` command for all three platforms.
+3. Run the native validator when the installed client exposes one: currently
+   `claude plugin validate` for Claude Code. Codex releases without a local
+   `plugin validate` subcommand rely on the manifest and asset regression tests.
+4. Run `python -m build`, install the wheel with its `[mcp]` extra, and repeat
+   install/doctor with the command from the clean wheel environment. Source-tree
+   success alone does not prove the assets or MCP runtime were packaged correctly.
+5. Keep `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` versions equal
+   to `project.version`; `scripts/check_release_identity.py` enforces this.
+
+`integrations/` is a package and Docker build input. It must remain in the sdist,
+wheel, and every Docker `/app` context, and changes under it must trigger the Docker
+workflow.
+
 ## Runtime Contract Enforcement
 
 The generic executor enforces the step-level contract embedded in each
@@ -135,6 +163,7 @@ Small source assets are tracked:
 - `envs/` — generated from `environments.yaml` via `scripts/emit_env_yamls.py`
 - `skills/` (inside ``src/abi/skills/`` — bundled with the package, installed via ``abi install-skills``)
 - `plugins/`
+- `integrations/` — platform-native Claude Code, OpenCode, and Codex bundles
 - `examples/`
 - `data/examples/`
 - `scripts/`
@@ -194,6 +223,8 @@ is passed.
 | `abi check-resources --type <plugin>` | Check resource/database availability |
 | `abi setup-resources --type <plugin> --confirm` | Auto-install/setup resources |
 | `abi install-skills` | Install SKILL.md files to `~/.claude/skills/abi/` |
+| `abi agent install <platform>` | Install a Claude Code, OpenCode, or Codex integration |
+| `abi agent doctor <platform>` | Read-only validation of an installed integration |
 | `abi export-openai-tools --type <plugin>` | OpenAI function-calling descriptors |
 | `abi-mcp` | Start MCP stdio server |
 

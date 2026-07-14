@@ -286,7 +286,10 @@ trusted PyPI publisher.
 The 3.12 build uses the default `python -m build` path: source tree → sdist →
 wheel. Files configured as wheel `force-include` inputs must therefore also be
 included in the sdist. This specifically includes the root
-`environments.yaml` manifest.
+`environments.yaml` manifest and the platform-native assets under `integrations/`.
+The clean-wheel smoke test installs the wheel with `[mcp]`, then installs and
+diagnoses the Claude Code, OpenCode, and Codex integrations so a missing package
+asset or unusable MCP runtime fails before release.
 
 ### `docker.yml` — Builds plugin images on relevant PRs and release tags
 
@@ -296,8 +299,9 @@ included in the sdist. This specifically includes the root
   pushes enable both; combining attestations with the local Docker exporter
   produces an unsupported manifest list.
 - Docker build inputs include `docker/.condarc`, `environments.yaml`, generated
-  `envs/*.yml`, plugins, configuration, scripts, data, examples, and golden
-  traces. None may be excluded by `.dockerignore`.
+  `envs/*.yml`, `integrations/`, plugins, configuration, scripts, data, examples,
+  and golden traces. None may be excluded by `.dockerignore`; all plugin images
+  copy `integrations/` into `/app`, and `integrations/**` triggers this workflow.
 - Automatic PR CI builds amplicon, RNA-seq, WGS, and metatranscriptomics. The
   large plasmid image is manual-only.
 - Registry pushes are multi-platform except RNA-seq, which remains
