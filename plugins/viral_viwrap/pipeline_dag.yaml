@@ -125,7 +125,21 @@ nodes:
         type: file
         format: json
         path: "{outdir}/{category_dir}/{sample_id}.artifacts.json"
-        contract: {min_size: "10B"}
+        contract:
+          min_size: "10B"
+          required_keys:
+            [schema_version, plugin, root, artifact_count, artifacts, standard_tables, consistency, groups]
+          schema:
+            artifact_count: {type: integer, min: 1}
+            consistency.standard_table_count: {type: integer, min: 1}
+            consistency.standard_row_count: {type: integer, min: 1}
+            consistency.linked_source_count: {type: integer, min: 1}
+    assertions:
+      - "output_json.schema_version == 'abi.artifact-manifest.v1'"
+      - "output_json.plugin == 'viral_viwrap'"
+      - "len(output_json.artifacts) == output_json.artifact_count"
+      - "len(output_json.standard_tables) == output_json.consistency.standard_table_count"
+      - "len(output_json.consistency.unmatched_source_files) == 0"
   viwrap_report:
     tool_id: internal
     internal_handler: viral_viwrap.report

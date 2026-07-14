@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from abi.interfaces import ABIPublishedOutputsPlugin
 from abi.runtimes import HpcRuntime, LocalRuntime, NextflowRuntime, RuntimeOptions, RuntimeResult
 from abi.schemas import ABIError
 
@@ -67,7 +68,20 @@ class WorkflowCoordinator:
         return runtime.dry_run(prepared.plan, prepared.config)
 
     def run(self, prepared: PreparedWorkflow) -> RuntimeResult:
-        return self._runtime(prepared).run(prepared.plan, prepared.config)
+        result = self._runtime(prepared).run(prepared.plan, prepared.config)
+        if isinstance(prepared.plugin, ABIPublishedOutputsPlugin):
+            published = {
+                str(name): Path(path)
+                for name, path in prepared.plugin.published_outputs(prepared.plan).items()
+            }
+            collisions = sorted(set(result.outputs) & set(published))
+            if collisions:
+                raise ABIError(
+                    "Plugin published output label(s) collide with ABI outputs: "
+                    + ", ".join(collisions)
+                )
+            result.outputs.update(published)
+        return result
 
     @staticmethod
     def _runtime(prepared: PreparedWorkflow) -> Any:

@@ -388,7 +388,7 @@
         <mxCell id="p5-adapters" parent="1" value="薄 Adapter&lt;br&gt;CLI │ MCP │ HTTP │ Legacy P0/run_viwrap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1">
           <mxGeometry relative="0" as="geometry" x="80" y="100" width="300" height="70"/>
         </mxCell>
-        <mxCell id="p5-coordinator" parent="1" value="WorkflowCoordinator&lt;br&gt;prepare() │ dry_run() │ run()&lt;br&gt;隐藏 config → plan → runtime" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+        <mxCell id="p5-coordinator" parent="1" value="WorkflowCoordinator&lt;br&gt;prepare() │ dry_run() │ run()&lt;br&gt;隐藏 config → plan → runtime → published outputs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
           <mxGeometry relative="0" as="geometry" x="470" y="90" width="360" height="90"/>
         </mxCell>
         <mxCell id="p5-result" parent="1" value="统一 ABI Result&lt;br&gt;plan │ provenance │ tables │ report │ resume identity" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1">

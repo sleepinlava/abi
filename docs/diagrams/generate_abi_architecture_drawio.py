@@ -950,7 +950,7 @@ def build_page5() -> Element:
         ),
         (
             "p5-coordinator",
-            "WorkflowCoordinator<br>prepare() │ dry_run() │ run()<br>隐藏 config → plan → runtime",
+            "WorkflowCoordinator<br>prepare() │ dry_run() │ run()<br>隐藏 config → plan → runtime → published outputs",
             BOX_GREEN,
             470,
             90,

@@ -17,6 +17,7 @@ from .checker import check_environment
 from .command_builder import build_viwrap_command, render_command
 from .errors import ViWrapEnvironmentError, ViWrapExecutionError, ViWrapParseError
 from .parser import parse_viwrap_outputs
+from .plan_outputs import find_plan_output
 
 
 def run_viwrap(config: Mapping[str, Any]) -> dict[str, Any]:
@@ -73,8 +74,10 @@ def run_viwrap(config: Mapping[str, Any]) -> dict[str, Any]:
     parsed = load_json_object(_plan_output(prepared, "parsed_summary"))
     artifacts = load_json_object(_plan_output(prepared, "artifact_manifest"))
     logs = _copy_legacy_step_logs(prepared, legacy_log_dir)
+    canonical_artifact_manifest = runtime_result.outputs["artifact_manifest"]
     artifact_manifest = legacy_log_dir / "artifact_manifest.json"
-    shutil.copyfile(_plan_output(prepared, "artifact_manifest"), artifact_manifest)
+    shutil.copyfile(canonical_artifact_manifest, artifact_manifest)
+    abi_outputs = _stringify_outputs(runtime_result.outputs)
     result.update(
         {
             "mode": "run",
@@ -95,16 +98,16 @@ def run_viwrap(config: Mapping[str, Any]) -> dict[str, Any]:
             },
             "warnings": parsed["warnings"],
             "abi_result_dir": str(abi_result_dir),
-            "abi_outputs": _stringify_outputs(runtime_result.outputs),
+            "abi_outputs": abi_outputs,
         }
     )
     return result
 
 
 def _plan_output(prepared: PreparedWorkflow, name: str) -> Path:
-    for step in prepared.plan.steps:
-        if name in step.outputs:
-            return Path(str(step.outputs[name]))
+    output = find_plan_output(prepared.plan, name)
+    if output is not None:
+        return output
     raise ViWrapParseError(f"Canonical ViWrap plan does not declare output {name!r}")
 
 

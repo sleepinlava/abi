@@ -13,6 +13,9 @@ from abi.plugins.viral_viwrap.errors import (
     ViWrapExecutionError,
     ViWrapParseError,
 )
+from abi.runtimes import RuntimeOptions
+from abi.schemas import ABIError
+from abi.workflow import WorkflowCoordinator
 
 
 def _compat_config(
@@ -111,6 +114,29 @@ def test_compat_runner_preserves_legacy_result_and_writes_standard_abi_bundle(tm
         ("viral_sample", "virus_1", "5000")
     ]
 
+    canonical_manifest_path = Path(result["abi_outputs"]["artifact_manifest"])
+    canonical_manifest = json.loads(canonical_manifest_path.read_text(encoding="utf-8"))
+    legacy_manifest = json.loads(
+        Path(result["logs"]["artifact_manifest"]).read_text(encoding="utf-8")
+    )
+    virus_table = canonical_manifest["standard_tables"]["virus_summary"]
+    raw_artifact_paths = {item["path"] for item in canonical_manifest["artifacts"]}
+
+    assert canonical_manifest == legacy_manifest
+    assert canonical_manifest["schema_version"] == "abi.artifact-manifest.v1"
+    assert canonical_manifest["artifact_count"] == len(canonical_manifest["artifacts"])
+    assert virus_table == {
+        "path": str(abi_result_dir / "tables/virus_summary.tsv"),
+        "rows": 1,
+    }
+    assert canonical_manifest["consistency"] == {
+        "standard_table_count": 4,
+        "standard_row_count": 1,
+        "linked_source_count": 1,
+        "unmatched_source_files": [],
+    }
+    assert virus_rows[0]["source_file"] in raw_artifact_paths
+
 
 def test_compat_runner_dry_run_writes_abi_provenance_without_raw_output(tmp_path):
     config = _compat_config(tmp_path)
@@ -126,6 +152,43 @@ def test_compat_runner_dry_run_writes_abi_provenance_without_raw_output(tmp_path
         True,
     )
     assert not Path(str(config["out_dir"])).exists()
+
+
+def test_workflow_coordinator_publishes_viwrap_artifact_manifest(tmp_path):
+    config = _compat_config(tmp_path)
+    config["outdir"] = str(tmp_path / "abi-result")
+    coordinator = WorkflowCoordinator()
+    prepared = coordinator.prepare(
+        "viral_viwrap",
+        overrides=config,
+        options=RuntimeOptions(engine="local", check_runtime=False),
+    )
+
+    runtime_result = coordinator.run(prepared)
+
+    manifest_path = runtime_result.outputs["artifact_manifest"]
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest_path.is_relative_to(Path(str(config["outdir"])))
+    assert manifest["schema_version"] == "abi.artifact-manifest.v1"
+
+
+def test_workflow_coordinator_rejects_published_output_label_collision(tmp_path, monkeypatch):
+    config = _compat_config(tmp_path)
+    config["outdir"] = str(tmp_path / "abi-result")
+    coordinator = WorkflowCoordinator()
+    prepared = coordinator.prepare(
+        "viral_viwrap",
+        overrides=config,
+        options=RuntimeOptions(engine="local", check_runtime=False),
+    )
+    monkeypatch.setattr(
+        prepared.plugin,
+        "published_outputs",
+        lambda plan: {"summary": Path(plan.outdir) / "provenance/run_summary.json"},
+    )
+
+    with pytest.raises(ABIError, match="collide with ABI outputs: summary"):
+        coordinator.run(prepared)
 
 
 def test_compat_runner_stops_on_failed_preflight(tmp_path):

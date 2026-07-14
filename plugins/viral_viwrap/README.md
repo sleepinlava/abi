@@ -23,6 +23,10 @@ external step surrounded by ABI validation, parsing, and reporting.
 The compatibility helper `run_viwrap(config)` delegates to the same canonical
 ABI DAG. It preserves the requested `out_dir` and legacy return/log fields while
 adding `abi_result_dir` and `abi_outputs` references to the standard ABI bundle.
+The `artifact_manifest` entry in `abi_outputs` points to a versioned manifest
+that inventories raw ViWrap files and links them to ABI standard tables and row
+counts. The legacy `artifact_manifest.json` is an exact alias of that canonical
+manifest.
 When `outdir` is omitted, that bundle is written to the configured `log_dir` or
 to `<out_dir>.abi_logs`. Legacy `viwrap.*` log aliases always remain in
 `log_dir`, including when the standard ABI bundle uses a separate `outdir`.

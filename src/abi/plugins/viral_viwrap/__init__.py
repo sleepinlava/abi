@@ -17,6 +17,7 @@ from .checker import check_environment
 from .command_builder import build_viwrap_command
 from .handlers import handlers as viwrap_handlers
 from .parser import parse_table_for_abi
+from .plan_outputs import find_plan_output
 from .runner import run_viwrap
 
 __all__ = [
@@ -231,6 +232,13 @@ class ViralViWrapPlugin:
 
     def internal_handlers(self):
         return viwrap_handlers()
+
+    def published_outputs(self, plan: Any) -> Dict[str, Path]:
+        """Publish the versioned artifact manifest through every ABI transport."""
+        manifest = find_plan_output(plan, "artifact_manifest")
+        if manifest is not None and manifest.is_file():
+            return {"artifact_manifest": manifest}
+        return {}
 
     def registry(self) -> ToolRegistry:
         return _ViWrapToolRegistry.from_path(self.root / "tool_registry.yaml")

@@ -135,6 +135,15 @@ Parsers must only write tables declared by the plugin. Empty tables should still
 exist with stable headers so agents can inspect results without parsing raw
 tool output.
 
+## Published Outputs
+
+Plugins may implement `published_outputs(plan)` to add plugin-specific final
+artifacts to the transport-neutral `RuntimeResult.outputs` mapping. Return only
+stable, existing paths and use labels that do not collide with the common ABI
+bundle keys. This hook is for discoverable final artifacts such as a versioned
+artifact manifest; intermediate files remain discoverable through the execution
+plan and should not be published individually.
+
 ## Shared Infrastructure
 
 Plugins should import from the public SDK:
