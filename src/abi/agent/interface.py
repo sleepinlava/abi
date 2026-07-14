@@ -71,20 +71,18 @@ from abi.agent.envelopes import (
     success_envelope,
 )
 from abi.diagnostics import classify_exception
-from abi.executor import GenericABIExecutor
 from abi.exporters import NextflowExporter
 from abi.interfaces import ABIResultValidationPlugin
 from abi.internal import run_plugin_preflight
 from abi.json_utils import load_json_object
 from abi.permissions import requires_confirmation
 from abi.plugins import get_plugin, list_plugins
-from abi.provenance import RunLogger
 from abi.results import validate_abi_result_dir
-from abi.runtimes import LocalRuntime, NextflowRuntime, RuntimeOptions
+from abi.runtimes import RuntimeOptions
 from abi.schemas import ABIError
 from abi.skill_installer import install_bundled_skills
-from abi.tables import StandardTableManager
 from abi.tool_descriptors import TOOL_ALIASES
+from abi.workflow import WorkflowCoordinator
 
 
 def _validate_plugin_result_dir(
@@ -943,13 +941,9 @@ class ABIAgentInterface:
         resource_overrides_list: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Execute a mock run: render commands + provenance, no external tools.
-
-        Prefers the plugin's ``execute_dry_run`` hook if available; otherwise
-        falls back to ``GenericABIExecutor`` with ``mock_tools=True``.
         # 执行模拟运行: 渲染命令 + 溯源产物, 不执行外部工具。
         # 优先使用插件的 execute_dry_run 钩子, 否则回退到 GenericABIExecutor mock 模式。
         """
-        plugin = get_plugin(analysis_type)
         # Force mock_tools=True so external commands are only rendered, not executed.
         # 强制 mock_tools=True, 确保外部命令仅渲染不执行。
         overrides = _common_overrides(
@@ -970,34 +964,22 @@ class ABIAgentInterface:
         ) | {"mock_tools": True}
         if resource_root:
             overrides.setdefault("resources", {})["root"] = resource_root
-        cfg = plugin.load_config(
-            _optional_path(config_path),
+        coordinator = WorkflowCoordinator()
+        prepared = coordinator.prepare(
+            analysis_type,
+            config_path,
             profile=profile,
             db_profile=db_profile,
             overrides=overrides,
+            resource_overrides=resource_overrides_list or (),
+            check_files=check_files,
+            options=RuntimeOptions(engine="local"),
         )
-        if resource_overrides_list:
-            from abi.resources import apply_resource_overrides
-
-            apply_resource_overrides(cfg, resource_overrides_list)
-        plan = plugin.build_plan(cfg, check_files=check_files)
-        if hasattr(plugin, "execute_dry_run"):
-            outputs = plugin.execute_dry_run(plan, cfg)
-        else:
-            table_manager = StandardTableManager(plugin.table_schemas())
-            executor = GenericABIExecutor(
-                plugin.registry(),
-                RunLogger(str(cfg["log_dir"])),
-                table_manager=table_manager,
-                parse_outputs=plugin.parse_outputs,
-                report_title=plugin.report_title,
-                mock_tools=True,
-            )
-            outputs = executor.dry_run(plan, cfg)
-        output_files = dict(outputs)
+        result = coordinator.dry_run(prepared)
+        output_files = dict(result.outputs)
         return {
             "analysis_type": analysis_type,
-            "outdir": cfg.get("outdir"),
+            "outdir": prepared.config.get("outdir"),
             "outputs": output_files,
         }
 
@@ -1149,18 +1131,6 @@ class ABIAgentInterface:
         if resource_root:
             overrides.setdefault("resources", {})["root"] = resource_root
 
-        plugin = get_plugin(analysis_type)
-        cfg = plugin.load_config(
-            _optional_path(config_path),
-            profile=profile,
-            db_profile=db_profile,
-            overrides=overrides,
-        )
-        if resource_overrides_list:
-            from abi.resources import apply_resource_overrides
-
-            apply_resource_overrides(cfg, resource_overrides_list)
-        plan = plugin.build_plan(cfg, check_files=check_files)
         options = RuntimeOptions(
             engine=runtime_engine,
             smoke=smoke,
@@ -1186,19 +1156,18 @@ class ABIAgentInterface:
             timeout_seconds=hpc_timeout_seconds,
             poll_interval_seconds=poll_interval_seconds,
         )
-        # Select runtime backend: LocalRuntime for subprocess execution,
-        # NextflowRuntime for DSL2 pipeline orchestration.
-        # 选择运行时后端: LocalRuntime 用于子进程执行, NextflowRuntime 用于 DSL2 管道编排。
-        runtime: Any
-        if runtime_engine == "local":
-            runtime = LocalRuntime(plugin, options=options)
-        elif runtime_engine == "hpc":
-            from abi.runtimes import HpcRuntime
-
-            runtime = HpcRuntime(plugin, options=options)
-        else:
-            runtime = NextflowRuntime(plugin, options=options)
-        result = runtime.run(plan, cfg)
+        coordinator = WorkflowCoordinator()
+        prepared = coordinator.prepare(
+            analysis_type,
+            config_path,
+            profile=profile,
+            db_profile=db_profile,
+            overrides=overrides,
+            resource_overrides=resource_overrides_list or (),
+            check_files=check_files,
+            options=options,
+        )
+        result = coordinator.run(prepared)
         return {
             "analysis_type": analysis_type,
             "engine": runtime_engine,
@@ -1360,11 +1329,9 @@ class ABIAgentInterface:
             return _query_platforms(dag)
 
         if what_lower == "workflows":
-            catalog_path = PLUGIN_ROOT / analysis_type / "workflows" / "catalog.yaml"
-            if not catalog_path.is_file():
-                return {"pipeline": analysis_type, "workflows": [], "workflow_count": 0}
-            catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8")) or {}
-            workflows = catalog.get("workflows", [])
+            from abi.workflow import WorkflowCatalog
+
+            workflows = WorkflowCatalog.for_plugin(analysis_type).rows()
             return {
                 "pipeline": analysis_type,
                 "workflows": workflows,
@@ -1407,7 +1374,6 @@ class ABIAgentInterface:
         # 共享的计划构建逻辑: 解析插件 -> 加载配置 -> 构建计划。
         # 返回 (plugin, config, plan) 三元组, 调用者可复用插件引用。
         """
-        plugin = get_plugin(analysis_type)
         overrides = _common_overrides(
             mode=mode,
             threads=threads,
@@ -1417,18 +1383,16 @@ class ABIAgentInterface:
         )
         if resource_root:
             overrides.setdefault("resources", {})["root"] = resource_root
-        cfg = plugin.load_config(
-            _optional_path(config_path),
+        prepared = WorkflowCoordinator().prepare(
+            analysis_type,
+            config_path,
             profile=profile,
             db_profile=db_profile,
             overrides=overrides,
+            resource_overrides=resource_overrides_list or (),
+            check_files=check_files,
         )
-        if resource_overrides_list:
-            from abi.resources import apply_resource_overrides
-
-            apply_resource_overrides(cfg, resource_overrides_list)
-        plan = plugin.build_plan(cfg, check_files=check_files)
-        return plugin, cfg, plan
+        return prepared.plugin, prepared.config, prepared.plan
 
 
 # ------------------------------------------------------------------

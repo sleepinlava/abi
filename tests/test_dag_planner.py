@@ -97,7 +97,7 @@ class TestUniversalDAGLoading:
         "plugin_name,expected_nodes",
         [
             ("amplicon_16s", 10),
-            ("easymetagenome", 24),
+            ("easymetagenome", 25),
             ("metagenomic_plasmid", 90),
             ("metatranscriptomics", 3),
             ("rnaseq_expression", 5),

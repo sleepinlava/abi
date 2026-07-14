@@ -12,6 +12,7 @@ from typing import Any, Mapping, Sequence
 from abi.internal import FunctionInternalHandler, InternalHandlerContext, InternalHandlerResult
 
 from .adapters import ManifestValidator, merge_bracken, parse_fastp_json, taxonomy_diversity
+from .report_manifest import write_report_manifest
 
 
 def _paths(value: Any) -> list[Path]:
@@ -163,7 +164,6 @@ def report_handler(
     config: Mapping[str, Any],
     context: InternalHandlerContext,
 ) -> InternalHandlerResult:
-    del context
     manifest = ManifestValidator.validate(config["input"]["sample_sheet"], check_files=False)
     report_path = Path(step.outputs["report_markdown"])
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -183,14 +183,15 @@ def report_handler(
     for name, path in sorted(inputs.items()):
         lines.append(f"- {name}: `{path}`")
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    report_manifest = {
-        "plugin": "easymetagenome",
-        "sample_count": len(manifest),
-        "artifacts": {name: str(path) for name, path in inputs.items()},
-        "report": str(report_path),
-    }
-    manifest_path = Path(step.outputs["report_manifest"])
-    manifest_path.write_text(json.dumps(report_manifest, indent=2) + "\n", encoding="utf-8")
+    manifest_path = write_report_manifest(
+        step.outputs["report_manifest"],
+        workflow="p0_taxonomy",
+        sample_count=len(manifest),
+        artifacts=inputs,
+        report=report_path,
+        tables_dir=context.tables_dir,
+        table_names=("qc_summary", "host_removal_summary", "taxonomy_abundance"),
+    )
     return InternalHandlerResult(
         message="EasyMetagenome report generated",
         artifacts={"report": report_path, "manifest": manifest_path},
@@ -270,25 +271,39 @@ def functional_report_handler(
         + "\n",
         encoding="utf-8",
     )
-    manifest_path = Path(step.outputs["report_manifest"])
-    manifest_path.write_text(
-        json.dumps(
-            {
-                "plugin": "easymetagenome",
-                "workflow": "p1_humann4",
-                "feature_observations": len(rows),
-                "artifacts": {name: str(path) for name, path in sources.items()},
-                "report": str(report_path),
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
     return InternalHandlerResult(
         message=f"Collected {len(rows)} HUMAnN feature observations",
-        tables={"functional_abundance": rows},
-        artifacts={"report": report_path, "manifest": manifest_path},
+        artifacts={"report": report_path},
+    )
+
+
+def publish_functional_report_handler(
+    step: Any,
+    config: Mapping[str, Any],
+    context: InternalHandlerContext,
+) -> InternalHandlerResult:
+    samples = ManifestValidator.validate(config["input"]["sample_sheet"], check_files=False)
+    sources = {
+        "gene_family": Path(step.inputs["gene_families"]),
+        "ko": Path(step.inputs["ko_table"]),
+        "pathway": Path(step.inputs["pathway_table"]),
+    }
+    feature_observations = sum(
+        len(_read_humann_table(path, feature_type)) for feature_type, path in sources.items()
+    )
+    manifest_path = write_report_manifest(
+        step.outputs["report_manifest"],
+        workflow="p1_humann4",
+        sample_count=len(samples),
+        artifacts=sources,
+        report=step.inputs["report_markdown"],
+        tables_dir=context.tables_dir,
+        table_names=("functional_abundance",),
+        extra={"feature_observations": feature_observations},
+    )
+    return InternalHandlerResult(
+        message="Published EasyMetagenome functional report manifest",
+        artifacts={"manifest": manifest_path},
     )
 
 
@@ -318,5 +333,8 @@ def handlers() -> dict[str, FunctionInternalHandler]:
         ),
         "easymetagenome.functional_report": FunctionInternalHandler(
             "easymetagenome.functional_report", functional_report_handler
+        ),
+        "easymetagenome.publish_functional_report": FunctionInternalHandler(
+            "easymetagenome.publish_functional_report", publish_functional_report_handler
         ),
     }

@@ -34,14 +34,19 @@ on:
       - ".dockerignore"
       - ".github/workflows/ci.yml"
       - ".github/workflows/docker.yml"
+      - "README.md"
+      - "config/**"
+      - "data/**"
       - "docker/**"
       - "environments.yaml"
       - "envs/**"
+      - "examples/**"
+      - "golden_traces/**"
       - "integrations/**"
       - "plugins/**"
-      - "src/**"
-      - "scripts/**"
       - "pyproject.toml"
+      - "scripts/**"
+      - "src/**"
 
 jobs:
   build:

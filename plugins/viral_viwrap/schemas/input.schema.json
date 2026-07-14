@@ -7,9 +7,18 @@
     "input_reads": {"type": "array", "items": {"type": "string"}},
     "input_cov": {"type": "string"},
     "input_sample2read_info": {"type": "string"},
+    "workflow": {
+      "type": "object",
+      "required": ["preset"],
+      "properties": {
+        "preset": {"enum": ["viwrap_compat"]}
+      },
+      "additionalProperties": false
+    },
     "out_dir": {"type": "string", "minLength": 1},
     "db_dir": {"type": "string", "minLength": 1},
     "conda_env_dir": {"type": "string", "minLength": 1},
+    "executable": {"type": "string", "minLength": 1},
     "identify_method": {"enum": ["genomad", "vb", "vs", "dvf", "vb-vs", "vb-vs-dvf"]},
     "reads_type": {"enum": ["illumina", "pacbio", "pacbio_hifi", "pacbio_asm20", "nanopore"]},
     "threads": {"type": "integer", "minimum": 1},

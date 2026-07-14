@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 from abi.executor import GenericABIExecutor
 from abi.plugins import get_plugin
@@ -16,7 +17,9 @@ from abi.plugins.viral_viwrap.checker import (
     check_environment,
 )
 from abi.plugins.viral_viwrap.command_builder import build_viwrap_command
-from abi.plugins.viral_viwrap.errors import ViWrapConfigError
+from abi.plugins.viral_viwrap.errors import (
+    ViWrapConfigError,
+)
 from abi.plugins.viral_viwrap.parser import parse_viwrap_outputs
 from abi.plugins.viral_viwrap.runner import run_viwrap
 from abi.provenance import RunLogger
@@ -66,6 +69,30 @@ def test_viwrap_rejects_reads_and_coverage_together(tmp_path):
         build_viwrap_command(config)
 
 
+def test_viwrap_command_supports_coverage_inputs_and_optional_flags(tmp_path):
+    config = _config(tmp_path)
+    config.pop("input_reads")
+    coverage = tmp_path / "coverage.tsv"
+    sample_info = tmp_path / "sample_to_reads.tsv"
+    coverage.write_text("contig\tS1\nvirus_1\t2\n", encoding="utf-8")
+    sample_info.write_text("sample\treads\nS1\t2\n", encoding="utf-8")
+    config.update(
+        {
+            "input_cov": str(coverage),
+            "input_sample2read_info": str(sample_info),
+            "custom_MAGs_dir": str(tmp_path / "mags with spaces"),
+            "virome": True,
+        }
+    )
+
+    command = build_viwrap_command(config)
+
+    assert "--input_reads" not in command
+    assert command[command.index("--input_cov") + 1] == str(coverage)
+    assert command[command.index("--custom_MAGs_dir") + 1] == str(tmp_path / "mags with spaces")
+    assert command[-1] == "--virome"
+
+
 def test_viwrap_preflight_can_validate_fixture_without_runtime(tmp_path):
     report = check_environment(_config(tmp_path), check_runtime=False)
 
@@ -73,14 +100,12 @@ def test_viwrap_preflight_can_validate_fixture_without_runtime(tmp_path):
     assert report["summary"]["can_run"] is True
 
 
-def test_viwrap_managed_dry_run_returns_complete_command(tmp_path):
+def test_viwrap_compat_runner_preserves_typed_config_errors(tmp_path):
     config = _config(tmp_path)
-    config.update({"dry_run": True, "skip_runtime_check": True})
+    config.pop("out_dir")
 
-    result = run_viwrap(config)
-
-    assert result["mode"] == "dry_run"
-    assert "--input_reads" in result["command"]
+    with pytest.raises(ViWrapConfigError, match="Missing required ViWrap settings: out_dir"):
+        run_viwrap(config)
 
 
 def test_viwrap_parser_and_artifact_manifest(tmp_path):
@@ -122,6 +147,33 @@ def test_viwrap_is_registered_and_plannable_offline():
 
     assert plan.analysis_type == "viral_viwrap"
     assert plan.selected_tools == ["viwrap"]
+
+
+def test_viwrap_compat_preset_is_explicit_and_rejects_unimplemented_native(tmp_path):
+    plugin = get_plugin("viral_viwrap")
+
+    config = plugin.load_config(overrides=_config(tmp_path))
+    schema = json.loads((plugin.root / "schemas/input.schema.json").read_text(encoding="utf-8"))
+    catalog = yaml.safe_load((plugin.root / "workflows/catalog.yaml").read_text(encoding="utf-8"))
+    catalog_ids = [item["id"] for item in catalog["workflows"]]
+
+    assert config["workflow"]["preset"] == "viwrap_compat"
+    assert schema["properties"]["workflow"]["properties"]["preset"]["enum"] == catalog_ids
+    native_dir = tmp_path / "native"
+    native_dir.mkdir()
+    with pytest.raises(ValueError, match="Unknown viral_viwrap workflow preset 'viral_native'"):
+        plugin.load_config(
+            overrides={**_config(native_dir), "workflow": {"preset": "viral_native"}}
+        )
+    typo_dir = tmp_path / "typo"
+    typo_dir.mkdir()
+    with pytest.raises(ValueError, match="Unknown viral_viwrap workflow field.*typo"):
+        plugin.load_config(
+            overrides={
+                **_config(typo_dir),
+                "workflow": {"preset": "viwrap_compat", "typo": 1},
+            }
+        )
 
 
 def test_viwrap_plugin_reads_example_builds_complete_dry_run_command(tmp_path):

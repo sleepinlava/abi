@@ -544,6 +544,9 @@ class _AttrDict:
     def __bool__(self) -> bool:
         return bool(object.__getattribute__(self, "_data"))
 
+    def __len__(self) -> int:
+        return len(object.__getattribute__(self, "_data"))
+
     def __eq__(self, other: Any) -> bool:
         return object.__getattribute__(self, "_data") == other
 

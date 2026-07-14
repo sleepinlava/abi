@@ -283,6 +283,18 @@ class TestEvaluateAssertions:
         )
         assert violations == []
 
+    def test_collection_length_assertion(self):
+        violations = evaluate_assertions(
+            ["len(output_json.artifacts) == output_json.artifact_count"],
+            {
+                "output_json": {
+                    "artifact_count": 2,
+                    "artifacts": [{"path": "a"}, {"path": "b"}],
+                }
+            },
+        )
+        assert violations == []
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Input checksum verification

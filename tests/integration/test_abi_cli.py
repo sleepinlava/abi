@@ -619,6 +619,17 @@ def test_abi_query_always_uses_agent_envelope():
     assert payload["result"]["platforms"] == ["illumina"]
 
 
+def test_viral_viwrap_compat_workflow_is_discoverable_through_unified_query():
+    result = CliRunner().invoke(
+        app,
+        ["query", "--type", "viral_viwrap", "--what", "workflows"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert [item["id"] for item in payload["result"]["workflows"]] == ["viwrap_compat"]
+
+
 @pytest.mark.parametrize(
     "analysis_type",
     [

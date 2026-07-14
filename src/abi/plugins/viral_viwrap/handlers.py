@@ -47,7 +47,7 @@ def environment_handler(
     context: InternalHandlerContext,
 ) -> InternalHandlerResult:
     del context
-    report = check_environment(config)
+    report = check_environment(config, check_runtime=False)
     _write_json(step.outputs["env_report"], report)
     return InternalHandlerResult(
         status="failed" if report["status"] == "fail" else "success",
@@ -83,8 +83,11 @@ def collect_artifacts_handler(
     config: Mapping[str, Any],
     context: InternalHandlerContext,
 ) -> InternalHandlerResult:
-    del context
-    manifest = collect_artifacts(config["out_dir"], step.outputs["artifact_manifest"])
+    manifest = collect_artifacts(
+        config["out_dir"],
+        step.outputs["artifact_manifest"],
+        tables_dir=context.tables_dir,
+    )
     return InternalHandlerResult(message=f"Collected {manifest['artifact_count']} ViWrap artifacts")
 
 

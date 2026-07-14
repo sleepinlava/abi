@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from typing import Any
+
+ARTIFACT_MANIFEST_SCHEMA_VERSION = "abi.artifact-manifest.v1"
 
 CATEGORY_DIRS = {
     "input": "00_",
@@ -20,9 +23,12 @@ CATEGORY_DIRS = {
 
 
 def collect_artifacts(
-    out_dir: str | Path, manifest_path: str | Path | None = None
+    out_dir: str | Path,
+    manifest_path: str | Path | None = None,
+    *,
+    tables_dir: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Classify every regular result file and optionally persist JSON."""
+    """Classify raw results and link them to ABI standard tables."""
     root = Path(out_dir)
     if not root.is_dir():
         raise FileNotFoundError(f"ViWrap output directory not found: {root}")
@@ -43,11 +49,22 @@ def collect_artifacts(
                 "size_bytes": path.stat().st_size,
             }
         )
+    standard_tables, source_files = _standard_table_manifest(tables_dir)
+    artifact_paths = {item["path"] for item in artifacts}
+    unmatched_source_files = sorted(source_files - artifact_paths)
     result = {
+        "schema_version": ARTIFACT_MANIFEST_SCHEMA_VERSION,
         "plugin": "viral_viwrap",
         "root": str(root),
         "artifact_count": len(artifacts),
         "artifacts": artifacts,
+        "standard_tables": standard_tables,
+        "consistency": {
+            "standard_table_count": len(standard_tables),
+            "standard_row_count": sum(table["rows"] for table in standard_tables.values()),
+            "linked_source_count": len(source_files & artifact_paths),
+            "unmatched_source_files": unmatched_source_files,
+        },
         "groups": {
             "primary_tables": [item["path"] for item in artifacts if item["category"] == "summary"],
             "primary_sequences": [
@@ -68,3 +85,22 @@ def collect_artifacts(
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     return result
+
+
+def _standard_table_manifest(
+    tables_dir: str | Path | None,
+) -> tuple[dict[str, dict[str, Any]], set[str]]:
+    if tables_dir is None:
+        return {}, set()
+    tables: dict[str, dict[str, Any]] = {}
+    source_files: set[str] = set()
+    for path in sorted(Path(tables_dir).glob("*.tsv")):
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            row_count = 0
+            for row in csv.DictReader(handle, delimiter="\t"):
+                row_count += 1
+                source_file = str(row.get("source_file", "")).strip()
+                if source_file:
+                    source_files.add(source_file)
+        tables[path.stem] = {"path": str(path), "rows": row_count}
+    return tables, source_files

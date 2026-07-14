@@ -115,10 +115,10 @@ nodes:
       kraken2_db: {type: directory}
       read_length: {type: integer}
     outputs:
-      bracken_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.P.brk"}
-      phylum_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.P.brk"}
-      bracken_report: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.P.report"}
-      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
+      bracken_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/P/{sample_id}.P.brk"}
+      phylum_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/P/{sample_id}.P.brk"}
+      bracken_report: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/P/{sample_id}.P.report"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}/P"}
     assertions: ["output_files.bracken_table exists"]
   bracken_genus:
     tool_id: bracken
@@ -133,10 +133,10 @@ nodes:
       kraken2_db: {type: directory}
       read_length: {type: integer}
     outputs:
-      bracken_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.G.brk"}
-      genus_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.G.brk"}
-      bracken_report: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.G.report"}
-      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
+      bracken_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/G/{sample_id}.G.brk"}
+      genus_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/G/{sample_id}.G.brk"}
+      bracken_report: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/G/{sample_id}.G.report"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}/G"}
     assertions: ["output_files.bracken_table exists"]
   bracken_species:
     tool_id: bracken
@@ -151,10 +151,10 @@ nodes:
       kraken2_db: {type: directory}
       read_length: {type: integer}
     outputs:
-      bracken_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.S.brk"}
-      species_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.S.brk"}
-      bracken_report: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/{sample_id}.S.report"}
-      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}"}
+      bracken_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/S/{sample_id}.S.brk"}
+      species_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/S/{sample_id}.S.brk"}
+      bracken_report: {type: file, format: tsv, path: "{outdir}/{category_dir}/{sample_id}/S/{sample_id}.S.report"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/{sample_id}/S"}
     assertions: ["output_files.bracken_table exists"]
   fastp_summary:
     tool_id: internal
@@ -249,8 +249,26 @@ nodes:
       alpha_table: {type: file, source: taxonomy_diversity.alpha_table}
       beta_table: {type: file, source: taxonomy_diversity.beta_table}
     outputs:
-      report_manifest: {type: file, format: json, path: "{outdir}/{category_dir}/report_manifest.json", contract: {min_size: "10B"}}
+      report_manifest:
+        type: file
+        format: json
+        path: "{outdir}/{category_dir}/report_manifest.json"
+        contract:
+          min_size: "10B"
+          required_keys:
+            [schema_version, plugin, workflow, sample_count, artifacts, report, standard_tables, consistency]
+          schema:
+            sample_count: {type: integer, min: 1}
+            consistency.standard_table_count: {type: integer, min: 1}
+            consistency.standard_row_count: {type: integer, min: 0}
       report_markdown: {type: file, format: markdown, path: "{outdir}/{category_dir}/easymetagenome_report.md", contract: {min_size: "10B"}}
+    assertions:
+      - "output_json.schema_version == 'abi.report-manifest.v1'"
+      - "output_json.plugin == 'easymetagenome'"
+      - "output_json.workflow == 'p0_taxonomy'"
+      - "len(output_json.standard_tables) == 3"
+      - "output_json.consistency.standard_table_count == 3"
+      - "output_json.consistency.standard_row_count == output_json.standard_tables.qc_summary.rows + output_json.standard_tables.host_removal_summary.rows + output_json.standard_tables.taxonomy_abundance.rows"
   concat_dehost_reads:
     tool_id: internal
     internal_handler: easymetagenome.concat_reads
@@ -292,8 +310,8 @@ nodes:
     inputs:
       humann_samples_dir: {type: directory}
     outputs:
-      joined_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/genefamilies.tsv", contract: {min_size: "10B"}}
-      output_dir: {type: directory, path: "{outdir}/{category_dir}"}
+      joined_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/genefamilies/joined/genefamilies.tsv", contract: {min_size: "10B"}}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/genefamilies/joined"}
   humann_renorm_genefamilies:
     tool_id: humann_renorm_table
     category: functional_summary
@@ -305,8 +323,8 @@ nodes:
     inputs:
       input_table: {type: file, source: humann_join_genefamilies.joined_table}
     outputs:
-      normalized_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/genefamilies_relab.tsv", contract: {min_size: "10B"}}
-      output_dir: {type: directory, path: "{outdir}/{category_dir}"}
+      normalized_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/genefamilies/normalized/genefamilies_relab.tsv", contract: {min_size: "10B"}}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/genefamilies/normalized"}
   humann_regroup_ko:
     tool_id: humann_regroup_table
     category: functional_summary
@@ -318,8 +336,8 @@ nodes:
     inputs:
       input_table: {type: file, source: humann_renorm_genefamilies.normalized_table}
     outputs:
-      regrouped_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/ko_relab.tsv", contract: {min_size: "10B"}}
-      output_dir: {type: directory, path: "{outdir}/{category_dir}"}
+      regrouped_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/ko/regrouped/ko_relab.tsv", contract: {min_size: "10B"}}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/ko/regrouped"}
   humann_split_ko:
     tool_id: humann_split_stratified_table
     category: functional_summary
@@ -330,8 +348,8 @@ nodes:
     inputs:
       input_table: {type: file, source: humann_regroup_ko.regrouped_table}
     outputs:
-      split_dir: {type: directory, path: "{outdir}/{category_dir}/ko_split"}
-      output_dir: {type: directory, path: "{outdir}/{category_dir}/ko_split"}
+      split_dir: {type: directory, path: "{outdir}/{category_dir}/ko/split"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/ko/split"}
   humann_join_pathabundance:
     tool_id: humann_join_tables
     category: functional_summary
@@ -343,8 +361,8 @@ nodes:
     inputs:
       humann_samples_dir: {type: directory}
     outputs:
-      joined_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/pathabundance.tsv", contract: {min_size: "10B"}}
-      output_dir: {type: directory, path: "{outdir}/{category_dir}"}
+      joined_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/pathways/joined/pathabundance.tsv", contract: {min_size: "10B"}}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/pathways/joined"}
   humann_renorm_pathabundance:
     tool_id: humann_renorm_table
     category: functional_summary
@@ -356,8 +374,8 @@ nodes:
     inputs:
       input_table: {type: file, source: humann_join_pathabundance.joined_table}
     outputs:
-      normalized_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/pathabundance_relab.tsv", contract: {min_size: "10B"}}
-      output_dir: {type: directory, path: "{outdir}/{category_dir}"}
+      normalized_table: {type: file, format: tsv, path: "{outdir}/{category_dir}/pathways/normalized/pathabundance_relab.tsv", contract: {min_size: "10B"}}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/pathways/normalized"}
   humann_split_pathabundance:
     tool_id: humann_split_stratified_table
     category: functional_summary
@@ -368,8 +386,8 @@ nodes:
     inputs:
       input_table: {type: file, source: humann_renorm_pathabundance.normalized_table}
     outputs:
-      split_dir: {type: directory, path: "{outdir}/{category_dir}/pathabundance_split"}
-      output_dir: {type: directory, path: "{outdir}/{category_dir}/pathabundance_split"}
+      split_dir: {type: directory, path: "{outdir}/{category_dir}/pathways/split"}
+      output_dir: {type: directory, path: "{outdir}/{category_dir}/pathways/split"}
   functional_report:
     tool_id: internal
     internal_handler: easymetagenome.functional_report
@@ -385,5 +403,38 @@ nodes:
       ko_split_dir: {type: directory, source: humann_split_ko.split_dir}
       pathway_split_dir: {type: directory, source: humann_split_pathabundance.split_dir}
     outputs:
-      report_manifest: {type: file, format: json, path: "{outdir}/{category_dir}/functional_report_manifest.json", contract: {min_size: "10B"}}
       report_markdown: {type: file, format: markdown, path: "{outdir}/{category_dir}/easymetagenome_functional_report.md", contract: {min_size: "10B"}}
+  publish_functional_report:
+    tool_id: internal
+    internal_handler: easymetagenome.publish_functional_report
+    category: report
+    scope: cross_sample
+    platforms: [illumina]
+    optional: false
+    depends_on: [functional_report]
+    inputs:
+      report_markdown: {type: file, source: functional_report.report_markdown}
+      gene_families: {type: file, source: humann_renorm_genefamilies.normalized_table}
+      ko_table: {type: file, source: humann_regroup_ko.regrouped_table}
+      pathway_table: {type: file, source: humann_renorm_pathabundance.normalized_table}
+    outputs:
+      report_manifest:
+        type: file
+        format: json
+        path: "{outdir}/{category_dir}/functional_report_manifest.json"
+        contract:
+          min_size: "10B"
+          required_keys:
+            [schema_version, plugin, workflow, sample_count, feature_observations, artifacts, report, standard_tables, consistency]
+          schema:
+            sample_count: {type: integer, min: 1}
+            feature_observations: {type: integer, min: 0}
+            consistency.standard_table_count: {type: integer, min: 1}
+            consistency.standard_row_count: {type: integer, min: 0}
+    assertions:
+      - "output_json.schema_version == 'abi.report-manifest.v1'"
+      - "output_json.plugin == 'easymetagenome'"
+      - "output_json.workflow == 'p1_humann4'"
+      - "len(output_json.standard_tables) == 1"
+      - "output_json.consistency.standard_table_count == 1"
+      - "output_json.consistency.standard_row_count == output_json.standard_tables.functional_abundance.rows"
