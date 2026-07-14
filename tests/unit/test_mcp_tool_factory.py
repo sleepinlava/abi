@@ -39,6 +39,18 @@ def test_tool_descriptor_rejects_unsafe_names() -> None:
         ToolDescriptor("good_name", {"properties": {"bad-name": {"type": "string"}}})
 
 
+def test_tool_descriptor_tolerates_malformed_property_metadata() -> None:
+    no_properties = ToolDescriptor("no_properties", {"properties": ["not", "a", "mapping"]})
+    fallback_type = ToolDescriptor(
+        "fallback_type",
+        {"properties": {"value": "not a schema"}, "required": ["value"]},
+    )
+
+    assert list(no_properties.make_function_signature().parameters) == []
+    assert fallback_type.properties == {"value": {"type": "string"}}
+    assert fallback_type.make_function_signature().parameters["value"].annotation is str
+
+
 def test_make_tool_func_rejects_unknown_kwargs_and_calls_agent_method() -> None:
     calls: list[dict] = []
 

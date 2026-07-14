@@ -73,3 +73,39 @@ def test_mcp_server_tool_signatures_cover_agent_interface_parameters(monkeypatch
         mcp_params = set(inspect.signature(mcp.tools[tool_name]).parameters)
 
         assert agent_params <= mcp_params, tool_name
+
+
+def test_mcp_server_skips_invalid_descriptors_with_warning(caplog, monkeypatch):
+    import abi.mcp.server as server
+    from abi import tool_descriptors
+
+    monkeypatch.setattr(
+        tool_descriptors,
+        "ABI_AGENT_TOOLS",
+        {"invalid-tool-name": {"properties": {}, "required": []}},
+    )
+    monkeypatch.setattr(tool_descriptors, "TOOL_ALIASES", {"invalid-tool-name": "query"})
+
+    mcp = FakeMCP("abi")
+    with caplog.at_level("WARNING", logger="abi.mcp.server"):
+        server._register_mcp_tools(mcp, ABIAgentInterface())
+
+    assert "invalid-tool-name" not in mcp.tools
+    assert "Skipping MCP tool 'invalid-tool-name'" in caplog.text
+    assert "autoplasm_validate_result" in mcp.tools
+
+
+def test_mcp_main_runs_stdio_transport(monkeypatch):
+    import abi.mcp.server as server
+
+    calls = []
+
+    class FakeServer:
+        def run(self, *, transport):
+            calls.append(transport)
+
+    monkeypatch.setattr(server, "create_server", FakeServer)
+
+    server.main()
+
+    assert calls == ["stdio"]
