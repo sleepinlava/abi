@@ -71,6 +71,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from abi.errors import ConfigError
+
 __all__ = [
     "ERROR_CODES",
     "DiagnosticHint",
@@ -305,7 +307,7 @@ def classify_exception(exc: Exception, *, command: str) -> tuple[str, List[Dict[
             "Fix the sample sheet columns and paths, then rerun plan or dry-run.",
             artifact=_extract_path(message),
         )
-    if "config" in lowered or error_type in {"ConfigError"}:
+    if "config" in lowered or isinstance(exc, ConfigError):
         # Config loading/validation failed — probably a YAML schema mismatch.
         # 配置加载/验证失败 — 可能是 YAML schema 不匹配。
         return _diagnosis(

@@ -15,7 +15,7 @@ from typing import Any, Iterable, Mapping, Sequence
 import yaml
 
 from abi.results import completed_abi_result_outputs
-from abi.runtimes.local import LocalRuntime
+from abi.workflow import WorkflowCoordinator
 
 from .adapters import (
     DatabaseChecker,
@@ -266,10 +266,9 @@ class P0Workflow:
         result_dir = root / "result"
         log_dir = root / "logs"
 
-        from . import EasyMetagenomePlugin
-
-        plugin = EasyMetagenomePlugin()
-        config = plugin.load_config(
+        coordinator = WorkflowCoordinator()
+        prepared = coordinator.prepare(
+            "easymetagenome",
             overrides={
                 "input": {"sample_sheet": str(Path(manifest).resolve())},
                 "workflow": {"preset": "p0_taxonomy"},
@@ -280,15 +279,16 @@ class P0Workflow:
                 "threads": threads,
                 "outdir": str(result_dir),
                 "log_dir": str(log_dir),
-            }
+            },
         )
-        plan = plugin.build_plan(config)
+        config = prepared.config
+        plan = prepared.plan
         outputs = (
             _matching_completed_outputs(result_dir, plan.to_dict(), config) if resume else None
         )
         resumed = outputs is not None
         if outputs is None:
-            runtime_result = LocalRuntime(plugin).run(plan, config)
+            runtime_result = coordinator.run(prepared)
             outputs = runtime_result.outputs
 
         _write_legacy_output_aliases(result_dir)

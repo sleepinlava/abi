@@ -14,6 +14,7 @@ from abi.diagnostics import (
     DiagnosticHint,
     classify_exception,
 )
+from abi.workflow import WorkflowCatalogError, WorkflowPresetError
 
 
 class TestDiagnosticHint:
@@ -87,6 +88,15 @@ class TestClassifyException:
         exc = ValueError("Missing wgs_bacteria config keys: outdir")
         code, hints = self._classify(exc)
         assert code in ("invalid_config", "missing_input")
+
+    def test_workflow_catalog_errors_are_invalid_config(self):
+        for exc in (
+            WorkflowCatalogError("catalog requires a workflows list"),
+            WorkflowPresetError("Unknown workflow preset 'missing'"),
+        ):
+            code, hints = self._classify(exc, command="plan")
+            assert code == "invalid_config"
+            assert hints[0]["code"] == "invalid_config"
 
     def test_tool_not_found_classified(self):
         exc = RuntimeError("executable 'fastp' was not found in /path/bin or PATH")

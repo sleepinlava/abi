@@ -1,0 +1,442 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" agent="ABI-docs-generator" version="24.0.0" type="device">
+  <diagram id="generated-1" name="01-系统分层总览">
+    <mxGraphModel dx="1422" dy="827" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="p1-title" parent="1" value="ABI 系统分层总览 / System Layers" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="400" y="20" width="500" height="40"/>
+        </mxCell>
+        <mxCell id="p1-layer-agent" parent="1" value="Agent 平台层&lt;br&gt;&lt;i&gt;Claude / ChatGPT / Cursor / HTTP Client&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="80" width="1200" height="60"/>
+        </mxCell>
+        <mxCell id="p1-layer-transport" parent="1" value="薄传输层 Thin Transport&lt;br&gt;CLI (cli.py) │ MCP (mcp/server.py) │ Job Service (jobs/service.py) │ Tool Export (tool_descriptors.py)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="160" width="1200" height="70"/>
+        </mxCell>
+        <mxCell id="p1-layer-interface" parent="1" value="ABIAgentInterface&lt;br&gt;统一 JSON 信封 + 权限门控 + dispatch() 路由" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="250" width="1200" height="55"/>
+        </mxCell>
+        <mxCell id="p1-layer-core" parent="1" value="厚核心 Thick Core&lt;br&gt;executor │ dag_planner │ tools │ contracts │ provenance │ diagnostics │ resources │ sciplot │ results" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="325" width="1200" height="70"/>
+        </mxCell>
+        <mxCell id="p1-layer-plugin" parent="1" value="清洁插件 Clean Plugins (7)&lt;br&gt;metagenomic_plasmid │ easymetagenome │ rnaseq_expression │ wgs_bacteria │ amplicon_16s │ metatranscriptomics │ viral_viwrap" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="415" width="1200" height="70"/>
+        </mxCell>
+        <mxCell id="p1-layer-runtime" parent="1" value="运行时 Runtimes&lt;br&gt;LocalRuntime │ NextflowRuntime │ HpcRuntime │ Docker" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="505" width="1200" height="55"/>
+        </mxCell>
+        <mxCell id="p1-layer-external" parent="1" value="外部世界 External&lt;br&gt;Bioinformatics Tools (fastp, SPAdes, Kraken2, ...) + Conda/Mamba Environments" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="580" width="1200" height="55"/>
+        </mxCell>
+        <mxCell id="p1-ssot-tools" parent="1" value="SSOT: tool_descriptors.py&lt;br&gt;ABI_AGENT_TOOLS + PROVIDER_PROFILES" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="900" y="160" width="360" height="50"/>
+        </mxCell>
+        <mxCell id="p1-ssot-dag" parent="1" value="SSOT: pipeline_dag.yaml&lt;br&gt;UniversalDAG + build_plan_from_dag()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="900" y="325" width="360" height="50"/>
+        </mxCell>
+        <mxCell id="p1-ssot-contract" parent="1" value="SSOT: tool_contracts/*.yaml&lt;br&gt;GenericCommandSkill" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="900" y="415" width="360" height="50"/>
+        </mxCell>
+        <mxCell id="p1-principles" parent="1" value="六大设计原则&lt;br&gt;1. 厚核心、薄传输&lt;br&gt;2. 插件拥有生物学，核心拥有机制&lt;br&gt;3. Agent 永不编码（JSON 信封）&lt;br&gt;4. 执行需门控（confirm_execution）&lt;br&gt;5. 声明式优于手写（DAG + YAML）&lt;br&gt;6. Wire-format 无关（返回 JSON 字符串）" style="shape=callout;whiteSpace=wrap;html=1;perimeter=calloutPerimeter;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;position=0.5;size=20;position2=0.5;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="660" width="380" height="160"/>
+        </mxCell>
+        <mxCell id="p1-legend" parent="1" value="图例 Legend&lt;br&gt;■ 蓝色 = 传输层 Transport&lt;br&gt;■ 绿色 = 核心层 Core&lt;br&gt;■ 橙色 = 插件层 Plugin&lt;br&gt;■ 紫色 = 运行时 Runtime&lt;br&gt;■ 红色 = 外部工具 External&lt;br&gt;→ 实线 = 同步调用&lt;br&gt;⇢ 虚线 = 配置/数据依赖" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=10;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="500" y="660" width="280" height="160"/>
+        </mxCell>
+        <mxCell id="p1-footer" parent="1" value="关键源文件: src/abi/agent/interface.py │ src/abi/cli.py │ src/abi/mcp/server.py │ src/abi/jobs/service.py │ src/abi/tool_descriptors.py" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=9;fontColor=#666666;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="860" width="1200" height="30"/>
+        </mxCell>
+        <mxCell id="generated-2" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p1-layer-agent" target="p1-layer-transport">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-3" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p1-layer-transport" target="p1-layer-interface">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-4" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p1-layer-interface" target="p1-layer-core">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-5" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p1-layer-core" target="p1-layer-plugin">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-6" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p1-layer-plugin" target="p1-layer-runtime">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-7" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p1-layer-runtime" target="p1-layer-external">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-8" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;dashed=1;dashPattern=8 8;" edge="1" source="p1-layer-transport" target="p1-ssot-tools">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-9" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;dashed=1;dashPattern=8 8;" edge="1" source="p1-layer-core" target="p1-ssot-dag">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-10" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;dashed=1;dashPattern=8 8;" edge="1" source="p1-layer-plugin" target="p1-ssot-contract">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="generated-11" name="02-Agent生命周期">
+    <mxGraphModel dx="1422" dy="827" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="p2-title" parent="1" value="Agent 生命周期与数据流 / Lifecycle Flow" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="400" y="20" width="500" height="40"/>
+        </mxCell>
+        <mxCell id="p2-lane-agent" parent="1" value="Agent" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="40" y="80" width="180" height="700"/>
+        </mxCell>
+        <mxCell id="p2-lane-if" parent="1" value="ABIAgentInterface" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="240" y="80" width="200" height="700"/>
+        </mxCell>
+        <mxCell id="p2-lane-plugin" parent="1" value="Plugin" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="460" y="80" width="180" height="700"/>
+        </mxCell>
+        <mxCell id="p2-lane-exec" parent="1" value="Executor" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="660" y="80" width="180" height="700"/>
+        </mxCell>
+        <mxCell id="p2-lane-runtime" parent="1" value="Runtime" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="860" y="80" width="160" height="700"/>
+        </mxCell>
+        <mxCell id="p2-lane-ext" parent="1" value="External Tools" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="1040" y="80" width="160" height="700"/>
+        </mxCell>
+        <mxCell id="p2-s1" parent="p2-lane-agent" value="1. list_types()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="50" width="140" height="36"/>
+        </mxCell>
+        <mxCell id="p2-s2" parent="p2-lane-if" value="2. plan()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="110" width="160" height="36"/>
+        </mxCell>
+        <mxCell id="p2-s3" parent="p2-lane-plugin" value="load_config()&lt;br&gt;build_plan()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="110" width="140" height="50"/>
+        </mxCell>
+        <mxCell id="p2-s4" parent="p2-lane-plugin" value="build_plan_from_dag()&lt;br&gt;pipeline_dag.yaml" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="180" width="140" height="50"/>
+        </mxCell>
+        <mxCell id="p2-s5" parent="p2-lane-if" value="3. dry_run()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="260" width="160" height="36"/>
+        </mxCell>
+        <mxCell id="p2-s6" parent="p2-lane-exec" value="execute(dry_run=True)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="260" width="140" height="36"/>
+        </mxCell>
+        <mxCell id="p2-s7" parent="p2-lane-if" value="4. inspect()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="330" width="160" height="36"/>
+        </mxCell>
+        <mxCell id="p2-s8" parent="p2-lane-if" value="5. run(confirm=false)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="400" width="160" height="40"/>
+        </mxCell>
+        <mxCell id="p2-s9" parent="p2-lane-agent" value="confirmation_required" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="400" width="140" height="40"/>
+        </mxCell>
+        <mxCell id="p2-s10" parent="p2-lane-if" value="6. run(confirm=true)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="470" width="160" height="40"/>
+        </mxCell>
+        <mxCell id="p2-s11" parent="p2-lane-runtime" value="runtime.run()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="470" width="120" height="40"/>
+        </mxCell>
+        <mxCell id="p2-s12" parent="p2-lane-exec" value="execute(dry_run=False)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="470" width="140" height="40"/>
+        </mxCell>
+        <mxCell id="p2-s13" parent="p2-lane-ext" value="ToolSkill.run()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="470" width="120" height="40"/>
+        </mxCell>
+        <mxCell id="p2-s14" parent="p2-lane-if" value="7. report()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="20" y="560" width="160" height="36"/>
+        </mxCell>
+        <mxCell id="p2-envelope" parent="1" value="JSON 信封三态&lt;br&gt;● success → result 载荷&lt;br&gt;● confirmation_required → 仅 run 触发&lt;br&gt;● error → error_code + diagnostic_hints" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="1240" y="120" width="280" height="100"/>
+        </mxCell>
+        <mxCell id="p2-perm" parent="1" value="权限三级 permissions.py&lt;br&gt;read_only: list_types, inspect, query&lt;br&gt;planning_write: plan, dry_run, report&lt;br&gt;execution: run (需 confirm)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="1240" y="250" width="280" height="100"/>
+        </mxCell>
+        <mxCell id="p2-outdir" parent="1" value="outdir/ 标准产物&lt;br&gt;├── execution_plan.json&lt;br&gt;├── provenance/&lt;br&gt;│   ├── commands.tsv&lt;br&gt;│   ├── checksums.json&lt;br&gt;│   └── run_summary.json&lt;br&gt;├── tables/*.tsv&lt;br&gt;├── report/report.md&lt;br&gt;└── figures/ (SciPlot)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=10;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;fontFamily=Courier New;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="1240" y="400" width="280" height="200"/>
+        </mxCell>
+        <mxCell id="generated-12" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p2-s1" target="p2-s2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-13" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p2-s2" target="p2-s3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-14" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p2-s3" target="p2-s4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-15" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p2-s5" target="p2-s6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-16" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p2-s8" target="p2-s9">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-17" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p2-s10" target="p2-s11">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-18" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p2-s11" target="p2-s12">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-19" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p2-s12" target="p2-s13">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-footer" parent="1" value="关键源文件: src/abi/agent/interface.py │ src/abi/agent/envelopes.py │ src/abi/permissions.py │ src/abi/results.py" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=9;fontColor=#666666;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="40" y="820" width="1200" height="30"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="generated-20" name="03-单步执行实现">
+    <mxGraphModel dx="1422" dy="827" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="p3-title" parent="1" value="单步执行实现 / Step Execution Detail" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="400" y="20" width="500" height="40"/>
+        </mxCell>
+        <mxCell id="p3-plan" parent="1" value="ExecutionPlan&lt;br&gt;遍历 steps" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="600" y="80" width="160" height="50"/>
+        </mxCell>
+        <mxCell id="p3-loop" parent="1" value="_execute_step()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="600" y="160" width="160" height="40"/>
+        </mxCell>
+        <mxCell id="p3-branch" parent="1" value="节点类型?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="610" y="230" width="140" height="80"/>
+        </mxCell>
+        <mxCell id="p3-ext-label" parent="1" value="external 外部工具" style="text;html=1;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="120" y="230" width="140" height="30"/>
+        </mxCell>
+        <mxCell id="p3-pre" parent="1" value="verify_input_checksums&lt;br&gt;Pre-execution" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="120" y="300" width="200" height="50"/>
+        </mxCell>
+        <mxCell id="p3-registry" parent="1" value="ToolRegistry&lt;br&gt;查找 tool_contract" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="120" y="380" width="200" height="50"/>
+        </mxCell>
+        <mxCell id="p3-skill" parent="1" value="GenericCommandSkill&lt;br&gt;build_command + run()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="120" y="460" width="200" height="50"/>
+        </mxCell>
+        <mxCell id="p3-sub" parent="1" value="subprocess&lt;br&gt;Conda PATH 前置" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="120" y="540" width="200" height="50"/>
+        </mxCell>
+        <mxCell id="p3-post" parent="1" value="validate_output_contract&lt;br&gt;Post-execution" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="120" y="620" width="200" height="50"/>
+        </mxCell>
+        <mxCell id="p3-parse" parent="1" value="parse_outputs&lt;br&gt;TSVMapper / parsers.yaml" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="120" y="700" width="200" height="50"/>
+        </mxCell>
+        <mxCell id="p3-int-label" parent="1" value="internal 内部处理" style="text;html=1;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="1000" y="230" width="140" height="30"/>
+        </mxCell>
+        <mxCell id="p3-ih-spec" parent="1" value="internal_handler_spec()&lt;br&gt;解析 handler_id" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="980" y="300" width="220" height="50"/>
+        </mxCell>
+        <mxCell id="p3-ih-ctx" parent="1" value="InternalHandlerContext&lt;br&gt;outdir / provenance / tables" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="980" y="380" width="220" height="50"/>
+        </mxCell>
+        <mxCell id="p3-ih-run" parent="1" value="ABIInternalHandler.run()&lt;br&gt;Python 函数执行" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="980" y="460" width="220" height="50"/>
+        </mxCell>
+        <mxCell id="p3-ih-result" parent="1" value="InternalHandlerResult&lt;br&gt;tables + artifacts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="980" y="540" width="220" height="50"/>
+        </mxCell>
+        <mxCell id="p3-tables" parent="1" value="StandardTableManager&lt;br&gt;append_rows()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="580" y="800" width="200" height="50"/>
+        </mxCell>
+        <mxCell id="p3-prov" parent="1" value="provenance/ + tables/&lt;br&gt;checksums.json 记录" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="580" y="880" width="200" height="50"/>
+        </mxCell>
+        <mxCell id="p3-contract" parent="1" value="合约验证三阶段 step_contract.py&lt;br&gt;Phase 1: Pre — 输入 checksum 校验&lt;br&gt;Phase 2: Post — 输出存在/大小/断言&lt;br&gt;Phase 3: Record — SHA256 写入 checksums.json" style="shape=callout;whiteSpace=wrap;html=1;perimeter=calloutPerimeter;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;position=0.5;size=20;position2=0.5;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="80" width="320" height="120"/>
+        </mxCell>
+        <mxCell id="p3-failfast" parent="1" value="Fail-fast: 第一步失败即停止&lt;br&gt;但溯源产物始终写出" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="220" width="280" height="50"/>
+        </mxCell>
+        <mxCell id="p3-parallel" parent="1" value="并行: config.execution.parallel&lt;br&gt;ThreadPoolExecutor per-sample" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="300" width="280" height="50"/>
+        </mxCell>
+        <mxCell id="p3-legend" parent="1" value="图例: 蓝色=外部工具路径 │ 橙色=内部处理路径 │ 绿色=核心模块" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=10;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="880" width="320" height="50"/>
+        </mxCell>
+        <mxCell id="generated-21" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-plan" target="p3-loop">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-22" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-loop" target="p3-branch">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-23" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-branch" target="p3-pre">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-24" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-branch" target="p3-ih-spec">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-25" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-pre" target="p3-registry">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-26" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-registry" target="p3-skill">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-27" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-skill" target="p3-sub">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-28" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-sub" target="p3-post">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-29" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-post" target="p3-parse">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-30" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-parse" target="p3-tables">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-31" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-ih-spec" target="p3-ih-ctx">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-32" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-ih-ctx" target="p3-ih-run">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-33" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-ih-run" target="p3-ih-result">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-34" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-ih-result" target="p3-tables">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-35" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p3-tables" target="p3-prov">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-footer" parent="1" value="关键源文件: src/abi/executor.py │ src/abi/tools.py │ src/abi/contracts/step_contract.py │ src/abi/internal.py │ src/abi/tsv_mapping.py" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=9;fontColor=#666666;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="980" width="1200" height="30"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="generated-36" name="04-插件解剖">
+    <mxGraphModel dx="1422" dy="827" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="p4-title" parent="1" value="插件解剖与扩展指南 / Plugin Anatomy" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="400" y="20" width="500" height="40"/>
+        </mxCell>
+        <mxCell id="p4-easy-header" parent="1" value="easymetagenome（简洁插件）" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="40" y="80" width="520" height="30"/>
+        </mxCell>
+        <mxCell id="p4-easy-tree" parent="1" value="plugins/easymetagenome/&lt;br&gt;├── abi-plugin.yaml&lt;br&gt;├── pipeline_dag.yaml (34 nodes)&lt;br&gt;├── tool_registry.yaml&lt;br&gt;├── tool_contracts/*.yaml&lt;br&gt;├── parsers.yaml&lt;br&gt;├── standard_tables.yaml&lt;br&gt;├── config_default.yaml&lt;br&gt;└── figure_specs.yaml&lt;br&gt;&lt;br&gt;src/abi/plugins/easymetagenome/&lt;br&gt;├── __init__.py (EasyMetagenomePlugin)&lt;br&gt;├── handlers.py (internal_handlers)&lt;br&gt;└── workflow.py (presets)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=10;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;fontFamily=Courier New;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="60" y="130" width="480" height="340"/>
+        </mxCell>
+        <mxCell id="p4-plasmid-header" parent="1" value="metagenomic_plasmid（复杂插件）" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=12;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="600" y="80" width="520" height="30"/>
+        </mxCell>
+        <mxCell id="p4-plasmid-tree" parent="1" value="plugins/metagenomic_plasmid/&lt;br&gt;├── pipeline_dag.yaml (84 nodes)&lt;br&gt;├── tool_registry.yaml&lt;br&gt;├── tool_contracts/ (67 tools)&lt;br&gt;├── standard_tables.yaml&lt;br&gt;├── figure_specs.yaml (8 figures)&lt;br&gt;└── config_default.yaml&lt;br&gt;&lt;br&gt;src/abi/plugins/metagenomic_plasmid/&lt;br&gt;└── _engine/ (40 modules, ~12k LOC)&lt;br&gt;    ├── pipeline.py&lt;br&gt;    ├── skills/ (custom ToolSkill)&lt;br&gt;    ├── normalize/&lt;br&gt;    └── report/&lt;br&gt;&lt;br&gt;src/abi/autoplasm/ → 向后兼容 shim" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=10;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;fontFamily=Courier New;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="620" y="130" width="480" height="340"/>
+        </mxCell>
+        <mxCell id="p4-core-dag" parent="1" value="dag_planner.py&lt;br&gt;读取 pipeline_dag.yaml" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="200" y="500" width="220" height="50"/>
+        </mxCell>
+        <mxCell id="p4-core-tools" parent="1" value="ToolRegistry&lt;br&gt;读取 tool_registry.yaml&lt;br&gt;+ tool_contracts/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="480" y="500" width="220" height="50"/>
+        </mxCell>
+        <mxCell id="p4-core-exec" parent="1" value="executor.py&lt;br&gt;调用 internal_handlers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="760" y="500" width="220" height="50"/>
+        </mxCell>
+        <mxCell id="p4-core-parse" parent="1" value="TSVMapper&lt;br&gt;读取 parsers.yaml" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="200" y="580" width="220" height="50"/>
+        </mxCell>
+        <mxCell id="p4-core-report" parent="1" value="write_plugin_report()&lt;br&gt;+ sciplot figure_specs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="480" y="580" width="220" height="50"/>
+        </mxCell>
+        <mxCell id="p4-core-entry" parent="1" value="plugins/__init__.py&lt;br&gt;entry_points abi.plugins" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="760" y="580" width="220" height="50"/>
+        </mxCell>
+        <mxCell id="generated-37" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;dashed=1;dashPattern=8 8;" edge="1" source="p4-easy-tree" target="p4-core-dag">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-38" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;dashed=1;dashPattern=8 8;" edge="1" source="p4-plasmid-tree" target="p4-core-dag">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-39" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;dashed=1;dashPattern=8 8;" edge="1" source="p4-easy-tree" target="p4-core-tools">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-40" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;dashed=1;dashPattern=8 8;" edge="1" source="p4-plasmid-tree" target="p4-core-tools">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-41" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;dashed=1;dashPattern=8 8;" edge="1" source="p4-easy-tree" target="p4-core-exec">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-42" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;dashed=1;dashPattern=8 8;" edge="1" source="p4-easy-tree" target="p4-core-parse">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-43" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;dashed=1;dashPattern=8 8;" edge="1" source="p4-plasmid-tree" target="p4-core-report">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-44" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;dashed=1;dashPattern=8 8;" edge="1" source="p4-plasmid-tree" target="p4-core-entry">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-checklist" parent="1" value="新插件 8 步 Checklist&lt;br&gt;1. 实现 ABIPlugin Protocol (src/abi/plugins/&amp;lt;name&amp;gt;/)&lt;br&gt;2. 创建 abi-plugin.yaml, tool_registry.yaml, standard_tables.yaml&lt;br&gt;3. 添加 tool_contracts/*.yaml&lt;br&gt;4. 创建 pipeline_dag.yaml + build_plan_from_dag()&lt;br&gt;5. 简单解析用 parsers.yaml + TSVMapper&lt;br&gt;6. 无外部工具的步骤用 @internal_handler 注册&lt;br&gt;7. 在 pyproject.toml entry-points abi.plugins 注册&lt;br&gt;8. assert_plugin_contract(plugin) 测试验证" style="shape=callout;whiteSpace=wrap;html=1;perimeter=calloutPerimeter;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;position=0.5;size=20;position2=0.5;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="40" y="660" width="1080" height="140"/>
+        </mxCell>
+        <mxCell id="p4-footer" parent="1" value="关键源文件: src/abi/interfaces.py │ src/abi/plugins/__init__.py │ docs/en/plugin_development_guide.md" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=9;fontColor=#666666;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="40" y="840" width="1200" height="30"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="generated-45" name="05-工作流深模块">
+    <mxGraphModel dx="1422" dy="827" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="p5-title" parent="1" value="第二期：工作流深模块 / Workflow Deepening" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="400" y="20" width="560" height="40"/>
+        </mxCell>
+        <mxCell id="p5-adapters" parent="1" value="薄 Adapter&lt;br&gt;CLI │ MCP │ HTTP │ Legacy P0/run_viwrap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="100" width="300" height="70"/>
+        </mxCell>
+        <mxCell id="p5-coordinator" parent="1" value="WorkflowCoordinator&lt;br&gt;prepare() │ dry_run() │ run()&lt;br&gt;隐藏 config → plan → runtime" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="470" y="90" width="360" height="90"/>
+        </mxCell>
+        <mxCell id="p5-result" parent="1" value="统一 ABI Result&lt;br&gt;plan │ provenance │ tables │ report │ resume identity" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="920" y="100" width="330" height="70"/>
+        </mxCell>
+        <mxCell id="p5-catalog" parent="1" value="WorkflowCatalog&lt;br&gt;resolve(preset)&lt;br&gt;nodes │ capabilities │ resources" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="210" y="280" width="300" height="90"/>
+        </mxCell>
+        <mxCell id="p5-plugin" parent="1" value="Clean Plugin&lt;br&gt;生物学配置 │ sample context │ parser │ internal handlers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="560" y="280" width="300" height="90"/>
+        </mxCell>
+        <mxCell id="p5-runtime" parent="1" value="Runtime Adapters&lt;br&gt;Local │ HPC │ Nextflow" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="910" y="280" width="260" height="90"/>
+        </mxCell>
+        <mxCell id="p5-easy" parent="1" value="EasyMetaGenome&lt;br&gt;catalog + canonical pipeline_dag.yaml&lt;br&gt;P0 compatibility 仅映射旧输入/输出" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="160" y="500" width="430" height="100"/>
+        </mxCell>
+        <mxCell id="p5-viwrap" parent="1" value="ViWrap&lt;br&gt;viwrap_compat 作为结果等价 oracle&lt;br&gt;viral_native 分阶段通过 parity gate 后启用" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="710" y="500" width="430" height="100"/>
+        </mxCell>
+        <mxCell id="generated-46" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p5-adapters" target="p5-coordinator">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-47" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p5-coordinator" target="p5-result">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-48" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p5-catalog" target="p5-coordinator">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-49" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p5-plugin" target="p5-coordinator">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-50" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p5-coordinator" target="p5-runtime">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-51" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p5-easy" target="p5-plugin">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="generated-52" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;" edge="1" source="p5-viwrap" target="p5-plugin">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-rule" parent="1" value="深模块验收&lt;br&gt;• preset 只在 catalog 声明&lt;br&gt;• transport 不组装 runtime&lt;br&gt;• plugin 不实现 provenance/resume&lt;br&gt;• compat/native 使用同一标准表与结果协议" style="shape=callout;whiteSpace=wrap;html=1;perimeter=calloutPerimeter;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;position=0.5;size=20;position2=0.5;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="250" y="690" width="760" height="130"/>
+        </mxCell>
+        <mxCell id="p5-footer" parent="1" value="关键源文件: src/abi/workflow/catalog.py │ src/abi/workflow/execution.py │ plugins/*/workflows/catalog.yaml" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=9;fontColor=#666666;" vertex="1">
+          <mxGeometry relative="0" as="geometry" x="80" y="870" width="1200" height="30"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

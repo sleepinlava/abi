@@ -10,6 +10,7 @@ from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge,
 from abi.report import write_plugin_report
 from abi.schemas import ABIExecutionPlan, ABISample, ABISampleContext
 from abi.tools import GenericCommandSkill, ToolRegistry
+from abi.workflow import WorkflowCatalog
 
 from .checker import check_environment
 from .command_builder import build_viwrap_command
@@ -23,20 +24,6 @@ __all__ = [
     "check_environment",
     "run_viwrap",
 ]
-
-
-def _workflow_preset_ids(root: Path) -> frozenset[str]:
-    """Load the workflow catalog used by query and config validation."""
-    catalog = load_yaml(root / "workflows/catalog.yaml")
-    workflows = catalog.get("workflows", [])
-    if not isinstance(workflows, list):
-        raise ValueError("viral_viwrap workflow catalog must contain a workflows list")
-    presets = frozenset(
-        str(item["id"]) for item in workflows if isinstance(item, Mapping) and item.get("id")
-    )
-    if not presets:
-        raise ValueError("viral_viwrap workflow catalog does not define any presets")
-    return presets
 
 
 class _ViWrapToolSkill(GenericCommandSkill):
@@ -96,11 +83,7 @@ class ViralViWrapPlugin:
                 "Unknown viral_viwrap workflow field(s): " + ", ".join(unknown_workflow_keys)
             )
         preset = str(workflow.get("preset", "viwrap_compat"))
-        presets = _workflow_preset_ids(self.root)
-        if preset not in presets:
-            raise ValueError(
-                f"Unknown viral_viwrap workflow preset {preset!r}; choose one of {sorted(presets)}"
-            )
+        WorkflowCatalog.for_plugin(self.plugin_id).resolve(preset)
         workflow["preset"] = preset
         config["workflow"] = workflow
         nested = config.get("input", {})

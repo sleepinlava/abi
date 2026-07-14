@@ -12,48 +12,13 @@ from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge,
 from abi.report import write_plugin_report
 from abi.schemas import ABIExecutionPlan, ABISample, ABISampleContext
 from abi.tools import ToolRegistry
+from abi.workflow import WorkflowCatalog
 
 from .adapters import ManifestValidator
 from .handlers import handlers as easymeta_handlers
 from .workflow import P0Workflow
 
 __all__ = ["EasyMetagenomePlugin", "ManifestValidator", "P0Workflow"]
-
-_COMMON_NODES = [
-    "validate_manifest",
-    "seqkit_stat_raw",
-    "fastp_qc",
-    "kneaddata_host_removal",
-    "fastp_summary",
-    "kneaddata_summary",
-]
-_TAXONOMY_NODES = [
-    "kraken2_classify",
-    "bracken_phylum",
-    "bracken_genus",
-    "bracken_species",
-    "bracken_merge",
-    "taxonomy_filter",
-    "taxonomy_diversity",
-    "collect_report",
-]
-_FUNCTIONAL_NODES = [
-    "concat_dehost_reads",
-    "humann4_profile",
-    "humann_join_genefamilies",
-    "humann_renorm_genefamilies",
-    "humann_regroup_ko",
-    "humann_split_ko",
-    "humann_join_pathabundance",
-    "humann_renorm_pathabundance",
-    "humann_split_pathabundance",
-    "functional_report",
-]
-WORKFLOW_PRESETS = {
-    "p0_taxonomy": _COMMON_NODES + _TAXONOMY_NODES,
-    "p1_humann4": _COMMON_NODES + _FUNCTIONAL_NODES,
-    "full_read_based": _COMMON_NODES + _TAXONOMY_NODES + _FUNCTIONAL_NODES,
-}
 
 
 class EasyMetagenomePlugin:
@@ -82,14 +47,11 @@ class EasyMetagenomePlugin:
         config = deep_merge(config, compact_overrides(overrides))
         workflow = dict(config.get("workflow", {}))
         preset = str(workflow.get("preset", "p0_taxonomy"))
-        if preset not in WORKFLOW_PRESETS:
-            raise ValueError(
-                f"Unknown easymetagenome workflow preset {preset!r}; "
-                f"choose one of {sorted(WORKFLOW_PRESETS)}"
-            )
-        workflow.setdefault("include_nodes", list(WORKFLOW_PRESETS[preset]))
-        workflow["functional_enabled"] = preset in {"p1_humann4", "full_read_based"}
-        workflow["taxonomy_enabled"] = preset in {"p0_taxonomy", "full_read_based"}
+        resolved_workflow = WorkflowCatalog.for_plugin(self.plugin_id).resolve(preset)
+        workflow.setdefault("include_nodes", list(resolved_workflow.include_nodes))
+        workflow["required_resources"] = list(resolved_workflow.required_resources)
+        workflow["functional_enabled"] = "functional" in resolved_workflow.capabilities
+        workflow["taxonomy_enabled"] = "taxonomy" in resolved_workflow.capabilities
         config["workflow"] = workflow
         raw_input_config = config.get("input", {})
         if not isinstance(raw_input_config, Mapping) or not raw_input_config.get("sample_sheet"):
@@ -203,11 +165,7 @@ class EasyMetagenomePlugin:
         functional_enabled = (
             bool(workflow.get("functional_enabled")) if isinstance(workflow, Mapping) else False
         )
-        required_resources = ["host_db"]
-        if taxonomy_enabled:
-            required_resources.append("kraken2_db")
-        if functional_enabled:
-            required_resources.extend(["humann_nucleotide_db", "humann_protein_db", "metaphlan_db"])
+        required_resources = list(workflow.get("required_resources", []))
         for name in required_resources:
             value = resources.get(name) if isinstance(resources, Mapping) else None
             path = Path(str(value or ""))

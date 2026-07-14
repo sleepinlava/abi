@@ -211,6 +211,21 @@ def test_humann4_preset_selects_functional_branch_without_taxonomy(tmp_path):
     assert join_step.params["_explicit_dependencies"]
 
 
+def test_workflow_preset_preserves_explicit_node_selection(tmp_path):
+    plugin = get_plugin("easymetagenome")
+    config = plugin.load_config(
+        overrides={
+            "workflow": {
+                "preset": "p1_humann4",
+                "include_nodes": ["validate_manifest", "seqkit_stat_raw"],
+            },
+            "outdir": str(tmp_path / "results"),
+        }
+    )
+
+    assert config["workflow"]["include_nodes"] == ["validate_manifest", "seqkit_stat_raw"]
+
+
 def test_workflow_catalog_is_available_through_unified_query():
     payload = json.loads(
         ABIAgentInterface().query(analysis_type="easymetagenome", what="workflows")
