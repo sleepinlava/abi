@@ -172,6 +172,24 @@ def _make_skill(metadata_override: dict | None = None) -> GenericCommandSkill:
     return GenericCommandSkill(base)
 
 
+def test_validate_inputs_skips_contract_string_values_that_look_like_paths():
+    """Output prefixes are command values, not files required before execution."""
+    skill = _make_skill(
+        {
+            "inputs": {
+                "read1": {"type": "file", "required": True},
+                "output_prefix": {"type": "string", "required": True},
+            }
+        }
+    )
+    skill.validate_inputs(
+        {
+            "read1": str(Path(__file__).resolve()),
+            "output_prefix": "/not-created-yet/S1.",
+        }
+    )
+
+
 def test_check_dotted_fields_valid_template():
     """Template with only simple {field} references passes without error."""
     skill = _make_skill(

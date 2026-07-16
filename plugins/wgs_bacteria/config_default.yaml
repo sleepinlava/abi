@@ -9,6 +9,9 @@ input:
 
 assembly:
   tool: spades
+  # Keep below the 120 GiB cloud-runtime limit while leaving headroom for
+  # concurrent system services and SPAdes temporary buffers.
+  memory_gb: 80
 
 annotation:
   genus: Escherichia

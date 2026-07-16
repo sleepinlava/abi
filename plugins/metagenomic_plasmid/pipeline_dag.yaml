@@ -699,6 +699,8 @@ nodes:
     - host_removal_bowtie2
     fallback_depends:
     - qc_fastp
+    config_params:
+      memory_bytes: assembly.memory_bytes
     inputs:
       read1:
         type: file
@@ -1016,6 +1018,7 @@ nodes:
       alignment:
         type: file
         format: sam
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.plasmid_alignment.sam'
         contract:
           min_size: 100B
   contig_coverage_minimap2:
@@ -1049,6 +1052,7 @@ nodes:
       alignment:
         type: file
         format: sam
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.plasmid_alignment.sam'
         contract:
           min_size: 100B
   contig_coverage_samtools:
@@ -1077,6 +1081,7 @@ nodes:
       bam:
         type: file
         format: bam
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.contig_alignment.bam'
         contract:
           min_size: 100B
   contig_coverage_coverm:
@@ -2144,6 +2149,7 @@ nodes:
       alignment:
         type: file
         format: sam
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.plasmid_alignment.sam'
         contract:
           min_size: 100B
   abundance_minimap2:
@@ -2178,6 +2184,7 @@ nodes:
       alignment:
         type: file
         format: sam
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.plasmid_alignment.sam'
         contract:
           min_size: 100B
   abundance_samtools:
@@ -2205,6 +2212,7 @@ nodes:
       bam:
         type: file
         format: bam
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.plasmid_alignment.bam'
         contract:
           min_size: 100B
   abundance_coverm:
@@ -2231,9 +2239,7 @@ nodes:
       abundance:
         type: file
         format: tsv
-      tpm_table:
-        type: file
-        format: tsv
+        path: '{outdir}/{category_dir}/{sample_id}/{sample_id}.coverm.tsv'
     standard_tables:
     - abundance
   abundance_bowtie2_short:

@@ -16,8 +16,10 @@ outputs:
   output_dir:
     type: path
 execution:
-  executable: plasmidfinder.py
-  command_template: plasmidfinder.py -i {plasmid_contigs} -o {output_dir} -p {database}
+  executable: python
+  command_template: >-
+    python -m plasmidfinder -i {plasmid_contigs} -o {output_dir} -p {database}
+    --legacy -x
   network: false
   writes_output: true
 normalization:
@@ -29,7 +31,7 @@ failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.
   tool_not_found:
-    hint: Install plasmidfinder.py in the autoplasm-annotation environment.
+    hint: Install the plasmidfinder Python module in the autoplasm-annotation environment.
   nonzero_exit:
     hint: Inspect provenance/step_logs for stderr and rerun after fixing inputs or
       environment.

@@ -89,7 +89,8 @@ tools:
   default_enabled: true
   required: true
   output_dir_policy: must_not_exist
-  command_template: megahit -1 {read1} -2 {read2} -o {output_dir} -t {threads}
+  command_template: megahit -1 {read1} -2 {read2} -o {output_dir} -t {threads} --memory
+    {memory_bytes}
 - id: metaspades
   name: metaSPAdes
   category: assembly
@@ -187,12 +188,12 @@ tools:
 - id: plasmidfinder
   name: PlasmidFinder
   category: typing
-  executable: plasmidfinder.py
-  extra_path_dirs:
-  - "{project_root}/plugins/metagenomic_plasmid/scripts"
+  executable: python
   default_enabled: false
   required: false
-  command_template: plasmidfinder.py -i {plasmid_contigs} -o {output_dir} -p {database}
+  command_template: >-
+    python -m plasmidfinder -i {plasmid_contigs} -o {output_dir} -p {database}
+    --legacy -x
 - id: plasmaag
   name: PlasMAAG
   category: plasmid_binning

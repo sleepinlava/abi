@@ -23,7 +23,7 @@ Inputs
 Outputs
 -------
 * ``count_matrix.tsv`` —  gene_id × sample_id matrix
-* ``sample_metadata.tsv`` — sample_id, group, condition for DESeq2
+* ``sample_metadata.tsv`` — all sample-sheet covariates for DESeq2
 """
 
 from __future__ import annotations
@@ -130,16 +130,23 @@ def write_sample_metadata(
     sample_sheet_rows: list[dict[str, str]],
     output_dir: Path,
 ) -> Path:
-    """Write sample_metadata.tsv (sample_id, group, condition)."""
+    """Write sample_metadata.tsv while preserving all sample-sheet covariates."""
     path = output_dir / "sample_metadata.tsv"
+    fieldnames: list[str] = []
+    for row in sample_sheet_rows:
+        for fieldname in row:
+            if fieldname not in fieldnames:
+                fieldnames.append(fieldname)
+    if "sample_id" not in fieldnames:
+        fieldnames.insert(0, "sample_id")
+
     with path.open("w", encoding="utf-8") as out:
-        out.write("sample_id\tgroup\tcondition\n")
+        writer = csv.DictWriter(out, fieldnames=fieldnames, delimiter="\t", lineterminator="\n")
+        writer.writeheader()
         for row in sample_sheet_rows:
             sid = row.get("sample_id", "").strip()
-            group = row.get("group", "").strip()
-            condition = row.get("condition", "").strip()
             if sid:
-                out.write(f"{sid}\t{group}\t{condition}\n")
+                writer.writerow({fieldname: row.get(fieldname, "") for fieldname in fieldnames})
     return path
 
 

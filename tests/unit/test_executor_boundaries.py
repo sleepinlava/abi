@@ -123,6 +123,53 @@ def test_prepare_output_directories_rejects_all_outputs_outside_root(tmp_path: P
     assert not outside_file.parent.exists()
 
 
+def test_resume_reuses_only_validated_nonempty_file_outputs(tmp_path: Path) -> None:
+    output = tmp_path / "result.tsv"
+    output.write_text("value\n1\n", encoding="utf-8")
+    skill = _Skill()
+    executor = _executor(tmp_path, skill=skill)
+    step = _step(
+        outputs={"result": str(output)},
+        params={"_contract": {"outputs": {"result": {"type": "file"}}}},
+    )
+
+    row, error = executor._execute_step(
+        step,
+        dry_run=False,
+        resume=True,
+        provenance=tmp_path / "provenance",
+        tables_dir=tmp_path / "tables",
+        progress_recorder=None,
+    )
+
+    assert error is None
+    assert row["status"] == "resumed"
+    assert skill.params is None
+
+
+def test_resume_reruns_step_when_declared_output_is_missing(tmp_path: Path) -> None:
+    output = tmp_path / "missing.tsv"
+    skill = _Skill()
+    executor = _executor(tmp_path, skill=skill)
+    step = _step(
+        outputs={"result": str(output), "output_dir": str(tmp_path)},
+        params={"_contract": {"outputs": {"result": {"type": "file"}}}},
+    )
+
+    row, error = executor._execute_step(
+        step,
+        dry_run=False,
+        resume=True,
+        provenance=tmp_path / "provenance",
+        tables_dir=tmp_path / "tables",
+        progress_recorder=None,
+    )
+
+    assert error is None
+    assert row["status"] == "success"
+    assert skill.params is not None
+
+
 def test_prepare_output_directories_rejects_symlink_escape_before_mkdir(tmp_path: Path) -> None:
     outdir = tmp_path / "pipeline"
     outside = tmp_path / "outside"
@@ -492,6 +539,26 @@ def test_symlink_bridge_propagation_and_scoring_helpers(tmp_path: Path) -> None:
     assert _read_pair_for_key("summary") == ""
     assert _filename_has_read_pair("sample_R1.fastq.gz", "1")
     assert _output_candidate_score("clean_read1", "S1", Path("S1_R1.clean.fastq.gz")) > 0
+
+
+def test_propagation_does_not_replace_a_planned_future_input_without_resolution(
+    tmp_path: Path,
+) -> None:
+    phylogeny_dir = tmp_path / "05b_phylogeny"
+    phylogeny_dir.mkdir()
+    combined = phylogeny_dir / "combined.fasta"
+    combined.write_text(">ASV1\nACGT\n", encoding="utf-8")
+    aligned = phylogeny_dir / "aligned.fasta"
+
+    completed = _step(outputs={"combined_fasta": str(combined)})
+    downstream = _step(inputs={"aligned_fasta": str(aligned)})
+
+    # combined.fasta is the planned output, not an output-path correction.
+    # It must not overwrite FastTree's future aligned_fasta input merely
+    # because the two paths share a directory and suffix.
+    _propagate_resolved_paths(completed, [downstream], replacements={})
+
+    assert downstream.inputs["aligned_fasta"] == str(aligned)
 
 
 def test_structured_tool_failure_reason_includes_diagnostic_paths() -> None:

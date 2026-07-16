@@ -63,6 +63,8 @@ nodes:
     scope: per_sample
     optional: false
     depends_on: [qc_fastp]
+    config_params:
+      memory_gb: assembly.memory_gb
     inputs:
       clean_read1:  {type: file, format: fastq.gz, source: qc_fastp.clean_read1}
       clean_read2:  {type: file, format: fastq.gz, source: qc_fastp.clean_read2}

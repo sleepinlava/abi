@@ -77,6 +77,8 @@ environments:
     - numpy >=1.23,<1.24
     - pandas >=1.5,<2
     - bakta
+    # Required by Bakta for tRNA prediction; pin the version validated with DB v6.
+    - trnascan-se=2.0.12
     - prokka
     - prodigal
     - diamond

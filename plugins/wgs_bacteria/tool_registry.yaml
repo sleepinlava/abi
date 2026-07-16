@@ -18,7 +18,7 @@ tools:
   default_enabled: true
   required: true
   command_template: spades.py --isolate -1 {clean_read1} -2 {clean_read2} -o
-    {output_dir} -t {threads}
+    {output_dir} -t {threads} -m {memory_gb}
   inputs:
   - clean_read1
   - clean_read2

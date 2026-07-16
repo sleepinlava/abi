@@ -1058,7 +1058,24 @@ class GenericCommandSkill(ToolSkill):
         """
         missing: List[str] = []
         resource_placeholders: List[str] = []
-        for key in self.metadata.get("inputs", []):
+        input_definitions = self.metadata.get("inputs", [])
+        if isinstance(input_definitions, Mapping):
+            input_items = input_definitions.items()
+        else:
+            input_items = ((key, None) for key in input_definitions)
+
+        for key, definition in input_items:
+            # Declarative tool contracts may expose command arguments such as
+            # STAR's output_prefix alongside true filesystem inputs.  Primitive
+            # values must not be treated as pre-existing paths merely because
+            # their rendered value contains a slash.
+            if isinstance(definition, Mapping) and definition.get("type") in {
+                "string",
+                "integer",
+                "number",
+                "boolean",
+            }:
+                continue
             value = params.get(key)
             if not value:
                 continue

@@ -26,6 +26,12 @@ inputs:
   comparison:
     type: string
     required: true
+  design:
+    type: string
+    default: "~ condition"
+    description: >-
+      DESeq2 design formula evaluated against sample-metadata columns. It must
+      include condition; paired experiments may use "~ donor + condition".
   alpha:
     type: number
     default: 0.05
@@ -38,7 +44,7 @@ outputs:
 execution:
   executable: Rscript
   command_template: Rscript {deseq2_script} --counts {count_matrix} --metadata {sample_metadata}
-    --output {output_dir} --comparison {comparison} --alpha {alpha}
+    --output {output_dir} --comparison {comparison} --design "{design}" --alpha {alpha}
   network: false
   writes_output: true
 failure_handling:

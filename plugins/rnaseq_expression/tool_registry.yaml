@@ -54,7 +54,7 @@ tools:
   default_enabled: true
   required: true
   command_template: Rscript {deseq2_script} --counts {count_matrix} --metadata {sample_metadata}
-    --output {output_dir} --comparison {comparison} --alpha {alpha}
+    --output {output_dir} --comparison {comparison} --design "{design}" --alpha {alpha}
   inputs:
   - count_matrix
   - sample_metadata

@@ -84,5 +84,5 @@ class LocalRuntime:
             mock_tools=mock_tools,
             internal_handlers=plugin_internal_handlers(self.plugin),
         )
-        outputs = executor.run(plan, config, dry_run=dry_run)
+        outputs = executor.run(plan, config, dry_run=dry_run, resume=self.options.resume)
         return RuntimeResult(status="success", return_code=0, outputs=dict(outputs))

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 from abi.plugins import get_plugin, list_plugins
 from abi.testing import assert_plugin_contract
 
@@ -37,6 +39,14 @@ def test_registry():
     assert registry.has("star")
     assert registry.has("featurecounts")
     assert registry.has("deseq2")
+
+
+def test_star_output_prefix_is_not_a_preexisting_path_input():
+    """STAR creates files at its output prefix, so runtime input checks must skip it."""
+    for plugin_id in ("rnaseq_expression", "metatranscriptomics"):
+        contract_path = Path("plugins") / plugin_id / "tool_contracts" / "star.yaml"
+        contract = yaml.safe_load(contract_path.read_text(encoding="utf-8"))
+        assert contract["inputs"]["output_prefix"]["type"] == "string"
 
 
 def test_load_config():
@@ -74,6 +84,10 @@ def test_build_plan_structure(tmp_path):
     assert len(plan.steps) >= 4  # at least 4 steps for 1 sample (fastp+star+featurecounts+deseq2)
     tool_ids = {s.tool_id for s in plan.steps}
     assert tool_ids >= {"fastp", "star", "featurecounts", "deseq2"}
+    matrix_step = next(step for step in plan.steps if step.tool_id == "build_count_matrix")
+    deseq2_step = next(step for step in plan.steps if step.tool_id == "deseq2")
+    assert matrix_step.inputs["count_matrix_script"].endswith("scripts/build_count_matrix.py")
+    assert deseq2_step.inputs["deseq2_script"].endswith("scripts/run_deseq2.R")
 
 
 def test_deseq2_step_is_last(tmp_path):
@@ -90,7 +104,28 @@ def test_deseq2_step_is_last(tmp_path):
     assert last_step.tool_id == "deseq2"
     assert last_step.category == "differential_expression"
     assert last_step.params["comparison"] == "treatment_vs_control"
+    assert last_step.params["design"] == "~ condition"
     assert last_step.params["alpha"] == 0.05
+
+
+def test_deseq2_plan_supports_paired_donor_design(tmp_path):
+    """A paired RNA-seq study can retain donor blocking in DESeq2."""
+    plugin = get_plugin("rnaseq_expression")
+    cfg = plugin.load_config(
+        overrides={
+            "outdir": str(tmp_path / "results"),
+            "input": {"sample_sheet": _TEST_SS},
+            "differential_expression": {
+                "comparison": "dex_vs_untreated",
+                "design": "~ donor + condition",
+            },
+        }
+    )
+    plan = plugin.build_plan(cfg, check_files=False)
+    deseq2_step = plan.steps[-1]
+    assert deseq2_step.tool_id == "deseq2"
+    assert deseq2_step.params["comparison"] == "dex_vs_untreated"
+    assert deseq2_step.params["design"] == "~ donor + condition"
 
 
 def test_workflow_spec_loads():

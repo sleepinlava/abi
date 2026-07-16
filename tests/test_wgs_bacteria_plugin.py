@@ -46,6 +46,7 @@ def test_load_config():
     cfg = plugin.load_config()
     assert cfg["project_name"] == "wgs_bacteria_run"
     assert cfg["annotation"]["genus"] == "Escherichia"
+    assert cfg["assembly"]["memory_gb"] == 80
 
 
 def test_load_config_normalizes_amrfinder_parent_database_to_latest(tmp_path):
@@ -86,6 +87,28 @@ def test_build_plan_structure(tmp_path):
     assert len(plan.steps) >= 5
     tool_ids = {s.tool_id for s in plan.steps}
     assert tool_ids >= {"fastp", "spades", "prokka", "mlst", "amrfinderplus"}
+
+
+def test_spades_memory_limit_is_configurable(tmp_path):
+    """SPAdes receives the configured memory cap in its rendered command."""
+    plugin = get_plugin("wgs_bacteria")
+    cfg = plugin.load_config(
+        overrides={
+            "outdir": str(tmp_path / "results"),
+            "input": {"sample_sheet": "/tmp/abi_test_ss.tsv"},
+            "assembly": {"memory_gb": 72},
+        }
+    )
+    plan = plugin.build_plan(cfg, check_files=False)
+    spades_step = next(step for step in plan.steps if step.tool_id == "spades")
+
+    assert spades_step.params["memory_gb"] == 72
+    command = (
+        plugin.registry()
+        .create("spades")
+        .build_command({**spades_step.inputs, **spades_step.outputs, **spades_step.params})
+    )
+    assert command[-2:] == ["-m", "72"]
 
 
 def test_mlst_depends_on_assembly_not_annotation(tmp_path):

@@ -50,6 +50,7 @@ def _context(samples: list[SampleInput]) -> SampleContext:
 
 
 def test_default_illumina_route_matches_optimized_main_path(tmp_path):
+    plugin = get_plugin("metagenomic_plasmid")
     sample = SampleInput(
         sample_id="S1", platform="illumina", read1="R1.fastq.gz", read2="R2.fastq.gz"
     )
@@ -98,6 +99,38 @@ def test_default_illumina_route_matches_optimized_main_path(tmp_path):
     assembly = next(step for step in plan.steps if step.tool_id == "megahit")
     assert assembly.inputs["read1"] == fastp.outputs["clean_read1"]
     assert assembly.inputs["read2"] == fastp.outputs["clean_read2"]
+    assert assembly.params["memory_bytes"] == 96636764160
+    command = (
+        plugin.registry()
+        .create("megahit")
+        .build_command({**assembly.inputs, **assembly.outputs, **assembly.params})
+    )
+    assert command[-2:] == ["--memory", "96636764160"]
+
+    abundance_mapper = next(
+        step for step in plan.steps if step.step_id.endswith("abundance_bowtie2")
+    )
+    assert abundance_mapper.outputs["alignment"].endswith("S1.plasmid_alignment.sam")
+    abundance_command = (
+        plugin.registry()
+        .create("bowtie2")
+        .build_command(
+            {**abundance_mapper.inputs, **abundance_mapper.outputs, **abundance_mapper.params}
+        )
+    )
+    assert abundance_command[-1] == abundance_mapper.outputs["alignment"]
+
+    abundance_sort = next(
+        step for step in plan.steps if step.step_id.endswith("abundance_samtools")
+    )
+    assert abundance_sort.inputs["alignment"] == abundance_mapper.outputs["alignment"]
+    assert abundance_sort.outputs["bam"].endswith("S1.plasmid_alignment.bam")
+
+    abundance_coverm = next(
+        step for step in plan.steps if step.step_id.endswith("abundance_coverm")
+    )
+    assert abundance_coverm.inputs["bam"] == abundance_sort.outputs["bam"]
+    assert abundance_coverm.outputs["abundance"].endswith("S1.coverm.tsv")
 
 
 def test_pipeline_template_params_are_contract_linted() -> None:

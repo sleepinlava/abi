@@ -30,6 +30,9 @@ assembly:
   enable: true
   tool: auto
   min_contig_length: 500
+  # Explicitly cap MEGAHIT below common cgroup limits; otherwise MEGAHIT may
+  # read host RAM from /proc and over-allocate inside a constrained container.
+  memory_bytes: 96636764160
 
 polishing:
   enable: false

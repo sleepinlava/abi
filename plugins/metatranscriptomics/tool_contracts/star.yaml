@@ -17,7 +17,8 @@ inputs:
     type: directory
     required: true
   output_prefix:
-    type: path
+    # STAR creates files below this prefix; it is not a pre-existing input path.
+    type: string
     required: true
   threads:
     type: integer

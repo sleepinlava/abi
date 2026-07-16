@@ -115,7 +115,10 @@ nodes:
         type: directory
         path: "{outdir}/03_expression"
       sample_sheet:        {type: file, format: tsv}
-      count_matrix_script: {type: file, format: py}
+      count_matrix_script:
+        type: file
+        format: py
+        path: "plugins/rnaseq_expression/scripts/build_count_matrix.py"
     outputs:
       count_matrix:
         type: file
@@ -143,11 +146,15 @@ nodes:
     depends_on: [build_matrix]
     config_params:
       comparison: differential_expression.comparison
+      design: differential_expression.design
       alpha: differential_expression.alpha
     inputs:
       count_matrix:     {type: file, format: tsv, source: build_matrix.count_matrix}
       sample_metadata:  {type: file, format: tsv, source: build_matrix.sample_metadata}
-      deseq2_script:    {type: file, format: R}
+      deseq2_script:
+        type: file
+        format: R
+        path: "plugins/rnaseq_expression/scripts/run_deseq2.R"
     outputs:
       de_results:
         type: file

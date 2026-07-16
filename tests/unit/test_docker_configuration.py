@@ -122,7 +122,7 @@ def test_sciplot_tests_are_excluded_from_wheel():
     assert 'exclude = ["src/abi/sciplot/tests/"]' in wheel_section
 
 
-def test_plasmidfinder_adapter_is_in_packaged_plugin_tree():
+def test_plasmidfinder_uses_the_installed_python_module():
     registry = yaml.safe_load(
         (ROOT / "plugins" / "metagenomic_plasmid" / "tool_registry.yaml").read_text(
             encoding="utf-8"
@@ -130,8 +130,9 @@ def test_plasmidfinder_adapter_is_in_packaged_plugin_tree():
     )
     tool = next(item for item in registry["tools"] if item["id"] == "plasmidfinder")
 
-    assert tool["extra_path_dirs"] == ["{project_root}/plugins/metagenomic_plasmid/scripts"]
-    assert (ROOT / "plugins" / "metagenomic_plasmid" / "scripts" / "plasmidfinder.py").is_file()
+    assert tool["executable"] == "python"
+    assert tool["command_template"].startswith("python -m plasmidfinder ")
+    assert "--legacy -x" in tool["command_template"]
 
 
 def test_python_script_tools_use_the_canonical_autoplasm_root():

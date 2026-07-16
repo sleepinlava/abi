@@ -16,6 +16,10 @@ inputs:
   threads:
     type: integer
     minimum: 1
+  memory_bytes:
+    type: integer
+    minimum: 1
+    default: 96636764160
 outputs:
   output_dir:
     type: directory
@@ -24,7 +28,8 @@ outputs:
     format: fasta
 execution:
   executable: megahit
-  command_template: megahit -1 {read1} -2 {read2} -o {output_dir} -t {threads}
+  command_template: megahit -1 {read1} -2 {read2} -o {output_dir} -t {threads} --memory
+    {memory_bytes}
   network: false
   writes_output: true
 normalization:

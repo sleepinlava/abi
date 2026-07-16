@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from abi.runtimes import local
+from abi.runtimes.base import RuntimeOptions
 from abi.runtimes.local import LocalRuntime, _coerce_bool
 from abi.schemas import ABIError
 
@@ -50,8 +51,8 @@ def test_local_runtime_dry_run_forces_mock_execution(tmp_path: Path, monkeypatch
         def __init__(self, registry, logger, **kwargs):
             captured.update(registry=registry, logger=logger, kwargs=kwargs)
 
-        def run(self, plan, config, *, dry_run):
-            captured.update(plan=plan, config=config, dry_run=dry_run)
+        def run(self, plan, config, *, dry_run, resume):
+            captured.update(plan=plan, config=config, dry_run=dry_run, resume=resume)
             return {"summary": tmp_path / "summary.json"}
 
     monkeypatch.setattr(local, "GenericABIExecutor", FakeExecutor)
@@ -65,6 +66,7 @@ def test_local_runtime_dry_run_forces_mock_execution(tmp_path: Path, monkeypatch
     assert result.outputs == {"summary": tmp_path / "summary.json"}
     assert captured["kwargs"]["mock_tools"] is True
     assert captured["dry_run"] is True
+    assert captured["resume"] is False
 
 
 def test_local_runtime_blocks_real_execution_when_preflight_fails(monkeypatch) -> None:
@@ -102,14 +104,37 @@ def test_local_runtime_skips_preflight_for_explicit_mock_mode(tmp_path: Path, mo
             assert kwargs["mock_tools"] is True
             assert "handler" in kwargs["internal_handlers"]
 
-        def run(self, plan, config, *, dry_run):
+        def run(self, plan, config, *, dry_run, resume):
             assert dry_run is False
+            assert resume is False
             return {"summary": tmp_path / "summary.json"}
 
     monkeypatch.setattr(local, "GenericABIExecutor", FakeExecutor)
 
     result = LocalRuntime(_Plugin()).run("plan", {"mock_tools": "true"})
     assert result.return_code == 0
+
+
+def test_local_runtime_passes_resume_option_to_executor(tmp_path: Path, monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+    monkeypatch.setattr(local, "RunLogger", lambda path: path)
+    monkeypatch.setattr(local, "StandardTableManager", lambda schemas: schemas)
+    monkeypatch.setattr(local, "plugin_internal_handlers", lambda plugin: {})
+
+    class FakeExecutor:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def run(self, plan, config, *, dry_run, resume):
+            captured.update(dry_run=dry_run, resume=resume)
+            return {"summary": tmp_path / "summary.json"}
+
+    monkeypatch.setattr(local, "GenericABIExecutor", FakeExecutor)
+    runtime = LocalRuntime(_Plugin(), options=RuntimeOptions(engine="local", resume=True))
+    result = runtime.run("plan", {"mock_tools": True})
+
+    assert result.return_code == 0
+    assert captured == {"dry_run": False, "resume": True}
 
 
 def test_local_runtime_check_is_noop() -> None:

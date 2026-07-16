@@ -181,6 +181,9 @@ class GenericABIExecutor:
         # Accumulated checksum map across all executed steps.
         # 跨所有已执行步骤累积的校验和映射。
         self._checksums: Dict[str, str] = {}
+        # Actual output paths that differ from the paths recorded in the plan.
+        # Only these are eligible for downstream path propagation.
+        self._resolved_output_replacements: Dict[str, Dict[str, str]] = {}
         self._checksum_lock = threading.Lock()
         self._tool_timeout_seconds: Any = None
         self._last_tool_version_rows: List[Dict[str, Any]] = []
@@ -204,6 +207,7 @@ class GenericABIExecutor:
         config: Mapping[str, Any],
         *,
         dry_run: bool = False,
+        resume: bool = False,
     ) -> Dict[str, Path]:
         """Execute a plan and write all provenance artifacts.
 
@@ -213,6 +217,8 @@ class GenericABIExecutor:
         2. Writes the execution plan JSON and resolved config YAML.
         3. Resolves input file paths and writes a resolved_inputs.tsv.
         4. Iterates over plan steps, executing each via ``_execute_step``.
+           When ``resume`` is enabled, completed steps with valid non-empty
+           outputs are recorded as resumed instead of being run again.
         5. On the first failure, records the error and breaks (fail-fast).
         6. Writes all remaining provenance artifacts regardless of outcome.
         7. Returns a mapping of artifact labels to file paths.
@@ -235,6 +241,7 @@ class GenericABIExecutor:
         如果任何步骤失败，抛出 ``ToolError``。
         """
         self._config = config
+        self._resolved_output_replacements = {}
         # Create the three-tier output directory structure.
         # 创建三层输出目录结构。
         outdir = ensure_directory(plan.outdir, label="Output directory")
@@ -362,6 +369,7 @@ class GenericABIExecutor:
                         row, error = self._execute_step(
                             step,
                             dry_run=dry_run,
+                            resume=resume,
                             provenance=provenance,
                             tables_dir=tables_dir,
                             progress_recorder=progress_recorder,
@@ -400,6 +408,7 @@ class GenericABIExecutor:
                     row, error = self._execute_step(
                         step,
                         dry_run=dry_run,
+                        resume=resume,
                         provenance=provenance,
                         tables_dir=tables_dir,
                         progress_recorder=progress_recorder,
@@ -417,6 +426,7 @@ class GenericABIExecutor:
                     row, error = self._execute_step(
                         step,
                         dry_run=dry_run,
+                        resume=resume,
                         provenance=provenance,
                         tables_dir=tables_dir,
                         progress_recorder=progress_recorder,
@@ -437,7 +447,11 @@ class GenericABIExecutor:
                     # 实际磁盘路径（来自 _resolve_actual_outputs），
                     # 这些路径与抽象合约路径不同。更新剩余步骤的 inputs/params。
                     if step.tool_id != "internal":
-                        _propagate_resolved_paths(step, plan.steps[i + 1 :])
+                        _propagate_resolved_paths(
+                            step,
+                            plan.steps[i + 1 :],
+                            replacements=self._resolved_output_replacements.pop(step.step_id, {}),
+                        )
         except Exception as exc:
             failed_errors.append(ToolError(f"Unexpected error during {_last_step_id}: {exc}"))
             failed_errors[-1].__cause__ = exc
@@ -552,6 +566,7 @@ class GenericABIExecutor:
         step: Any,
         *,
         dry_run: bool,
+        resume: bool = False,
         provenance: Path,
         tables_dir: Path,
         progress_recorder: PipelineProgressRecorder | None,
@@ -596,13 +611,17 @@ class GenericABIExecutor:
             progress_recorder.step_started(step)
 
         # Dispatch based on step state. The ordering matters:
-        # skipped > dry_run/internal > unregistered > real execution.
+        # explicit skip > validated resume > dry-run/internal > unregistered > real execution.
         # 根据步骤状态进行分发。顺序很重要：
         # skipped > dry_run/internal > 未注册 > 真实执行。
         if step.skipped:
             # Step was explicitly skipped (e.g., already completed in a prior run).
             # 步骤被显式跳过（例如在之前的运行中已完成）。
             status = "skipped"
+        elif resume and not dry_run and self._step_is_resumable(step):
+            status = "resumed"
+            return_code = 0
+            reason = "validated existing outputs reused"
         elif dry_run:
             # In dry_run mode, we never invoke external tools.
             # "internal" tools are handled by the plan itself (no external process).
@@ -680,6 +699,60 @@ class GenericABIExecutor:
                 standard_tables=standard_tables,
             )
         return row, failed_error
+
+    def _step_is_resumable(self, step: Any) -> bool:
+        """Validate whether a completed external step can be safely reused.
+
+        A local retry can occur after the initial run has already written valid
+        outputs but before the final summary.  Reusing an output directory by
+        itself is unsafe, so every declared file output must exist and be
+        non-empty; declared contract checks and assertions must also pass.
+        """
+        if step.tool_id == "internal" or step.skipped:
+            return False
+        contract = step.params.get("_contract", {})
+        output_spec = contract.get("outputs", {}) if isinstance(contract, Mapping) else {}
+        if not isinstance(output_spec, Mapping) or not output_spec:
+            return False
+
+        planned_outputs = dict(step.outputs)
+        resolved_outputs = _resolve_actual_outputs(step.outputs, output_spec, step.sample_id)
+        file_outputs = []
+        for key, spec in output_spec.items():
+            if key == "output_dir" or not isinstance(spec, Mapping):
+                continue
+            value = resolved_outputs.get(key)
+            if not value:
+                return False
+            path = Path(str(value))
+            if not path.is_file() or path.stat().st_size == 0:
+                return False
+            file_outputs.append(path)
+        if not file_outputs:
+            return False
+
+        contract_result = validate_output_contract(step.step_id, resolved_outputs, output_spec)
+        if not contract_result.passed:
+            return False
+        assertions = contract.get("assertions", [])
+        if assertions and evaluate_assertions(
+            assertions, _build_assertion_context(step, resolved_outputs)
+        ):
+            return False
+
+        self._resolved_output_replacements[step.step_id] = {
+            key: str(value)
+            for key, value in resolved_outputs.items()
+            if (
+                key not in {"output_dir", "_contract", "stdout_path", "stderr_path"}
+                and isinstance(value, (str, Path))
+                and str(value) != str(planned_outputs.get(key, ""))
+            )
+        }
+        for key, value in resolved_outputs.items():
+            if key != "output_dir" and value != step.outputs.get(key):
+                step.outputs[key] = value
+        return True
 
     def _run_internal_step(
         self,
@@ -864,6 +937,21 @@ class GenericABIExecutor:
             # compare contract paths against real files. / 保存原始计划输出。
             planned_outputs = dict(step.outputs)
             resolved_outputs = _resolve_actual_outputs(step.outputs, output_spec, step.sample_id)
+
+            # Propagation is only necessary for outputs whose actual path differs
+            # from the planned path. Treating every existing output as a
+            # replacement can overwrite a later, not-yet-created DAG input that
+            # happens to share its directory and suffix (for example, replacing
+            # FastTree's aligned FASTA with MAFFT's unaligned input FASTA).
+            self._resolved_output_replacements[step.step_id] = {
+                key: str(value)
+                for key, value in resolved_outputs.items()
+                if (
+                    key not in {"output_dir", "_contract", "stdout_path", "stderr_path"}
+                    and isinstance(value, (str, Path))
+                    and str(value) != str(planned_outputs.get(key, ""))
+                )
+            }
 
             # 0b. Write resolved paths back to step outputs so that downstream
             #     steps receive the actual on-disk paths, not the abstract
@@ -1603,7 +1691,12 @@ def _bridge_consensus_for_single_detector(step: Any, resolved_outputs: Dict[str,
             shutil.copy2(src, dest)
 
 
-def _propagate_resolved_paths(completed_step: Any, downstream_steps: List[Any]) -> None:
+def _propagate_resolved_paths(
+    completed_step: Any,
+    downstream_steps: List[Any],
+    *,
+    replacements: Mapping[str, str] | None = None,
+) -> None:
     """Propagate resolved output paths from *completed_step* to downstream steps.
 
     After ``_resolve_actual_outputs`` corrects abstract contract paths to real
@@ -1628,26 +1721,22 @@ def _propagate_resolved_paths(completed_step: Any, downstream_steps: List[Any]) 
     if not downstream_steps:
         return
 
-    old_outputs = getattr(completed_step, "outputs", {}) or {}
-    # Collect resolved paths that differ from planned contract paths.
-    # The executor writes resolved paths back to step.outputs during
-    # _run_external_step, but we need the PRE-resolution values to know
-    # what to replace.  Strategy: compare each output value against
-    # the planned path from the DAG contract.  If the value is a real
-    # file and the corresponding planned path is different, it was resolved.
-    replacements: Dict[str, str] = {}
-    for key, value in old_outputs.items():
-        if key in ("output_dir", "_contract", "stdout_path", "stderr_path"):
-            continue
-        if not isinstance(value, str):
-            continue
-        p = Path(value)
-        if p.exists() and p.is_file():
-            # This is a resolved real file.  Search downstream for
-            # the corresponding abstract path to replace.
-            replacements[key] = value
+    if replacements is None:
+        # Backward-compatible fallback for direct callers that do not have
+        # access to the executor's pre-resolution output snapshot.
+        old_outputs = getattr(completed_step, "outputs", {}) or {}
+        resolved_replacements: Dict[str, str] = {}
+        for key, value in old_outputs.items():
+            if key in ("output_dir", "_contract", "stdout_path", "stderr_path"):
+                continue
+            if not isinstance(value, str):
+                continue
+            if Path(value).is_file():
+                resolved_replacements[key] = value
+    else:
+        resolved_replacements = dict(replacements)
 
-    if not replacements:
+    if not resolved_replacements:
         return
 
     # Only propagate resolved paths to downstream steps owned by the same
@@ -1673,13 +1762,18 @@ def _propagate_resolved_paths(completed_step: Any, downstream_steps: List[Any]) 
                 if not value or not old.exists():
                     # For empty values, match by key name directly.
                     # 对于空值，直接按键名匹配。
-                    if not value and key in replacements:
-                        ds.inputs[key] = replacements[key]
+                    if not value and key in resolved_replacements:
+                        ds.inputs[key] = resolved_replacements[key]
+                        continue
+                    # An output with the same semantic key is always the
+                    # preferred replacement (for example clean_read2).
+                    if key in resolved_replacements:
+                        ds.inputs[key] = resolved_replacements[key]
                         continue
                     # Try matching by checking if any resolved output
                     # lives in the same output directory and has a
                     # compatible file extension.
-                    for repl_key, repl_val in replacements.items():
+                    for repl_key, repl_val in resolved_replacements.items():
                         repl_path = Path(repl_val)
                         if (
                             # Match empty or compatible suffix
@@ -1696,10 +1790,13 @@ def _propagate_resolved_paths(completed_step: Any, downstream_steps: List[Any]) 
                 if not value or not old.exists():
                     # For empty param values, match by key name.
                     # 对于空参数值，按键名匹配。
-                    if not value and key in replacements:
-                        ds.params[key] = replacements[key]
+                    if not value and key in resolved_replacements:
+                        ds.params[key] = resolved_replacements[key]
                         continue
-                    for repl_key, repl_val in replacements.items():
+                    if key in resolved_replacements:
+                        ds.params[key] = resolved_replacements[key]
+                        continue
+                    for repl_key, repl_val in resolved_replacements.items():
                         repl_path = Path(repl_val)
                         if (
                             not old.suffix or repl_path.suffix == old.suffix

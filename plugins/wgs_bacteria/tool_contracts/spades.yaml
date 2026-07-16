@@ -24,6 +24,10 @@ inputs:
     type: integer
     minimum: 1
     default: 4
+  memory_gb:
+    type: integer
+    minimum: 1
+    default: 80
 outputs:
   output_dir:
     type: directory
@@ -36,7 +40,7 @@ outputs:
 execution:
   executable: spades.py
   command_template: spades.py --isolate -1 {clean_read1} -2 {clean_read2} -o {output_dir}
-    -t {threads}
+    -t {threads} -m {memory_gb}
   network: false
   writes_output: true
 failure_handling:

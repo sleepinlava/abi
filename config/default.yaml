@@ -116,6 +116,10 @@ host_removal:
 assembly:
   enable: true
   short_read_assembler: megahit
+  # MEGAHIT otherwise reads host RAM from /proc and can over-allocate inside a
+  # cgroup-constrained cloud container. This 90 GiB cap leaves headroom in a
+  # 120 GiB runtime and may be overridden per run.
+  memory_bytes: 96636764160
   high_quality_short_read_assembler: metaspades
   long_read_assembler: metaflye
   pacbio_hifi_assembler: hifiasm_meta

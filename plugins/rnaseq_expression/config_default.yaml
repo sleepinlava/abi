@@ -16,4 +16,8 @@ resources:
 
 differential_expression:
   comparison: "treatment_vs_control"
+  # Formula is evaluated against columns in the sample sheet metadata.  Keep
+  # condition in every design because the configured comparison is a condition
+  # contrast; paired experiments can use "~ donor + condition".
+  design: "~ condition"
   alpha: 0.05

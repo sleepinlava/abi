@@ -8,6 +8,7 @@
 #     --metadata sample_metadata.tsv \
 #     --output results/ \
 #     --comparison treatment_vs_control \
+#     --design "~ condition" \
 #     --alpha 0.05
 #
 # Outputs:
@@ -34,12 +35,13 @@ counts_file  <- parse_arg("--counts")
 metadata_file <- parse_arg("--metadata")
 output_dir   <- parse_arg("--output", ".")
 comparison   <- parse_arg("--comparison", "treatment_vs_control")
+design_text  <- parse_arg("--design", "~ condition")
 alpha        <- as.numeric(parse_arg("--alpha", "0.05"))
 
 # ── Validation / 验证 ─────────────────────────────────────────────────────
 if (is.null(counts_file) || is.null(metadata_file)) {
   stop("Usage: Rscript run_deseq2.R --counts <file> --metadata <file> ",
-       "--output <dir> --comparison <name> --alpha <float>\n",
+       "--output <dir> --comparison <name> --design <formula> --alpha <float>\n",
        call. = FALSE)
 }
 
@@ -93,6 +95,22 @@ if (!("condition" %in% colnames(metadata))) {
   stop("Metadata file must contain a 'condition' column", call. = FALSE)
 }
 
+design_formula <- tryCatch(
+  as.formula(design_text),
+  error = function(e) stop("Invalid DESeq2 design formula '", design_text,
+                            "': ", conditionMessage(e), call. = FALSE)
+)
+design_variables <- all.vars(design_formula)
+if (!("condition" %in% design_variables)) {
+  stop("DESeq2 design must include 'condition' to support --comparison; got: ",
+       design_text, call. = FALSE)
+}
+missing_design_columns <- setdiff(design_variables, colnames(metadata))
+if (length(missing_design_columns) > 0) {
+  stop("DESeq2 design references missing metadata column(s): ",
+       paste(missing_design_columns, collapse = ", "), call. = FALSE)
+}
+
 # Keep only samples present in both metadata and count matrix
 sample_cols <- colnames(count_matrix)
 metadata <- metadata[metadata$sample_id %in% sample_cols, , drop = FALSE]
@@ -121,11 +139,14 @@ if (!(denominator %in% conditions)) {
 metadata$condition <- factor(metadata$condition)
 # Set the reference level to the denominator
 metadata$condition <- relevel(metadata$condition, ref = denominator)
+for (column in setdiff(design_variables, "condition")) {
+  metadata[[column]] <- factor(metadata[[column]])
+}
 
 dds <- DESeqDataSetFromMatrix(
   countData = count_matrix,
   colData   = metadata,
-  design    = ~ condition
+  design    = design_formula
 )
 
 # Remove genes with zero counts across all samples (causes size factor failure)
