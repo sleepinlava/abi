@@ -186,7 +186,12 @@ class ToolCatalog:
         return catalog
 
     @classmethod
-    def from_plugin_dir(cls, plugin_dir: str | Path) -> ToolCatalog:
+    def from_plugin_dir(
+        cls,
+        plugin_dir: str | Path,
+        *,
+        registry_path: str | Path | None = None,
+    ) -> ToolCatalog:
         """Compile one plugin for compatibility adapters and isolated tests."""
         from abi.runtime_environment import load_environment_assignments
 
@@ -194,7 +199,14 @@ class ToolCatalog:
         environment_data = load_environment_assignments()
         raw_assignments = environment_data.get("tool_assignments", {})
         env_assignments = cls._normalise_env_assignments(raw_assignments)
-        return cls(cls._compile_plugin(path, path.name, env_assignments))
+        return cls(
+            cls._compile_plugin(
+                path,
+                path.name,
+                env_assignments,
+                registry_path=Path(registry_path) if registry_path is not None else None,
+            )
+        )
 
     @classmethod
     def _normalise_env_assignments(cls, raw: Any) -> Dict[str, Dict[str, str]]:
@@ -212,10 +224,18 @@ class ToolCatalog:
         plugin_dir: Path,
         plugin: str,
         env_assignments: Dict[str, Dict[str, str]],
+        *,
+        registry_path: Path | None = None,
     ) -> Iterator[RuntimeToolDescriptor]:
         import yaml
 
-        registry_path = plugin_dir / "tool_registry.yaml"
+        manifest_path = plugin_dir / "abi-plugin.yaml"
+        manifest = (
+            yaml.safe_load(manifest_path.read_bytes()) or {} if manifest_path.exists() else {}
+        )
+        if registry_path is None:
+            registry_name = str(manifest.get("tool_registry", "tool_registry.yaml"))
+            registry_path = plugin_dir / registry_name
         data = yaml.safe_load(registry_path.read_bytes()) or {} if registry_path.exists() else {}
         tools = data.get("tools", [])
         plugin_envs = env_assignments.get(plugin, {})
@@ -235,7 +255,8 @@ class ToolCatalog:
                 registry_entries[tool_id] = dict(entry)
 
         contracts: Dict[str, Dict[str, Any]] = {}
-        contracts_dir = plugin_dir / "tool_contracts"
+        contracts_name = str(manifest.get("tool_contracts", "tool_contracts"))
+        contracts_dir = plugin_dir / contracts_name
         if contracts_dir.exists():
             for path in sorted([*contracts_dir.glob("*.yaml"), *contracts_dir.glob("*.yml")]):
                 contract = yaml.safe_load(path.read_bytes()) or {}

@@ -2,7 +2,32 @@
 
 ABI plugins expose biological analysis types behind the shared lifecycle API.
 
-## Minimum Python Interface
+## Recommended Declarative Interface
+
+Place `abi-plugin.yaml` beside your plugin module and inherit from
+`DeclarativeABIPlugin`. The base class reads plugin identity, the tool registry,
+and standard-table paths from the manifest, so those values are declared once:
+
+```python
+from abi.plugin import DeclarativeABIPlugin
+
+
+class MyPlugin(DeclarativeABIPlugin):
+    def load_config(self, config_path=None, **kwargs): ...
+    def build_plan(self, config, *, check_files=True): ...
+    def parse_outputs(self, tool_id, output_dir, sample_id): ...
+    def write_report(self, plan, result_dir): ...
+```
+
+Monorepos that keep declarations away from the Python module may set one class
+attribute, for example `plugin_root = Path("plugins/my_analysis")`.
+
+The base class validates the manifest and all declared paths during import.
+Discovery also requires the entry-point name, manifest `plugin_id`, and manifest
+`entry_point` to agree. Runtime registry, tool-contract, and environment checks
+remain unchanged; use `abi contract-lint --strict` before publishing.
+
+## Low-level Python Interface
 
 Implement the `abi.interfaces.ABIPlugin` protocol:
 
@@ -23,6 +48,8 @@ Register the plugin with:
 [project.entry-points."abi.plugins"]
 my_analysis = "my_package.plugins:MyPlugin"
 ```
+
+The entry-point key must exactly match `plugin_id` in `abi-plugin.yaml`.
 
 ## Plugin Directory
 
@@ -164,6 +191,7 @@ Plugins should import from the public SDK:
 | `abi.diagnostics` | `DiagnosticHint`, `classify_exception`, `ERROR_CODES` |
 | `abi.json_utils` | `load_json_file`, `load_json_payload` with `ABIJSONError` |
 | `abi.interfaces` | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin`, `ABIPublishedOutputsPlugin` protocols |
+| `abi.plugin` | `DeclarativeABIPlugin` — manifest-backed identity, registry, and table schemas |
 | `abi._shared` | `_read_tsv`, `_display_command`, `_plan_dict`, `_common_overrides` |
 | `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — DAG-driven `build_plan()` (added 2026-06-18) |
 | `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — declarative TSV column mapping (added 2026-06-18) |

@@ -54,7 +54,7 @@ implementation.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from abi._shared import (
     _execute_generic_dry_run,
@@ -65,12 +65,12 @@ from abi._shared import (
     _resolve_path,
 )
 from abi.config import PLUGIN_ROOT, PROJECT_ROOT, compact_overrides, deep_merge, load_yaml
+from abi.plugin import DeclarativeABIPlugin
 from abi.report import write_plugin_report
 from abi.schemas import ABIExecutionPlan, ABISample, ABISampleContext
-from abi.tools import ToolRegistry
 
 
-class MetatranscriptomicsPlugin:
+class MetatranscriptomicsPlugin(DeclarativeABIPlugin):
     """ABI plugin modelling a standard RNA-seq / metatranscriptomics workflow.
 
     Implements the ``ABIPlugin`` interface to demonstrate that the ABI
@@ -92,19 +92,7 @@ class MetatranscriptomicsPlugin:
     * ``parse_outputs`` normalizes all three tools into standard tables.
     """
 
-    # Static metadata for ABI agent discovery / ABI agent 发现用的静态元数据
-    plugin_id = "metatranscriptomics"
-    display_name = "Metatranscriptomics Demo"
-    description = "Minimal RNA-seq style ABI portability demo: fastp, STAR, featureCounts."
-    report_title = "Metatranscriptomics ABI Report"
-
-    @property
-    def root(self) -> Path:
-        """Filesystem root for plugin data (configs, tool registry, etc.).
-
-        插件数据（配置文件、工具注册表等）的文件系统根目录。
-        """
-        return PLUGIN_ROOT / self.plugin_id
+    plugin_root = PLUGIN_ROOT / "metatranscriptomics"
 
     @property
     def _tsv_mapper(self):
@@ -236,36 +224,10 @@ class MetatranscriptomicsPlugin:
 
         return build_plan_from_dag(self.root / "pipeline_dag.yaml", config, context)
 
-    def registry(self) -> ToolRegistry:
-        """Return the tool registry loaded from ``tool_registry.yaml``.
-
-        Contains command templates and container images for fastp, STAR,
-        and featureCounts.
-
-        返回从 ``tool_registry.yaml`` 加载的工具注册表，包含 fastp、STAR、
-        featureCounts 的命令模板及容器镜像。
-        """
-        return ToolRegistry.from_path(self.root / "tool_registry.yaml")
-
     def execute_dry_run(self, plan: Any, config: Mapping[str, Any]) -> Dict[str, Path]:
         return _execute_generic_dry_run(self, plan, config)
 
     # ── Standard tables / 标准表格 ───────────────────────────────────────
-
-    def table_schemas(self) -> Mapping[str, Iterable[str]]:
-        """Return expected column schemas from ``standard_tables.yaml``.
-
-        Defines the ``gene_expression`` table with columns
-        ``[sample_id, gene_id, count, tpm, tool, source_file]``.
-
-        从 ``standard_tables.yaml`` 返回预期列结构，定义 ``gene_expression`` 表，
-        包含 ``[sample_id, gene_id, count, tpm, tool, source_file]`` 列。
-        """
-        data = load_yaml(self.root / "standard_tables.yaml")
-        tables = data.get("tables", {})
-        if not isinstance(tables, Mapping):
-            raise ValueError("standard_tables.yaml must contain a tables mapping")
-        return tables
 
     # ── Output parsing / 输出解析 ────────────────────────────────────────
 

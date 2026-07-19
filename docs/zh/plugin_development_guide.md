@@ -2,7 +2,32 @@
 
 ABI 插件在共享生命周期 API 背后暴露生物学分析类型。
 
-## 最小 Python 接口
+## 推荐的声明式接口
+
+将 `abi-plugin.yaml` 放在插件模块旁边，并继承
+`DeclarativeABIPlugin`。基类会从 manifest 读取插件身份、工具注册表和
+标准表路径，因此这些信息只需声明一次：
+
+```python
+from abi.plugin import DeclarativeABIPlugin
+
+
+class MyPlugin(DeclarativeABIPlugin):
+    def load_config(self, config_path=None, **kwargs): ...
+    def build_plan(self, config, *, check_files=True): ...
+    def parse_outputs(self, tool_id, output_dir, sample_id): ...
+    def write_report(self, plan, result_dir): ...
+```
+
+如果 monorepo 将声明文件与 Python 模块分开存放，只需设置一个类属性，
+例如 `plugin_root = Path("plugins/my_analysis")`。
+
+基类会在导入时校验 manifest 及其声明的所有路径。插件发现还会强制
+entry-point 名称、manifest 中的 `plugin_id` 与 `entry_point` 一致。运行时
+注册表、工具合约和环境校验保持不变；发布前运行
+`abi contract-lint --strict`。
+
+## 底层 Python 接口
 
 实现 `abi.interfaces.ABIPlugin` 协议：
 
@@ -23,6 +48,8 @@ ABI 插件在共享生命周期 API 背后暴露生物学分析类型。
 [project.entry-points."abi.plugins"]
 my_analysis = "my_package.plugins:MyPlugin"
 ```
+
+entry-point 的键必须与 `abi-plugin.yaml` 中的 `plugin_id` 完全一致。
 
 ## 插件目录
 
@@ -141,6 +168,7 @@ assertions:
 | `abi.diagnostics` | `DiagnosticHint`、`classify_exception`、`ERROR_CODES` |
 | `abi.json_utils` | `load_json_file`、`load_json_payload` 及其 `ABIJSONError` |
 | `abi.interfaces` | `ABIPlugin`、`ABIDryRunPlugin`、`ABIInitializablePlugin`、`ABIPublishedOutputsPlugin` 协议 |
+| `abi.plugin` | `DeclarativeABIPlugin` — 由 manifest 提供身份、注册表和标准表 schema |
 | `abi._shared` | `_read_tsv`、`_display_command`、`_plan_dict`、`_common_overrides` |
 | `abi.dag_planner` | `UniversalDAG`、`build_plan_from_dag`、`PathTemplateContext` — DAG 驱动的 `build_plan()`（2026-06-18 新增） |
 | `abi.tsv_mapping` | `TSVMapper`、`generate_rows` — 声明式 TSV 列映射（2026-06-18 新增） |
