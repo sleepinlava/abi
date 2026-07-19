@@ -17,6 +17,7 @@ import yaml
 from abi.config import PROJECT_ROOT, resolved_mamba_root
 from abi.plugins import get_plugin
 from abi.resources import check_resources
+from abi.tool_catalog import ToolCatalog
 
 DEFAULT_ANALYSIS_TYPES = (
     "amplicon_16s",
@@ -318,10 +319,9 @@ def build_tool_lock(
 
     for registry in sorted((project_root / "plugins").glob("*/tool_registry.yaml")):
         plugin = registry.parent.name
-        data = _load_yaml(registry)
-        for tool in data.get("tools", []):
-            if not isinstance(tool, Mapping):
-                continue
+        catalog = ToolCatalog.from_plugin_dir(registry.parent, registry_path=registry)
+        for descriptor in catalog:
+            tool = descriptor.metadata
             tool_id = str(tool.get("id", ""))
             executable = str(tool.get("executable") or tool_id)
             env_name = str(tool.get("env_name") or _assigned_env(assignments, plugin, tool_id))

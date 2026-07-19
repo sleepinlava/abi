@@ -60,14 +60,28 @@ def test_generate_runtime_locks_resolves_extra_path_dirs(tmp_path: Path) -> None
                 "tools": [
                     {
                         "id": "demo_tool",
-                        "name": "Demo Tool",
-                        "category": "test",
-                        "executable": "demo-tool",
                         "script_path": "{autoplasm_root}/demo/driver.py",
                         "required": True,
                         "extra_path_dirs": ["{autoplasm_root}/demo"],
                     }
                 ]
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    contracts = plugin_dir / "tool_contracts"
+    contracts.mkdir()
+    (contracts / "demo_tool.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "tool_id": "demo_tool",
+                "name": "Demo Tool",
+                "category": "test",
+                "execution": {
+                    "executable": "demo-tool",
+                    "command_template": "demo-tool {input}",
+                },
             },
             sort_keys=False,
         ),

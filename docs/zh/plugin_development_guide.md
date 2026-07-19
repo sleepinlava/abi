@@ -84,7 +84,7 @@ abi install-skills      # → ~/.claude/skills/abi/
 
 ## 工具合约
 
-合约是机器可读的，必须与运行时注册表匹配：
+合约是权威的、机器可读的工具声明：
 
 - `tool_id`
 - `category`
@@ -92,6 +92,21 @@ abi install-skills      # → ~/.claude/skills/abi/
 - `execution.command_template`
 - 声明的输入/输出模板字段
 - 标准化的标准表名称
+
+`tool_registry.yaml` 是精简的运行策略索引。每个合约必须有且仅有一个
+注册表条目，但条目只需要工具 ID 和运行策略：
+
+```yaml
+tools:
+  - id: fastp
+    required: true
+    default_enabled: true
+    skill_path: skills/fastp/SKILL.md
+```
+
+不要在其中重复 `name`、`category`、`executable` 或 `command_template`。
+旧注册表仍可包含这些字段，但如果重复声明冲突，ABI 会直接拒绝，
+而不是静默选择其中一份。
 
 环境名称不存储在单独的合约或注册表中。它们集中在 `environments.yaml` 中的
 `tool_assignments:` 下（每个插件一个映射），由 `ToolRegistry` 在运行时注入正确的

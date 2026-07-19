@@ -90,7 +90,7 @@ bioinformatics tools.
 
 ## Tool Contracts
 
-Contracts are machine-readable and must match the runtime registry:
+Contracts are the authoritative machine-readable tool declarations:
 
 - `tool_id`
 - `category`
@@ -98,6 +98,21 @@ Contracts are machine-readable and must match the runtime registry:
 - `execution.command_template`
 - declared input/output template fields
 - normalized standard table names
+
+`tool_registry.yaml` is a compact policy index. Each contract must have exactly
+one registry entry, but the entry only needs the tool ID and runtime policy:
+
+```yaml
+tools:
+  - id: fastp
+    required: true
+    default_enabled: true
+    skill_path: skills/fastp/SKILL.md
+```
+
+Do not repeat `name`, `category`, `executable`, or `command_template` there.
+Legacy registries may still contain those fields, but ABI rejects a conflicting
+duplicate instead of silently choosing one declaration.
 
 Environment names are **not** stored in individual contracts or registries.
 They are centralized in `environments.yaml` under `tool_assignments:` (one mapping
