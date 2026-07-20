@@ -1,0 +1,25 @@
+{
+  "figure_id": "scapp_plsdb_technical_metrics",
+  "created_at": "2026-07-20T02:02:32.639877+00:00",
+  "abi_version": "unknown",
+  "skill": "abi_sciplot",
+  "skill_version": "0.1.0",
+  "renderer": "matplotlib",
+  "renderer_version": "3.11.0",
+  "python_version": "3.12.3",
+  "input_table": "docs/zh/figures/scapp_plsdb_metrics.tsv",
+  "input_data_role": "Provisional legacy single-stage PLSDB coverage screen; not paper-method truth",
+  "input_sha256": "ef8fa3b22ef5a9fbdf8f829bb71a215bd6372824e027ebb2aea1637261bb61f4",
+  "workflow_name": "metagenomic_plasmid",
+  "theme": "abi_nature",
+  "palette": "colorblind_safe_8",
+  "statistical_test": null,
+  "multiple_testing_correction": null,
+  "packages": {
+    "matplotlib": "3.11.0",
+    "pandas": "3.0.3",
+    "numpy": "1.26.4",
+    "seaborn": "0.13.2",
+    "pydantic": "2.13.4"
+  }
+}

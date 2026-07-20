@@ -75,6 +75,8 @@ environments:
     dependencies:
     - python=3.10
     - numpy >=1.23,<1.24
+    # SciPy 1.13 fails at import time with this environment's NumPy 1.23 ABI.
+    - scipy >=1.10,<1.11
     - pandas >=1.5,<2
     - bakta
     # Required by Bakta for tRNA prediction; pin the version validated with DB v6.

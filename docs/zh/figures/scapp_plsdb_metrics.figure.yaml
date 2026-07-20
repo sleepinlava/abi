@@ -1,0 +1,26 @@
+figure_id: scapp_plsdb_technical_metrics
+figure_type: barplot
+data:
+  table: docs/zh/figures/scapp_plsdb_metrics.tsv
+  format: tsv
+  required_columns: [metric, percent, definition]
+mapping:
+  x: metric
+  y: percent
+style:
+  theme: abi_nature
+  palette: colorblind_safe_8
+  width_mm: 130
+  height_mm: 85
+  dpi: 300
+labels:
+  title: Provisional single-stage PLSDB coverage screen
+  x_label: Directional metric (>90% coverage; >80% identity)
+  y_label: Percent (%)
+export:
+  output_dir: docs/zh/figures/rendered
+  basename: scapp_plsdb_technical_metrics
+  formats: [png, pdf, svg]
+provenance:
+  workflow_name: metagenomic_plasmid
+  input_data_role: Provisional legacy single-stage PLSDB coverage screen; not paper-method truth

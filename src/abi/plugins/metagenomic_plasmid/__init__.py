@@ -65,7 +65,7 @@ from ._engine.report.markdown import write_markdown_report
 from ._engine.resources import check_resources as check_plugin_resources
 from ._engine.resources import setup_resources as setup_plugin_resources
 from ._engine.result_validation import validate_result_dir as validate_plugin_result_dir
-from ._engine.standard_tables import summarize_standard_tables
+from ._engine.standard_tables import expand_standard_rows, summarize_standard_tables
 from ._engine.tool_defaults import default_tools_for_category
 from .handlers import handlers as _metagenomic_plasmid_handlers
 
@@ -599,7 +599,7 @@ class MetagenomicPlasmidPlugin:
         ``_engine.parsers.parse_standard_outputs``，后者了解 AutoPlasm 管道中
         每个工具的预期文件布局。
         """
-        return parse_standard_outputs(tool_id, output_dir, sample_id)
+        return expand_standard_rows(parse_standard_outputs(tool_id, output_dir, sample_id))
 
     # ── Dry-run execution / 演习执行 ─────────────────────────────────────
 

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
+from types import SimpleNamespace
 
 import yaml
 
 from abi.contracts.lint import validate_pipeline_template_params
+from abi.internal import InternalHandlerContext
 from abi.plugins import get_plugin
 from abi.plugins.metagenomic_plasmid import build_plan_from_dag
 from abi.plugins.metagenomic_plasmid._engine.config import load_config
@@ -24,6 +26,7 @@ from abi.plugins.metagenomic_plasmid._engine.standard_tables import (
     TABLE_SCHEMAS,
     ensure_standard_tables,
 )
+from abi.plugins.metagenomic_plasmid.handlers import plasmid_structure_handler
 from abi.schemas import ExecutionPlan, PlanStep, SampleContext, SampleInput
 
 
@@ -591,3 +594,39 @@ def test_terminal_overlap_detection_is_bounded_and_exact():
 
     assert _terminal_overlap_length(sequence) == 25
     assert _terminal_overlap_length("ACGT" * 4) == 0
+
+
+def test_generic_internal_handler_writes_plasmid_structure_rows(tmp_path):
+    fasta = tmp_path / "plasmids.fasta"
+    fasta.write_text(
+        ">p1\n" + "A" * 25 + "CGTACGTA" + "A" * 25 + "\n",
+        encoding="utf-8",
+    )
+    step = SimpleNamespace(
+        sample_id="S1",
+        inputs={"plasmid_contigs": str(fasta)},
+        params={},
+    )
+    context = InternalHandlerContext(
+        outdir=tmp_path,
+        provenance_dir=tmp_path / "provenance",
+        tables_dir=tmp_path / "tables",
+    )
+
+    result = plasmid_structure_handler(step, {}, context)
+
+    assert result.tables["plasmid_structure"] == [
+        {
+            "sample_id": "S1",
+            "plasmid_id": "p1",
+            "length_bp": 58,
+            "is_circular": "true",
+            "terminal_overlap_bp": 25,
+            "method": "header_or_exact_terminal_overlap",
+            "warnings": (
+                "Sequence-based circularity is predictive and should be confirmed from the "
+                "assembly graph or read support."
+            ),
+            "source_file": str(fasta),
+        }
+    ]

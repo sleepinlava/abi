@@ -190,6 +190,8 @@ execution:
 
 `ABIAgentInterface` 是与传输无关的边界。保持 CLI JSON（``--output-json``）、MCP（``abi-mcp``）、OpenAI 描述符（``abi export-openai-tools``）、技能（``abi install-skills``）、``abi dispatch`` 和 Job Service 行为与之对齐。
 
+插件通过发现机制和共享的 `analysis_type` 参数加入该接口，不新增传输特有的生命周期工具。Agent 上下文、安全、结果和测试契约详见[插件开发指南](plugin_development_guide.md)。
+
 执行必须保持门控：`abi run`、`abi_run` 和 Job Service 执行提交应返回 `confirmation_required`，除非显式传入确认。
 
 ### 面向 Agent 的命令

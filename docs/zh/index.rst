@@ -1,9 +1,7 @@
 ABI 文档
-==========
+==============================
 
-**Agent-Bioinformatics Interface** — 一个位于 AI Agent 和生物信息学工具之间的
-Python 控制平面。ABI 不是一个工作流引擎，而是一个提供标准化 JSON 信封、
-溯源跟踪、工具合约和执行门控的结构化接口层，覆盖七种生物信息学分析类型。
+ABI 让科研人员和 AI Agent 通过统一、可预期且受确认门保护的接口运行可复现生物信息学流程。先选择目标，再从只读发现逐步进入经过审查的正式执行。
 
 .. image:: https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=1e6fba
    :target: https://pypi.org/project/abi-agent/
@@ -24,177 +22,152 @@ Python 控制平面。ABI 不是一个工作流引擎，而是一个提供标准
    🌐 <a href="../en/">English</a> &nbsp;|&nbsp; <strong>中文</strong>
    </div>
 
-----
+从这里开始
+------------------------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 66
+
+   * - 你的目标
+     - 建议先阅读
+   * - 理解组件和请求流
+     - :doc:`components_and_architecture`
+   * - 安全运行一次分析
+     - :doc:`usage_guide`
+   * - 连接 AI Agent
+     - :doc:`agent_usage`
+   * - 新增或修改工作流
+     - :doc:`development_workflow` 和 :doc:`plugin_development_guide`
+   * - 部署队列任务或生产环境
+     - :doc:`job_service`、:doc:`hpc_development` 和 :doc:`runtime_locks`
 
 安装
-----
+------------------------------
+
+ABI 支持 Python 3.10–3.13。
 
 .. code-block:: bash
 
    pip install abi-agent
+   abi --version
 
-支持 Python 3.10–3.13。
+按需安装可选能力：
 
 .. code-block:: bash
 
-   # 包含所有扩展的开发安装
-   pip install -e ".[dev,docs,mcp]"
+   pip install "abi-agent[mcp]"       # MCP 服务
+   pip install "abi-agent[report]"    # 科研图形和增强报告
 
-----
+五分钟示例
+------------------------------
 
-ABI 是什么？
------------
+在源码仓库根目录中，内置宏转录组 fixture 无需安装分析工具和参考索引，即可生成执行计划与 dry-run 结果。
 
-ABI 位于 AI Agent 和生物信息学工具之间，提供**标准化接口**，使 Agent 可以在不需要编写代码或理解工具内部细节的情况下规划、执行和检查生物信息学工作流。
+.. code-block:: bash
 
-- **对生物信息学开发者**：将分析流程定义为带有工具合约、解析器和 DAG 的插件 — ABI 自动处理面向 Agent 的接口、溯源和执行门控。
-- **对 AI Agent**：发现插件、构建执行计划、运行工具（需显式确认）并解释结果 — 全部通过类型化 JSON 信封和结构化诊断提示完成。
+   abi list-types
+   abi query --type metatranscriptomics --what stages
 
-核心设计原则
------------
+   abi plan \
+     --type metatranscriptomics \
+     --config examples/metatranscriptomics/config_demo.yaml \
+     --sample-sheet examples/sample_sheet_transcriptomics.tsv \
+     --outdir results/docs-plan
 
-.. list-table::
-   :header-rows: 0
-   :widths: 30 70
+   abi dry-run \
+     --type metatranscriptomics \
+     --config examples/metatranscriptomics/config_demo.yaml \
+     --sample-sheet examples/sample_sheet_transcriptomics.tsv \
+     --outdir results/docs-dry-run
 
-   * - **Core 要厚**
-     - 生命周期、权限、诊断、溯源和标准表位于 Core 中 — 不在插件间重复。
-   * - **Transport 要薄**
-     - CLI、OpenAI tools、Anthropic tools、MCP、HTTP — 每个只是调用同一 ``ABIAgentInterface`` 的适配器。
-   * - **Plugin 拥有生物学**
-     - 工具选择、解析和报告解释是每个插件特有的；Core 处理机制：合约、DAG、溯源、执行门控。
-   * - **Agent 不写代码**
-     - Agent 通过 JSON 信封、工具描述符和诊断提示进行交互 — 绝不导入 Python 模块。
+该 fixture 包含参考资源占位路径，只用于演示规划和 dry-run，不是可直接执行的生物学配置。准备真实配置请继续阅读 :doc:`usage_guide`。
 
-内置分析类型
------------
+理解 ABI
+------------------------------
+
+ABI 把传输、通用工作流机制、生物学插件、运行时执行和结果发布分开，使所有 Agent 集成都保持轻量，并共享相同的安全与结果契约。
+
+.. toctree::
+   :maxdepth: 1
+   :caption: 组件与架构
+
+   components_and_architecture
+   abi_spec_v0.1
+   openai_interface_standard
+   abi_sciplot_design
+
+使用 ABI
+------------------------------
+
+标准生命周期为 ``query -> plan -> check -> dry-run -> run -> inspect -> report``，真实执行必须得到明确确认。
+
+.. toctree::
+   :maxdepth: 1
+   :caption: 使用方法与示例
+
+   usage_guide
+   agent_usage
+   job_service
+   hpc_development
+   metagenomic_plasmid
+   rnaseq_expression_workflow
+
+开发 ABI
+------------------------------
+
+从验收标准开始，选择正确的架构边界，添加回归测试，并运行与受影响发布表面相匹配的质量门禁。
+
+.. toctree::
+   :maxdepth: 1
+   :caption: 开发规范
+
+   development_workflow
+   development
+   plugin_development_guide
+   plugin_report_figure_spec
+   testing
+   workflow_validation
+   real_data_validation_datasets
+   production_manual_acceptance_checklist
+
+运维与发布
+------------------------------
+
+生产使用需要固定版本、验证工具和数据库、定义代表性生物学验收标准，并生成严格运行时锁。
+
+.. toctree::
+   :maxdepth: 1
+   :caption: 运维与发布
+
+   runtime_locks
+   release
+   devlog
+
+组件摘要
+------------------------------
 
 .. list-table::
    :header-rows: 1
-   :widths: 25 75
+   :widths: 26 74
 
-   * - 插件
-     - 说明
-   * - ``amplicon_16s``
-     - 16S rRNA 微生物组：cutadapt → vsearch_mergepairs → vsearch_derep →
-       UNOISE3 去噪 → SINTAX 分类 → MAFFT+FastTree 系统发育 →
-       alpha/beta 多样性 (scripts/amplicon_diversity.py)
-   * - ``rnaseq_expression``
-     - 批量 RNA-seq：fastp → STAR → featureCounts → build_count_matrix →
-       DESeq2 → clusterProfiler
-   * - ``wgs_bacteria``
-     - 细菌分离株 WGS：fastp → SPAdes → Prokka → MLST → AMRFinderPlus
-   * - ``metatranscriptomics``
-     - 宏转录组：fastp → STAR/HISAT2 → featureCounts
-   * - ``metagenomic_plasmid``
-     - 旗舰质粒分析：QC → 组装 → 质粒检测 → 注释 → 丰度 → 统计。
-       DAG 驱动规划 (UniversalDAG)，并行执行、标准表和 SciPlot 图形。
-   * - ``easymetagenome``
-     - P0 猎枪宏基因组：fastp → kneaddata → kraken2 → bracken →
-       HUMAnN 工具 → seqkit，覆盖分类、功能分析、清单验证和模式驱动报告。
-   * - ``viral_viwrap``
-     - 病毒宏基因组 (ViWrap 1.3.1)：binning → 分类 → 宿主预测 →
-       质量过滤。托管外部 CLI 插件，自定义 ToolSkill，
-       环境检查器，产物映射器。
+   * - 层级
+     - 面向用户的职责
+   * - 传输层
+     - CLI、JSON、MCP、模型工具描述、dispatch 和 HTTP Job
+   * - 核心层
+     - 规划、权限、诊断、契约、溯源、表格和报告
+   * - 插件层
+     - 分析特有工具、DAG 分支、解析器、断言和结果解释
+   * - 运行时
+     - 本地、Conda、Docker、Nextflow、HPC 和云端执行
+   * - 结果层
+     - 执行计划、溯源、标准 TSV、报告和科研图形
 
-请运行 ``abi list-types --output-json`` 获取当前安装环境中的权威插件列表。
+所有面向 Agent 的命令都支持 ``--output-json``。当前环境的权威插件列表以 ``abi list-types --output-json`` 为准。
 
-快速开始
---------
+索引与表
+------------------------------
 
-.. code-block:: bash
-
-   # 发现可用插件
-   abi list-types
-
-   # 轻量级元数据查询
-   abi query --type amplicon_16s --what stages
-
-   # 规划工作流（不执行）
-   abi plan --type amplicon_16s --sample-sheet samples.tsv --config config.yaml
-
-   # 干运行：验证输入，写入计划和空表骨架
-   abi dry-run --type amplicon_16s --sample-sheet samples.tsv --config config.yaml
-
-   # 显式确认后执行
-   abi run --type amplicon_16s --sample-sheet samples.tsv --config config.yaml \
-     --confirm-execution
-
-   # 检查结果并生成报告
-   abi inspect --result-dir results/
-   abi report --result-dir results/ --type amplicon_16s
-
-   # 导出 AI Agent 工具描述符
-   abi export-tools --type metagenomic_plasmid --format openai --provider openai
-   abi export-tools --type metagenomic_plasmid --format anthropic
-   abi export-tools --type metagenomic_plasmid --format gemini
-
-   # 启动 MCP 服务器（Claude Desktop / Claude Code）
-   abi-mcp
-
-   # 安装 Agent 技能
-   abi install-skills
-
-所有面向 Agent 的命令均支持 ``--output-json``。
-
-.. toctree::
-   :maxdepth: 1
-   :caption: 入门
-   :hidden:
-
-   development
-   development_workflow
-   plugin_development_guide
-   testing
-
-.. toctree::
-   :maxdepth: 1
-   :caption: 插件指南
-   :hidden:
-
-   metagenomic_plasmid
-
-.. toctree::
-   :maxdepth: 1
-   :caption: 核心参考
-   :hidden:
-
-   abi_spec_v0.1
-   openai_interface_standard
-   workflow_validation
-   hpc_development
-
-.. toctree::
-   :maxdepth: 1
-   :caption: 运维
-   :hidden:
-
-   agent_usage
-   job_service
-   runtime_locks
-   release
-
-快速链接
---------
-
-- `API 参考 (英文) <../en/api.html>`_ — 完整 Python API 参考（自动生成）
-- `abi_sciplot 设计文档 (英文) <../en/abi_sciplot_design.html>`_ — 科研图形编译器设计
-- :doc:`development` — 本地设置、源码树、SDK 参考
-- :doc:`development_workflow` — 从需求、实现、验证到发布的全流程开发规范
-- :doc:`plugin_development_guide` — 如何添加新的分析类型
-- :doc:`testing` — 测试指南（单元、集成、冒烟、基准、CI）
-- :doc:`workflow_validation` — 生物学验证方法
-- :doc:`openai_interface_standard` — 多 LLM 工具描述符导出
-- :doc:`agent_usage` — Agent 集成指南（MCP、Skills、dispatch）
-- :doc:`metagenomic_plasmid` — 旗舰质粒分析插件
-- :doc:`job_service` — HTTP Job Service 指南
-- :doc:`runtime_locks` — 正式运行时锁生成与严格验收
-- :doc:`release` — 发布指南
-- `论文执行计划 (英文) <../en/paper_execution_plan.html>`_ — 论文执行分层与验证
-- `开发日志 (英文) <../en/devlog.html>`_ — 开发日志
-
-索引和表
---------
-
-- :ref:`genindex`
-- :ref:`modindex`
+* :ref:`genindex`
+* :ref:`modindex`

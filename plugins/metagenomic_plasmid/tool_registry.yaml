@@ -219,6 +219,7 @@ tools:
   default_enabled: false
   required: false
   command_template: mob_typer --infile {plasmid_contigs} --out_file {output_dir}/{sample_id}.mob_typer.tsv
+    --database_directory {database} --num_threads {threads} --multi
 - id: copla
   name: COPLA
   category: typing

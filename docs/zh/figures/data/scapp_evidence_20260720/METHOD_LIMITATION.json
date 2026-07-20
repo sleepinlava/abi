@@ -1,0 +1,12 @@
+{
+  "status": "superseded_provisional_screen",
+  "affected_artifacts": "All scapp_plsdb_* figures and evidence strata generated from truth_reconstruction_20260717",
+  "discovery_date": "2026-07-20",
+  "source": {
+    "document": "SCAPP supplementary methods, section S5, page 3",
+    "sha256": "aed4604eddba0d017e304695c350f7d958a909c5b5e6c1cb246aaa47289fce05"
+  },
+  "omitted_requirement": "A contig/reference pair must first cover strictly more than 85% of the contig at strictly more than 85% identity before that contig can contribute marked regions to the reference; the reference then requires strictly more than 90% coverage.",
+  "impact": "The provisional 25/157 prediction match count and 98/113 reference recovery count are not paper-method precision or recall and must not be used as the final benchmark.",
+  "replacement": "Independent metaSPAdes reconstruction through K127 followed by the corrected two-stage truth builder and bidirectional scorer."
+}

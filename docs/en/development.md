@@ -208,6 +208,10 @@ for ``StandardTableManager``, ``PipelineProgressRecorder``, and ``RunLogger``.
 MCP (``abi-mcp``), OpenAI descriptors (``abi export-openai-tools``), Skills
 (``abi install-skills``), ``abi dispatch``, and Job Service behavior aligned with it.
 
+Plugins join this interface through discovery and the shared `analysis_type` argument; they do not add transport-specific lifecycle tools.
+
+See the [Plugin Development Guide](plugin_development_guide.md) for the required Agent context, safety, result, and test contracts.
+
 Execution must remain gated: `abi run`, `abi_run`, and Job Service execution
 submissions should return `confirmation_required` unless explicit confirmation
 is passed.

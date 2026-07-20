@@ -1,14 +1,8 @@
 # <img src="figures/abi_logo.png" alt="ABI" width="36" height="36" align="top"> ABI — Agent-Bioinformatics Interface
 
-ABI is a Python interface layer for agent-driven bioinformatics workflows. It
-standardizes **7 analysis plugins** behind a common
-`plan -> dry-run -> run -> inspect -> report` lifecycle, with provenance,
-standard TSV tables, **multi-LLM tool descriptors** (OpenAI, Anthropic Claude,
-Google Gemini, DeepSeek, 智谱 GLM, Kimi, Qwen, MiniMax), optional MCP transport,
-Nextflow export/runtime support, DAG/contract static analysis, resource
-auto-discovery + install, a publication-grade scientific figure compiler
-(`abi-sciplot`, 15 plot types, PDF/SVG/PNG/TIFF), and a queue-backed
-HTTP Job Service with force-kill capability.
+Run reproducible bioinformatics workflows from the command line or an AI agent, without asking the agent to invent the pipeline.
+
+ABI gives every supported analysis the same safe lifecycle: inspect the workflow, check inputs and resources, dry-run it, execute with explicit confirmation, then inspect standardized results and provenance.
 
 [![PyPI](https://img.shields.io/pypi/v/abi-agent?style=flat-square&color=blue)](https://pypi.org/project/abi-agent/)
 [![Python](https://img.shields.io/pypi/pyversions/abi-agent?style=flat-square)](https://pypi.org/project/abi-agent/)
@@ -20,252 +14,288 @@ HTTP Job Service with force-kill capability.
 
 > :cn: [中文版](README.zh.md)
 
-> **Engineering status (v1.5.5 source, 2026-07-12): local freeze candidate.**
-> 2296 tests pass (83% statement coverage), risk-based module coverage gates
-> pass, and a clean wheel runs all 7 built-in plugin dry-runs. Hard freeze still
-> requires a green remote Python 3.10-3.13 matrix, fixed real-tool benchmarks
-> with biological acceptance criteria, two defect-only release candidates, and
-> one week without new P0/P1 defects.
+## What ABI helps you do
 
-## Installation
+- **Review before you run.** See the stages, tools, commands, inputs, outputs, and resource needs before spending compute time.
+- **Use one workflow interface.** The same `plan -> check -> dry-run -> run -> inspect -> report` flow works across all built-in analysis types.
+- **Keep results traceable.** Each run records resolved inputs, configuration, commands, tool versions, resources, progress, tables, and reports.
+- **Let agents operate safely.** Agents call typed ABI tools instead of generating ad hoc shell pipelines, and execution remains confirmation-gated.
+- **Move between runtimes.** Start locally, then use Docker, Nextflow, HPC, cloud workers, or the HTTP Job Service without changing the workflow contract.
+
+ABI is an orchestration and interface layer. It does not replace the underlying bioinformatics tools, reference databases, or compute resources required by an analysis.
+
+## Who ABI is for
+
+- **Researchers and bioinformaticians** who want a predictable way to preview, run, inspect, and reproduce an analysis.
+- **Teams using AI agents** that need machine-readable tools, clear permissions, and structured diagnostics.
+- **Platform engineers** exposing workflows through CLI, MCP, HTTP, Nextflow, HPC, or cloud infrastructure.
+- **Plugin authors** who want to add a workflow while reusing ABI's planning, provenance, validation, tables, and reporting core.
+
+## Choose an analysis workflow
+
+| If you want to... | Use `--type` | Main result |
+| --- | --- | --- |
+| Profile a 16S microbial community | `amplicon_16s` | ASVs, taxonomy, phylogeny, alpha and beta diversity |
+| Compare bulk RNA-seq expression | `rnaseq_expression` | Count matrix, differential expression, pathway enrichment |
+| Analyze a bacterial isolate genome | `wgs_bacteria` | Assembly, annotation, MLST, antimicrobial resistance calls |
+| Quantify metatranscriptomic expression | `metatranscriptomics` | Read QC, alignment summary, per-gene counts |
+| Profile shotgun metagenomic reads | `easymetagenome` | Taxonomic and functional abundance profiles |
+| Identify and characterize viruses | `viral_viwrap` | Viral bins, quality, taxonomy, hosts, normalized abundance |
+| Reconstruct and characterize plasmids | `metagenomic_plasmid` | Detection consensus, typing, hosts, annotation, abundance, community analysis |
+
+All seven workflows have software-path validation. Biological acceptance depends on your data, parameters, databases, and tool versions; validate representative datasets before production use.
+
+Use ABI itself to explore a workflow without reading its implementation:
+
+```bash
+abi list-types
+abi query --type metagenomic_plasmid --what stages
+abi query --type metagenomic_plasmid --what tools
+abi query --type metagenomic_plasmid --step qc_fastp --what inputs
+```
+
+## Get started in five minutes
+
+### 1. Install ABI
+
+ABI supports Python 3.10-3.13.
 
 ```bash
 pip install abi-agent
-
-# Development install
-pip install -e ".[dev]"
-
-# Optional MCP server dependencies
-pip install -e ".[dev,mcp]"
-```
-
-Python 3.10-3.13 is supported.
-
-## Quick Start
-
-```bash
-# List installed analysis plugins
-abi list-types
-
-# Show version
 abi --version
 
-# Build a plan without executing tools
-abi plan --type metatranscriptomics --config config.yaml --sample-sheet samples.tsv
+# Optional integrations
+pip install "abi-agent[mcp]"       # MCP server
+pip install "abi-agent[report]"    # Scientific figures and richer reports
+```
 
-# Write dry-run provenance and table skeletons
-abi dry-run --type metatranscriptomics --config config.yaml --sample-sheet samples.tsv
+To run the bundled example and work with the source repository:
 
-# Execute only after explicit confirmation
-abi run --type metatranscriptomics --config config.yaml --sample-sheet samples.tsv \
+```bash
+git clone https://github.com/sleepinlava/abi.git
+cd abi
+python -m venv .venv
+. .venv/bin/activate
+pip install -e .
+```
+
+### 2. Build a plan without running tools
+
+This example resolves a three-step metatranscriptomics workflow and writes the exact plan to `results/quickstart-plan/execution_plan.json`.
+
+```bash
+abi plan \
+  --type metatranscriptomics \
+  --config examples/metatranscriptomics/config_demo.yaml \
+  --sample-sheet examples/sample_sheet_transcriptomics.tsv \
+  --outdir results/quickstart-plan
+```
+
+### 3. Create a dry-run result
+
+A dry-run does not execute STAR, HISAT2, featureCounts, or other analysis tools. It creates the provenance bundle, standard table skeletons, and report preview you can inspect first.
+
+```bash
+abi dry-run \
+  --type metatranscriptomics \
+  --config examples/metatranscriptomics/config_demo.yaml \
+  --sample-sheet examples/sample_sheet_transcriptomics.tsv \
+  --outdir results/quickstart-dry-run
+```
+
+The result directory has a consistent shape:
+
+```text
+results/quickstart-dry-run/
+├── execution_plan.json
+├── provenance/          # resolved inputs, config, commands, resources, versions
+├── tables/              # workflow-specific standard TSV tables
+└── report/              # Markdown and HTML report previews
+```
+
+### 4. Check the real runtime
+
+Before a real run, point the configuration at your data and references, then check files, executables, and resources without changing them.
+
+```bash
+abi check \
+  --type metatranscriptomics \
+  --config path/to/config.yaml \
+  --sample-sheet path/to/samples.tsv
+
+abi check-resources \
+  --type metatranscriptomics \
+  --config path/to/config.yaml
+```
+
+Some plugins can prepare managed resources. Preview the setup first, then confirm it explicitly if the paths and downloads are correct.
+
+```bash
+abi setup-resources --type metagenomic_plasmid --dry-run
+abi setup-resources --type metagenomic_plasmid --confirm
+```
+
+### 5. Run only after review
+
+`abi run` will not execute without `--confirm-execution`. This gives both people and agents a clear approval boundary.
+
+```bash
+abi run \
+  --type metatranscriptomics \
+  --config path/to/config.yaml \
+  --sample-sheet path/to/samples.tsv \
+  --outdir results/my-run \
   --confirm-execution
 
-# Inspect and rebuild reports
-abi inspect --result-dir results/
-abi report --result-dir results/ --type metatranscriptomics
+abi inspect --result-dir results/my-run
+abi report --result-dir results/my-run --type metatranscriptomics
+```
 
-# Lightweight metadata query (~50ms, reads DAG + tool registry only)
-abi query --type metatranscriptomics --what stages
-abi query --type metatranscriptomics --what tools
-abi query --type metatranscriptomics --what platforms
-abi query --type metatranscriptomics --step qc_fastp --what inputs
+All agent-facing commands support `--output-json` for structured automation.
 
-# Export agent/runtime interfaces
+## How the lifecycle protects your run
+
+| Command | What you get | Does it execute analysis tools? |
+| --- | --- | --- |
+| `abi query` | Fast workflow metadata from the DAG and tool registry | No |
+| `abi plan` | Resolved steps, commands, inputs, outputs, and dependencies | No |
+| `abi check` | Input, resource, executable, and runtime diagnostics | No |
+| `abi dry-run` | Plan, provenance bundle, table skeletons, report preview | No |
+| `abi run` | Executed workflow and recorded artifacts | Yes, after confirmation |
+| `abi inspect` | Validation and summary of an existing result directory | No |
+| `abi report` | Rebuilt Markdown and HTML reports | No analysis execution |
+
+## Run where you work
+
+### Local and Conda environments
+
+ABI maps registered tools to 18 Conda environments through `environments.yaml`. By default, repository-local environments are resolved from `.mamba/envs/<env_name>/bin`.
+
+Set `ABI_MAMBA_ROOT` to use another root. `AUTOPLASM_MAMBA_ROOT` remains available for backward compatibility.
+
+### Docker
+
+Dockerfiles are provided for amplicon, RNA-seq, bacterial WGS, metatranscriptomics, and plasmid analysis. EasyMetagenome and ViWrap currently use managed local environments.
+
+```bash
+docker build -f docker/Dockerfile.amplicon -t abi-amplicon .
+
+docker run --rm -v "$PWD:/data" abi-amplicon \
+  abi plan --type amplicon_16s --outdir /data/results
+
+docker compose -f docker/docker-compose.yml up -d
+```
+
+Approximate image sizes are 1.5 GB for amplicon, 2-2.5 GB for RNA-seq/WGS/metatranscriptomics, and 15 GB for plasmid analysis.
+
+### Nextflow, HPC, cloud, and queued jobs
+
+Export a workflow to Nextflow, target an HPC executor, or submit work through the queue-backed Job Service when a local foreground process is not enough.
+
+```bash
 abi export-nextflow --type metatranscriptomics --output workflow.nf
-abi export-openai-tools --type metatranscriptomics --format responses    # legacy compat
-abi export-tools --type metatranscriptomics --format openai --provider openai   # OpenAI
-abi export-tools --type metatranscriptomics --format openai --provider deepseek # DeepSeek
-abi export-tools --type metatranscriptomics --format openai --provider zhipu    # 智谱 GLM
-abi export-tools --type metatranscriptomics --format anthropic           # Claude
-abi export-tools --type metatranscriptomics --format gemini              # Gemini
-abi export-agent-context --type metatranscriptomics --format json
-abi doctor-agent --type metatranscriptomics
 
-# Resource discovery and auto-install
-abi check-resources --type metagenomic_plasmid
-abi setup-resources --type metagenomic_plasmid --confirm
+abi job-service --host 127.0.0.1 --port 18791 --workers 2 --subprocess-workers
+abi job submit --command run --analysis-type metatranscriptomics --confirm-execution
+abi job status <JOB_ID>
+abi job artifacts <JOB_ID>
+abi job cancel <JOB_ID>
+```
 
-# Static contract / DAG validation (L1 literature + L2 path + L3 validation)
-abi contract-lint --type metagenomic_plasmid
-abi contract-lint --type metagenomic_plasmid --strict
+Subprocess workers support force-cancel with a SIGTERM-to-SIGKILL grace period. See the [Job Service guide](docs/en/job_service.md) and [HPC guide](docs/en/hpc_development.md).
 
-# Headless agent dispatch (used by Job Service workers)
-abi dispatch --command list-types --arguments '{}'
+## Use ABI with an AI agent
 
-# Start the safe MCP stdio server for agent platforms
-abi-mcp
+ABI exposes the same core operations through JSON CLI responses, provider-specific tool descriptors, MCP, a headless dispatcher, and HTTP jobs.
 
-# Install and diagnose an agent integration (claude-code, opencode, codex)
+```bash
+# Install a repository-scoped integration and diagnose it
 abi agent install codex --scope project
 abi agent doctor codex --scope project
 
-# Scientific figure compiler (validate, render, lint, export)
+# Start the safe MCP stdio profile
+abi-mcp
+
+# Export descriptors for your model provider
+abi export-tools --type metatranscriptomics --format openai --provider openai
+abi export-tools --type metatranscriptomics --format anthropic
+abi export-tools --type metatranscriptomics --format gemini
+
+# Invoke an ABI command from a worker process
+abi dispatch --command list-types --arguments '{}'
+```
+
+The default MCP `safe` profile omits execution and management tools. `abi-mcp --profile full` adds confirmation-gated execution. Ready-to-load Claude Code, OpenCode, and Codex assets live under `integrations/`.
+
+For system prompts or programmatic discovery:
+
+```python
+import abi
+
+print(abi.get_agent_guide())
+print(abi.list_plugins_summary())
+```
+
+See the [Agent usage guide](docs/en/agent_usage.md) for provider setup and permission details.
+
+## Turn results into scientific figures
+
+`abi-sciplot` validates a declarative figure specification and renders publication-ready PDF, SVG, PNG, or TIFF output. It supports 15 plot types, three themes, linting, and SHA-256 provenance.
+
+```bash
 abi-sciplot validate --spec figure.yaml
 abi-sciplot render --spec figure.yaml
 abi-sciplot lint --spec figure.yaml
 abi-sciplot list-plot-types
-
-# Job Service with optional force-kill subprocess workers
-abi job-service --workers 2 --store jobs.json --subprocess-workers
 ```
 
-All agent-facing commands support `--output-json`.
+See the [SciPlot design and usage guide](docs/en/abi_sciplot_design.md).
 
-## Release-Ready Runtime Locks
+## Reproduce a production runtime
 
-ABI can snapshot the exact Conda packages, registered tools, databases, host
-runtime, ABI version, and Git commit used by a production workflow. A normal
-`lock-runtime` invocation is an audit snapshot; `--strict` is the release gate.
+An ordinary runtime lock is an audit snapshot. A strict lock verifies Conda packages, declared tools, databases, host runtime, ABI version, Git commit, and release-scope readiness.
 
 ```bash
 abi lock-runtime \
   --output-dir locks/candidate \
   --prefix abi-production \
-  --mamba-root /root/autodl-tmp/.mamba \
-  --resource-root /root/autodl-tmp/resources \
+  --mamba-root /path/to/mamba \
+  --resource-root /path/to/resources \
   --db-profile full \
   --strict
 ```
 
-Strict mode fails closed on missing/extra Conda environments, omitted or failed
-package snapshots, unresolved release-scope tools, non-ready release-scope
-resources, missing code identity, or a dirty Git worktree. Add
-`--require-all-tools` only when certifying every optional registered capability.
+Strict mode fails closed when the release environment is incomplete or the code identity is not clean. Use `--require-all-tools` only when every optional registered capability must be certified.
 
-The canonical cloud layout keeps plasmid/metagenome databases under
-`resources/autoplasm/` and RNA references at the top level. On the managed ABI
-cloud host, `scripts/cloud/prepare_release_lock.sh` creates checksum-verified,
-read-only, version-and-commit-qualified locks atomically. The current helper
-certifies the six provisioned workflows; `viral_viwrap` remains outside that
-release scope until its separate multi-environment and database bundle is
-installed. See [release-ready runtime locks](docs/en/runtime_locks.md).
+See [release-ready runtime locks](docs/en/runtime_locks.md) for the resource layout, immutable lock policy, and managed cloud procedure.
 
-## Built-In Analysis Types
+## Project status and expectations
 
-| Type | Tools | Description |
-| --- | --- | --- |
-| `amplicon_16s` | 10 | 16S rRNA microbiome: cutadapt → vsearch merge/derep/denoise → SINTAX taxonomy → MAFFT+FastTree phylogeny → diversity (alpha/beta). **✅ Software workflow validated** |
-| `rnaseq_expression` | 5 | Bulk RNA-seq: fastp → STAR → featureCounts → build_count_matrix → DESeq2 → clusterProfiler. **✅ Software workflow validated** |
-| `wgs_bacteria` | 5 | Bacterial isolate WGS: fastp → SPAdes → Prokka → MLST → AMRFinderPlus. **✅ Software workflow validated** |
-| `metatranscriptomics` | 3 | Metatranscriptomics: fastp → STAR/HISAT2 → featureCounts. **✅ Software workflow validated** |
-| `easymetagenome` | 10 | P0 shotgun metagenomics: fastp → kneaddata → kraken2 → bracken → humann4 + HUMAnN utilities → seqkit. 3 workflow presets (taxonomy, functional, full), DAG-driven planner, internal handlers. **✅ Software workflow validated** |
-| `viral_viwrap` | 1 | Viral metagenomics: wraps ViWrap 1.3.1 — binning → taxonomy → host prediction → quality filtering. Managed external CLI plugin with environment checker. **✅ Software workflow validated** |
-| `metagenomic_plasmid` | 64 | Flagship plasmid analysis: QC → assembly → plasmid detection → annotation → abundance → community analysis → visualization. 10 conda envs, **90-node declarative DAG**, 16 standard tables, 8 sciplot figures. **✅ Software workflow validated; assembly-mode refseq validation passed (3 plasmids, genomad+platon, majority_vote)** |
+ABI is currently alpha software. Its core contracts, built-in planning paths, dry-runs, packaging, and adapters are tested, but production readiness still depends on the underlying tools and your validation data.
 
-The `autoplasm` CLI is preserved for backward compatibility:
+Before production use, pin the ABI version, capture a strict runtime lock, verify tool and database versions, and define biological acceptance criteria for representative samples.
+
+The plasmid workflow has passed assembly-mode RefSeq validation for a three-plasmid dataset. Other claims and workflow-specific validation evidence are tracked in the [workflow validation guide](docs/en/workflow_validation.md).
+
+## Extend ABI or contribute
+
+Transport-neutral behavior belongs in `src/abi/`; CLI, MCP, HTTP, and provider integrations stay thin. Built-in workflows combine Python adapters in `src/abi/plugins/` with declarative definitions in `plugins/<analysis_type>/`.
+
+Register a third-party plugin with the `abi.plugins` entry-point group:
+
+```toml
+[project.entry-points."abi.plugins"]
+my_analysis = "my_package.plugins:MyPlugin"
+```
+
+Validate a plugin's declarative DAG and contracts before sharing it:
 
 ```bash
-autoplasm dry-run --config examples/config_minimal.yaml --profile dry_run
+abi contract-lint --type my_analysis
+abi contract-lint --type my_analysis --strict
 ```
 
-## Docker
-
-Pre-built Docker images for 5 of 7 plugins (`easymetagenome` and `viral_viwrap` run locally):
-
-```bash
-# Build a plugin image
-docker build -f docker/Dockerfile.amplicon -t abi-amplicon .
-
-# Run a workflow inside the container
-docker run --rm -v $PWD:/data abi-amplicon \
-  abi plan --type amplicon_16s --outdir /data/results
-
-# Start all services with Docker Compose
-docker compose -f docker/docker-compose.yml up -d
-```
-
-Images: `abi-amplicon` (~1.5 GB), `abi-rnaseq` (~2.5 GB), `abi-wgs` (~2.0 GB), `abi-metatranscriptomics` (~2.0 GB), `abi-plasmid` (~15 GB). See `docker/docker-compose.yml` for the full orchestration.
-
-## Architecture
-
-```
-Agent Platforms (Claude / ChatGPT / Cursor / CI)
-        │
-        v
-Transport Layer   CLI JSON  │  OpenAI/Anthropic/Gemini Tools  │  MCP  │  HTTP Job API  │  Skills  │  Query
-        │
-        v
-ABIAgentInterface   plan / dry_run / run / inspect / report / dispatch / query
-        │
-        v
-ABI Core            schemas  │  provenance  │  permissions  │  diagnostics
-                    tables   │  tools       │  executor     │  report
-                    contracts│  dag         │  figures      │  dag_planner
-                    tsv_mapping  │  sciplot  │  resources  │  workflow
-                    tool_descriptors  │  internal  │  results
-        │
-        v
-Plugins             amplicon_16s/  rnaseq_expression/  wgs_bacteria/
-                    metatranscriptomics/  easymetagenome/
-                    viral_viwrap/  metagenomic_plasmid/
-        │
-        v
-Runtimes            local  │  Docker  │  Nextflow  │  HPC (SLURM/PBS)  │  cloud  │  Job Service
-```
-
-### Design Principles
-
-| Principle | Meaning |
-| --- | --- |
-| **Thick Core** | Lifecycle, permissions, diagnostics, provenance, standard tables, plugin discovery all live in Core. |
-| **Thin Transport** | CLI, OpenAI tools, MCP, HTTP only adapt calls — no business logic. |
-| **Clean Plugin** | Biology logic in plugins, generic mechanisms in Core. |
-| **Agent Doesn't Code** | Agents call ABI through schemas, descriptors, JSON envelopes, and diagnostic hints. |
-
-## Agent Transports
-
-`ABIAgentInterface` is the stable transport-neutral boundary used by:
-
-- CLI JSON through `--output-json`
-- `abi dispatch --command <name> --arguments '<json>'` for headless subprocess dispatch
-- **`abi query`** for lightweight metadata queries (~50ms) — pipeline stages, tools,
-  platforms, and step-level I/O directly from DAG + tool registry, no plan required
-- **Multi-LLM descriptors** from `abi export-tools --format openai|anthropic|gemini [--provider ...]` covering 7+ providers
-- OpenAI-compatible descriptors from `abi export-openai-tools` (backward compat)
-- MCP stdio server via `abi-mcp` (or `python -m abi.mcp.server`) — auto-generated from SSOT;
-  the default `safe` profile omits execution and management tools, while
-  `abi-mcp --profile full` adds the confirmation-gated `abi_run`
-- HTTP Job Service via `abi job-service` and `abi job submit/list/status/artifacts/cancel`
-- Agent integration installer and diagnostics via `abi agent install|doctor`
-- Ready-to-load Claude Code, OpenCode, and Codex assets under `integrations/`
-
-**Plan summarization**: `abi plan` envelopes now include a `summary` field (pipeline stages,
-key tools, platforms) so agents understand the workflow structure without reading the full
-`execution_plan.json`. This saves 78-95% tokens on plan output for complex pipelines.
-
-Agents can also get operating instructions programmatically:
-
-```python
-import abi
-print(abi.get_agent_guide())        # compact operating guide for system prompt
-print(abi.list_plugins_summary())   # list all installed analysis plugins
-```
-
-Execution tools require explicit confirmation. `abi run`, `abi_run`, and Job
-Service execution submissions return `confirmation_required` unless
-`confirm_execution=true` or `--confirm-execution` is provided.
-
-## Job Service
-
-```bash
-# Start with in-process workers
-abi job-service --host 127.0.0.1 --port 18791 --workers 1 --store jobs.json
-
-# Start with subprocess workers for force-kill support
-abi job-service --workers 2 --subprocess-workers
-
-# Client commands
-abi job submit --command run --analysis-type metatranscriptomics --confirm-execution
-abi job status <JOB_ID>
-abi job artifacts <JOB_ID>
-abi job cancel <JOB_ID>          # SIGTERM → SIGKILL (3s grace) for subprocess workers
-```
-
-When `--subprocess-workers` is enabled, each job runs in an isolated `abi dispatch`
-process and can be force-killed via SIGTERM on cancel. The job record tracks
-`worker_pid` and `remote_scheduler_job_id` (for HPC/cloud backends).
-
-## Development
+For local development:
 
 ```bash
 pip install -e ".[dev]"
@@ -274,69 +304,28 @@ ruff check src/ tests/
 ruff format --check src/ tests/
 mypy src/abi/ --ignore-missing-imports
 pytest tests/ -v --tb=short
-
-# CI-equivalent tests, branch coverage, and risk-based module gates
-python -m pytest tests/ src/abi/sciplot/tests/ \
-  -m "not requires_tools" --strict-markers \
-  --cov=src/abi --cov-branch --cov-report=json:coverage.json \
-  --cov-fail-under=75
-python scripts/check_module_coverage.py --coverage coverage.json
-
 python -m build
-python -m twine check dist/*
 ```
 
-Repository-local bioinformatics environments are described under `envs/` and
-resolved from `.mamba/envs/<env_name>/bin`. Set `ABI_MAMBA_ROOT` to override the
-default `.mamba` root; `AUTOPLASM_MAMBA_ROOT` remains accepted for compatibility.
+Start with the [development guide](docs/en/development.md), [plugin development guide](docs/en/plugin_development_guide.md), and [API reference](docs/en/api.rst).
 
-More details:
+## Documentation
 
-- [ABI Spec v0.1](docs/en/abi_spec_v0.1.md)
-- [Development Guide](docs/en/development.md)
-- [API Reference](docs/en/api.rst) — Sphinx auto-generated from docstrings
-- [abi_sciplot Design](docs/en/abi_sciplot_design.md) — Scientific figure compiler
-- [Plugin Development Guide](docs/en/plugin_development_guide.md)
-- [RNA-seq Workflow](docs/en/rnaseq_expression_workflow.md)
-- [Workflow Validation](docs/en/workflow_validation.md)
-- [HPC Development](docs/en/hpc_development.md)
-- [OpenAI/LLM Interface Standard](docs/en/openai_interface_standard.md)
-- [Agent Usage Guide](docs/en/agent_usage.md)
-- [Job Service Guide](docs/en/job_service.md)
-- [Release Guide](docs/en/release.md)
-- [Dev Log](docs/en/devlog.md)
-
-## Public SDK
-
-Plugin authors should depend on these public modules:
-
-| Module | Contents |
-| --- | --- |
-| `abi.interfaces` | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin`, `ABIResourcePlugin`, `ABIResultValidationPlugin` |
-| `abi.schemas` | `SampleInput`, `SampleContext`, `PlanStep`, `ExecutionPlan` (`ABI`-prefixed aliases available) |
-| `abi.tools` | `ToolRegistry`, `ToolSkill`, `GenericCommandSkill`, `RunResult` |
-| `abi.provenance` | `RunLogger`, `PipelineProgressRecorder`, TSV provenance writers |
-| `abi.errors` | `ABIError`, `ConfigError`, `SampleSheetError`, `ToolError`, `MissingTemplateParamError` |
-| `abi.contracts` | `ContractViolationError`, `validate_output_contract`, `evaluate_assertions`, `save_checksums_atomic`, `run_contract_lint`, `WorkflowSpec`, `WorkflowStepSpec`, `load_workflow_spec` |
-| `abi.dag` | `infer_dag`, `ABIDAG`, `StepBinding` — DAG inference with L1 (literature) / L2 (path) / L3 (validation) layers |
-| `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — declarative plan generation from `pipeline_dag.yaml`. Replaces all hand-written `build_plan()` boilerplate; used by all 7 plugins. (v1.3.2) |
-| `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — YAML-driven TSV/JSON/log parsing with 3 source types (tsv_mapping, json_mapping, key_value_log). Replaces ~14 boilerplate parser functions. (v1.3.2) |
-| `abi.sciplot` | `FigureSpec`, `render_figure`, `validate_spec`, `lint_figure` — publication-grade scientific figure compiler. Pydantic schema, 15 plot types (including PCoA, volcano, stacked bar, heatmap, phylogeny), plotnine+seaborn backends, PDF/SVG/PNG/TIFF export, 3 themes, FigureLint, SHA256 provenance. (v1.4.0) |
-| `abi.tool_descriptors` | `ABI_AGENT_TOOLS`, `TOOL_ALIASES`, `export_openai_compatible`, `export_anthropic`, `export_gemini`, `PROVIDER_PROFILES` |
-| `abi.resources` | `check_resources`, `setup_resources` — plugin-capability-based resource discovery and managed setup |
-| `abi.internal` | `ABIInternalHandler`, `InternalHandlerContext`, `InternalHandlerResult` — transport-neutral internal DAG nodes for steps without external tools |
-| `abi.results` | `ABIResultWriter`, `validate_abi_result_dir` — shared result/provenance writer |
-| `abi.tables` | `StandardTableManager` — YAML-driven table normalization |
-| `abi.config` | `resolved_mamba_root`, `PROJECT_ROOT`, `load_yaml`, `deep_merge` — env resolution with 4-level priority |
-| `abi.testing` | `assert_plugin_contract` |
-
-Register third-party plugins with:
-
-```toml
-[project.entry-points."abi.plugins"]
-my_analysis = "my_package.plugins:MyPlugin"
-```
+- [Components and architecture](docs/en/components_and_architecture.md)
+- [Using ABI: lifecycle and examples](docs/en/usage_guide.md)
+- [Development standards](docs/en/development_workflow.md)
+- [ABI specification](docs/en/abi_spec_v0.1.md)
+- [Agent usage](docs/en/agent_usage.md)
+- [Plugin development](docs/en/plugin_development_guide.md)
+- [Workflow validation](docs/en/workflow_validation.md)
+- [Runtime locks](docs/en/runtime_locks.md)
+- [Job Service](docs/en/job_service.md)
+- [HPC development](docs/en/hpc_development.md)
+- [RNA-seq workflow](docs/en/rnaseq_expression_workflow.md)
+- [Metagenomic plasmid workflow](docs/en/metagenomic_plasmid.md)
+- [Release guide](docs/en/release.md)
+- [Full hosted documentation](https://sleepinlava.github.io/abi/)
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+ABI is available under the MIT License. See [LICENSE](LICENSE).

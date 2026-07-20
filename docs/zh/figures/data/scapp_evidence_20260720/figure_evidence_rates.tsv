@@ -1,0 +1,11 @@
+evidence	group	count	denominator	percent
+Circular / terminal overlap	Reference matched (n=25)	13	25	52.0
+PlasmidFinder	Reference matched (n=25)	7	25	28.0
+MOB replicon	Reference matched (n=25)	11	25	44.0
+Relaxase	Reference matched (n=25)	6	25	24.0
+oriT	Reference matched (n=25)	4	25	16.0
+Circular / terminal overlap	Reference unmatched (n=132)	41	132	31.060606060606062
+PlasmidFinder	Reference unmatched (n=132)	2	132	1.5151515151515151
+MOB replicon	Reference unmatched (n=132)	3	132	2.272727272727273
+Relaxase	Reference unmatched (n=132)	8	132	6.0606060606060606
+oriT	Reference unmatched (n=132)	4	132	3.0303030303030303

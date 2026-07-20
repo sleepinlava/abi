@@ -69,13 +69,40 @@ def plasmid_structure_handler(
     config: Mapping[str, Any],
     context: InternalHandlerContext,
 ) -> InternalHandlerResult:
-    """Stub handler for plasmid structure detection (circularity/terminal overlap).
-
-    Full circularity detection requires overlapping terminal reads; this stub
-    reports a no-detection result so downstream stages can proceed.
-    """
+    """Detect header-declared circularity and exact terminal sequence overlap."""
     del config, context
-    return InternalHandlerResult(message="Plasmid structure detection: no overlap data available")
+    from ._engine.pipeline import _read_fasta_records, _terminal_overlap_length
+
+    source_value = step.inputs.get("plasmid_contigs") or step.params.get("plasmid_contigs")
+    source = Path(str(source_value or ""))
+    rows = []
+    if source.is_file():
+        for record in _read_fasta_records(source):
+            sequence = record["sequence"].upper()
+            overlap = _terminal_overlap_length(sequence)
+            header_circular = any(
+                marker in record["header"].lower()
+                for marker in ("circular=true", "topology=circular", "_circular")
+            )
+            rows.append(
+                {
+                    "sample_id": step.sample_id or "",
+                    "plasmid_id": record["id"],
+                    "length_bp": len(sequence),
+                    "is_circular": str(bool(header_circular or overlap >= 20)).lower(),
+                    "terminal_overlap_bp": overlap,
+                    "method": "header_or_exact_terminal_overlap",
+                    "warnings": (
+                        "Sequence-based circularity is predictive and should be confirmed from "
+                        "the assembly graph or read support."
+                    ),
+                    "source_file": str(source),
+                }
+            )
+    return InternalHandlerResult(
+        message=f"Plasmid structure detection: {len(rows)} sequence(s) evaluated",
+        tables={"plasmid_structure": rows},
+    )
 
 
 def plasmid_catalog_prepare_handler(

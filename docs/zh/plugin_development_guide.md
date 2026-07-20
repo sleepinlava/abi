@@ -82,6 +82,141 @@ abi install-skills      # → ~/.claude/skills/abi/
 
 要添加新技能，在 `src/abi/skills/<tool_name>/SKILL.md` 下创建目录和 SKILL.md 文件。`abi_agent/SKILL.md` 技能教会 Claude Code 如何使用 `abi` CLI 本身；其他技能记录各个生物信息学工具。
 
+工具 Skill 解释科学目的、参数、输入、输出和失败模式，但不会新增 MCP 函数，也不能绕过 ABI 生命周期。
+
+## 让插件可被 Agent 调用
+
+Agent 传输层暴露共享生命周期工具。新插件通过 entry-point 被发现后，Agent 使用 `analysis_type` 参数调用它；不要创建独立的 `abi_my_plugin_plan` 或 `abi_my_plugin_run` 工具。
+
+### 提供可发现的生物学身份
+
+manifest 身份是未经专门训练的 Agent 通过 `abi_list_types` 和 `abi_export_agent_context` 看到的信息：
+
+```yaml
+abi_version: "0.1"
+plugin_id: my_analysis
+display_name: My Biological Analysis
+description: "分析 <输入> 并生成 <主要生物学结果>。"
+report_title: My Biological Analysis Report
+entry_point: my_package.plugin:MyPlugin
+```
+
+`description` 用于插件选择，应说明生物学目标、输入类型和主要结果，避免只写实现细节或宣传性内容。
+
+entry-point 键、manifest `plugin_id` 和插件类身份必须一致。提供 `config_default.yaml` 和 `sample_sheet_template.tsv`，让用户与 Agent 从明确 Schema 开始，而不是编造元数据。
+
+### 让工作流可以被查询
+
+`abi_query` 读取声明式 DAG 和工具注册表。使用稳定的节点与工具 ID，声明平台，并为每个节点提供有意义的输入、输出、依赖关系和说明。
+
+Agent 应能在不读取源码的情况下回答：
+
+```bash
+abi query --type my_analysis --what stages
+abi query --type my_analysis --what tools
+abi query --type my_analysis --what platforms
+abi query --type my_analysis --step qc_tool --what inputs
+abi query --type my_analysis --step qc_tool --what outputs
+```
+
+资源属于特定节点时，应明确声明关联关系，使步骤级资源查询和预检诊断能够解释缺少的内容。
+
+### 保持规划安全且确定
+
+- `load_config()` 可以读取配置，但不得安装资源或运行工具。
+- `build_plan()` 必须根据显式输入生成确定的步骤和路径。
+- `plan` 和 `dry_run` 可以写入审查产物，但不得执行外部分析工具。
+- 真实工具只能在共享确认门之后通过 `run` 执行。
+- `report` 必须读取已有发布结果，不能静默重新运行工作流。
+
+Agent 权限 profile 由 ABI 核心层管理。插件不得在规划、解析、报告或诊断中创建隐藏执行路径。
+
+### 发布 Agent 能解释的结果
+
+插件的 `table_schemas()` 定义 `abi_export_agent_context` 返回的 `standard_tables`。表名、列、单位、标识符和缺失值约定必须稳定。
+
+解析器应把工具输出标准化到这些表格。报告和图形应读取已发布表格，而不是重新解析原始日志或私有中间文件。
+
+不适合标准表格的稳定最终产物通过 `published_outputs(plan)` 发布。工作流包含多个输出分支时，发布方法、溯源、局限性和带分支限定的 manifest。
+
+可恢复失败应抛出 ABI 错误类型或提供结构化诊断。Agent 使用 `error_code` 和 `diagnostic_hints`；原始 traceback 不是操作契约。
+
+### 检查 Agent 上下文
+
+安装插件后，检查其机器可读契约：
+
+```bash
+abi list-types --output-json
+abi export-agent-context --type my_analysis
+abi doctor-agent --type my_analysis
+abi export-tools --type my_analysis --format openai
+```
+
+确认插件说明足以支持选择，标准表格列表完整，且执行工具只有在明确请求时才被导出。
+
+不要为插件手工编辑 OpenAI、Anthropic、Gemini 或 MCP Schema。ABI 从单一事实来源生成生命周期描述符，并在导出时注入插件范围。
+
+### 添加端到端 Agent 契约测试
+
+除插件单元测试外，还应通过 `ABIAgentInterface` 覆盖发现、上下文导出、规划、dry-run、执行确认和结果验证。
+
+```python
+import json
+
+from abi.agent import ABIAgentInterface
+
+
+def call(tool, arguments):
+    return json.loads(ABIAgentInterface().dispatch(tool, arguments))
+
+
+def test_agent_can_discover_and_plan_my_plugin(tmp_path, plugin_fixture):
+    listed = call("abi_list_types", {})
+    plugin_ids = {
+        row["analysis_type"]
+        for row in listed["result"]["analysis_types"]
+    }
+    assert "my_analysis" in plugin_ids
+
+    context = call(
+        "abi_export_agent_context",
+        {"analysis_type": "my_analysis"},
+    )
+    assert context["status"] == "success"
+    assert context["result"]["standard_tables"]
+    assert "abi_run" in context["result"]["unsafe_tools"]
+
+    common = {
+        "analysis_type": "my_analysis",
+        "config_path": str(plugin_fixture.config),
+        "sample_sheet": str(plugin_fixture.sample_sheet),
+    }
+    plan = call("abi_plan", {**common, "outdir": str(tmp_path / "plan")})
+    assert plan["status"] == "success"
+
+    dry = call("abi_dry_run", {**common, "outdir": str(tmp_path / "dry")})
+    assert dry["status"] == "success"
+
+    run = call("abi_run", {**common, "confirm_execution": False})
+    assert run["status"] == "confirmation_required"
+```
+
+在 `golden_traces/<plugin_id>.jsonl` 添加已知正确的生命周期，并在 `tests/integration/test_golden_traces.py` 回放。Trace 应包含错误恢复和需要确认的 run 尝试。
+
+在插件测试套件中定义 `plugin_fixture`，让它生成有效的最小配置和样本表。Fixture 应使用小型合成数据，并且不依赖特定机器的资源路径。
+
+### Agent 可调用插件检查清单
+
+- 插件出现在 `abi list-types --output-json` 中。
+- 上下文导出包含正确的标准表格、产物、权限和错误码。
+- DAG 阶段、工具、平台、输入、输出和资源都可以查询。
+- 默认配置和样本表模板没有含义模糊的字段。
+- plan、check 和 dry-run 不执行外部工具即可完成。
+- 未授权时 `abi_run` 返回 `confirmation_required`。
+- 真实结果通过 `abi_validate_result`，报告使用标准表格。
+- 模型描述符和 MCP profile 不需要插件特有传输代码。
+- Golden trace 和回归测试覆盖完整 Agent 生命周期。
+
 ## 工具合约
 
 合约是权威的、机器可读的工具声明：

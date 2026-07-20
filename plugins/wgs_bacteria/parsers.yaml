@@ -10,19 +10,19 @@ parsers:
     target_table: amr_profile
     columns:
       gene_symbol:
-        sources: ["Gene symbol"]
+        sources: ["Gene symbol", "Element symbol"]
         default: ""
       sequence_name:
-        sources: ["Sequence name"]
+        sources: ["Sequence name", "Element name"]
         default: ""
       scope:
         sources: ["Scope"]
         default: ""
       element_type:
-        sources: ["Element type"]
+        sources: ["Element type", "Type"]
         default: ""
       element_subtype:
-        sources: ["Element subtype"]
+        sources: ["Element subtype", "Subtype"]
         default: ""
       target_class:
         sources: ["Class"]
@@ -34,10 +34,10 @@ parsers:
         sources: ["Method"]
         default: ""
       coverage_pct:
-        sources: ["% Coverage of reference sequence"]
+        sources: ["% Coverage of reference sequence", "% Coverage of reference"]
         default: ""
       identity_pct:
-        sources: ["% Identity to reference sequence"]
+        sources: ["% Identity to reference sequence", "% Identity to reference"]
         default: ""
     constants:
       tool: amrfinderplus

@@ -165,9 +165,17 @@ def parse_mob_suite(output_dir: Path, sample_id: str) -> StandardRows:
             contig = _get(row, "contig_id", "contig", "sample_id")
             if not contig:
                 continue
+            # MOB-typer restores the complete FASTA header in ``sample_id``;
+            # standard ABI tables use the first whitespace-delimited sequence ID.
+            contig = contig.split(maxsplit=1)[0]
             molecule_type = _get(row, "molecule_type", "type")
             size = _get(row, "size", "length", "contig_length")
             score = "1.0" if "plasmid" in molecule_type.lower() else ""
+            replicon_type = _get(row, "replicon_type", "rep_type_s", "rep_type")
+            relaxase_type = _get(row, "relaxase_type", "relaxase_type_s")
+            mpf_type = _get(row, "mpf_type")
+            orit_type = _get(row, "orit_type", "orit_type_s")
+            mobility = _get(row, "predicted_mobility", "mobility")
             prediction_rows.append(
                 {
                     "sample_id": sample_id,
@@ -183,14 +191,13 @@ def parse_mob_suite(output_dir: Path, sample_id: str) -> StandardRows:
                     "source_file": str(path),
                 }
             )
-            mobility = _get(row, "predicted_mobility", "mobility")
-            for key, category in [
-                ("replicon_type", "replicon"),
-                ("relaxase_type", "MOB"),
-                ("mpf_type", "MPF"),
-                ("predicted_mobility", "mobility"),
+            for value, product, category in [
+                (replicon_type, "replicon_type", "replicon"),
+                (relaxase_type, "relaxase_type", "MOB"),
+                (mpf_type, "mpf_type", "MPF"),
+                (orit_type, "orit_type", "oriT"),
+                (mobility, "predicted_mobility", "mobility"),
             ]:
-                value = _get(row, key)
                 if value:
                     annotation_rows.append(
                         {
@@ -200,7 +207,7 @@ def parse_mob_suite(output_dir: Path, sample_id: str) -> StandardRows:
                             "end": "",
                             "strand": "",
                             "gene": value,
-                            "product": key,
+                            "product": product,
                             "category": category,
                             "tool": "mob_suite",
                             "evidence": _evidence(row, ["primary_cluster_id"]),
@@ -210,9 +217,6 @@ def parse_mob_suite(output_dir: Path, sample_id: str) -> StandardRows:
                         }
                     )
             # ── plasmon typing rows ──
-            replicon_type = _get(row, "replicon_type")
-            relaxase_type = _get(row, "relaxase_type")
-            mpf_type = _get(row, "mpf_type")
             if replicon_type:
                 typing_rows.append(
                     {
@@ -255,7 +259,15 @@ def parse_mob_suite(output_dir: Path, sample_id: str) -> StandardRows:
                         "source_file": str(path),
                     }
                 )
-            host = _get(row, "host_range", "predicted_host", "host")
+            host = _get(
+                row,
+                "host_range",
+                "predicted_host",
+                "predicted_host_range_overall_name",
+                "observed_host_range_ncbi_name",
+                "reported_host_range_lit_name",
+                "host",
+            )
             if host:
                 host_rows.append(
                     {
@@ -269,28 +281,38 @@ def parse_mob_suite(output_dir: Path, sample_id: str) -> StandardRows:
                         "source_file": str(path),
                     }
                 )
-            typing_rows.append(
-                {
-                    "sample_id": sample_id,
-                    "contig_id": contig,
-                    "typing_scheme": "MOB-typer",
-                    "type_id": _get(row, "replicon_type", "primary_cluster_id"),
-                    "mobility": _get(row, "predicted_mobility", "relaxase_type", "mpf_type"),
-                    "confidence": _get(row, "confidence") or "supporting",
-                    "tool": "mob_typer",
-                    "evidence": _evidence(
-                        row,
-                        ["relaxase_type", "mpf_type", "orit_type", "primary_cluster_id"],
-                    ),
-                    "source_file": str(path),
-                }
-            )
+            if not any((replicon_type, relaxase_type, mpf_type)):
+                typing_rows.append(
+                    {
+                        "sample_id": sample_id,
+                        "contig_id": contig,
+                        "typing_scheme": "MOB-typer",
+                        "type_id": _get(row, "primary_cluster_id"),
+                        "mobility": mobility or orit_type,
+                        "confidence": _get(row, "confidence") or "supporting",
+                        "tool": "mob_typer",
+                        "evidence": _join_evidence(
+                            {
+                                "orit_type": orit_type,
+                                "primary_cluster_id": _get(row, "primary_cluster_id"),
+                            }
+                        ),
+                        "source_file": str(path),
+                    }
+                )
     return {
         "plasmid_predictions": prediction_rows,
         "annotations": annotation_rows,
         "host_predictions": host_rows,
         "plasmid_typing": typing_rows,
     }
+
+
+def parse_mob_typer(output_dir: Path, sample_id: str) -> StandardRows:
+    """Parse MOB-typer without treating post-detection typing as a new plasmid call."""
+    rows = parse_mob_suite(output_dir, sample_id)
+    rows.pop("plasmid_predictions", None)
+    return rows
 
 
 def parse_abricate(output_dir: Path, sample_id: str) -> StandardRows:
@@ -311,11 +333,12 @@ def parse_abricate(output_dir: Path, sample_id: str) -> StandardRows:
                     "strand": _get(row, "strand"),
                     "gene": gene,
                     "product": _get(row, "product"),
+                    "drug_class": _get(row, "resistance", "drug_class", "class"),
                     "category": _annotation_category(database),
                     "tool": "abricate",
                     "evidence": _join_evidence({"database": database}),
                     "identity": _get(row, "identity", "perc_identity", "percent_identity"),
-                    "coverage": _get(row, "coverage", "perc_coverage", "percent_coverage"),
+                    "coverage": _get(row, "percent_coverage", "perc_coverage", "coverage"),
                     "source_file": str(path),
                 }
             )
@@ -327,10 +350,10 @@ def parse_amrfinderplus(output_dir: Path, sample_id: str) -> StandardRows:
     for path in _candidate_files(output_dir, ("*.tsv", "*.txt")):
         for row in _read_table(path):
             contig = _get(row, "contig_id", "contig", "sequence_name")
-            gene = _get(row, "gene_symbol", "gene")
+            gene = _get(row, "gene_symbol", "element_symbol", "gene")
             if not contig and not gene:
                 continue
-            element_type = _get(row, "element_type", "scope")
+            element_type = _get(row, "element_type", "type", "scope")
             rows.append(
                 {
                     "sample_id": sample_id,
@@ -339,7 +362,8 @@ def parse_amrfinderplus(output_dir: Path, sample_id: str) -> StandardRows:
                     "end": _get(row, "stop", "end"),
                     "strand": _get(row, "strand"),
                     "gene": gene,
-                    "product": _get(row, "sequence_name", "product"),
+                    "product": _get(row, "element_name", "sequence_name", "product"),
+                    "drug_class": _get(row, "class", "subclass"),
                     "category": _annotation_category(element_type or "AMR"),
                     "tool": "amrfinderplus",
                     "evidence": _join_evidence({"element_type": element_type}),
@@ -347,12 +371,16 @@ def parse_amrfinderplus(output_dir: Path, sample_id: str) -> StandardRows:
                         row,
                         "identity_to_reference_sequence",
                         "percent_identity_to_reference_sequence",
+                        "percent_identity_to_reference",
+                        "identity_to_reference",
                         "identity",
                     ),
                     "coverage": _get(
                         row,
                         "coverage_of_reference_sequence",
                         "percent_coverage_of_reference_sequence",
+                        "percent_coverage_of_reference",
+                        "coverage_of_reference",
                         "coverage",
                     ),
                     "source_file": str(path),
@@ -1230,7 +1258,7 @@ PARSERS: Dict[str, Parser] = {
     "platon": parse_platon,
     "plasmidfinder": parse_plasmidfinder,
     "mob_suite": parse_mob_suite,
-    "mob_typer": parse_mob_suite,
+    "mob_typer": parse_mob_typer,
     "copla": parse_copla,
     "gplas2": parse_gplas2,
     "plasmaag": parse_plasmaag,

@@ -23,6 +23,16 @@ CORE_TABLES = {
     "plasmid_typing",
 }
 
+NONEMPTY_TABLES_BY_CATEGORY = {
+    "qc": {"qc_summary", "sample_qc"},
+    "assembly": {"assembly_summary", "assembly_qc"},
+    "plasmid_detection": {"plasmid_predictions"},
+    "plasmid_consensus": {"plasmid_consensus"},
+    "typing": {"plasmid_typing"},
+    "annotation": {"annotations", "plasmid_annotation"},
+    "abundance": {"abundance", "plasmid_abundance"},
+}
+
 
 def validate_result_dir(
     result_dir: str | Path,
@@ -56,6 +66,7 @@ def validate_result_dir(
     _require_file(report_md, warnings)
     _require_file(report_html, warnings)
 
+    plan = _read_json(plan_path, errors)
     summary = _read_json(summary_path, errors)
     status = str(summary.get("status", "unknown")) if summary else "unknown"
     if status != "success":
@@ -73,13 +84,14 @@ def validate_result_dir(
     if missing_core:
         errors.append("Missing core standard table(s): " + ", ".join(sorted(missing_core)))
     if not allow_empty_tables:
+        required_nonempty = _required_nonempty_tables(plan)
         empty_core = [
             name
-            for name in CORE_TABLES
+            for name in required_nonempty
             if name in tables and tables[name]["exists"] and tables[name]["rows"] == 0
         ]
         if empty_core:
-            errors.append("Empty core standard table(s): " + ", ".join(sorted(empty_core)))
+            errors.append("Empty active-module standard table(s): " + ", ".join(sorted(empty_core)))
 
     if tables.get("network_edges", {}).get("rows", 0) and not tables.get("network_nodes", {}).get(
         "rows", 0
@@ -95,6 +107,18 @@ def validate_result_dir(
         "failed_steps": failed_steps,
         "tables": tables,
     }
+
+
+def _required_nonempty_tables(plan: Dict[str, Any]) -> set[str]:
+    categories = {
+        str(step.get("category", ""))
+        for step in plan.get("steps", [])
+        if isinstance(step, dict) and not step.get("skipped", False)
+    }
+    required: set[str] = set()
+    for category in categories:
+        required.update(NONEMPTY_TABLES_BY_CATEGORY.get(category, set()))
+    return required
 
 
 def _require_file(path: Path, issues: List[str]) -> None:

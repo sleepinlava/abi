@@ -1,0 +1,26 @@
+figure_id: scapp_plsdb_directional_recovery
+figure_type: stacked_barplot
+data:
+  table: docs/zh/figures/scapp_plsdb_directional_recovery.tsv
+  format: tsv
+  required_columns: [direction, Matched, Unmatched]
+mapping:
+  x: direction
+style:
+  theme: abi_nature
+  palette: colorblind_safe_8
+  width_mm: 130
+  height_mm: 85
+  dpi: 300
+labels:
+  title: Provisional directional single-stage coverage screen
+  x_label: Comparison direction
+  y_label: Fraction of sequences (%)
+  legend_title: Match status
+export:
+  output_dir: docs/zh/figures/rendered
+  basename: scapp_plsdb_directional_recovery
+  formats: [png, pdf, svg]
+provenance:
+  workflow_name: metagenomic_plasmid
+  input_data_role: Provisional legacy bidirectional coverage screen; not paper-method truth
