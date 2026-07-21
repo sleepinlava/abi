@@ -36,6 +36,13 @@ def _load_entry_point_plugins() -> Dict[str, ABIPlugin]:
             )
             continue
         plugin_id = str(getattr(plugin, "plugin_id", entry_point.name))
+        if plugin_id != entry_point.name:
+            warnings.warn(
+                f"Skipping ABI plugin entry point {entry_point.name!r}: plugin_id is {plugin_id!r}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            continue
         plugins[plugin_id] = plugin
     return plugins
 

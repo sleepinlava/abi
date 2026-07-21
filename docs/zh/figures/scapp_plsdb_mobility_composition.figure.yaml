@@ -1,0 +1,26 @@
+figure_id: scapp_plsdb_mobility_composition
+figure_type: stacked_barplot
+data:
+  table: docs/zh/figures/data/scapp_evidence_20260720/figure_mobility_composition.tsv
+  format: tsv
+  required_columns: [group, Mobilizable, Non-mobilizable]
+mapping:
+  x: group
+style:
+  theme: abi_nature
+  palette: colorblind_safe_8
+  width_mm: 130
+  height_mm: 90
+  dpi: 300
+labels:
+  title: Mobility composition by provisional single-stage match status
+  x_label: Technical match group
+  y_label: Plasmids (%)
+  legend_title: Predicted mobility
+export:
+  output_dir: docs/zh/figures/rendered
+  basename: scapp_plsdb_mobility_composition
+  formats: [png, pdf, svg]
+provenance:
+  workflow_name: metagenomic_plasmid
+  input_data_role: MOB-typer classifications stratified by provisional legacy match status

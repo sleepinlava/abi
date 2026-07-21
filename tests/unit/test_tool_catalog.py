@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from abi.tool_catalog import (
     CatalogComparison,
     RuntimeToolDescriptor,
     ToolCatalog,
+    ToolResolutionError,
 )
 from abi.tools import ToolRegistry
 
@@ -61,7 +63,7 @@ class TestToolCatalog:
         assert c.tool_ids() == []
         assert not c.has("x")
 
-    def test_from_project_root_merges_authoritative_contract(
+    def test_from_project_root_compiles_contract_with_registry_policy(
         self, tmp_path: Path, monkeypatch
     ) -> None:
         plugin = tmp_path / "plugins" / "demo"
@@ -73,10 +75,8 @@ class TestToolCatalog:
                     "tools": [
                         {
                             "id": "aligner",
-                            "name": "Registry Name",
-                            "executable": "old-aligner",
-                            "inputs": ["reads"],
-                            "resources": {"cpu": 1, "memory": "1GB"},
+                            "required": True,
+                            "default_enabled": False,
                         }
                     ]
                 }
@@ -115,6 +115,8 @@ class TestToolCatalog:
         assert descriptor.resources.cpu == 8
         assert descriptor.inputs["reads"]["required"] is True
         assert descriptor.outputs == {"bam": {"type": "file"}}
+        assert descriptor.metadata["required"] is True
+        assert descriptor.default_enabled is False
         assert descriptor.execution == {
             "executable": "new-aligner",
             "command_template": "new-aligner {reads} -o {bam}",
@@ -132,8 +134,6 @@ class TestToolCatalog:
                     "tools": [
                         {
                             "id": "aligner",
-                            "executable": "old-aligner",
-                            "resources": {"cpu": 1, "memory": "1GB"},
                             "output_dir_policy": "must_not_exist",
                         }
                     ]
@@ -166,6 +166,45 @@ class TestToolCatalog:
         assert metadata["command_template"] == "new-aligner {input}"
         assert metadata["env_name"] == "demo-env"
         assert metadata["output_dir_policy"] == "must_not_exist"
+
+    def test_conflicting_registry_and_contract_declarations_fail(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        plugin = tmp_path / "plugins" / "demo"
+        contracts = plugin / "tool_contracts"
+        contracts.mkdir(parents=True)
+        (plugin / "tool_registry.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "tools": [
+                        {
+                            "id": "aligner",
+                            "executable": "old-aligner",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        (contracts / "aligner.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "tool_id": "aligner",
+                    "execution": {
+                        "executable": "new-aligner",
+                        "command_template": "new-aligner {input}",
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "abi.runtime_environment.load_environment_assignments",
+            lambda: {"tool_assignments": {}},
+        )
+
+        with pytest.raises(ToolResolutionError, match="conflicting executable"):
+            ToolCatalog.from_plugin_dir(plugin)
 
 
 class TestCatalogComparison:

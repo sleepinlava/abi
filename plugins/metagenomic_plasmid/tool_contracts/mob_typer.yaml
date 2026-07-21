@@ -12,20 +12,27 @@ inputs:
   sample_id:
     type: string
     required: true
+  database:
+    type: directory
+    required: true
+  threads:
+    type: integer
+    minimum: 1
 outputs:
   output_dir:
     type: path
 execution:
   executable: mob_typer
   command_template: mob_typer --infile {plasmid_contigs} --out_file {output_dir}/{sample_id}.mob_typer.tsv
+    --database_directory {database} --num_threads {threads} --multi
   network: false
   writes_output: true
 normalization:
-  parser: abi.autoplasm.parsers:parse_mob_suite
+  parser: abi.autoplasm.parsers:parse_mob_typer
   tables:
-  - plasmid_predictions
   - annotations
   - host_predictions
+  - plasmid_typing
 failure_handling:
   missing_input:
     hint: Check planned input paths and prerequisite upstream steps.

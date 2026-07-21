@@ -178,6 +178,7 @@ TABLE_SCHEMAS: Dict[str, List[str]] = {
         "strand",
         "gene",
         "product",
+        "drug_class",
         "category",
         "tool",
         "evidence",
@@ -383,17 +384,25 @@ def append_standard_rows(
 ) -> Dict[str, Path]:
     written = {}
     ensure_standard_tables(tables_dir)
+    expanded = expand_standard_rows(rows_by_table)
+    for table_name, rows in expanded.items():
+        if not rows:
+            continue
+        written[table_name] = write_standard_table(tables_dir, table_name, rows, append=True)
+    return written
+
+
+def expand_standard_rows(
+    rows_by_table: Mapping[str, Iterable[Mapping[str, Any]]],
+) -> Dict[str, List[Mapping[str, Any]]]:
+    """Return parsed rows plus their public plasmid result-table mirrors."""
     expanded: Dict[str, List[Mapping[str, Any]]] = {}
     for table_name, source_rows in rows_by_table.items():
         rows = list(source_rows)
         expanded.setdefault(table_name, []).extend(rows)
         for canonical_name, canonical_rows in _canonical_result_rows(table_name, rows).items():
             expanded.setdefault(canonical_name, []).extend(canonical_rows)
-    for table_name, rows in expanded.items():
-        if not rows:
-            continue
-        written[table_name] = write_standard_table(tables_dir, table_name, rows, append=True)
-    return written
+    return expanded
 
 
 def _canonical_result_rows(
@@ -500,7 +509,7 @@ def _canonical_result_rows(
                 "sample_id": row.get("sample_id", ""),
                 "contig_id": row.get("contig_id", ""),
                 "gene": row.get("gene", ""),
-                "drug_class": row.get("product", ""),
+                "drug_class": row.get("drug_class") or row.get("product", ""),
                 "identity": row.get("identity", ""),
                 "coverage": row.get("coverage", ""),
                 "tool": row.get("tool", ""),

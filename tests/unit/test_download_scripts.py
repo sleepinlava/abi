@@ -171,6 +171,8 @@ def test_download_databases_uses_mob_init_cli_with_directory():
     assert "MOB_INIT_BIN" in content
     assert "envs/autoplasm-annotation" in content
     assert "/bin/mob_init" in content
+    assert "ncbi_plasmid_full_seqs.fas.msh" in content
+    assert "taxa.sqlite" in content
 
 
 def test_download_databases_checks_env_abs_paths():

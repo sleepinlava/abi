@@ -1,0 +1,29 @@
+figure_id: scapp_plsdb_abundance_length
+figure_type: scatterplot
+data:
+  table: docs/zh/figures/data/scapp_evidence_20260720/evidence_by_plasmid.tsv
+  format: tsv
+  required_columns:
+    [plasmid_id, log10_abundance_coverage, log10_length_bp, reference_matched, is_circular]
+mapping:
+  x: log10_abundance_coverage
+  y: log10_length_bp
+  hue: reference_matched
+style:
+  theme: abi_nature
+  palette: colorblind_safe_8
+  width_mm: 130
+  height_mm: 90
+  dpi: 300
+labels:
+  title: ABI predictions under a provisional single-stage match screen
+  x_label: log10 CoverM coverage
+  y_label: log10 length (bp)
+  legend_title: PLSDB-derived match
+export:
+  output_dir: docs/zh/figures/rendered
+  basename: scapp_plsdb_abundance_length
+  formats: [png, pdf, svg]
+provenance:
+  workflow_name: metagenomic_plasmid
+  input_data_role: Per-plasmid abundance and length with provisional legacy match status

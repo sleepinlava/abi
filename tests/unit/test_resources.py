@@ -697,6 +697,37 @@ def test_tool_git_ready_check_validates_worktree(tmp_path):
     assert not _resource_path_ready(path, spec)
 
 
+def test_mob_suite_ready_check_rejects_sentinel_only(tmp_path):
+    from abi.autoplasm.resources import _resource_path_ready, default_resource_specs
+
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    spec = next(s for s in default_resource_specs(config) if s.resource_id == "mob_suite")
+    path = tmp_path / "mob_suite"
+    path.mkdir()
+    (path / ".autoplasm_resource_ready").touch()
+    (path / "repetitive.dna.fas.nhr").write_text("index", encoding="utf-8")
+
+    assert not _resource_path_ready(path, spec)
+
+
+def test_mob_suite_ready_check_requires_complete_runtime_database(tmp_path):
+    from abi.autoplasm.resources import (
+        MOB_SUITE_REQUIRED_FILES,
+        _resource_path_ready,
+        default_resource_specs,
+    )
+
+    config = {"resources": {"root": str(tmp_path / "resources")}}
+    spec = next(s for s in default_resource_specs(config) if s.resource_id == "mob_suite")
+    path = tmp_path / "mob_suite"
+    path.mkdir()
+    for name in MOB_SUITE_REQUIRED_FILES:
+        (path / name).write_text("ready", encoding="utf-8")
+    (path / "repetitive.dna.fas.nhr").write_text("index", encoding="utf-8")
+
+    assert _resource_path_ready(path, spec)
+
+
 def test_efetch_url_encodes_accession():
     """m1: _efetch_url must URL-encode the accession to avoid query corruption."""
     from abi.autoplasm.resources import _efetch_url

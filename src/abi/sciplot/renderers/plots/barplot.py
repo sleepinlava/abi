@@ -32,6 +32,10 @@ def plot_barplot(
     y_col = spec.mapping.y
 
     # Auto-count mode: when y is not specified, count occurrences of x values
+    hue_col = spec.mapping.hue
+    if hue_col and not y_col:
+        raise ValueError("barplot mapping.hue requires mapping.y.")
+
     if not y_col:
         if x_col and x_col in data.columns:
             counts = data[x_col].value_counts().reset_index()
@@ -45,6 +49,40 @@ def plot_barplot(
                 "barplot requires either mapping.y (bar heights) or a valid "
                 "mapping.x column for auto-counting."
             )
+    elif hue_col and hue_col in data.columns and x_col and x_col in data.columns:
+        numeric = data.assign(**{y_col: pd.to_numeric(data[y_col], errors="coerce")})
+        x_levels = list(dict.fromkeys(numeric[x_col].astype(str)))
+        hue_levels = list(dict.fromkeys(numeric[hue_col].astype(str)))
+        pivot = numeric.pivot_table(
+            index=x_col,
+            columns=hue_col,
+            values=y_col,
+            aggfunc="first",
+            observed=False,
+        )
+        pivot.index = pivot.index.astype(str)
+        pivot.columns = pivot.columns.astype(str)
+        pivot = pivot.reindex(index=x_levels, columns=hue_levels)
+        x_pos = np.arange(len(x_levels))
+        group_width = 0.8
+        bar_width = group_width / max(1, len(hue_levels))
+        colors = palette.get_categorical(spec.style.palette, n=len(hue_levels))
+        for index, hue_level in enumerate(hue_levels):
+            offset = (index - (len(hue_levels) - 1) / 2) * bar_width
+            values = pivot[hue_level].fillna(0).to_numpy()
+            ax.bar(
+                x_pos + offset,
+                values,
+                label=hue_level,
+                color=colors[index % len(colors)],
+                edgecolor="white",
+                linewidth=0.3,
+                width=bar_width,
+            )
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(x_levels, rotation=45, ha="right", fontsize=7)
+        ax.legend(fontsize=theme.font.legend_size_pt)
+        return
     else:
         if x_col and x_col in data.columns:
             labels = [str(r) for r in data[x_col].values]

@@ -1,0 +1,25 @@
+{
+  "figure_id": "scapp_plsdb_abundance_length",
+  "created_at": "2026-07-20T02:03:26.794965+00:00",
+  "abi_version": "unknown",
+  "skill": "abi_sciplot",
+  "skill_version": "0.1.0",
+  "renderer": "matplotlib",
+  "renderer_version": "3.11.0",
+  "python_version": "3.12.3",
+  "input_table": "docs/zh/figures/data/scapp_evidence_20260720/evidence_by_plasmid.tsv",
+  "input_data_role": "Per-plasmid abundance and length with provisional legacy match status",
+  "input_sha256": "860467681579e0904145621795917d856968749d65f97f2ed78b5d841bda0528",
+  "workflow_name": "metagenomic_plasmid",
+  "theme": "abi_nature",
+  "palette": "colorblind_safe_8",
+  "statistical_test": null,
+  "multiple_testing_correction": null,
+  "packages": {
+    "matplotlib": "3.11.0",
+    "pandas": "3.0.3",
+    "numpy": "1.26.4",
+    "seaborn": "0.13.2",
+    "pydantic": "2.13.4"
+  }
+}

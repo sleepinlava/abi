@@ -11,7 +11,7 @@ bioinformatics pipeline code directly.
 abi install-skills
 ```
 
-This copies 41 bundled SKILL.md files to `~/.claude/skills/abi/`. After
+This copies 40 bundled SKILL.md files to `~/.claude/skills/abi/`. After
 installation, Claude Code automatically loads the skills and knows how to
 use the `abi` CLI and its bioinformatics tools.
 
@@ -112,16 +112,150 @@ for p in abi.list_plugins_summary():
     print(f"{p['analysis_type']}: {p['name']}")
 ```
 
+## Run a Biological Analysis Through a Plugin
+
+ABI does not create a separate MCP function for every plugin. The agent calls shared lifecycle tools such as `abi_plan` and `abi_dry_run`, then selects the plugin with the `analysis_type` argument.
+
+### 1. Translate the biological question into an analysis request
+
+Before selecting a plugin, establish:
+
+- the biological question and expected result;
+- input data type and sequencing platform;
+- sample IDs, groups, contrasts, or paired-end relationships;
+- available reference genomes, annotations, databases, and indexes;
+- the intended runtime, compute limits, and output location.
+
+Ask the user when missing information would change the plugin, workflow branch, reference, or biological interpretation. Do not guess a reference genome, sample grouping, or database profile.
+
+### 2. Discover and select the plugin
+
+| Biological goal | `analysis_type` |
+| --- | --- |
+| Profile a 16S microbial community | `amplicon_16s` |
+| Compare bulk RNA-seq expression | `rnaseq_expression` |
+| Analyze a bacterial isolate genome | `wgs_bacteria` |
+| Quantify metatranscriptomic expression | `metatranscriptomics` |
+| Profile shotgun metagenomic reads | `easymetagenome` |
+| Identify and characterize viruses | `viral_viwrap` |
+| Reconstruct and characterize plasmids | `metagenomic_plasmid` |
+
+Use the installed environment as the source of truth:
+
+```text
+abi_list_types({})
+abi_export_agent_context({"analysis_type": "rnaseq_expression"})
+abi_query({"analysis_type": "rnaseq_expression", "what": "stages"})
+abi_query({"analysis_type": "rnaseq_expression", "what": "tools"})
+```
+
+`abi_export_agent_context` returns the plugin description, standard tables, important artifacts, permissions, error codes, and recovery rules. Use it before constructing a plan.
+
+Its `safe_sequence` field is a compact compatibility baseline. For a biological run, follow the expanded sequence below, including preflight checks and post-run result validation.
+
+### 3. Prepare configuration and sample metadata
+
+The Agent lifecycle tools accept paths; they do not invent biological metadata. Use an existing reviewed config and sample sheet, or initialize templates outside MCP with:
+
+```bash
+abi init --type rnaseq_expression --outdir my-analysis
+```
+
+The user or agent must replace placeholder paths and verify sample metadata. Keep source data read-only and write each attempt to a new result directory.
+
+### 4. Plan, check, and dry-run
+
+Use the same `analysis_type`, config, sample sheet, and output assumptions in every call:
+
+```text
+abi_plan({
+  "analysis_type": "rnaseq_expression",
+  "config_path": "my-analysis/config/rnaseq_expression.yaml",
+  "sample_sheet": "my-analysis/samples.tsv",
+  "outdir": "my-analysis/results/plan"
+})
+
+abi_check({
+  "analysis_type": "rnaseq_expression",
+  "config_path": "my-analysis/config/rnaseq_expression.yaml",
+  "sample_sheet": "my-analysis/samples.tsv",
+  "engine": "local",
+  "check_runtime": true
+})
+
+abi_dry_run({
+  "analysis_type": "rnaseq_expression",
+  "config_path": "my-analysis/config/rnaseq_expression.yaml",
+  "sample_sheet": "my-analysis/samples.tsv",
+  "outdir": "my-analysis/results/dry-run"
+})
+```
+
+Stop before execution if preflight reports missing inputs, tools, or resources. A successful dry-run proves that planning and command rendering work; it does not prove biological validity.
+
+### 5. Present an approval summary
+
+Before requesting execution approval, summarize:
+
+- selected plugin and biological purpose;
+- samples, platforms, groups, and contrasts;
+- planned stages and key tools;
+- references, databases, and unresolved warnings;
+- runtime backend, output directory, and expected resource demand;
+- the exact action that will cross the execution boundary.
+
+Do not invent runtime or storage estimates. Report only estimates supplied by the plan, configuration, scheduler, or user.
+
+### 6. Execute only after explicit approval
+
+The default MCP `safe` profile does not expose `abi_run`. Start the full profile only when execution is needed:
+
+```bash
+abi-mcp --profile full
+```
+
+First call `abi_run` with `confirm_execution: false` to preserve the approval boundary. After the user explicitly approves the summarized plan, repeat the same request with `confirm_execution: true`.
+
+```text
+abi_run({
+  "analysis_type": "rnaseq_expression",
+  "config_path": "my-analysis/config/rnaseq_expression.yaml",
+  "sample_sheet": "my-analysis/samples.tsv",
+  "outdir": "my-analysis/results/run-001",
+  "engine": "local",
+  "confirm_execution": true
+})
+```
+
+Approval applies only to the displayed plugin, inputs, configuration, output path, and runtime. Re-plan and ask again if any of them changes materially.
+
+### 7. Validate and interpret the result
+
+```text
+abi_inspect({"result_dir": "my-analysis/results/run-001"})
+abi_validate_result({"result_dir": "my-analysis/results/run-001"})
+abi_report({
+  "analysis_type": "rnaseq_expression",
+  "result_dir": "my-analysis/results/run-001"
+})
+```
+
+Read biological values from declared standard tables, not from ad hoc parsing of raw logs. Use provenance for methods and reproducibility, and use plugin reports for limitations and interpretation context.
+
+The Agent should separate three conclusions: execution completed, result contracts passed, and biological acceptance criteria passed. None of these automatically proves the other two.
+
 ## Safe Sequence
 
 1. `abi_list_types` — discover installed analysis plugins
 2. `abi_export_agent_context` or `abi_doctor_agent` — get operating context
 3. `abi_query` — lightweight metadata query (stages, tools, platforms, step I/O)
-4. `abi_plan` — build execution plan (includes `summary` field — no need to read `execution_plan.json`)
-5. `abi_dry_run` — validate commands and provenance (no real tools)
-6. `abi_inspect` — check provenance for failures
-7. `abi_run` — execute **only after explicit user approval**
-8. `abi_report` — regenerate reports from standard tables and provenance
+4. `abi_plan` — build the execution plan and review its `summary`
+5. `abi_check` — preflight inputs, resources, executables, and runtime
+6. `abi_dry_run` — write commands, provenance, table skeletons, and report preview
+7. `abi_inspect` or `abi_validate_result` — verify the dry-run artifacts
+8. Present the plugin, inputs, resources, runtime, output path, and warnings
+9. `abi_run` — execute **only after explicit user approval**
+10. `abi_inspect`, `abi_validate_result`, and `abi_report` — validate and interpret results
 
 ## Transport Methods
 
@@ -130,14 +264,29 @@ for p in abi.list_plugins_summary():
 ```bash
 abi list-types --output-json
 abi query --type metatranscriptomics --what stages --output-json
-abi plan --type metatranscriptomics --outdir results/rnaseq_demo --output-json
-abi dry-run --type metatranscriptomics --outdir results/rnaseq_demo --output-json
-abi inspect --result-dir results/rnaseq_demo --output-json
-abi report --type metatranscriptomics --result-dir results/rnaseq_demo --output-json
+abi plan --type metatranscriptomics \
+  --config examples/metatranscriptomics/config_demo.yaml \
+  --sample-sheet examples/sample_sheet_transcriptomics.tsv \
+  --outdir results/agent-plan --output-json
+abi check --type metatranscriptomics \
+  --config examples/metatranscriptomics/config_demo.yaml \
+  --sample-sheet examples/sample_sheet_transcriptomics.tsv \
+  --no-check-runtime --output-json
+abi dry-run --type metatranscriptomics \
+  --config examples/metatranscriptomics/config_demo.yaml \
+  --sample-sheet examples/sample_sheet_transcriptomics.tsv \
+  --outdir results/agent-dry-run --output-json
+abi inspect --result-dir results/agent-dry-run --output-json
+abi validate-result --result-dir results/agent-dry-run --allow-empty-tables --output-json
+abi report --type metatranscriptomics --result-dir results/agent-dry-run --output-json
 ```
 
 All commands return JSON envelopes with status `success`, `confirmation_required`,
 or `error`.
+
+For `abi check`, a successful transport envelope may contain `result.status: "fail"` and a non-zero CLI exit when preflight finds missing inputs or resources. Agents must inspect both status levels.
+
+The bundled example contains placeholder reference paths. Use it for planning and dry-run only; configure real references before biological execution.
 
 ### Multi-LLM Tools
 

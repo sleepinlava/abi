@@ -1513,6 +1513,12 @@ nodes:
         type: file
         format: fasta
         source: plasmid_consensus.plasmid_contigs
+      database:
+        type: directory
+        source: config.resources.mob_suite.database
+      threads:
+        type: integer
+        default: 1
     outputs:
       typing_results:
         type: file

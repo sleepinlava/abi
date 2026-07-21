@@ -1,0 +1,28 @@
+figure_id: scapp_plsdb_evidence_rates
+figure_type: lineplot
+data:
+  table: docs/zh/figures/data/scapp_evidence_20260720/figure_evidence_rates.tsv
+  format: tsv
+  required_columns: [evidence, group, count, denominator, percent]
+mapping:
+  x: evidence
+  y: percent
+  hue: group
+style:
+  theme: abi_nature
+  palette: colorblind_safe_8
+  width_mm: 150
+  height_mm: 90
+  dpi: 300
+labels:
+  title: Evidence rates by provisional single-stage match status
+  x_label: Auxiliary plasmid evidence
+  y_label: Plasmids positive (%)
+  legend_title: Technical match group
+export:
+  output_dir: docs/zh/figures/rendered
+  basename: scapp_plsdb_evidence_rates
+  formats: [png, pdf, svg]
+provenance:
+  workflow_name: metagenomic_plasmid
+  input_data_role: Auxiliary evidence stratified by a provisional legacy single-stage match screen

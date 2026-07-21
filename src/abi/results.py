@@ -239,13 +239,15 @@ def validate_abi_result_dir(
 
     analysis_type = _analysis_type(plan, summary)
     schemas: Mapping[str, Iterable[str]] = {}
+    plugin: Any = None
     if not analysis_type:
         errors.append("Cannot determine analysis_type from execution_plan.json or run_summary.json")
     else:
         try:
             from abi.plugins import get_plugin
 
-            schemas = get_plugin(analysis_type).table_schemas()
+            plugin = get_plugin(analysis_type)
+            schemas = plugin.table_schemas()
         except Exception as exc:
             errors.append(f"Cannot load table schema for analysis_type {analysis_type!r}: {exc}")
 
@@ -264,11 +266,24 @@ def validate_abi_result_dir(
             errors.append(f"{table_name}.tsv missing field(s): {', '.join(fields)}")
 
     if not allow_empty_tables:
-        empty_tables = [
-            name for name, table in tables.items() if table["exists"] and table["rows"] == 0
-        ]
-        if empty_tables:
-            errors.append("Empty standard table(s): " + ", ".join(sorted(empty_tables)))
+        specialized_validator = getattr(plugin, "validate_result_dir", None)
+        specialized: Mapping[str, Any] | None = None
+        if callable(specialized_validator):
+            candidate = specialized_validator(root, allow_empty_tables=False)
+            if isinstance(candidate, Mapping):
+                specialized = candidate
+        if specialized is not None and isinstance(specialized.get("errors"), list):
+            errors.extend(
+                error
+                for error in specialized.get("errors", [])
+                if str(error).startswith("Empty ") and error not in errors
+            )
+        else:
+            empty_tables = [
+                name for name, table in tables.items() if table["exists"] and table["rows"] == 0
+            ]
+            if empty_tables:
+                errors.append("Empty standard table(s): " + ", ".join(sorted(empty_tables)))
 
     return {
         "result_dir": str(root),

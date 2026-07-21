@@ -139,6 +139,22 @@ def test_validate_empty_table_not_allowed(tmp_path: Path) -> None:
     assert any("Empty standard table" in e for e in result["errors"])
 
 
+def test_validate_uses_plugin_specific_nonempty_policy(tmp_path: Path) -> None:
+    result_dir = _make_result_dir(tmp_path, analysis_type="metagenomic_plasmid")
+    (result_dir / "tables" / "active.tsv").write_text("id\n", encoding="utf-8")
+    (result_dir / "tables" / "optional.tsv").write_text("id\n", encoding="utf-8")
+    plugin = _mock_plugin({"active": ["id"], "optional": ["id"]})
+    plugin.validate_result_dir.return_value = {
+        "errors": ["Empty active-module standard table(s): active"]
+    }
+
+    with mock.patch("abi.plugins.get_plugin", return_value=plugin):
+        result = validate_abi_result_dir(result_dir, allow_empty_tables=False)
+
+    assert "Empty active-module standard table(s): active" in result["errors"]
+    assert all("optional" not in error for error in result["errors"])
+
+
 # ── Missing (non-existent) result directory ────────────────────────────────
 
 

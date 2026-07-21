@@ -1,0 +1,69 @@
+{
+  "result_dir": "/root/autodl-tmp/abi-real-data/results/plasmid_scapp_core_retry7",
+  "match_table": "/root/autodl-tmp/abi-real-data/references/scapp/truth_reconstruction_20260717/prediction_precision_coverage.tsv",
+  "mob_table": "/root/autodl-tmp/abi-real-data/results/plasmid_scapp_core_retry7/supplementary/amr_mobility_20260720/raw/mob_typer/SRR11038083.mob_typer.tsv",
+  "total_plasmids": 157,
+  "input_sha256": {
+    "match_table": "dc9beb21bae4352436226708dd9707bc87f02a16efbe913b59e02e349dbbae4e",
+    "mob_table": "bfba022269353220b188cb869858fe78a8ea71ebbeb868461795c2ca3eb8f5bb",
+    "tables/plasmid_consensus.tsv": "b3dff82169615f257419b0bb31f49931e28585ef22c434d46da40e806eb7d2d1",
+    "tables/plasmid_structure.tsv": "0b1b85b90e5f622c60c439eb2bfee470bdddbb524d527d4cb1a033df132329cf",
+    "tables/plasmid_abundance.tsv": "e90c278bee47ed86d703752aa294b6465d42ebc98a546a018bf00400011b6dc3",
+    "tables/annotations.tsv": "c532a338636ab6cdc2103aadac248bce03883955052d962e2103a9069cb5274a",
+    "tables/amr_genes.tsv": "c9ab93553fd9616e51446ba4d8b6f25505607a496e6963279cd211ea697c45a1",
+    "tables/plasmid_typing.tsv": "6fd211158fa636a22f6bba69640703ce0c0d9349f4d436d8e76a2140b946bbe3"
+  },
+  "groups": {
+    "reference_matched": {
+      "count": 25,
+      "median_reference_coverage_fraction": 1.0,
+      "median_length_bp": 1680.0,
+      "median_abundance_coverage": 35.692772,
+      "median_terminal_overlap_bp": 22.0,
+      "median_annotation_count": 2.0,
+      "median_amr_hit_count": 0.0,
+      "is_circular_count": 13,
+      "is_circular_rate": 0.52,
+      "reference_hit_present_count": 25,
+      "reference_hit_present_rate": 1.0,
+      "plasmidfinder_positive_count": 7,
+      "plasmidfinder_positive_rate": 0.28,
+      "mob_replicon_positive_count": 11,
+      "mob_replicon_positive_rate": 0.44,
+      "mob_relaxase_positive_count": 6,
+      "mob_relaxase_positive_rate": 0.24,
+      "mob_orit_positive_count": 4,
+      "mob_orit_positive_rate": 0.16,
+      "mobility_counts": {
+        "non-mobilizable": 16,
+        "mobilizable": 9
+      }
+    },
+    "reference_unmatched": {
+      "count": 132,
+      "median_reference_coverage_fraction": 0.0,
+      "median_length_bp": 1567.5,
+      "median_abundance_coverage": 8.3303935,
+      "median_terminal_overlap_bp": 0.0,
+      "median_annotation_count": 1.0,
+      "median_amr_hit_count": 0.0,
+      "is_circular_count": 41,
+      "is_circular_rate": 0.3106060606060606,
+      "reference_hit_present_count": 28,
+      "reference_hit_present_rate": 0.21212121212121213,
+      "plasmidfinder_positive_count": 2,
+      "plasmidfinder_positive_rate": 0.015151515151515152,
+      "mob_replicon_positive_count": 3,
+      "mob_replicon_positive_rate": 0.022727272727272728,
+      "mob_relaxase_positive_count": 8,
+      "mob_relaxase_positive_rate": 0.06060606060606061,
+      "mob_orit_positive_count": 4,
+      "mob_orit_positive_rate": 0.030303030303030304,
+      "mobility_counts": {
+        "non-mobilizable": 121,
+        "mobilizable": 11
+      }
+    }
+  },
+  "interpretation_limit": "Reference matching is an assembly-derived technical consistency check. An unmatched prediction is not necessarily a biological false positive."
+}

@@ -2,7 +2,32 @@
 
 ABI plugins expose biological analysis types behind the shared lifecycle API.
 
-## Minimum Python Interface
+## Recommended Declarative Interface
+
+Place `abi-plugin.yaml` beside your plugin module and inherit from
+`DeclarativeABIPlugin`. The base class reads plugin identity, the tool registry,
+and standard-table paths from the manifest, so those values are declared once:
+
+```python
+from abi.plugin import DeclarativeABIPlugin
+
+
+class MyPlugin(DeclarativeABIPlugin):
+    def load_config(self, config_path=None, **kwargs): ...
+    def build_plan(self, config, *, check_files=True): ...
+    def parse_outputs(self, tool_id, output_dir, sample_id): ...
+    def write_report(self, plan, result_dir): ...
+```
+
+Monorepos that keep declarations away from the Python module may set one class
+attribute, for example `plugin_root = Path("plugins/my_analysis")`.
+
+The base class validates the manifest and all declared paths during import.
+Discovery also requires the entry-point name, manifest `plugin_id`, and manifest
+`entry_point` to agree. Runtime registry, tool-contract, and environment checks
+remain unchanged; use `abi contract-lint --strict` before publishing.
+
+## Low-level Python Interface
 
 Implement the `abi.interfaces.ABIPlugin` protocol:
 
@@ -23,6 +48,8 @@ Register the plugin with:
 [project.entry-points."abi.plugins"]
 my_analysis = "my_package.plugins:MyPlugin"
 ```
+
+The entry-point key must exactly match `plugin_id` in `abi-plugin.yaml`.
 
 ## Plugin Directory
 
@@ -61,9 +88,144 @@ To add a new skill, create the directory and SKILL.md file under
 Claude Code how to use the `abi` CLI itself; other skills document individual
 bioinformatics tools.
 
+A tool skill explains scientific purpose, parameters, inputs, outputs, and failure modes. It does not add a new MCP function or bypass the ABI lifecycle.
+
+## Make a Plugin Callable by Agents
+
+Agent transports expose shared lifecycle tools. A new plugin becomes callable through the `analysis_type` argument after entry-point discovery; do not create separate `abi_my_plugin_plan` or `abi_my_plugin_run` tools.
+
+### Provide discoverable biological identity
+
+The manifest identity is what an untrained Agent sees through `abi_list_types` and `abi_export_agent_context`:
+
+```yaml
+abi_version: "0.1"
+plugin_id: my_analysis
+display_name: My Biological Analysis
+description: "Analyzes <input> to produce <main biological result>."
+report_title: My Biological Analysis Report
+entry_point: my_package.plugin:MyPlugin
+```
+
+Write `description` for plugin selection. State the biological goal, expected input class, and primary output; avoid implementation-only or marketing text.
+
+The entry-point key, manifest `plugin_id`, and plugin class identity must match. Include `config_default.yaml` and `sample_sheet_template.tsv` so users and Agents can start from explicit schemas instead of inventing metadata.
+
+### Make the workflow queryable
+
+`abi_query` reads the declarative DAG and tool registry. Use stable node and tool IDs, declare platforms, and give every node meaningful inputs, outputs, dependencies, and descriptions.
+
+An Agent should be able to answer these questions without reading source code:
+
+```bash
+abi query --type my_analysis --what stages
+abi query --type my_analysis --what tools
+abi query --type my_analysis --what platforms
+abi query --type my_analysis --step qc_tool --what inputs
+abi query --type my_analysis --step qc_tool --what outputs
+```
+
+If a resource belongs to a specific node, make that relationship explicit so step-level resource queries and preflight diagnostics can explain what is missing.
+
+### Keep planning safe and deterministic
+
+- `load_config()` may read configuration but must not install resources or run tools.
+- `build_plan()` must produce deterministic steps and paths from explicit inputs.
+- `plan` and `dry_run` may write review artifacts but must not execute external analysis tools.
+- Real tool execution must happen only through `run` after the shared confirmation gate.
+- `report` must consume existing published results and must not silently rerun the workflow.
+
+Agent permission profiles are owned by the ABI core. Plugins must not create hidden execution paths inside planning, parsing, reporting, or diagnostics.
+
+### Publish results that an Agent can interpret
+
+The plugin's `table_schemas()` defines the `standard_tables` returned by `abi_export_agent_context`. Use stable names, columns, units, identifiers, and missing-value conventions.
+
+Parsers should normalize tool outputs into these tables. Reports and figures should read published tables instead of re-parsing raw logs or private intermediate files.
+
+Implement `published_outputs(plan)` for stable final artifacts that do not fit a standard table. Publish methods, provenance, limitations, and branch-qualified manifests when a workflow has multiple output branches.
+
+Raise ABI error types or provide structured diagnostic hints for recoverable failures. Agents use `error_code` and `diagnostic_hints`; raw tracebacks are not an operating contract.
+
+### Verify the Agent context
+
+After installing the plugin, inspect its machine-readable contract:
+
+```bash
+abi list-types --output-json
+abi export-agent-context --type my_analysis
+abi doctor-agent --type my_analysis
+abi export-tools --type my_analysis --format openai
+```
+
+Confirm that the plugin description is sufficient for selection, the standard table list is complete, and execution tools are excluded unless explicitly requested.
+
+Do not hand-edit OpenAI, Anthropic, Gemini, or MCP schemas for a plugin. ABI generates lifecycle descriptors from one source of truth and injects the plugin scope during export.
+
+### Add an end-to-end Agent contract test
+
+In addition to plugin unit tests, cover discovery, context export, planning, dry-run, confirmation, and result validation through `ABIAgentInterface`.
+
+```python
+import json
+
+from abi.agent import ABIAgentInterface
+
+
+def call(tool, arguments):
+    return json.loads(ABIAgentInterface().dispatch(tool, arguments))
+
+
+def test_agent_can_discover_and_plan_my_plugin(tmp_path, plugin_fixture):
+    listed = call("abi_list_types", {})
+    plugin_ids = {
+        row["analysis_type"]
+        for row in listed["result"]["analysis_types"]
+    }
+    assert "my_analysis" in plugin_ids
+
+    context = call(
+        "abi_export_agent_context",
+        {"analysis_type": "my_analysis"},
+    )
+    assert context["status"] == "success"
+    assert context["result"]["standard_tables"]
+    assert "abi_run" in context["result"]["unsafe_tools"]
+
+    common = {
+        "analysis_type": "my_analysis",
+        "config_path": str(plugin_fixture.config),
+        "sample_sheet": str(plugin_fixture.sample_sheet),
+    }
+    plan = call("abi_plan", {**common, "outdir": str(tmp_path / "plan")})
+    assert plan["status"] == "success"
+
+    dry = call("abi_dry_run", {**common, "outdir": str(tmp_path / "dry")})
+    assert dry["status"] == "success"
+
+    run = call("abi_run", {**common, "confirm_execution": False})
+    assert run["status"] == "confirmation_required"
+```
+
+Add a known-good lifecycle under `golden_traces/<plugin_id>.jsonl` and replay it in `tests/integration/test_golden_traces.py`. The trace should include error recovery and a confirmation-required run attempt.
+
+Define `plugin_fixture` in the plugin test suite so it writes a valid minimal config and sample sheet. Keep these fixtures synthetic, small, and independent of machine-specific resource paths.
+
+### Agent-callable plugin checklist
+
+- The plugin is present in `abi list-types --output-json`.
+- Context export names the correct standard tables, artifacts, permissions, and errors.
+- DAG stages, tools, platforms, inputs, outputs, and resources are queryable.
+- Default config and sample sheet templates contain no ambiguous fields.
+- Plan, check, and dry-run work without executing external tools.
+- `abi_run` returns `confirmation_required` before approval.
+- Real results pass `abi_validate_result` and reports use standard tables.
+- Provider descriptors and MCP profiles require no plugin-specific transport code.
+- Golden traces and regression tests cover the complete Agent lifecycle.
+
 ## Tool Contracts
 
-Contracts are machine-readable and must match the runtime registry:
+Contracts are the authoritative machine-readable tool declarations:
 
 - `tool_id`
 - `category`
@@ -71,6 +233,21 @@ Contracts are machine-readable and must match the runtime registry:
 - `execution.command_template`
 - declared input/output template fields
 - normalized standard table names
+
+`tool_registry.yaml` is a compact policy index. Each contract must have exactly
+one registry entry, but the entry only needs the tool ID and runtime policy:
+
+```yaml
+tools:
+  - id: fastp
+    required: true
+    default_enabled: true
+    skill_path: skills/fastp/SKILL.md
+```
+
+Do not repeat `name`, `category`, `executable`, or `command_template` there.
+Legacy registries may still contain those fields, but ABI rejects a conflicting
+duplicate instead of silently choosing one declaration.
 
 Environment names are **not** stored in individual contracts or registries.
 They are centralized in `environments.yaml` under `tool_assignments:` (one mapping
@@ -164,6 +341,7 @@ Plugins should import from the public SDK:
 | `abi.diagnostics` | `DiagnosticHint`, `classify_exception`, `ERROR_CODES` |
 | `abi.json_utils` | `load_json_file`, `load_json_payload` with `ABIJSONError` |
 | `abi.interfaces` | `ABIPlugin`, `ABIDryRunPlugin`, `ABIInitializablePlugin`, `ABIPublishedOutputsPlugin` protocols |
+| `abi.plugin` | `DeclarativeABIPlugin` — manifest-backed identity, registry, and table schemas |
 | `abi._shared` | `_read_tsv`, `_display_command`, `_plan_dict`, `_common_overrides` |
 | `abi.dag_planner` | `UniversalDAG`, `build_plan_from_dag`, `PathTemplateContext` — DAG-driven `build_plan()` (added 2026-06-18) |
 | `abi.tsv_mapping` | `TSVMapper`, `generate_rows` — declarative TSV column mapping (added 2026-06-18) |

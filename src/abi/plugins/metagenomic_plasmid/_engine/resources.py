@@ -93,6 +93,16 @@ EXAMPLE_ACCESSIONS = {
 }
 PLASMIDFINDER_DB_URL = "https://bitbucket.org/genomicepidemiology/plasmidfinder_db.git"
 RESOURCE_READY_SENTINEL = ".autoplasm_resource_ready"
+MOB_SUITE_REQUIRED_FILES = (
+    "rep.dna.fas",
+    "mob.proteins.faa",
+    "mpf.proteins.faa",
+    "orit.fas",
+    "clusters.txt",
+    "host_range_literature_plasmidDB.txt",
+    "ncbi_plasmid_full_seqs.fas.msh",
+    "taxa.sqlite",
+)
 MAX_DIRECTORY_SUMMARY_ENTRIES = 100_000
 # Default Kraken2 standard database snapshot. Update periodically by checking
 # https://benlangmead.github.io/aws-indexes/k2 — a stale date still downloads
@@ -1546,13 +1556,17 @@ def _resource_path_ready(path: Path, spec: ResourceSpec) -> bool:
         return True
     if (path / ".lock").exists():
         return False
+    if spec.resource_id == "mob_suite":
+        blast_suffixes = {".nhr", ".nin", ".nsq", ".phr", ".pin", ".psq"}
+        required_ready = all(
+            (path / name).is_file() and (path / name).stat().st_size > 0
+            for name in MOB_SUITE_REQUIRED_FILES
+        )
+        return required_ready and any(file.suffix in blast_suffixes for file in path.glob("*"))
     if (path / RESOURCE_READY_SENTINEL).exists():
         return True
     if spec.resource_id == "genomad":
         return (path / "genomad_db").exists()
-    if spec.resource_id == "mob_suite":
-        blast_suffixes = {".nhr", ".nin", ".nsq", ".phr", ".pin", ".psq"}
-        return any(file.suffix in blast_suffixes for file in path.glob("*"))
     if spec.resource_id == "plasmidfinder":
         return (path / "config").exists() and any(path.glob("*.fsa"))
     if spec.resource_id == "metaphlan":
@@ -1603,17 +1617,24 @@ def _resource_ready_check(path: Path, spec: ResourceSpec) -> str:
         return "resource file exists"
     if (path / ".lock").exists():
         return "lock file present"
+    if spec.resource_id == "mob_suite":
+        missing = [
+            name
+            for name in MOB_SUITE_REQUIRED_FILES
+            if not (path / name).is_file() or (path / name).stat().st_size == 0
+        ]
+        blast_suffixes = {".nhr", ".nin", ".nsq", ".phr", ".pin", ".psq"}
+        if not any(file.suffix in blast_suffixes for file in path.glob("*")):
+            missing.append("BLAST index")
+        if missing:
+            return f"MOB-suite database incomplete: {', '.join(missing)}"
+        return "MOB-suite raw data, Mash, taxonomy, and BLAST indices found"
     if (path / RESOURCE_READY_SENTINEL).exists():
         return "ready sentinel found"
     if spec.resource_id == "genomad":
         if (path / "genomad_db").exists():
             return "genomad_db directory found"
         return "genomad_db directory missing"
-    if spec.resource_id == "mob_suite":
-        blast_suffixes = {".nhr", ".nin", ".nsq", ".phr", ".pin", ".psq"}
-        if any(file.suffix in blast_suffixes for file in path.glob("*")):
-            return "MOB-suite BLAST index found"
-        return "MOB-suite BLAST index missing"
     if spec.resource_id == "plasmidfinder":
         if (path / "config").exists() and any(path.glob("*.fsa")):
             return "PlasmidFinder config and fsa files found"

@@ -109,6 +109,44 @@ def _dict_field(meta: Mapping[str, Any], key: str) -> Dict[str, Any]:
     return {}
 
 
+def _normalise_declaration_value(field: str, value: Any) -> str:
+    text = str(value or "").strip()
+    if field == "command_template":
+        return " ".join(text.split())
+    return text
+
+
+def _validate_registry_contract_overlap(
+    *,
+    plugin: str,
+    tool_id: str,
+    registry: Mapping[str, Any],
+    contract: Mapping[str, Any],
+) -> None:
+    """Reject conflicting duplicate declarations before merging them."""
+    execution = contract.get("execution")
+    contract_execution = execution if isinstance(execution, Mapping) else {}
+    authoritative = {
+        "name": contract.get("name"),
+        "category": contract.get("category"),
+        "executable": contract_execution.get("executable"),
+        "command_template": contract_execution.get("command_template"),
+        "container_image": contract_execution.get("container_image"),
+        "execution_scope": contract_execution.get("execution_scope"),
+    }
+    for field_name, contract_value in authoritative.items():
+        if field_name not in registry or contract_value is None:
+            continue
+        registry_value = registry[field_name]
+        if _normalise_declaration_value(field_name, registry_value) == _normalise_declaration_value(
+            field_name, contract_value
+        ):
+            continue
+        raise ToolResolutionError(
+            f"{plugin}/{tool_id}: conflicting {field_name} declarations in registry and contract"
+        )
+
+
 # ── Catalog ──────────────────────────────────────────────────────────────────
 
 
@@ -186,7 +224,12 @@ class ToolCatalog:
         return catalog
 
     @classmethod
-    def from_plugin_dir(cls, plugin_dir: str | Path) -> ToolCatalog:
+    def from_plugin_dir(
+        cls,
+        plugin_dir: str | Path,
+        *,
+        registry_path: str | Path | None = None,
+    ) -> ToolCatalog:
         """Compile one plugin for compatibility adapters and isolated tests."""
         from abi.runtime_environment import load_environment_assignments
 
@@ -194,7 +237,14 @@ class ToolCatalog:
         environment_data = load_environment_assignments()
         raw_assignments = environment_data.get("tool_assignments", {})
         env_assignments = cls._normalise_env_assignments(raw_assignments)
-        return cls(cls._compile_plugin(path, path.name, env_assignments))
+        return cls(
+            cls._compile_plugin(
+                path,
+                path.name,
+                env_assignments,
+                registry_path=Path(registry_path) if registry_path is not None else None,
+            )
+        )
 
     @classmethod
     def _normalise_env_assignments(cls, raw: Any) -> Dict[str, Dict[str, str]]:
@@ -212,10 +262,18 @@ class ToolCatalog:
         plugin_dir: Path,
         plugin: str,
         env_assignments: Dict[str, Dict[str, str]],
+        *,
+        registry_path: Path | None = None,
     ) -> Iterator[RuntimeToolDescriptor]:
         import yaml
 
-        registry_path = plugin_dir / "tool_registry.yaml"
+        manifest_path = plugin_dir / "abi-plugin.yaml"
+        manifest = (
+            yaml.safe_load(manifest_path.read_bytes()) or {} if manifest_path.exists() else {}
+        )
+        if registry_path is None:
+            registry_name = str(manifest.get("tool_registry", "tool_registry.yaml"))
+            registry_path = plugin_dir / registry_name
         data = yaml.safe_load(registry_path.read_bytes()) or {} if registry_path.exists() else {}
         tools = data.get("tools", [])
         plugin_envs = env_assignments.get(plugin, {})
@@ -235,7 +293,8 @@ class ToolCatalog:
                 registry_entries[tool_id] = dict(entry)
 
         contracts: Dict[str, Dict[str, Any]] = {}
-        contracts_dir = plugin_dir / "tool_contracts"
+        contracts_name = str(manifest.get("tool_contracts", "tool_contracts"))
+        contracts_dir = plugin_dir / contracts_name
         if contracts_dir.exists():
             for path in sorted([*contracts_dir.glob("*.yaml"), *contracts_dir.glob("*.yml")]):
                 contract = yaml.safe_load(path.read_bytes()) or {}
@@ -252,11 +311,31 @@ class ToolCatalog:
                     raise ToolResolutionError(f"Duplicate contract for {plugin}/{tool_id}")
                 contracts[tool_id] = dict(contract)
 
-        for tool_id in registry_entries.keys() | contracts.keys():
+        if contracts:
+            missing_registry_entries = set(contracts) - set(registry_entries)
+            if missing_registry_entries:
+                raise ToolResolutionError(
+                    f"{plugin}: contracts missing registry policy entries: "
+                    f"{sorted(missing_registry_entries)}"
+                )
+            missing_contracts = set(registry_entries) - set(contracts)
+            if missing_contracts:
+                raise ToolResolutionError(
+                    f"{plugin}: registry policy entries missing contracts: "
+                    f"{sorted(missing_contracts)}"
+                )
+
+        for tool_id in sorted(registry_entries.keys() | contracts.keys()):
             entry = registry_entries.get(tool_id, {})
             contract = contracts.get(tool_id)
             merged = dict(entry)
             if contract is not None:
+                _validate_registry_contract_overlap(
+                    plugin=plugin,
+                    tool_id=tool_id,
+                    registry=entry,
+                    contract=contract,
+                )
                 # Tool contracts are the authoritative runtime declaration;
                 # registry-only operational flags remain as fallbacks.
                 merged.update(contract)

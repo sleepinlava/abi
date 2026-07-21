@@ -241,6 +241,67 @@ def test_parse_amrfinderplus():
     assert float(tet["identity_pct"]) >= 0.0
 
 
+def test_parse_amrfinderplus_supports_current_header_names(tmp_path):
+    """Current AMRFinderPlus headers remain compatible with standard tables."""
+    output = tmp_path / "amr.tsv"
+    output.write_text(
+        "\t".join(
+            [
+                "Protein id",
+                "Contig id",
+                "Start",
+                "Stop",
+                "Strand",
+                "Element symbol",
+                "Element name",
+                "Scope",
+                "Type",
+                "Subtype",
+                "Class",
+                "Subclass",
+                "Method",
+                "Target length",
+                "Reference sequence length",
+                "% Coverage of reference",
+                "% Identity to reference",
+            ]
+        )
+        + "\n"
+        + "\t".join(
+            [
+                "protein_1",
+                "contig_1",
+                "100",
+                "900",
+                "+",
+                "mecA",
+                "PBP2a",
+                "core",
+                "AMR",
+                "AMR",
+                "BETA-LACTAM",
+                "METHICILLIN",
+                "EXACTP",
+                "668",
+                "668",
+                "100.00",
+                "100.00",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    plugin = get_plugin("wgs_bacteria")
+    rows = plugin.parse_outputs("amrfinderplus", tmp_path, "S1")["amr_profile"]
+
+    assert len(rows) == 1
+    assert rows[0]["gene_symbol"] == "mecA"
+    assert rows[0]["sequence_name"] == "PBP2a"
+    assert rows[0]["element_type"] == "AMR"
+    assert rows[0]["coverage_pct"] == "100.00"
+
+
 def test_parse_outputs_unknown_tool():
     """Unrecognized tool_id → empty dict."""
     plugin = get_plugin("wgs_bacteria")

@@ -3,6 +3,7 @@ from pathlib import Path
 from abi.autoplasm.parsers import parse_standard_outputs, supports_standard_parsing
 from abi.autoplasm.standard_tables import (
     append_standard_rows,
+    expand_standard_rows,
     read_standard_table,
     write_consensus_table,
 )
@@ -143,6 +144,100 @@ def test_core_parsers_emit_standard_rows(tmp_path):
 
     opera_ms = parse_standard_outputs("opera_ms", FIXTURES / "opera_ms", "HYB1")
     assert any(row["metric"] == "n50" for row in opera_ms["assembly_summary"])
+
+
+def test_amrfinderplus_supports_current_nucleotide_headers(tmp_path):
+    output = tmp_path / "amrfinder"
+    output.mkdir()
+    header = [
+        "Protein id",
+        "Contig id",
+        "Start",
+        "Stop",
+        "Strand",
+        "Element symbol",
+        "Element name",
+        "Scope",
+        "Type",
+        "Class",
+        "% Coverage of reference",
+        "% Identity to reference",
+    ]
+    values = [
+        "NA",
+        "contig_1",
+        "10",
+        "870",
+        "+",
+        "blaTEM-116",
+        "broad-spectrum class A beta-lactamase TEM-116",
+        "core",
+        "AMR",
+        "BETA-LACTAM",
+        "100.00",
+        "100.00",
+    ]
+    (output / "sample.amrfinder.tsv").write_text(
+        "\t".join(header) + "\n" + "\t".join(values) + "\n",
+        encoding="utf-8",
+    )
+
+    parsed = parse_standard_outputs("amrfinderplus", output, "S1")["annotations"]
+
+    assert len(parsed) == 1
+    assert parsed[0]["gene"] == "blaTEM-116"
+    assert parsed[0]["product"] == "broad-spectrum class A beta-lactamase TEM-116"
+    assert parsed[0]["drug_class"] == "BETA-LACTAM"
+    assert parsed[0]["category"] == "ARG"
+    assert parsed[0]["coverage"] == "100.00"
+    assert parsed[0]["identity"] == "100.00"
+    public = expand_standard_rows({"annotations": parsed})["amr_genes"]
+    assert public[0]["drug_class"] == "BETA-LACTAM"
+
+
+def test_mob_typer_supports_current_multi_headers(tmp_path):
+    output = tmp_path / "mob_typer"
+    output.mkdir()
+    (output / "sample.mob_typer.tsv").write_text(
+        "\t".join(
+            [
+                "sample_id",
+                "size",
+                "rep_type(s)",
+                "relaxase_type(s)",
+                "mpf_type",
+                "orit_type(s)",
+                "predicted_mobility",
+                "primary_cluster_id",
+                "predicted_host_range_overall_name",
+            ]
+        )
+        + "\n"
+        + "\t".join(
+            [
+                "contig_1 flag=1 len=5000",
+                "5000",
+                "IncF",
+                "MOBF",
+                "MPFT",
+                "oriT_F",
+                "conjugative",
+                "AA001",
+                "Enterobacteriaceae",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    parsed = parse_standard_outputs("mob_typer", output, "S1")
+
+    assert "plasmid_predictions" not in parsed
+    assert {row["contig_id"] for row in parsed["plasmid_typing"]} == {"contig_1"}
+    assert any(row["type_id"] == "IncF" for row in parsed["plasmid_typing"])
+    assert any(row["type_id"] == "relaxase:MOBF" for row in parsed["plasmid_typing"])
+    assert any(row["gene"] == "oriT_F" for row in parsed["annotations"])
+    assert parsed["host_predictions"][0]["host_taxon"] == "Enterobacteriaceae"
 
 
 def test_registered_new_tool_parsers_emit_standard_rows():

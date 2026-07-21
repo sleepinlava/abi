@@ -19,6 +19,7 @@ __all__ = [
     "load_plugin_manifest",
     "load_tool_contracts",
     "load_workflow_spec",
+    "validate_plugin_manifest",
     "validate_plugin_contract_files",
     "validate_tool_contract",
 ]
@@ -244,7 +245,7 @@ def validate_plugin_contract_files(plugin: Any) -> None:
         return
     root = Path(plugin.root)
     manifest = load_plugin_manifest(root)
-    _validate_manifest(plugin, root, manifest)
+    validate_plugin_manifest(plugin, root, manifest)
     template_param_violations = validate_pipeline_template_params(root)
     if template_param_violations:
         raise ContractValidationError(
@@ -284,7 +285,13 @@ def validate_plugin_contract_files(plugin: Any) -> None:
                 )
 
 
-def _validate_manifest(plugin: Any, root: Path, manifest: Mapping[str, Any]) -> None:
+def validate_plugin_manifest(
+    plugin: Any,
+    root: str | Path,
+    manifest: Mapping[str, Any],
+) -> None:
+    """Validate plugin identity and every filesystem path in its manifest."""
+    root = Path(root)
     for key in (
         "abi_version",
         "plugin_id",
@@ -310,6 +317,10 @@ def _validate_manifest(plugin: Any, root: Path, manifest: Mapping[str, Any]) -> 
     if "workflow" in manifest:
         _require_mapping(manifest["workflow"], f"{plugin.plugin_id}: workflow")
         _validate_workflow_section(manifest["workflow"], plugin.plugin_id, str(root))
+
+
+# Kept for callers from earlier SDK releases that imported this private helper.
+_validate_manifest = validate_plugin_manifest
 
 
 def _validate_workflow_section(

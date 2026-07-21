@@ -116,17 +116,25 @@ else
     # the BLAST-index check below always failed). This mirrors the path used by
     # abi.plugins.metagenomic_plasmid._engine.resources._resolved_resource_command.
     "${MOB_INIT_BIN}" --database_directory "${MOB_DIR}"
-    # Verify mob_suite BLAST indices exist before touching the ready marker
-    # (mob_init can exit 0 while leaving an incomplete DB).
+    # A BLAST index alone is insufficient: mob_typer also requires marker
+    # FASTAs, a Mash sketch, cluster metadata, and the ETE3 taxonomy database.
+    MOB_REQUIRED=(
+        rep.dna.fas mob.proteins.faa mpf.proteins.faa orit.fas clusters.txt
+        host_range_literature_plasmidDB.txt ncbi_plasmid_full_seqs.fas.msh taxa.sqlite
+    )
+    MOB_MISSING=()
+    for f in "${MOB_REQUIRED[@]}"; do
+        [[ -s "${MOB_DIR}/${f}" ]] || MOB_MISSING+=("${f}")
+    done
     MOB_BLAST_FOUND=false
     for f in "${MOB_DIR}"/*.nhr "${MOB_DIR}"/*.phr; do
-        if [[ -f "$f" ]]; then MOB_BLAST_FOUND=true; break; fi
+        if [[ -s "$f" ]]; then MOB_BLAST_FOUND=true; break; fi
     done
-    if [[ "${MOB_BLAST_FOUND}" == "true" ]]; then
+    if [[ "${MOB_BLAST_FOUND}" == "true" && "${#MOB_MISSING[@]}" -eq 0 ]]; then
         touch "${MOB_DIR}/.autoplasm_resource_ready"
         log_info "mob_suite database initialization complete."
     else
-        log_error "mob_init completed but no BLAST index files found in ${MOB_DIR}; database may be incomplete."
+        log_error "mob_init completed but the MOB-suite database is incomplete: ${MOB_MISSING[*]:-BLAST index missing}."
         exit 1
     fi
 fi

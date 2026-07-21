@@ -1,0 +1,4 @@
+metric	percent	definition
+Recall (98/113)	86.7257	PLSDB-derived technical truth sequences with >90% coverage by ABI consensus predictions at >80% identity
+Precision (25/157)	15.9236	ABI consensus predictions with >90% coverage by PLSDB-derived technical truth at >80% identity
+F1	26.9068	Harmonic mean of the directional technical precision and recall

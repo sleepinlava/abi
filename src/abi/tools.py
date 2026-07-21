@@ -1606,7 +1606,10 @@ class ToolRegistry:
             # while ToolCatalog provides the single registry/contract merge.
             from abi.tool_catalog import ToolCatalog
 
-            catalog = ToolCatalog.from_plugin_dir(registry_path.parent)
+            catalog = ToolCatalog.from_plugin_dir(
+                registry_path.parent,
+                registry_path=registry_path,
+            )
             tools = [
                 dict(descriptor.metadata)
                 for descriptor in catalog

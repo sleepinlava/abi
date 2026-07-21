@@ -101,16 +101,150 @@ for p in abi.list_plugins_summary():
     print(f"{p['analysis_type']}: {p['name']}")
 ```
 
+## 通过插件执行生物学分析
+
+ABI 不会为每个插件创建独立的 MCP 函数。Agent 调用 `abi_plan`、`abi_dry_run` 等共享生命周期工具，并通过 `analysis_type` 参数选择插件。
+
+### 1. 把生物学问题转换为分析请求
+
+选择插件前，先明确：
+
+- 生物学问题和预期结果；
+- 输入数据类型和测序平台；
+- 样本 ID、分组、比较关系或双端关系；
+- 可用的参考基因组、注释、数据库和索引；
+- 运行环境、计算限制和输出目录。
+
+缺失信息会改变插件、工作流分支、参考资源或生物学解释时，应向用户确认。不得猜测参考基因组、样本分组或数据库配置。
+
+### 2. 发现并选择插件
+
+| 生物学目标 | `analysis_type` |
+| --- | --- |
+| 分析 16S 微生物群落 | `amplicon_16s` |
+| 比较 bulk RNA-seq 表达差异 | `rnaseq_expression` |
+| 分析细菌分离株基因组 | `wgs_bacteria` |
+| 定量宏转录组表达 | `metatranscriptomics` |
+| 分析 shotgun 宏基因组 reads | `easymetagenome` |
+| 识别并表征宏基因组病毒 | `viral_viwrap` |
+| 重建并表征宏基因组质粒 | `metagenomic_plasmid` |
+
+以当前安装环境为权威来源：
+
+```text
+abi_list_types({})
+abi_export_agent_context({"analysis_type": "rnaseq_expression"})
+abi_query({"analysis_type": "rnaseq_expression", "what": "stages"})
+abi_query({"analysis_type": "rnaseq_expression", "what": "tools"})
+```
+
+`abi_export_agent_context` 会返回插件说明、标准表格、重要产物、权限、错误码和恢复规则。构建计划前应先读取这些信息。
+
+其中的 `safe_sequence` 是用于兼容的精简基线。进行生物学执行时，应遵循下文扩展序列，包括运行前预检和运行后结果验证。
+
+### 3. 准备配置与样本元数据
+
+Agent 生命周期工具接收文件路径，但不会编造生物学元数据。使用已经审查的配置和样本表，或在 MCP 之外初始化模板：
+
+```bash
+abi init --type rnaseq_expression --outdir my-analysis
+```
+
+用户或 Agent 必须替换占位路径并核对样本元数据。源数据保持只读，每次尝试使用新的结果目录。
+
+### 4. 规划、检查与 dry-run
+
+每次调用都使用相同的 `analysis_type`、配置、样本表和输出假设：
+
+```text
+abi_plan({
+  "analysis_type": "rnaseq_expression",
+  "config_path": "my-analysis/config/rnaseq_expression.yaml",
+  "sample_sheet": "my-analysis/samples.tsv",
+  "outdir": "my-analysis/results/plan"
+})
+
+abi_check({
+  "analysis_type": "rnaseq_expression",
+  "config_path": "my-analysis/config/rnaseq_expression.yaml",
+  "sample_sheet": "my-analysis/samples.tsv",
+  "engine": "local",
+  "check_runtime": true
+})
+
+abi_dry_run({
+  "analysis_type": "rnaseq_expression",
+  "config_path": "my-analysis/config/rnaseq_expression.yaml",
+  "sample_sheet": "my-analysis/samples.tsv",
+  "outdir": "my-analysis/results/dry-run"
+})
+```
+
+预检报告输入、工具或资源缺失时，应在执行前停止。dry-run 成功只证明规划和命令渲染有效，不能证明生物学有效性。
+
+### 5. 展示执行审批摘要
+
+请求用户授权前，应总结：
+
+- 所选插件和生物学目的；
+- 样本、平台、分组和比较关系；
+- 计划阶段和关键工具；
+- 参考资源、数据库和未解决警告；
+- 运行后端、输出目录和预期资源需求；
+- 即将跨越执行边界的准确操作。
+
+不得编造运行时间或存储需求。只报告计划、配置、调度器或用户提供的估计。
+
+### 6. 仅在明确授权后执行
+
+默认 MCP `safe` profile 不会暴露 `abi_run`。只有需要执行时才启动 full profile：
+
+```bash
+abi-mcp --profile full
+```
+
+首次调用 `abi_run` 时传入 `confirm_execution: false`，保留审批边界。用户明确批准摘要中的计划后，再用完全相同的请求传入 `confirm_execution: true`。
+
+```text
+abi_run({
+  "analysis_type": "rnaseq_expression",
+  "config_path": "my-analysis/config/rnaseq_expression.yaml",
+  "sample_sheet": "my-analysis/samples.tsv",
+  "outdir": "my-analysis/results/run-001",
+  "engine": "local",
+  "confirm_execution": true
+})
+```
+
+授权只适用于已展示的插件、输入、配置、输出路径和运行时。任一内容发生实质变化时，都应重新规划并再次请求授权。
+
+### 7. 验证并解释结果
+
+```text
+abi_inspect({"result_dir": "my-analysis/results/run-001"})
+abi_validate_result({"result_dir": "my-analysis/results/run-001"})
+abi_report({
+  "analysis_type": "rnaseq_expression",
+  "result_dir": "my-analysis/results/run-001"
+})
+```
+
+从插件声明的标准表格读取生物学数值，不要临时解析原始日志。使用溯源文件说明方法和可复现性，使用插件报告了解解释范围和局限性。
+
+Agent 应区分三个结论：执行已经完成、结果契约已经通过、生物学验收标准已经通过。任何一个结论都不能自动证明另外两个。
+
 ## 安全调用序列
 
 1. `abi_list_types` — 发现已安装的分析插件
 2. `abi_export_agent_context` 或 `abi_doctor_agent` — 获取操作上下文
 3. `abi_query` — 轻量级元数据查询（阶段、工具、平台、步骤 I/O）
-4. `abi_plan` — 构建执行计划（包含 `summary` 字段 — 无需读取 `execution_plan.json`）
-5. `abi_dry_run` — 验证命令和溯源（不执行真实工具）
-6. `abi_inspect` — 检查溯源中的失败项
-7. `abi_run` — **仅在用户明确批准后**执行
-8. `abi_report` — 从标准表和溯源重新生成报告
+4. `abi_plan` — 构建执行计划并检查 `summary`
+5. `abi_check` — 预检输入、资源、可执行程序和运行时
+6. `abi_dry_run` — 写入命令、溯源、表格骨架和报告预览
+7. `abi_inspect` 或 `abi_validate_result` — 验证 dry-run 产物
+8. 展示插件、输入、资源、运行时、输出路径和警告
+9. `abi_run` — **仅在用户明确批准后**执行
+10. `abi_inspect`、`abi_validate_result` 和 `abi_report` — 验证并解释结果
 
 ## 传输方式
 
@@ -119,13 +253,28 @@ for p in abi.list_plugins_summary():
 ```bash
 abi list-types --output-json
 abi query --type metatranscriptomics --what stages --output-json
-abi plan --type metatranscriptomics --outdir results/rnaseq_demo --output-json
-abi dry-run --type metatranscriptomics --outdir results/rnaseq_demo --output-json
-abi inspect --result-dir results/rnaseq_demo --output-json
-abi report --type metatranscriptomics --result-dir results/rnaseq_demo --output-json
+abi plan --type metatranscriptomics \
+  --config examples/metatranscriptomics/config_demo.yaml \
+  --sample-sheet examples/sample_sheet_transcriptomics.tsv \
+  --outdir results/agent-plan --output-json
+abi check --type metatranscriptomics \
+  --config examples/metatranscriptomics/config_demo.yaml \
+  --sample-sheet examples/sample_sheet_transcriptomics.tsv \
+  --no-check-runtime --output-json
+abi dry-run --type metatranscriptomics \
+  --config examples/metatranscriptomics/config_demo.yaml \
+  --sample-sheet examples/sample_sheet_transcriptomics.tsv \
+  --outdir results/agent-dry-run --output-json
+abi inspect --result-dir results/agent-dry-run --output-json
+abi validate-result --result-dir results/agent-dry-run --allow-empty-tables --output-json
+abi report --type metatranscriptomics --result-dir results/agent-dry-run --output-json
 ```
 
 所有命令返回带有 `success`、`confirmation_required` 或 `error` 状态的 JSON 信封。
+
+对于 `abi check`，传输层信封可能为 `success`，但预检发现缺失输入或资源时，内部 `result.status` 为 `"fail"`，CLI 也会非零退出。Agent 必须同时检查两层状态。
+
+内置示例包含参考资源占位路径，只用于规划和 dry-run。进行生物学执行前必须配置真实参考资源。
 
 ### 多 LLM 工具描述符
 

@@ -53,6 +53,24 @@ def test_metagenomic_plasmid_plugin_parses_standard_outputs():
     assert rows["plasmid_predictions"][0]["tool"] == "genomad"
 
 
+@pytest.mark.parametrize(
+    ("tool_id", "source_table", "public_table"),
+    [
+        ("bakta", "annotations", "plasmid_annotation"),
+        ("coverm", "abundance", "plasmid_abundance"),
+    ],
+)
+def test_metagenomic_plasmid_plugin_expands_public_standard_tables(
+    tool_id, source_table, public_table
+):
+    plugin = get_plugin("metagenomic_plasmid")
+
+    rows = plugin.parse_outputs(tool_id, FIXTURES / tool_id, "S1")
+
+    assert rows[source_table]
+    assert rows[public_table]
+
+
 def test_builtin_plugins_satisfy_machine_contracts():
     for plugin_id in (
         "metatranscriptomics",
